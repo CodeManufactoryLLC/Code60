@@ -14,11 +14,11 @@ const props: ComponentProps<typeof SettingsPage> = {
   versions: undefined,
   memory: <SettingsHeader page="memory" />,
   pollingControls: <SettingsHeader page="polling-settings" />,
-  transparent: false,
-  savingAppearance: false,
-  onTransparent: unchanged,
   theme: "dark",
   onTheme: unchanged,
+  iconAppearance: { animations: true, monochrome: false, color: "#808080", contrast: 100 },
+  iconAppearanceSaved: true,
+  onIconAppearance: unchanged,
   sidebarAppearance: { opacity: 100, blur: 0 },
   sidebarAppearanceSaved: true,
   sidebarBlurSupported: true,
@@ -41,14 +41,34 @@ const props: ComponentProps<typeof SettingsPage> = {
 };
 
 describe("Settings page titles", () => {
-  it("labels sidebar ranges, shows live units and reports unsaved appearance values", () => {
+  it("offers a named monochrome switch, gray color selector and save failure feedback", () => {
+    const html = renderToStaticMarkup(
+      <SettingsPage {...props} section="appearance" iconAppearanceSaved={false} />,
+    );
+    expect(html).toContain('Monochrome<input type="checkbox" role="switch" aria-checked="false"');
+    expect(html).toContain('Icon color<input type="color" disabled="" value="#808080"');
+    expect(html).toContain("Icon appearance could not be saved.");
+    expect(html).toContain(
+      'type="range" min="0" max="200" step="1" disabled="" aria-valuetext="100%"',
+    );
+    const enabled = renderToStaticMarkup(
+      <SettingsPage
+        {...props}
+        section="appearance"
+        iconAppearance={{ animations: true, monochrome: true, color: "#348a56", contrast: 150 }}
+      />,
+    );
+    expect(enabled).toContain('Icon color<input type="color" value="#348a56"');
+    expect(enabled).toContain('aria-valuetext="150%"');
+  });
+  it("labels window background ranges, shows live units and reports unsaved appearance values", () => {
     const html = renderToStaticMarkup(
       <SettingsPage
         {...props}
         section="appearance"
         sidebarAppearance={{ opacity: 35, blur: 12 }}
         sidebarAppearanceSaved={false}
-        sidebarBlurError="Native sidebar blur could not be applied."
+        sidebarBlurError="Native window background blur could not be applied."
       />,
     );
     expect(html).toContain("Background opacity</label>");
@@ -58,9 +78,12 @@ describe("Settings page titles", () => {
     expect(html).toContain('type="range" min="0" max="100" step="1"');
     expect(html).toContain('role="alert"');
     expect(html).toContain("could not be saved");
-    expect(html).toContain("Native sidebar blur could not be applied.");
-    expect(html).toContain("Native sidebar blur could not be applied.");
-    expect(html).toContain("Reset sidebar");
+    expect(html).toContain("Native window background blur could not be applied.");
+    expect(html).toContain("Native window background blur could not be applied.");
+    expect(html).toContain("Reset background");
+    expect(html).toContain("Window background</legend>");
+    expect(html).not.toContain("Transparent background");
+    expect(html).toContain("entire app window");
   });
   it.each(settingsSectionIds)(
     "uses the specific %s page name instead of a Settings heading",

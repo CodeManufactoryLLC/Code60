@@ -23,8 +23,9 @@ export class RelayPlans {
     id: string,
     execution: ExecutionHost,
     authorize: (owner: ExecutionOwner) => void,
+    timing: Parameters<typeof PlanStore.open>[3] = {},
   ) {
-    return new RelayPlans(await PlanStore.open(root, id, true), execution, authorize);
+    return new RelayPlans(await PlanStore.open(root, id, true, timing), execution, authorize);
   }
   list() {
     return this.store.list();
@@ -196,7 +197,9 @@ export class RelayPlans {
             current.error = "Execution stopped. Saved plans do not restore worker authority.";
           }
         })
-        .then(() => {});
+        .then(() => {})
+        .finally(() => this.store.stopTiming());
+    this.store.stopTiming();
     return Promise.resolve();
   }
 }

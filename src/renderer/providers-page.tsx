@@ -4,6 +4,7 @@ import { NavigationCards } from "./navigation-cards.js";
 import { PrimaryProviderMark } from "./neobrutalism/provider-controls.js";
 import { PageTitle } from "./page-title.js";
 import type { ProviderManagement } from "./provider-management.js";
+import { providerActionReasons } from "./provider-management.js";
 import { ProviderMenu } from "./provider-menu.js";
 import { SettingsCard } from "./settings-layout.js";
 
@@ -37,6 +38,9 @@ export function ProvidersPage({
       active={active}
     />
   );
+  const reasons = provider
+    ? providerActionReasons(setup, provider.id, management.pending)
+    : undefined;
   const defaults =
     provider && snapshot?.modelDefaults?.providers[provider.id as ModelDefaultAction["provider"]];
   return (
@@ -45,10 +49,33 @@ export function ProvidersPage({
       aria-label={provider?.name ?? "Providers"}
     >
       <div className="table-controls">
-        <PageTitle page={provider ? "provider" : "providers"} className="table-title">
+        <PageTitle
+          page={provider ? "provider" : "providers"}
+          target={provider ? { kind: "provider", id: provider.id } : undefined}
+          className="table-title"
+          actions={
+            provider
+              ? [
+                  {
+                    id: "disconnect",
+                    label: "Disconnect",
+                    disabled: Boolean(reasons?.disconnect),
+                    reason: reasons?.disconnect ?? undefined,
+                    run: () => void management.act({ type: "disconnect", provider: provider.id }),
+                  },
+                  {
+                    id: "primary",
+                    label: "Set as Primary",
+                    disabled: Boolean(reasons?.primary),
+                    reason: reasons?.primary ?? undefined,
+                    run: () => void management.act({ type: "set-primary", provider: provider.id }),
+                  },
+                ]
+              : []
+          }
+        >
           {provider?.name ?? "Providers"}
         </PageTitle>
-        {provider && menu(provider)}
       </div>
       {provider ? (
         <div className="provider-detail-content">

@@ -121,7 +121,7 @@ describe("DesktopKnowledge", () => {
     expect(capabilities.entries).toEqual([
       expect.objectContaining({
         id: "plans",
-        access: expect.stringContaining("right sidebar → View Plan"),
+        access: expect.stringContaining("right sidebar → + New Tab → View Plan"),
         availability: expect.objectContaining({
           status: "unknown",
           reason: expect.stringContaining("current session has an existing plan"),
@@ -177,7 +177,7 @@ describe("DesktopKnowledge", () => {
       expect.objectContaining({ availability: expect.objectContaining({ status: "blocked" }) }),
     ]);
   });
-  it.each(["sidebar background opacity", "Scientifica"])(
+  it.each(["window background opacity", "Scientifica", "icon animations"])(
     "keeps %s settings discoverable and human-only without a database",
     async (query) => {
       const { knowledge } = setup({ database: null });
@@ -188,7 +188,7 @@ describe("DesktopKnowledge", () => {
         expect.objectContaining({
           id: "settings",
           agentAccess: "human-only",
-          access: expect.stringContaining("Appearance → Left sidebar"),
+          access: expect.stringContaining("Appearance → Window background"),
           availability: expect.objectContaining({ status: "available" }),
         }),
       ]);
@@ -197,7 +197,7 @@ describe("DesktopKnowledge", () => {
   it("reports retained desktop update targets and scheduler controls without probes", async () => {
     const { knowledge, reads } = setup();
     const updates = result(
-      await knowledge.call("code60_get_capabilities", { query: "Updates" }, relay),
+      await knowledge.call("code60_get_capabilities", { query: "Update Manager" }, relay),
     );
     expect(updates.entries).toEqual(
       expect.arrayContaining([
@@ -368,11 +368,17 @@ describe("DesktopKnowledge", () => {
     const capabilities = result(
       await knowledge.call("code60_get_capabilities", { query: "Memory Recall" }, relay),
     );
+    // Files now also describes the persistent Memory Recall destination.
     expect(capabilities.entries).toEqual([
       expect.objectContaining({
         id: "memory-recall",
         agentAccess: "human-only",
         availability: expect.objectContaining({ status: "available" }),
+      }),
+      expect.objectContaining({
+        id: "files",
+        agentAccess: "read",
+        availability: expect.objectContaining({ status: "unknown" }),
       }),
     ]);
     const id = randomUUID();

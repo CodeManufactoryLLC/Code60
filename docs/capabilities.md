@@ -4,16 +4,30 @@ Generated from `src/contracts/knowledge.ts`. Do not edit by hand; run `npm run g
 
 Schema version: 1
 
+## Page navigation
+
+- ID: `page-navigation`
+- Status: shipped
+- Purpose: Open pages through the sidebar, navigation cards or Back and Forward.
+- Access: Left navigation sidebar or Home / Apps / Settings cards; workspace header → Back / Forward
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: No confirmation; navigation only.
+- Limits: The workspace header contains history and global appearance controls, with no current-page dropdown. The sidebar has six permanently open cards: Home (with Search), Assistants, Projects, Providers, Apps and Settings. Each header has a full-width divider, with immediate child labels aligned beneath its title. Top-level collapse controls are absent; deeper navigation groups retain their accordions. Primary pages have a centered title with their navigation icon on its left inside the content card; a chevron-only title actions menu contains existing page commands. Pages without commands omit the menu. Table tools, scope selectors, creation cards and corner panel toggles remain visible. Chat Rename is in its content title actions menu. No database is required; existing destination guards apply. Navigation never sends a request or starts work.
+- Pages: none
+- Settings sections: none
+- Tools: none
+
 ## Back and Forward
 
 - ID: `navigation-history`
 - Status: shipped
 - Purpose: Return to visited pages, Settings sections, project and provider homes, and specific chats.
-- Access: Title bar → Back / Forward, beside the navigation sidebar toggle
+- Access: Workspace header card → Back / Forward
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: No confirmation; navigation only.
-- Limits: Renderer-memory history holds up to 100 destinations and resets on reload or relaunch. Unavailable destinations are skipped. Buttons are disabled without an available destination or while a selection is pending. Restoring a chat preserves drafts and running work; it never sends a request to an agent.
+- Limits: Renderer-memory history holds up to 100 destinations and resets on reload or relaunch. Unavailable destinations are skipped. Buttons are disabled without an available destination or while a selection is pending. An empty circle replaces the arrow artwork for each unavailable direction while preserving its position. Restoring a chat preserves drafts and running work; it never sends a request to an agent.
 - Pages: none
 - Settings sections: none
 - Tools: none
@@ -23,7 +37,7 @@ Schema version: 1
 - ID: `memory-recall`
 - Status: shipped
 - Purpose: Inspect memories recorded as used by the displayed chat, grouped by dispatched turn.
-- Access: Relay, project or worker chat → right sidebar → New tab → Open Memory Recall
+- Access: Relay, project or worker chat → right sidebar → Files view dropdown → Memory Recall
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Read-only; no retrieval or provider dispatch.
@@ -65,7 +79,7 @@ Schema version: 1
 - ID: `custom-agents`
 - Status: shipped
 - Purpose: Create application-wide assistants with special instructions and one persistent Relay-style conversation each.
-- Access: Home → Custom Assistants or Sidebar → Assistants → Custom Assistants → New Assistant; assistant card → More actions → Edit or Archive; Archived → card → More actions → Restore
+- Access: Home → Custom Assistants or Sidebar → Assistants → Custom Assistants → New Assistant; assistant card → More actions → Edit or Archive; title actions → Archived → card → More actions → Restore
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Archiving confirms natively, stops only the assistant and preserves history.
@@ -120,11 +134,11 @@ Schema version: 1
 
 - ID: `plans`
 - Status: shipped
-- Purpose: Propose and track revisioned tasks; use View Plan to reopen the current conversation’s latest saved plan.
-- Access: Chat → right sidebar → View Plan → existing plan tab
+- Purpose: Propose and track revisioned tasks with rounded completion percentages and cumulative running time; use View Plan in a blank Files tab to reopen the current conversation’s latest saved plan.
+- Access: Chat → right sidebar → + New Tab → View Plan → existing plan tab
 - Prerequisite: runtime
 - Agent access: existing-tools
-- Confirmation: View Plan reopens the current session's latest existing plan without generating or accepting a new one. Human Accept authorizes only that revision and targets.
+- Confirmation: View Plan appears beside Open Files and Open Memory Recall on blank/empty tabs only. It reopens the current session's latest existing plan without generating or accepting one. Human Accept authorizes only that revision and targets. Execution time counts running intervals only; Resume adds to the saved total. Restart keeps recorded time without restoring authority or counting downtime; older executed plans may lack historical timing.
 - Limits: No agent tool can accept a plan.
 - Pages: none
 - Settings sections: none
@@ -162,12 +176,12 @@ Schema version: 1
 
 - ID: `files`
 - Status: shipped
-- Purpose: Browse files and bounded read-only previews in tabs owned by the individual chat or worker session.
-- Access: Chat → Files panel
+- Purpose: Browse files and bounded read-only previews in tabs owned by the individual chat or worker session. The Files view dropdown selects among open views; File Explorer, Changes and Memory Recall remain available alongside its + New Tab item. File/document views have Close current tab below the header.
+- Access: Chat → upper-right corner of main content card → Toggle files panel
 - Prerequisite: runtime
 - Agent access: read
 - Confirmation: Existing permissions apply.
-- Limits: Tab sets, order and selection are independent per session, retained during navigation until project close or renderer reload. Inactive panels release file subscriptions. Archived reviews remain read-only in a reachable panel. Awareness can read only authorized open cached previews from the exact active file subscription, not arbitrary paths.
+- Limits: Tab sets, order and selection are independent per session, retained during navigation until project close or renderer reload. Inactive panels release file subscriptions. Archived reviews remain read-only in a reachable panel. The Files view dropdown has no search field. Arrow keys/Home/End and first-letter navigation highlight choices; Enter/Space commits. Delete closes the selected view and Alt+Left/Right reorders it while the closed selector is focused. Tabs cannot be dragged. Closing the final tab leaves the panel open with the selector enabled for the main pages and + New Tab. Close appears only on file/document views, at the upper right below the header. Main-page choices do not load content until selected. Awareness can read only authorized open cached previews from the exact active file subscription, not arbitrary paths.
 - Pages: `files`
 - Settings sections: none
 - Tools: none
@@ -205,7 +219,7 @@ Schema version: 1
 - ID: `prompts`
 - Status: shipped
 - Purpose: Customize project orchestration and handoff templates.
-- Access: Apps → Prompt Builder
+- Access: Apps → Prompt Builder → title actions for Save, Discard changes or Reset to default
 - Prerequisite: database
 - Agent access: read
 - Confirmation: Existing permissions apply.
@@ -247,7 +261,7 @@ Schema version: 1
 - ID: `providers`
 - Status: shipped
 - Purpose: Verify and choose coding-agent providers; inspect and clear saved per-connector orchestrator and worker model defaults.
-- Access: Providers → provider details
+- Access: Providers → provider details → title actions for Disconnect or Set as Primary
 - Prerequisite: none
 - Agent access: read
 - Confirmation: Existing permissions apply.
@@ -275,7 +289,7 @@ Schema version: 1
 - ID: `memory`
 - Status: shipped
 - Purpose: Learn and recall scoped evidence when enabled.
-- Access: Settings → Memory; Apps → Data Viewer → Memories
+- Access: Apps → Memory; Apps → Data Viewer → Memories
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
@@ -302,7 +316,7 @@ Schema version: 1
 
 - ID: `automations`
 - Status: shipped
-- Purpose: Run consented local schedules in an independent service. Each job is an expandable accordion with ordered run/stop, delete and disclosure controls on its closed header. Play starts one run; the pulsing pause glyph retains the Stop action to cancel active work. Disabled schedules show (Paused) beside their name, independently of manual execution. Details show the saved prompt, schedule and execution settings, with separate schedule enable/pause and inline editing. Actions offers New scheduled job in an inline editor and Refresh; Execution history remains a table with live, assembled execution transcripts and saved outcomes.
+- Purpose: Run consented local schedules in an independent service. Each job is an expandable accordion with ordered run/stop, delete and disclosure controls on its closed header. Play starts one run; the pulsing pause glyph retains the Stop action to cancel active work. Disabled schedules show (Paused) beside their name, independently of manual execution. Details show the saved prompt, schedule and execution settings, with separate schedule enable/pause and inline editing. The Scheduled Jobs title actions menu offers New scheduled job in an inline editor and Refresh; Execution history remains a table with live, assembled execution transcripts and saved outcomes.
 - Access: Apps → Scheduled Jobs
 - Prerequisite: none
 - Agent access: human-only
@@ -321,7 +335,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Human service consent; native confirmation for service controls.
-- Limits: Automatic status checks respect global Pause polling and back off to at most sixty seconds on failure; manual Refresh remains available. Awareness never installs, probes or controls the service. Checking or unavailable status never guesses a lifecycle action. A standalone running scheduler is labelled Not installed and has no native Stop action. No database is required.
+- Limits: Automatic status checks respect global Pause polling and back off to at most sixty seconds on failure; manual Refresh Scheduling Service remains available in the title actions menu. Awareness never installs, probes or controls the service. Checking or unavailable status never guesses a lifecycle action. A standalone running scheduler is labelled Not installed and has no native Stop action. No database is required.
 - Pages: `system-manager`
 - Settings sections: none
 - Tools: none
@@ -344,22 +358,22 @@ Schema version: 1
 
 - ID: `settings`
 - Status: shipped
-- Purpose: Change appearance, text, polling and application options. Text typefaces include locally bundled Scientifica; OCR-A is no longer offered. Table defaults start at Low density (44px rows), with row, column and heading lines off; saved global and per-table choices are retained. Options include left sidebar background opacity (0–100%) and native macOS desktop blur strength (0–100%). Transparent Linux windows retain minimize, maximize/restore and guarded close controls in the title bar, including the splash and first-use setup.
-- Access: Sidebar → Settings; Appearance → Left sidebar
+- Purpose: Change appearance, text, polling and application options. Text typefaces include locally bundled Scientifica; OCR-A is no longer offered. Table defaults start at Low density (44px rows), with row, column and heading lines off; saved global and per-table choices are retained. Options include Icon animations (on by default), Monochrome icons with a color selector (gray by default) and Icon contrast (0–200%, default 100%), whole-window background opacity (0–100%) and native macOS desktop blur strength (0–100%). Transparent Linux windows retain minimize, maximize/restore and guarded close controls in the title bar, including the splash and first-use setup.
+- Access: Sidebar → Settings for About, Advanced, Table defaults and Text; Apps → Appearance → Window background or Icons; Apps → Polling; breadcrumb card → Color theme or Icon animations
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
-- Limits: Only explicitly allowlisted values are included in awareness. Each sidebar foreground card has a dedicated top-right chevron to expand or collapse its children without changing the current page. Home/Search is also collapsible. Header navigation never toggles expansion; Assistants opens a database-independent page with Relay and Custom Assistants cards. Hidden children are inert; explicit child navigation reveals ancestors. Sidebar background controls are saved locally, apply immediately independently of Transparent background, and keep text/icons sharp. Native desktop blur is macOS-only; strength blends the system-managed blur, not a pixel radius. Lower sidebar opacity to see it. Native blur failures appear beside its Appearance controls; adjust the slider to retry. Linux retains opacity with blur disabled. Forced colors use an opaque background without blur.
+- Limits: Only explicitly allowlisted values are included in awareness. Each sidebar foreground card has a dedicated top-right chevron to expand or collapse its children without changing the current page. Home/Search is also collapsible. Header navigation never toggles expansion; Assistants opens a database-independent page with Relay and Custom Assistants cards. Hidden children are inert; explicit child navigation reveals ancestors. Monochrome is off by default; enabling it immediately tints icon artwork, provider logos and animated frames in shades of the selected color while preserving transparency and playback. Its color defaults to gray (#808080). Icon contrast spreads its shades from a flat color at 0%, through the standard range at 100%, to black/white extremes at 200%. Color and contrast persist locally and are retained when disabled. Forced colors bypasses the tint. The breadcrumb Icon animations toggle immediately freezes GIF artwork and CSS icon pulses app-wide, with a transparent block over its wheel when off. Re-enabling plays the wheel once; other icons wait for their usual triggers. Playback is on by default and saved locally alongside icon color/contrast. Page, panel, popover and status-text transitions remain unchanged; reduced motion and forced colors still suppress icon playback. The breadcrumb Color theme button shows System (eclipse), Dark (night) or Light (sun) and cycles System → Dark → Light → System on activation. System is the default and follows OS appearance; explicit choices persist locally and stay synchronized with Apps → Appearance → Theme. Window background sliders are saved locally and apply immediately across the title strip, margins and footer regardless of sidebar size or collapse. There is no separate Transparent background switch. Foreground cards, text and icons stay opaque and sharp; the background remains interactive even at zero opacity. Native desktop blur is macOS-only; strength blends the system-managed blur, not a pixel radius. Lower Background opacity to see it. Native blur failures appear beside its Appearance controls; adjust the slider to retry. Linux retains opacity with blur disabled. Forced colors use an opaque background without blur.
 - Pages: `apps`, `advanced`, `experiments`, `settings`
 - Settings sections: `appearance`, `table-defaults`, `text`, `polling-settings`, `about`
 - Tools: none
 
-## Updates
+## Update Manager
 
 - ID: `updates`
 - Status: shipped
 - Purpose: Check, download and install macOS arm64 and Linux x64 desktop releases.
-- Access: Settings → Updates
+- Access: Apps → Update Manager → title actions
 - Prerequisite: runtime
 - Agent access: human-only
 - Confirmation: Human approval before installation and shutdown.
@@ -429,7 +443,7 @@ Schema version: 1
 - ID: `logs`
 - Status: shipped
 - Purpose: Inspect private, typed desktop diagnostics.
-- Access: Apps → Data Viewer → Logs
+- Access: Apps → Data Viewer → Logs; title actions → Pause/Resume viewing, Refresh logs or Clear logs
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Native confirmation before Clear.

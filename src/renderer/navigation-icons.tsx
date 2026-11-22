@@ -1,4 +1,7 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useContext, useEffect, useId, useRef, useState } from "react";
+import { IconAnimations } from "./icon-animations.js";
+import animationWheel from "./icons/apps/animation-wheel.gif?no-inline";
+import animationWheelStill from "./icons/apps/animation-wheel.png?no-inline";
 import booksAnimation from "./icons/apps/books.gif?no-inline";
 import booksStill from "./icons/apps/books.png?no-inline";
 import chemicalIcon from "./icons/apps/chemical.svg?no-inline";
@@ -16,6 +19,10 @@ import gearWheelAnimation from "./icons/apps/gear-wheel.gif?no-inline";
 import gearWheelStill from "./icons/apps/gear-wheel.png?no-inline";
 import heartbeatAnimation from "./icons/apps/heartbeat.gif?no-inline";
 import heartbeatStill from "./icons/apps/heartbeat.png?no-inline";
+import historyBackAnimation from "./icons/apps/history-back.gif?no-inline";
+import historyBackStill from "./icons/apps/history-back.png?no-inline";
+import historyForwardAnimation from "./icons/apps/history-forward.gif?no-inline";
+import historyForwardStill from "./icons/apps/history-forward.png?no-inline";
 import homeAnimation from "./icons/apps/home.gif?no-inline";
 import homeStill from "./icons/apps/home.png?no-inline";
 import infoAnimation from "./icons/apps/info.gif?no-inline";
@@ -48,6 +55,12 @@ import spellBookAnimation from "./icons/apps/spell-book.gif?no-inline";
 import spellBookStill from "./icons/apps/spell-book.png?no-inline";
 import tableAnimation from "./icons/apps/table.gif?no-inline";
 import tableStill from "./icons/apps/table.png?no-inline";
+import themeSystemAnimation from "./icons/apps/theme-eclipse.gif?no-inline";
+import themeSystemStill from "./icons/apps/theme-eclipse.png?no-inline";
+import themeDarkAnimation from "./icons/apps/theme-night.gif?no-inline";
+import themeDarkStill from "./icons/apps/theme-night.png?no-inline";
+import themeLightAnimation from "./icons/apps/theme-sun.gif?no-inline";
+import themeLightStill from "./icons/apps/theme-sun.png?no-inline";
 import timeManagementAnimation from "./icons/apps/time-management.gif?no-inline";
 import timeManagementStill from "./icons/apps/time-management.png?no-inline";
 import underConstructionIcon from "./icons/apps/under-construction.svg?no-inline";
@@ -59,6 +72,12 @@ const artwork = {
 } as const;
 
 const animatedArtwork = {
+  "app-icon-animations": { animation: animationWheel, still: animationWheelStill },
+  "app-theme-system": { animation: themeSystemAnimation, still: themeSystemStill },
+  "app-theme-dark": { animation: themeDarkAnimation, still: themeDarkStill },
+  "app-theme-light": { animation: themeLightAnimation, still: themeLightStill },
+  "app-history-back": { animation: historyBackAnimation, still: historyBackStill },
+  "app-history-forward": { animation: historyForwardAnimation, still: historyForwardStill },
   "app-cloud-computing": { animation: downloadAnimation, still: downloadStill },
   "app-heart-rate": { animation: heartbeatAnimation, still: heartbeatStill },
   "app-color-palette": { animation: paintingAnimation, still: paintingStill },
@@ -207,7 +226,15 @@ export type NavigationIconName =
   | keyof typeof artwork
   | keyof typeof animatedArtwork;
 
-function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }) {
+function AnimatedNavigationIcon({
+  name,
+  playOnEnable = false,
+}: {
+  name: keyof typeof animatedArtwork;
+  playOnEnable?: boolean;
+}) {
+  const enabled = useContext(IconAnimations);
+  const previous = useRef(enabled);
   const { animation, still } = animatedArtwork[name];
   const enlarged =
     name === "app-steering-wheel" ||
@@ -223,12 +250,13 @@ function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }
     if (!element) return;
     const target =
       element.closest("button, a, [role='tab'], [role='button']") ??
-      element.closest(".sidebar-navigation-card")?.querySelector(".sidebar-card-toggle");
+      element.closest(".sidebar-section")?.querySelector(".sidebar-card-toggle");
     if (!target) return;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)");
     const reset = () => setPlayback(0);
     const play = () => {
       if (
+        enabled &&
         !motion.matches &&
         !document.hidden &&
         !element.closest("[hidden], [inert]") &&
@@ -239,26 +267,29 @@ function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }
     const visibility = () => {
       if (document.hidden) reset();
     };
-    const hoverCard = target.matches(".home-card");
-    const trigger = hoverCard ? "pointerenter" : "click";
+    const hoverControl = target.matches(".home-card");
+    if (!enabled) reset();
+    else if (!previous.current && playOnEnable) play();
+    previous.current = enabled;
+    const trigger = hoverControl ? "pointerenter" : "click";
     const focus = () => {
       if (target.matches(":focus-visible")) play();
     };
     target.addEventListener(trigger, play);
-    if (hoverCard) target.addEventListener("focus", focus);
+    if (hoverControl) target.addEventListener("focus", focus);
     motion.addEventListener("change", reset);
     document.addEventListener("visibilitychange", visibility);
     return () => {
       target.removeEventListener(trigger, play);
-      if (hoverCard) target.removeEventListener("focus", focus);
+      if (hoverControl) target.removeEventListener("focus", focus);
       motion.removeEventListener("change", reset);
       document.removeEventListener("visibilitychange", visibility);
     };
-  }, []);
+  }, [enabled, playOnEnable]);
   return (
     <img
       ref={image}
-      src={playback ? `${animation}?play=${encodeURIComponent(id)}-${playback}` : still}
+      src={enabled && playback ? `${animation}?play=${encodeURIComponent(id)}-${playback}` : still}
       className="navigation-icon"
       data-icon={name}
       data-animated="true"
@@ -270,9 +301,20 @@ function AnimatedNavigationIcon({ name }: { name: keyof typeof animatedArtwork }
   );
 }
 
-export function NavigationIcon({ name }: { name: NavigationIconName }) {
+export function NavigationIcon({
+  name,
+  playOnEnable = false,
+}: {
+  name: NavigationIconName;
+  playOnEnable?: boolean;
+}) {
   if (name in animatedArtwork)
-    return <AnimatedNavigationIcon name={name as keyof typeof animatedArtwork} />;
+    return (
+      <AnimatedNavigationIcon
+        name={name as keyof typeof animatedArtwork}
+        playOnEnable={playOnEnable}
+      />
+    );
   if (name in artwork) {
     return (
       <img

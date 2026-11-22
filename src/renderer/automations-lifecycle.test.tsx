@@ -179,8 +179,8 @@ it.each(["job", "creation"] as const)(
       await view.settle();
       let saved = view.job("a").onSaved;
       if (origin === "creation") {
-        const menu = required(view.tree(), (node) => node.props.label === "Actions");
-        (menu.props.items as { run(): void }[])[0]?.run();
+        const title = required(view.tree(), (node) => node.props.page === "automations");
+        (title.props.actions as { run(): void }[])[0]?.run();
         view.render();
         saved = (
           required(view.tree(), (node) => node.type === AutomationForm).props as ComponentProps<

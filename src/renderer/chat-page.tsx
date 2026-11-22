@@ -421,21 +421,45 @@ export function ChatPage({
           page={relay && !chat?.customAgentId ? "relay" : chat ? "orchestrator" : "chat"}
           id={id}
           target={titleTarget ? { kind: "conversation", id: titleTarget } : undefined}
+          actions={[
+            ...(!relay
+              ? [
+                  {
+                    id: "rename",
+                    label: "Rename",
+                    disabled: !available || !run,
+                    run: () => setRenaming(true),
+                  },
+                ]
+              : []),
+            ...(!available
+              ? [{ id: "connect", label: "Connect to database", run: onDatabase }]
+              : connecting && !chat?.restored
+                ? [
+                    {
+                      id: "cancel-connection",
+                      label: "Cancel",
+                      disabled: busy,
+                      run: () => void action({ type: "stop", id: run?.id ?? null }),
+                    },
+                  ]
+                : relay && (!run || ended)
+                  ? [
+                      {
+                        id: "retry-connection",
+                        label: "Retry connection",
+                        disabled: busy,
+                        run: () =>
+                          void action({
+                            type: "restart",
+                            id: run?.id ?? chat?.conversationId ?? null,
+                          }),
+                      },
+                    ]
+                  : []),
+          ]}
         >
-          {relay ? (
-            (chat?.title ?? "Relay")
-          ) : (
-            <Button
-              variant="quiet"
-              type="button"
-              className="chat-title"
-              aria-label={`Rename chat: ${chat?.title ?? "Chat"}`}
-              disabled={!available || !run}
-              onClick={() => setRenaming(true)}
-            >
-              {chat?.title ?? "Chat"}
-            </Button>
-          )}
+          {chat?.title ?? (relay ? "Relay" : "Chat")}
         </PageTitle>
         {renaming && run && (
           <RenameChat
@@ -444,34 +468,6 @@ export function ChatPage({
             onSave={(title) => action({ type: "rename", id: run.id, title })}
           />
         )}
-        <div className="orchestration-chat-status">
-          {!available ? (
-            <Button type="button" onClick={onDatabase}>
-              Connect to database
-            </Button>
-          ) : connecting && !chat?.restored ? (
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() => void action({ type: "stop", id: run?.id ?? null })}
-            >
-              Cancel
-            </Button>
-          ) : (
-            relay &&
-            (!run || ended) && (
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void action({ type: "restart", id: run?.id ?? chat?.conversationId ?? null })
-                }
-              >
-                Retry connection
-              </Button>
-            )
-          )}
-        </div>
       </header>
       {notice}
       {failure && (

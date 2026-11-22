@@ -21,7 +21,7 @@ const review = (id: string, title: string, chatId: string | null): ReviewSummary
   submissions: [],
 });
 
-it("offers View Plan only for the displayed session, including saved plans and other selected tabs", () => {
+it("offers View Plan only in the displayed session’s centered blank-tab choices", () => {
   const plan: PlanSummary = {
     id: "saved-plan",
     chatId: "current-chat",
@@ -36,12 +36,15 @@ it("offers View Plan only for the displayed session, including saved plans and o
   const render = (
     plans: PlanSummary[],
     currentChat: string | undefined,
-    kind: "changes" | "blank" = "blank",
+    kind: "changes" | "blank" | "plan" = "blank",
     disabled = false,
   ) =>
     renderToStaticMarkup(
       <FilePanel
-        tabs={updateFileTabs(emptyFileTabs(), { type: kind })}
+        tabs={updateFileTabs(
+          emptyFileTabs(),
+          kind === "plan" ? { type: "plan", planId: plan.id, title: plan.title } : { type: kind },
+        )}
         onAction={() => {}}
         browser={{} as FileBrowser}
         open
@@ -54,9 +57,16 @@ it("offers View Plan only for the displayed session, including saved plans and o
       />,
     );
   for (const state of ["draft", "running", "completed", "paused", "dismissed"] as const) {
-    for (const kind of ["blank", "changes"] as const)
-      expect(render([{ ...plan, state }], "current-chat", kind)).toContain(">View Plan</button>");
+    expect(render([{ ...plan, state }], "current-chat")).toContain(">View Plan</button>");
+    for (const kind of ["changes", "plan"] as const)
+      expect(render([{ ...plan, state }], "current-chat", kind)).not.toContain("View Plan");
   }
+  const choices =
+    render([plan], "current-chat").match(/class="file-panel-empty-actions">(.*?)<\/div>/)?.[1] ??
+    "";
+  expect(choices).toContain(">View Plan</button>");
+  expect(choices).toContain(">Open Files</button>");
+  expect(choices).toContain(">Open Memory Recall</button>");
   expect(render([], "current-chat")).not.toContain("View Plan");
   expect(render([plan], "other-chat")).not.toContain("View Plan");
   expect(render([plan], undefined)).not.toContain("View Plan");
@@ -141,4 +151,19 @@ it("nests all revisions under their task without a review dropdown or diff", () 
   expect(html).toContain('d="M28.5,32a3.4762');
   expect(html).toContain('d="M29,30h-8v-2h8v2');
   expect(html).not.toMatch(/<select|review-panel|monaco/);
+});
+
+it.each(["blank", "recall", "changes"] as const)("omits Close from the %s page", (kind) => {
+  const html = renderToStaticMarkup(
+    <FilePanel
+      tabs={updateFileTabs(emptyFileTabs(), { type: kind })}
+      onAction={() => {}}
+      browser={{} as FileBrowser}
+      open
+      active={false}
+      onOpenProject={() => {}}
+      onToggle={() => {}}
+    />,
+  );
+  expect(html).not.toContain('aria-label="Close current tab"');
 });

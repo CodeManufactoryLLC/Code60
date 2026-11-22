@@ -1,12 +1,12 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { DesktopApi, KnowledgeOwner, PlanSummary, ReviewSummary } from "../bridge/index.js";
-import { type FileTabAction, type FileTabs, fileTabLabel, updateFileTabs } from "./file-tabs.js";
+import { type FileTabAction, type FileTabs, fileMainViews, fileTabLabel } from "./file-tabs.js";
 import { type FileBrowser, FileInspector, FilesPage } from "./files.js";
 import { Icon } from "./icons.js";
 import { useKnowledgePanel } from "./knowledge-report.js";
 import { MemoryRecall, type RecallSource } from "./memory-recall.js";
 import type { PreviewViewState } from "./monaco-preview.js";
-import { PanelShell } from "./panel-shell.js";
+import { type PanelPage, PanelShell } from "./panel-shell.js";
 import { PlanPanelLoader } from "./plan-panel.js";
 import { ReviewFilePreview } from "./review-content.js";
 import { ReviewPanelLoader } from "./review-panel.js";
@@ -166,22 +166,35 @@ export function FilePanel({
         id: tab.id,
         label: fileTabLabel(tab, tabs.entries),
         title: tab.kind === "file" ? tab.path : fileTabLabel(tab, tabs.entries),
+        closeButton:
+          tab.kind === "file" ||
+          tab.kind === "plan" ||
+          tab.kind === "revision" ||
+          tab.kind === "application",
         icon:
-          tab.kind === "changes"
-            ? ("task--tools" as const)
-            : tab.kind === "explorer"
-              ? ("folder" as const)
-              : tab.kind === "revision"
-                ? ("file--diff" as const)
-                : ("document" as const),
+          tab.kind === "changes" || tab.kind === "explorer" || tab.kind === "recall"
+            ? fileMainViews[tab.kind].icon
+            : tab.kind === "revision"
+              ? ("file--diff" as const)
+              : ("document" as const),
       })),
     [tabs.entries],
   );
-  const act = (action: FileTabAction) => {
-    const next = updateFileTabs(tabs, action);
-    onAction(action);
-    return next.active;
-  };
+  const act = onAction;
+  // Offer unopened destinations without mounting readers or changing stored tabs.
+  const pages: PanelPage[] = [];
+  for (const kind of ["explorer", "changes", "recall"] as const) {
+    const { label, icon } = fileMainViews[kind];
+    if (!tabs.entries.some((tab) => tab.kind === kind))
+      pages.push({
+        id: `page-${kind}`,
+        label,
+        icon,
+        select: () => {
+          act({ type: kind });
+        },
+      });
+  }
   return (
     <PanelShell
       disabled={disabled}
@@ -189,6 +202,7 @@ export function FilePanel({
       name="Files"
       emptyLabel="Open files"
       tabs={panelTabs}
+      pages={pages}
       selectedId={tabs.active}
       onAction={(action) => act(action.type === "add" ? { type: "blank" } : action)}
       open={open}
@@ -197,21 +211,6 @@ export function FilePanel({
     >
       {(focusActiveTab) => (
         <>
-          {!disabled && currentPlan && (
-            <button
-              type="button"
-              className="file-open-link file-panel-view-plan"
-              onClick={() => {
-                if (onViewPlan) onViewPlan();
-                else {
-                  focusActiveTab();
-                  act({ type: "plan", planId: currentPlan.id, title: currentPlan.title });
-                }
-              }}
-            >
-              View Plan
-            </button>
-          )}
           {changesContent && (
             <div className="file-panel-changes" hidden={selected?.kind !== "changes"}>
               {changesContent}
@@ -228,6 +227,21 @@ export function FilePanel({
             <div className="file-panel-empty">
               <div className="file-panel-empty-actions">
                 {emptyContent}
+                {currentPlan && (
+                  <button
+                    type="button"
+                    className="file-open-link"
+                    onClick={() => {
+                      if (onViewPlan) onViewPlan();
+                      else {
+                        focusActiveTab();
+                        act({ type: "plan", planId: currentPlan.id, title: currentPlan.title });
+                      }
+                    }}
+                  >
+                    View Plan
+                  </button>
+                )}
                 <button
                   type="button"
                   className="file-open-link"

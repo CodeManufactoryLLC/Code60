@@ -2,8 +2,7 @@
 
 /* Use the same delayed hover entry and exit on both navigation surfaces. */
 .sidebar :is(button:not(.icon-button, .sidebar-resize), .sidebar-settings-heading),
-.chat-sidebar-row,
-.file-tab {
+:where(.chat-sidebar-row) {
   transition: background-color var(--motion) var(--ease) var(--navigation-hover-delay);
 }
 
@@ -22,15 +21,21 @@
   position: relative;
   --button-size: var(--nav-font-size, 15px);
   --nav-step: 24px;
-  --nav-item-padding: 15px;
-  --nav-inset: max(40px, calc(1.25 * var(--button-size) + 20px));
+  --nav-item-padding: 19px;
+  --nav-borderless-offset: 1px;
+  --nav-inset: min(
+    max(40px, calc(2.5 * var(--button-size) + 8px)),
+    max(21px, calc(100cqw - 147px))
+  );
   --nav-action-width: max(24px, calc(var(--button-size) + 4px));
+  --nav-action-height: min(28px, var(--nav-row-height));
+  --nav-action-glyph: min(24px, calc(var(--nav-row-height) - 2px));
   --control-fill: transparent;
   --disabled-fill: transparent;
   grid-column: 1;
   /* Breadcrumb height belongs to the content column, never to navigation. */
   grid-row: 1 / -1;
-  /* Reserve shadow paint space without moving cards or the resize divider. */
+  /* Preserve the sidebar/resize alignment through reveal animation. */
   margin-left: calc(-4px * var(--sidebar-reveal));
   padding: 0 0 0 calc(4px * var(--sidebar-reveal));
   align-self: stretch;
@@ -72,7 +77,7 @@
   font-weight: var(--button-weight, 600);
 }
 
-/* Space rows themselves so nesting does not multiply container gaps. */
+/* Adjacent row fills meet without white gutters or compounded nested spacing. */
 .sidebar
   :is(
     .page-tab,
@@ -82,68 +87,129 @@
     .sidebar-settings-heading,
     .project-session-new
   ) {
-  margin-bottom: 2.5px;
+  margin-bottom: 0;
 }
 
-/* The shared Neobrutalism Card owns its fill, 2px outline, 5px radius and shadow.
-   Four pixels of inset preserve the former 3px border + 3px padding row positions. */
+/* One shadowless outlined shell contains every accordion section. */
 .sidebar-navigation-card {
+  box-shadow: none;
+  border-width: 1px;
+  border-radius: 5px;
   position: relative;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  overflow: clip;
+  isolation: isolate;
+  container-type: inline-size;
+}
+
+.sidebar-section {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
   min-width: 0;
-  margin-block: 3px;
-  padding: 4px;
+  padding: 0;
   gap: 0;
   isolation: isolate;
 }
 
-/* Keep the solid header band behind controls without clipping focus outlines. */
-.sidebar-navigation-card::before {
+.sidebar-card-header {
+  border-bottom: 1px solid var(--border);
+}
+
+/* Match the Light sidebar canvas across cards; preserve system colors. */
+@media (forced-colors: none) {
+  :root:not([data-color-scheme="dark"]) .sidebar {
+    --accent-bg: #93c5fd;
+  }
+
+  .sidebar-navigation-card {
+    --nb-card-fill: var(--surface);
+  }
+
+  :root:not([data-color-scheme="dark"]) .sidebar-navigation-card {
+    --nb-card-fill: var(--content-background);
+    --card-header-fill: #5494fd;
+    --card-header-text: #ffffff;
+    --card-header-muted: #ffffff;
+    --card-header-hover: #73a7fd;
+  }
+
+  /* Dark headers inherit the same purple and light foreground as breadcrumbs. */
+  .sidebar-card-header {
+    --text: var(--card-header-text);
+    --muted: var(--card-header-muted);
+    --hover-bg: var(--card-header-hover);
+    --control-hover: var(--card-header-hover);
+    --accent-bg: var(--card-header-fill);
+    --control-fill: var(--card-header-fill);
+  }
+
+  :root:not([data-color-scheme="dark"]) .sidebar-card-header {
+    --accent: #1e40af;
+    --hover-bg: var(--card-header-hover);
+    --accent-bg: var(--card-header-fill);
+    --control-hover: var(--card-header-hover);
+    --focus-line: #1e40af;
+    --focus-outline: #1e40af;
+    --focus-inset-shadow: inset 0 0 0 2px #1e40af;
+  }
+
+  .sidebar-navigation-card :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-action) {
+    color: var(--primary);
+    background: var(--primary-text);
+  }
+
+  :root:not([data-color-scheme="dark"])
+    .sidebar-section
+    > :is(.sidebar-card-toggle, .project-sidebar-open, .provider-sidebar-add) {
+    --focus-outline: #1e40af;
+  }
+
+  :root[data-focus-highlight="on"] .sidebar-card-header {
+    --focus-inset-shadow: inset 0 0 0 5px var(--focus-line);
+  }
+}
+
+/* Each section retains its header palette within the shared shell. */
+.sidebar-section::before {
   content: "";
   position: absolute;
   inset: 0 0 auto;
-  height: calc(var(--nav-row-height) + 10px);
+  height: var(--nav-row-height);
   max-height: 100%;
-  border-radius: calc(var(--navigation-card-radius) - var(--rule));
   background: var(--card-header-fill);
   pointer-events: none;
   z-index: -1;
 }
 
-/* Adjacent 8px + 3px margins leave 11px between cards. */
-.sidebar-navigation-card + .sidebar-navigation-card {
-  margin-top: 8px;
-}
-
-/* Preserve the first row's alignment with the breadcrumb header. */
-.sidebar-navigation-card:first-child {
-  margin-top: 6px;
-}
-
 .sidebar .sidebar-card-header :is([role="tab"], .page-group-toggle, .page-group-label) {
-  padding-right: 48px;
+  padding-right: 12px;
 }
 
 .sidebar .sidebar-card-toggle,
 .sidebar :is(.project-sidebar-open, .provider-sidebar-add) {
   position: absolute;
   z-index: 1;
-  top: calc(4px + (var(--nav-row-height) - 28px) / 2);
-  right: 8px;
+  top: calc((var(--nav-row-height) - var(--nav-action-height)) / 2);
+  right: 4px;
   width: 28px;
-  height: 28px;
-  min-height: 28px;
+  height: var(--nav-action-height);
+  min-height: var(--nav-action-height);
   padding: 0;
   color: var(--muted);
   transition: color var(--motion) var(--ease);
 }
 
 .sidebar :is(.project-sidebar-open, .provider-sidebar-add) {
-  right: 40px;
+  right: 4px;
 }
 
 .sidebar .sidebar-card-header :is(#tab-chat, #tab-providers) {
-  padding-right: 72px;
+  padding-right: 44px;
 }
 
 /* Reserve action space, revealing only the row under the pointer or keyboard focus. */
@@ -151,7 +217,7 @@
   opacity: 0;
 }
 
-.sidebar-navigation-card:has(
+.sidebar-section:has(
     > .sidebar-card-header:hover,
     > .sidebar-card-toggle:hover,
     > :is(.project-sidebar-open, .provider-sidebar-add):hover,
@@ -175,8 +241,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: var(--nav-action-glyph);
+  height: var(--nav-action-glyph);
   border: 1px solid #000000;
   border-radius: 50%;
   background: var(--surface-band);
@@ -240,22 +306,9 @@
   --nav-indent: 0px;
 }
 
-/* Add 3px to the 2.5px row gap before each card's second row. */
-.sidebar-navigation-card > :is([role="tablist"], .page-group-pages):not(:first-child) {
-  margin-top: 3px;
-}
-
-/* An empty project list contributes no second-row gap below its heading. */
-#chat-pages:not(:has(.chat-sidebar-row, .project-chat-heading, .project-session-new)) {
+/* Accordion children meet their heading without a second blank strip. */
+.sidebar-section > :is([role="tablist"], .page-group-pages):not(:first-child) {
   margin-top: 0;
-}
-
-/* Trim the final row's spacing even when it lives inside a disclosure. */
-.sidebar-navigation-card::after {
-  content: "";
-  flex: 0 0 0;
-  margin-top: -2.5px;
-  pointer-events: none;
 }
 
 .sidebar :is(.chat-sidebar-row, .project-chat-heading, .sidebar-settings-heading) {
@@ -271,16 +324,13 @@
 }
 
 .sidebar-toggle {
-  position: fixed;
-  top: calc((var(--app-titlebar-height) - var(--sidebar-toggle-width)) / 2);
-  /* Clear macOS traffic lights and any wider native-control inset. */
-  left: max(80px, calc(var(--titlebar-left) + 8px));
-  z-index: 12;
+  position: relative;
   flex-shrink: 0;
   width: var(--sidebar-toggle-width);
   height: var(--sidebar-toggle-width);
   min-height: var(--sidebar-toggle-width);
   color: var(--muted);
+  pointer-events: auto;
   -webkit-app-region: no-drag;
 }
 
@@ -290,19 +340,17 @@
 
 /* Vertical page tabs */
 .page-tabs {
+  margin: 6px 0 4px;
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0;
+  gap: 16px;
   min-width: 0;
   min-height: 0;
-  margin-inline: -4px;
-  padding: 0 4px 4px;
   overflow-y: auto;
   overflow-anchor: none;
   scrollbar-width: none;
-  background: transparent;
 }
 
 .page-tab {
@@ -354,22 +402,13 @@
 .page-tab
   :is([role="tab"], .page-group-toggle, .page-group-label):has(> .navigation-icon[data-animated]),
 .chat-sidebar-entry:has(.navigation-icon[data-animated]) {
-  --nav-label-inset: calc(
-    max(var(--nav-inset), calc(var(--nav-icon-scale, 2) * var(--button-size) + 8px)) +
-    var(--nav-indent) +
-    var(--nav-item-padding)
-  );
+  --nav-label-inset: calc(var(--nav-inset) + var(--nav-indent) + var(--nav-item-padding));
 }
 
 .chat-sidebar-entry:has(.navigation-icon[data-icon="app-communication"]),
 .chat-sidebar-entry:has(.navigation-icon[data-icon="app-down-right"]),
 .chat-sidebar-row > .chat-workers-toggle-leading {
-  --nav-label-inset: calc(
-    var(--nav-item-padding) +
-    max(var(--nav-inset), calc(2 * var(--button-size) + 8px)) +
-    var(--nav-indent) -
-    4px
-  );
+  --nav-label-inset: calc(var(--nav-item-padding) + var(--nav-inset) + var(--nav-indent) - 4px);
 }
 
 /* Center the visible letterforms with the icons and clip only at the end of the label. */
@@ -403,6 +442,10 @@
 
 /* Visible navigation artwork stays fully opaque in every interaction state. */
 .sidebar .navigation-icon {
+  --sidebar-icon-size: min(calc(1em * var(--nav-icon-scale, 1)), calc(var(--nav-inset) - 8px));
+  width: var(--sidebar-icon-size);
+  height: var(--sidebar-icon-size);
+  left: calc(var(--nav-label-inset) - var(--sidebar-icon-size) - 8px);
   opacity: 1;
 }
 
@@ -426,6 +469,14 @@
   gap: 8px;
   min-width: 0;
   max-width: 100%;
+}
+
+.content-page-title > .navigation-icon {
+  position: static;
+  transform: none;
+  flex-shrink: 0;
+  width: 2em;
+  height: 2em;
 }
 
 .page-title > .navigation-icon,
@@ -452,96 +503,6 @@
 
 .page-title-placeholder {
   display: none;
-}
-
-.page-breadcrumbs ol {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.page-breadcrumbs li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.workspace-breadcrumbs[data-breadcrumb-height-motion] {
-  overflow: hidden;
-}
-
-.breadcrumb-exit {
-  position: absolute;
-  pointer-events: none;
-  user-select: none;
-}
-
-.breadcrumb-exit .page-title-text {
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-
-.page-breadcrumbs .page-title {
-  flex-shrink: 1;
-}
-
-.page-breadcrumbs [aria-current="page"] :is(.page-title-text, .chat-title) {
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-
-.page-breadcrumbs [aria-current="page"] .page-title:has(> .sr-only) {
-  position: relative;
-}
-
-.page-breadcrumbs [aria-current="page"] .page-title:has(> .sr-only)::after {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  bottom: -0.15em;
-  border-bottom: 1px solid currentColor;
-  pointer-events: none;
-}
-
-.page-breadcrumbs :is(.breadcrumb-link, .breadcrumb-label) {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.page-breadcrumbs .breadcrumb-link {
-  min-width: 0;
-  min-height: 24px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  overflow-wrap: anywhere;
-  white-space: normal;
-  -webkit-app-region: no-drag;
-}
-
-.page-breadcrumbs .breadcrumb-link:where(:hover, :focus-visible) {
-  color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 0.1em;
-}
-
-.breadcrumb-separator {
-  --icon-size: 1em;
-  flex-shrink: 0;
-  color: var(--muted);
 }
 
 .page-tab[data-closable="true"] [role="tab"] {
@@ -614,11 +575,11 @@
 
 #table-pages,
 #advanced-pages {
-  --nav-indent: calc(var(--nav-step) * 2);
+  --nav-indent: var(--nav-step);
 }
 
 #experiment-pages {
-  --nav-indent: calc(var(--nav-step) * 3);
+  --nav-indent: calc(var(--nav-step) * 2);
 }
 
 .page-group-pages[hidden] {
@@ -733,13 +694,13 @@
 }
 
 .project-chat-pages {
-  --nav-indent: calc(var(--nav-step) * 2);
+  --nav-indent: var(--nav-step);
   display: flex;
   flex-direction: column;
 }
 
 .project-chat-pages .chat-worker-children {
-  --nav-indent: calc(var(--nav-step) * 3);
+  --nav-indent: calc(var(--nav-step) * 2);
 }
 
 .project-chat-group {
@@ -753,12 +714,7 @@
 
 .project-chat-heading {
   container-type: inline-size;
-  --project-label-inset: calc(
-    var(--nav-item-padding) +
-    max(var(--nav-inset), calc(2 * var(--button-size) + 8px)) +
-    var(--nav-indent) -
-    4px
-  );
+  --project-label-inset: calc(var(--nav-item-padding) + var(--nav-inset) + var(--nav-indent) - 4px);
   display: flex;
   flex-wrap: nowrap;
   flex-shrink: 0;
@@ -826,9 +782,9 @@
   flex: 0 0 28px;
   padding: 0;
   align-self: center;
-  height: 28px;
-  min-height: 28px;
-  max-height: 28px;
+  height: var(--nav-action-height);
+  min-height: var(--nav-action-height);
+  max-height: var(--nav-action-height);
 }
 
 .chat-worker-children[hidden] {
@@ -960,8 +916,9 @@
 #custom-agent-pages .chat-sidebar-entry {
   --nav-label-inset: calc(
     var(--nav-item-padding) +
-    max(var(--nav-inset), calc(var(--nav-icon-scale, 2) * var(--button-size) + 8px)) +
-    var(--nav-indent)
+    var(--nav-inset) +
+    var(--nav-indent) +
+    var(--nav-borderless-offset)
   );
 }
 
@@ -969,17 +926,21 @@
   --nav-indent: var(--nav-step);
 }
 
-#assistants-pages {
-  --nav-indent: var(--nav-step);
+#assistants-pages,
+#app-pages,
+#settings-pages,
+#provider-pages,
+#chat-pages {
+  --nav-indent: 0px;
 }
 
 #custom-agent-pages .chat-worker-children {
-  --nav-indent: calc(var(--nav-step) * 3);
+  --nav-indent: calc(var(--nav-step) * 2);
 }
 
 #assistants-pages > .relay-sidebar .chat-worker-children,
 #custom-agent-pages {
-  --nav-indent: calc(var(--nav-step) * 2);
+  --nav-indent: var(--nav-step);
 }
 
 .sidebar :is(button, [role="tab"]):focus-visible,
@@ -1006,6 +967,23 @@
   aspect-ratio: 1;
   left: auto;
   right: 0;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Provider marks share the bounded artwork gutter, including the worker disclosure. */
+.chat-sidebar-entry .chat-sidebar-artwork:has(> :is(.agent-logo, .carbon-icon)) {
+  height: min(28px, 2em);
+}
+
+.chat-sidebar-entry .chat-sidebar-artwork > :is(.agent-logo, .carbon-icon),
+.chat-workers-toggle-leading > :is(.agent-logo, .carbon-icon) {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  width: min(28px, 2em);
+  height: min(28px, 2em);
   max-width: 100%;
   max-height: 100%;
 }
@@ -1068,30 +1046,173 @@
   }
 }
 
-/* Dark plum bands separate compact headers from near-black reading surfaces. */
-:root[data-color-scheme="dark"] .sidebar-card-header {
-  --text: var(--card-header-text);
-  --muted: var(--card-header-muted);
-  --focus-line: var(--card-header-text);
-  --focus-outline: var(--card-header-text);
-  --accent: var(--card-header-text);
-  --hover-bg: var(--card-header-hover);
-  --accent-bg: var(--card-header-hover);
-  --control-hover: var(--card-header-hover);
+/* Header labels retain bold weight over the card's shared palette. */
+:root .sidebar-card-header {
+  --button-weight: 700;
+  --title-weight: 700;
+  font-weight: 700;
 }
 
-/* History shares the native-control row with the sidebar toggle. */
+/* The six card titles keep their own case, independent of saved Button Text case. */
+.sidebar-card-header .page-tab-label {
+  text-transform: uppercase;
+}
+
+/* History belongs to the current-page card, independently of the portal owner. */
 .sidebar-history {
-  position: fixed;
-  top: 0;
-  left: calc(max(80px, calc(var(--titlebar-left) + 8px)) + var(--sidebar-toggle-width) + 4px);
-  z-index: 12;
-  height: var(--app-titlebar-height);
+  position: absolute;
+  left: var(--header-side-padding);
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 4;
   display: flex;
   align-items: center;
+  gap: 8px;
   -webkit-app-region: no-drag;
 }
+
 .sidebar-history > .icon-button {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+}
+
+/* Empty circles reserve unavailable directions without suggesting an available action. */
+.history-placeholder {
+  display: block;
+  box-sizing: border-box;
+  width: 75%;
+  aspect-ratio: 1;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* Global appearance actions stay outside the current page's portalled owner. */
+.breadcrumb-appearance-controls {
+  position: absolute;
+  right: var(--header-side-padding);
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.breadcrumb-appearance-controls > .icon-button {
+  position: relative;
+  opacity: 0.5;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  -webkit-app-region: no-drag;
+}
+
+.breadcrumb-appearance-controls > .icon-button:is(:hover, :focus-visible) {
+  opacity: 1;
+}
+
+.sidebar-history .navigation-icon,
+.breadcrumb-appearance-controls .navigation-icon {
+  position: static;
+  width: 36px;
+  height: 36px;
+  transform: none;
+  pointer-events: none;
+}
+
+.breadcrumb-appearance-controls .icon-animation-block {
+  position: absolute;
+  inset: 10%;
+  width: 80%;
+  height: 80%;
+}
+
+/* Bitmap glyphs need a visible focus ring because their colors do not inherit. */
+.sidebar-history > .icon-button:focus-visible .navigation-icon,
+.breadcrumb-appearance-controls
+  > .icon-button:focus-visible
+  .navigation-icon:not(.icon-animation-block) {
+  outline: 2px solid var(--focus-line);
+  outline-offset: 1px;
+  border-radius: 50%;
+}
+
+@media (forced-colors: active) {
+  .breadcrumb-appearance-controls > .icon-button {
+    opacity: 1;
+  }
+
+  .sidebar-history > .icon-button:focus-visible .navigation-icon,
+  .breadcrumb-appearance-controls
+    > .icon-button:focus-visible
+    .navigation-icon:not(.icon-animation-block) {
+    outline-color: Highlight;
+  }
+}
+
+@container page-header (max-width: 480px) {
+  .sidebar-history,
+  .breadcrumb-appearance-controls {
+    gap: 4px;
+  }
+
+  .sidebar-history > .icon-button,
+  .breadcrumb-appearance-controls > .icon-button {
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+  }
+
+  .sidebar-history .navigation-icon,
+  .breadcrumb-appearance-controls .navigation-icon:not(.icon-animation-block) {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+/* Immediate child labels share the card heading's gutter, regardless of artwork size. */
+#provider-pages .chat-sidebar-entry {
+  --nav-label-inset: calc(
+    var(--nav-item-padding) +
+    var(--nav-inset) +
+    var(--nav-borderless-offset)
+  );
+}
+
+.sidebar-navigation-card:has(#tab-chat) {
+  container-type: inline-size;
+}
+#tab-chat,
+#chat-pages .project-chat-name {
+  --project-root-label-inset: min(
+    calc(var(--nav-item-padding) + var(--nav-inset)),
+    max(40px, calc(100cqw - 128px))
+  );
+}
+#tab-chat > .navigation-icon {
+  --project-header-icon-size: min(
+    calc(1em * var(--nav-icon-scale)),
+    calc(var(--nav-label-inset) - var(--nav-item-padding) - 8px)
+  );
+  width: var(--project-header-icon-size);
+  height: var(--project-header-icon-size);
+  left: calc(var(--nav-label-inset) - var(--project-header-icon-size) - 8px);
+}
+
+#chat-pages .project-chat-name {
+  --nav-label-inset: calc(var(--project-root-label-inset) + var(--nav-borderless-offset));
+}
+
+#tab-chat {
+  --nav-label-inset: var(--project-root-label-inset);
+}
+
+@media (forced-colors: active) {
+  .sidebar {
+    --nav-borderless-offset: 0px;
+  }
 }

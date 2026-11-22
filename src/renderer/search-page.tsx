@@ -304,18 +304,7 @@ export function SearchPage({
                   </option>
                 ))}
               </select>
-              {unapplied && (
-                <span
-                  className="search-unapplied"
-                  role="img"
-                  aria-label={unappliedLabel}
-                  data-tooltip={unappliedLabel}
-                  // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard access exposes the status tooltip.
-                  tabIndex={0}
-                >
-                  <Icon name="information" />
-                </span>
-              )}
+              {unapplied && <span className="search-unapplied">{unappliedLabel}</span>}
               <p className="sr-only" role="status">
                 {unapplied ? unappliedLabel : ""}
               </p>

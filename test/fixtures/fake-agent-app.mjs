@@ -12,6 +12,7 @@ export function createFakeAgent(options = {}) {
   let cwd = process.cwd();
   let gateway = {};
   let planId;
+  let timingGateRoot;
   const tool = async (name, args = {}) => {
     const response = await fetch(gateway.CODE60_MCP_GATEWAY_URL, {
       method: "POST",
@@ -246,7 +247,17 @@ export function createFakeAgent(options = {}) {
       }
       if (options.planWorkflow && gateway.CODE60_MCP_GATEWAY_URL) {
         const request = text.split("--- User request ---\n").at(-1);
-        if (request === "Plan a change" || request === "Plan a second change") {
+        if (request.startsWith("Plan a timed change\n")) {
+          timingGateRoot = request.split("\n")[1];
+          const plan = await tool("code60_create_plan", {
+            requestId: "fixture-timed-plan",
+            title: "Timed plan",
+            description: "Controlled execution timing.",
+            tasks: [{ text: "First segment" }, { text: "Second segment" }],
+          });
+          planId = plan.id;
+          steps = [{ message: "Timed plan ready for acceptance." }];
+        } else if (request === "Plan a change" || request === "Plan a second change") {
           const plan = await tool("code60_create_plan", {
             requestId: request === "Plan a change" ? "fixture-plan" : "fixture-second-plan",
             title: request === "Plan a change" ? "Planned change" : "Second planned change",
@@ -286,7 +297,25 @@ export function createFakeAgent(options = {}) {
           steps = [{ message: "Plan revised." }];
         } else if (text.includes("Code60: the user accepted plan")) {
           let plan = await tool("code60_read_plan", { planId });
-          if (plan.title === "Layout check") {
+          if (plan.title === "Timed plan") {
+            const resume = plan.tasks[0].state === "blocked";
+            if (!resume)
+              plan = await tool("code60_update_plan", {
+                operation: "progress",
+                planId,
+                revision: plan.revision,
+                taskId: plan.tasks[0].id,
+                state: "in_progress",
+                note: "Timing gate active.",
+              });
+            steps = [
+              {
+                message: resume ? "Second timing segment active." : "First timing segment active.",
+              },
+              { waitForFile: join(timingGateRoot, resume ? "complete-timing" : "pause-timing") },
+              { planTiming: resume ? "complete" : "pause" },
+            ];
+          } else if (plan.title === "Layout check") {
             const updates = [
               ["completed", "Verified the short task."],
               [
@@ -557,6 +586,21 @@ export function createFakeAgent(options = {}) {
             sessionUpdate: "agent_message_chunk",
             content: { type: "text", text: `permission ${id}: ${outcome}` },
           });
+        } else if (options.planWorkflow && step.planTiming !== undefined) {
+          let plan = await tool("code60_read_plan", { planId });
+          const tasks = step.planTiming === "pause" ? plan.tasks.slice(0, 1) : plan.tasks;
+          for (const task of tasks)
+            plan = await tool("code60_update_plan", {
+              operation: "progress",
+              planId,
+              revision: plan.revision,
+              taskId: task.id,
+              state: step.planTiming === "pause" ? "blocked" : "completed",
+              note:
+                step.planTiming === "pause"
+                  ? "Waiting at the timing checkpoint."
+                  : "Verified timing segment.",
+            });
         } else if (step.write !== undefined) {
           writeFileSync(join(cwd, step.write.path), step.write.content);
         } else if (step.stderr !== undefined) {

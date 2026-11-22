@@ -25,13 +25,39 @@ describe("desktop capability catalog", () => {
       confirmation: "Human approval before installation and shutdown.",
     });
   });
-  it("classifies bounded human-only navigation history without database prerequisites", () => {
-    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
+  it("describes human-only sidebar/card navigation without a current-page menu", () => {
+    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "page-navigation")).toMatchObject({
       prerequisite: "none",
       agentAccess: "human-only",
-      access: expect.stringContaining("Title bar"),
+      access: expect.stringContaining("Left navigation sidebar"),
+      limitations: expect.stringContaining("no current-page dropdown"),
+    });
+    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "page-navigation")?.limitations).toContain(
+      "navigation icon on its left",
+    );
+  });
+  it("describes content-title commands while keeping navigation and availability human-only", () => {
+    const navigation = DESKTOP_CAPABILITIES.find((cap) => cap.id === "page-navigation");
+    expect(navigation?.limitations).toContain("chevron-only title actions menu");
+    expect(navigation?.limitations).toContain(
+      "Table tools, scope selectors, creation cards and corner panel toggles remain visible",
+    );
+    expect(navigation?.prerequisite).toBe("none");
+    expect(navigation?.agentAccess).toBe("human-only");
+    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "updates")?.access).toContain(
+      "title actions",
+    );
+  });
+  it("classifies bounded human-only navigation history without database prerequisites", () => {
+    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
+      access: "Workspace header card → Back / Forward",
+      prerequisite: "none",
+      agentAccess: "human-only",
       limitations: expect.stringContaining("100 destinations"),
     });
+    expect(
+      DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")?.limitations,
+    ).toContain("An empty circle replaces the arrow artwork");
   });
   it("exposes conversational browser modes only through the orchestrator gateway", () => {
     expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "browser")).toMatchObject({
@@ -103,15 +129,62 @@ describe("desktop capability catalog", () => {
   it("describes per-card custom assistant management", () => {
     const access = DESKTOP_CAPABILITIES.find((c) => c.id === "custom-agents")?.access;
     expect(access).toContain("assistant card → More actions → Edit or Archive");
-    expect(access).toContain("Archived → card → More actions → Restore");
+    expect(access).toContain("title actions → Archived → card → More actions → Restore");
   });
-  it("describes human-only sidebar appearance controls and their transparency limits", () => {
+  it("describes human-only window background controls and their transparency limits", () => {
     expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
       prerequisite: "none",
       agentAccess: "human-only",
-      purpose: expect.stringContaining("left sidebar background opacity"),
-      access: expect.stringContaining("Appearance → Left sidebar"),
+      access: expect.stringContaining("Appearance → Window background"),
       limitations: expect.stringContaining("dedicated top-right chevron"),
+      purpose: expect.stringContaining("whole-window background opacity"),
+    });
+  });
+  it("describes Apps-owned preferences and Update Manager with unchanged human-only access", () => {
+    const updates = DESKTOP_CAPABILITIES.find((c) => c.id === "updates");
+    expect(updates).toMatchObject({
+      label: "Update Manager",
+      access: "Apps → Update Manager → title actions",
+      prerequisite: "runtime",
+      agentAccess: "human-only",
+    });
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "memory")?.access).toContain("Apps → Memory");
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")?.access).toContain(
+      "Apps → Appearance",
+    );
+  });
+  it("describes the global icon playback switch without changing authority", () => {
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      access: expect.stringContaining("Color theme or Icon animations"),
+      limitations: expect.stringContaining("freezes GIF artwork and CSS icon pulses app-wide"),
+    });
+  });
+  it("describes the human-only breadcrumb theme shortcut without changing availability", () => {
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      access: expect.stringContaining("breadcrumb card → Color theme"),
+      limitations: expect.stringContaining("System → Dark → Light → System"),
+    });
+  });
+  it("describes locally saved monochrome icons without database prerequisites", () => {
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      purpose: expect.stringContaining("Monochrome icons with a color selector"),
+      access: expect.stringContaining("Icons"),
+      limitations: expect.stringContaining("Icon contrast spreads its shades"),
+    });
+  });
+  it("locates the file panel toggle in the main content card corner", () => {
+    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "files")).toMatchObject({
+      access: "Chat → upper-right corner of main content card → Toggle files panel",
+      purpose: expect.stringContaining("File Explorer, Changes and Memory Recall"),
+      limitations: expect.stringContaining("Alt+Left/Right reorders"),
+      prerequisite: "runtime",
+      agentAccess: "read",
     });
   });
   it("keeps navigation disclosures human-only and independent from execution", () => {
@@ -153,7 +226,7 @@ describe("desktop capability catalog", () => {
     const providers = DESKTOP_CAPABILITIES.find((capability) => capability.id === "providers");
     expect(providers).toMatchObject({
       label: "Providers",
-      access: "Providers → provider details",
+      access: "Providers → provider details → title actions for Disconnect or Set as Primary",
       prerequisite: "none",
     });
     expect(providers?.limitations).toContain("stopped desktop agent work");

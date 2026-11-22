@@ -1,29 +1,10 @@
 /* Files styles. Imported into its declared layer by style.css. */
 
-.file-panel-toolbar > .icon-button {
-  flex-shrink: 0;
-}
-
 .file-target-label {
   flex-shrink: 0;
   margin: 0;
   padding: 8px 12px;
   overflow-wrap: anywhere;
-}
-
-.file-panel-open {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 36px;
-  height: 36px;
-  min-height: 36px;
-  margin: 0;
-  z-index: 3;
-}
-
-.chat-workspace-body[data-file-panel-open="false"] .orchestration-chat-heading {
-  padding-right: 64px;
 }
 
 /* Chat frames the conversation separately from its adjacent inspector card. */
@@ -60,6 +41,7 @@
 }
 
 .file-panel {
+  box-shadow: none;
   box-sizing: border-box;
   --control-fill: var(--chat-neutral);
   position: relative;
@@ -96,89 +78,64 @@
   display: none;
 }
 
-.file-tab-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-
 .file-panel-toggle {
-  margin-left: auto;
-}
-
-.file-panel-toolbar,
-.file-tabs {
-  display: flex;
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
-}
-
-.file-tabs {
-  overflow-x: scroll;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  margin: 0;
+  padding: 0;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 
 .file-panel-toolbar {
-  align-items: center;
+  flex: 0 0 auto;
+  height: var(--breadcrumb-card-height, 58px);
+  min-width: 0;
   background: var(--card-header-fill);
   border-radius: 2px 2px 0 0;
 }
 
-.file-tab {
-  display: flex;
-  flex: 0 0 auto;
+.file-tab-actions {
+  box-sizing: border-box;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  max-width: 260px;
-  border-right: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  border-radius: var(--button-radius);
+  gap: 4px;
+  min-width: 0;
+  padding: 4px;
 }
 
-.file-tab > :where([role="tab"]) {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.file-tab-selector {
   min-width: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
+}
+
+.file-tab-selector .neo-combobox-trigger {
+  width: 100%;
+  height: 36px;
+  min-height: 36px;
+  margin: 0;
+  padding-inline: 6px;
+  gap: 4px;
+  font:
+    var(--button-weight, 600) min(var(--button-size, 13px), 22px) / 1.5
+    var(--button-font, var(--font));
   text-transform: none;
 }
 
-.file-tab > :where([role="tab"]) > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.file-panel-view-actions > .icon-button {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
 }
 
-.file-tab[data-selected="true"] {
-  background: var(--accent-bg);
-  color: var(--text);
-}
-
-.file-tab[data-selected="true"] > [role="tab"] {
-  color: var(--text);
-}
-
-.file-tab > .file-tab-close {
-  flex-shrink: 0;
-  border: 0;
-  background: transparent;
-}
-
-/* The shared tab paints under both independent controls, including Close. */
-.file-tab:has(> [role="tab"]:enabled):hover {
-  background: var(--hover-bg);
-  color: var(--text);
-}
-
-.file-panel .file-tab > [role="tab"]:is(:hover, :active, :focus) {
-  background: transparent;
-  color: inherit;
+.file-panel-view-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  padding: 4px 4px 0;
 }
 
 .file-panel-content {
@@ -194,16 +151,8 @@
   display: grid;
   place-items: center;
   flex: 1;
-}
-
-.file-panel-view-plan {
-  display: block;
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-align: left;
-  flex-shrink: 0;
-  align-self: flex-start;
+  min-height: 0;
+  overflow: auto;
 }
 
 .file-panel-empty-actions,
@@ -218,9 +167,13 @@
 
 .file-panel-empty-actions {
   padding: 16px;
+  min-width: 0;
+  margin: auto;
 }
 
 .file-panel-empty-actions button {
+  max-width: 100%;
+  white-space: normal;
   text-align: left;
   overflow-wrap: anywhere;
 }
@@ -955,7 +908,12 @@ button.file-open-link {
 .plan-toolbar progress {
   display: block;
   width: 100%;
-  height: 4px;
+  height: 12px;
+}
+
+.plan-execution-time {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .plan-actions {
@@ -1137,12 +1095,11 @@ button.file-open-link {
   border-radius: 0 !important;
 }
 
-.file-tab-actions > .icon-button {
-  flex-shrink: 0;
-}
-
-/* Dark plum bands separate compact headers from near-black reading surfaces. */
-:root[data-color-scheme="dark"] .file-panel-toolbar {
+/* Header controls inherit contrasting colors for each theme's solid band. */
+:root .file-panel-toolbar {
+  --button-weight: 700;
+  --title-weight: 700;
+  font-weight: 700;
   --text: var(--card-header-text);
   --muted: var(--card-header-muted);
   --focus-line: var(--card-header-text);
@@ -1153,6 +1110,12 @@ button.file-open-link {
   --control-hover: var(--card-header-hover);
 }
 
-:root[data-color-scheme="dark"] .file-panel-toolbar .icon-button {
-  color: var(--muted);
+/* Light inspector controls share the white reading surface. */
+@media (forced-colors: none) {
+  :root:not([data-color-scheme="dark"]) .file-panel-toolbar {
+    --card-header-fill: var(--content-background);
+    --card-header-text: #111111;
+    --card-header-muted: #303848;
+    --card-header-hover: #e0eefe;
+  }
 }

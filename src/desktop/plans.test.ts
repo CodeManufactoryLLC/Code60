@@ -7,14 +7,21 @@ import { parsePlanAction, planCreateSchema, planUpdateSchema } from "../bridge/i
 import { PlanStore } from "./plans.js";
 
 const roots: string[] = [];
+const stores: PlanStore[] = [];
+async function openPlanStore(...args: Parameters<typeof PlanStore.open>) {
+  const store = await PlanStore.open(...args);
+  stores.push(store);
+  return store;
+}
 afterEach(async () => {
+  for (const store of stores.splice(0)) store.stopTiming();
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 async function setup() {
   const parent = await mkdtemp(join(tmpdir(), "code60-plan-"));
   roots.push(parent);
   const root = join(parent, "chat");
-  return { root, store: await PlanStore.open(root, "chat") };
+  return { root, store: await openPlanStore(root, "chat") };
 }
 const draft = {
   requestId: "first",
@@ -46,7 +53,7 @@ it("rewinds plan context without decreasing revisions or reviving discarded auth
       plan.title = "Late update";
     }),
   ).rejects.toThrow("discarded by Undo");
-  const reopened = await PlanStore.open(root, "chat");
+  const reopened = await openPlanStore(root, "chat");
   expect(reopened.list()).toEqual([]);
   expect(reopened.get(original.id).title).toBe("Build");
 });
@@ -54,7 +61,7 @@ it("keeps Relay target assignments and rejects private-record changes instead of
   const parent = await mkdtemp(join(tmpdir(), "code60-private-plan-"));
   roots.push(parent);
   const root = join(parent, "documents");
-  const store = await PlanStore.open(root, "relay", true);
+  const store = await openPlanStore(root, "relay", true);
   const target = { id: randomUUID(), cwd: "/absolute/target", workspaceMode: "direct" as const };
   const request = {
     ...draft,
@@ -73,7 +80,7 @@ it("keeps Relay target assignments and rejects private-record changes instead of
   expect(store.get(plan.id).state).toBe("draft");
   expect(await readFile(path, "utf8")).toContain("Changed outside Code60");
   await writeFile(path, data);
-  expect((await PlanStore.open(root, "relay", true)).get(plan.id).tasks[0]?.target).toEqual(target);
+  expect((await openPlanStore(root, "relay", true)).get(plan.id).tasks[0]?.target).toEqual(target);
   await chmod(path, 0o644);
   await expect(PlanStore.open(root, "relay", true)).rejects.toThrow("permissions");
 });
@@ -147,7 +154,7 @@ it("repairs Markdown from its record and never resumes execution on reopen", asy
   const plan = await store.create(draft, null);
   await store.action({ type: "accept", chatId: "chat", planId: plan.id, revision: 1 });
   await writeFile(join(root, "plans", `${plan.id}.md`), "interrupted projection");
-  const reopened = await PlanStore.open(root, "chat");
+  const reopened = await openPlanStore(root, "chat");
   expect(reopened.get(plan.id).state).toBe("paused");
   expect(await readFile(join(root, "plans", `${plan.id}.md`), "utf8")).toContain("- [ ] Implement");
   await expect(PlanStore.open(root, "another-chat")).rejects.toThrow("identity");
@@ -218,7 +225,7 @@ it.each([false, true])(
   "persists creation order through rewrites and repeated reopen (private %s)",
   async (strict) => {
     const { root } = await setup();
-    let store = await PlanStore.open(root, "chat", strict);
+    let store = await openPlanStore(root, "chat", strict);
     const first = await store.create(draft, null);
     await store.action({ type: "dismiss", chatId: "chat", planId: first.id, revision: 1 });
     const latest = await store.create({ ...draft, requestId: "latest", title: "Latest" }, null);
@@ -247,7 +254,7 @@ it.each([false, true])(
       [first, latest].map((plan) => readFile(join(root, "plans", `${plan.id}.md`), "utf8")),
     );
     for (let restart = 0; restart < 3; restart++) {
-      store = await PlanStore.open(root, "chat", strict);
+      store = await openPlanStore(root, "chat", strict);
       expect(store.list().map((plan) => plan.id)).toEqual([earlyId, lateId]);
       expect(store.get(lateId)).toEqual(expected[1]);
       expect(store.get(earlyId)).toEqual(expected[0]);

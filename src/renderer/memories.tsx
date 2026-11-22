@@ -8,7 +8,6 @@ import {
   type MemoryRecord,
 } from "../bridge/index.js";
 import { DataTable, type TableOptions } from "./data-table.js";
-import { Icon } from "./icons.js";
 import { MemoriesModel } from "./memories-model.js";
 import { MemoryInspector } from "./memory.js";
 import { Modal } from "./modal.js";
@@ -192,21 +191,17 @@ export function MemoriesPage({
         selected={selected}
         onSelect={(id) => void inspect(id)}
         scope={scope}
-        actions={
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Refresh memories"
-            data-tooltip="Refresh"
-            disabled={busyPaging}
-            onClick={() => {
+        pageActions={[
+          {
+            id: "memories-0",
+            label: "Refresh memories",
+            run: () => {
               setError("");
               model.refresh();
-            }}
-          >
-            <Icon name="renew" />
-          </button>
-        }
+            },
+            disabled: busyPaging,
+          },
+        ]}
       />
       {!state.pending && !state.error && !state.page.records.length && (
         <p className="table-empty" role="status">

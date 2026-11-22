@@ -8,16 +8,23 @@ import { ChatWorkspace } from "./chat-workspace.js";
 import { builtinRelayId, conversationId } from "./chats.js";
 import { CommandsPage } from "./commands-page.js";
 import { ConfigurationsTable } from "./configurations.js";
+import { ContentHeaderSlot } from "./content-page-header.js";
 import { CustomAgentsPage } from "./custom-agents.js";
 import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
 import { HomePage } from "./home-page.js";
-import { Icon } from "./icons.js";
 import { LogsPage } from "./logs.js";
 import { MemoriesPage } from "./memories.js";
 import { MemoryPage } from "./memory.js";
 import { MessagesPage } from "./messages.js";
-import { isSettingsSection, type RenderedPageId, renderedPages } from "./navigation.js";
+import {
+  isSettingsSection,
+  pageDefinitions,
+  type RenderedPageId,
+  renderedPages,
+  settingsIcons,
+  settingsLabels,
+} from "./navigation.js";
 import { NavigationHomePage } from "./navigation-home-page.js";
 import { sidebarPageElementId, staticChildren } from "./navigation-tree.js";
 import { Card } from "./neobrutalism/card.js";
@@ -83,24 +90,10 @@ export function AppPages(props: AppPagesProps) {
   );
   const titleNavigation = useMemo(
     () => ({
-      open: navigation.open,
-      pending: navigation.pending,
       selectionPending: navigation.projectPending || navigation.conversationPending,
       header: !splash,
-      projects: snapshot?.openProjects ?? [],
-      chats: snapshot?.chats ?? [],
-      runs: navigationRuns,
     }),
-    [
-      navigation.open,
-      navigation.pending,
-      navigation.projectPending,
-      navigation.conversationPending,
-      splash,
-      snapshot?.openProjects,
-      snapshot?.chats,
-      navigationRuns,
-    ],
+    [navigation.projectPending, navigation.conversationPending, splash],
   );
   const projectRuns = useMemo(
     () => snapshot?.runs.filter((run) => !run.relay) ?? [],
@@ -123,10 +116,13 @@ export function AppPages(props: AppPagesProps) {
   const directory = scope.project;
   const workspace = scope.workspace;
   const databaseKey = JSON.stringify([database, state?.databaseGeneration ?? 0]);
-  const { transparent, savingAppearance, saveTransparent, sidebarBlurSupported } = appearance;
+  const { sidebarBlurSupported } = appearance;
   const {
     theme,
     setTheme,
+    iconAppearance,
+    setIconAppearance,
+    iconAppearanceSaved,
     sidebarAppearance,
     setSidebarAppearance,
     sidebarAppearanceSaved,
@@ -284,7 +280,14 @@ export function AppPages(props: AppPagesProps) {
       />
     ),
     apps: (
-      <AppsPage database={database} onOpen={(id) => void navigation.open({ kind: "page", id })} />
+      <AppsPage
+        database={database}
+        onOpen={(id) =>
+          void navigation.open(
+            isSettingsSection(id) ? { kind: "settings", id } : { kind: "page", id },
+          )
+        }
+      />
     ),
     home: (
       <HomePage
@@ -344,11 +347,11 @@ export function AppPages(props: AppPagesProps) {
               </fieldset>
             )
           }
-          transparent={transparent}
-          savingAppearance={savingAppearance}
-          onTransparent={(enabled) => void saveTransparent(enabled)}
           theme={theme}
           onTheme={setTheme}
+          iconAppearance={iconAppearance}
+          iconAppearanceSaved={iconAppearanceSaved}
+          onIconAppearance={setIconAppearance}
           sidebarAppearance={sidebarAppearance}
           sidebarAppearanceSaved={sidebarAppearanceSaved}
           sidebarBlurSupported={sidebarBlurSupported}
@@ -611,32 +614,28 @@ export function AppPages(props: AppPagesProps) {
           <main className="sessions" aria-label="Sessions" data-heading-lines={lines.heading}>
             <SessionsTable
               key={scope.viewKey}
-              actions={
-                <>
-                  {run?.agentAlive && (
-                    <button
-                      type="button"
-                      className="icon-button danger-text"
-                      aria-label="Stop leftover agent"
-                      disabled={busy}
-                      onClick={() => void act({ type: "stop", id: run.record.id })}
-                    >
-                      <Icon name="stop" />
-                    </button>
-                  )}
-                  {!!snapshot?.active && (
-                    <button
-                      type="button"
-                      className="icon-button"
-                      aria-label="Stop all runs"
-                      disabled={busy}
-                      onClick={() => void attempt(() => api.stopAll())}
-                    >
-                      <Icon name="stop" />
-                    </button>
-                  )}
-                </>
-              }
+              pageActions={[
+                ...(run?.agentAlive
+                  ? [
+                      {
+                        id: "app-pages-0",
+                        label: "Stop leftover agent",
+                        run: () => void act({ type: "stop", id: run.record.id }),
+                        disabled: busy,
+                      },
+                    ]
+                  : []),
+                ...(snapshot?.active
+                  ? [
+                      {
+                        id: "app-pages-1",
+                        label: "Stop all runs",
+                        run: () => void attempt(() => api.stopAll()),
+                        disabled: busy,
+                      },
+                    ]
+                  : []),
+              ]}
               tableId="sessions"
               workspace={`${database}:${directory}`}
               onAdd={() => {
@@ -691,12 +690,28 @@ export function AppPages(props: AppPagesProps) {
             role="tabpanel"
             id={`panel-${id}`}
             aria-labelledby={
-              id === "chat" && snapshot
-                ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
-                : sidebarPageElementId(id, tabs.projectId, tabs.providerId)
+              id === "settings" && settingsSection
+                ? `tab-settings-${settingsSection}`
+                : id === "chat" && snapshot
+                  ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
+                  : sidebarPageElementId(id, tabs.projectId, tabs.providerId)
             }
             hidden={tabs.active !== id}
           >
+            {id !== "chat" && (
+              <ContentHeaderSlot
+                icon={
+                  id === "settings" && settingsSection
+                    ? settingsIcons[settingsSection]
+                    : pageDefinitions[id].icon
+                }
+                fallback={
+                  id === "settings" && settingsSection
+                    ? settingsLabels[settingsSection]
+                    : pageDefinitions[id].label
+                }
+              />
+            )}
             {views[id]}
           </Shell>
         );

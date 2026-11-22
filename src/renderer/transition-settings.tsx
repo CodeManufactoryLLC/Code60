@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { InfoTip } from "./overlays.js";
+import { ControlDescription } from "./overlays.js";
 import {
   defaultTransitionTimes,
   maxTransitionTime,
@@ -38,9 +38,9 @@ export function TransitionSettings() {
             <div className="transition-setting-heading">
               <span className="settings-label">
                 <label htmlFor={sliderId}>{field.label}</label>
-                <InfoTip label={field.label} id={tipId}>
+                <ControlDescription id={tipId}>
                   {`${field.tip} Range: 0 to 30 seconds. Zero is instant. System reduced motion overrides these settings. Changes apply immediately and are saved on this device.`}
-                </InfoTip>
+                </ControlDescription>
               </span>
               <output htmlFor={sliderId}>{transitionTimeLabel(time)}</output>
             </div>

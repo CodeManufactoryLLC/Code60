@@ -10,6 +10,7 @@ import {
   type SettingsSectionId,
   settingsIcons,
   settingsLabels,
+  settingsParents,
   settingsSectionIds,
 } from "./navigation.js";
 import type { NavigationIconName } from "./navigation-icons.js";
@@ -64,8 +65,8 @@ export function staticChildren(parent: ParentPageId, database: string | null): N
       ...(!pageAvailable(id, database) ? { reason: "Connect to a database first" } : {}),
       target: { kind: "page", id },
     }));
-  if (parent === "settings")
-    for (const id of settingsSectionIds)
+  for (const id of settingsSectionIds)
+    if (settingsParents[id] === parent)
       nodes.push({
         id,
         label: settingsLabels[id],

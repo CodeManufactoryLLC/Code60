@@ -2,8 +2,9 @@ import { type ReactNode, useId } from "react";
 import type { Versions } from "../bridge/index.js";
 import { AboutSection } from "./about-section.js";
 import { parseTheme, type SidebarAppearance, type Theme } from "./appearance.js";
+import { type IconAppearance, iconContrastBounds } from "./icon-appearance.js";
 import { type SettingsSectionId, settingsLabels } from "./navigation.js";
-import { InfoTip } from "./overlays.js";
+import { ControlDescription } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 import { SidebarAppearanceSettings } from "./sidebar-appearance-settings.js";
 import { type RowDensity, rowDensities, type TableLines } from "./table-preferences.js";
@@ -16,11 +17,11 @@ export function SettingsPage({
   versions,
   memory,
   pollingControls,
-  transparent,
-  savingAppearance,
-  onTransparent,
   theme,
   onTheme,
+  iconAppearance,
+  iconAppearanceSaved,
+  onIconAppearance,
   sidebarAppearance,
   sidebarAppearanceSaved,
   sidebarBlurSupported,
@@ -52,11 +53,11 @@ export function SettingsPage({
   onSignals(on: boolean): void;
   charts: boolean;
   onCharts(on: boolean): void;
-  transparent: boolean | undefined;
-  savingAppearance: boolean;
-  onTransparent(enabled: boolean): void;
   theme: Theme;
   onTheme(theme: Theme): void;
+  iconAppearance: IconAppearance;
+  iconAppearanceSaved: boolean;
+  onIconAppearance(appearance: IconAppearance): void;
   sidebarAppearance: SidebarAppearance;
   sidebarAppearanceSaved: boolean;
   sidebarBlurSupported: boolean | undefined;
@@ -100,6 +101,65 @@ export function SettingsPage({
             nativeError={sidebarBlurError}
             onChange={onSidebarAppearance}
           />
+          <SettingsCard title="Icons">
+            <label className="settings-row">
+              Monochrome
+              <input
+                type="checkbox"
+                role="switch"
+                checked={iconAppearance.monochrome}
+                aria-checked={iconAppearance.monochrome}
+                onChange={(event) =>
+                  onIconAppearance({ ...iconAppearance, monochrome: event.target.checked })
+                }
+              />
+            </label>
+            <label className="settings-row">
+              Icon color
+              <input
+                type="color"
+                value={iconAppearance.color}
+                disabled={!iconAppearance.monochrome}
+                onChange={(event) =>
+                  onIconAppearance({ ...iconAppearance, color: event.target.value })
+                }
+              />
+            </label>
+            <div className="icon-contrast-setting">
+              <div className="icon-contrast-heading">
+                <span className="settings-label">
+                  <label htmlFor={`${id}-icon-contrast`}>Icon contrast</label>
+                  <ControlDescription id={`${id}-icon-contrast-tip`}>
+                    Spreads the selected color into darker shadows and lighter highlights. Zero uses
+                    one flat color; 100% keeps the standard shades; 200% reaches black and white.
+                    Applies immediately while Monochrome is on.
+                  </ControlDescription>
+                </span>
+                <output htmlFor={`${id}-icon-contrast`}>{iconAppearance.contrast}%</output>
+              </div>
+              <div className="transition-range">
+                <input
+                  id={`${id}-icon-contrast`}
+                  type="range"
+                  min={iconContrastBounds.min}
+                  max={iconContrastBounds.max}
+                  step={1}
+                  value={iconAppearance.contrast}
+                  disabled={!iconAppearance.monochrome}
+                  aria-valuetext={`${iconAppearance.contrast}%`}
+                  aria-describedby={`${id}-icon-contrast-tip`}
+                  onChange={(event) =>
+                    onIconAppearance({ ...iconAppearance, contrast: event.target.valueAsNumber })
+                  }
+                />
+              </div>
+            </div>
+            {!iconAppearanceSaved && (
+              <p className="error" role="alert">
+                Icon appearance could not be saved. Changes apply for this window only.
+              </p>
+            )}
+          </SettingsCard>
           <TransitionSettings />
           <SettingsCard title="Window">
             <label className="settings-row">
@@ -113,27 +173,6 @@ export function SettingsPage({
                 <option value="dark">Dark</option>
                 <option value="system">System</option>
               </select>
-            </label>
-            <label className="settings-row">
-              <span className="settings-label">
-                <span id={`${id}-transparent-label`}>Transparent background</span>
-                <InfoTip label="Transparent background" id={`${id}-transparent`}>
-                  Applies after restart. Makes the other areas outside the content frame and
-                  navigation transparent. On macOS, clicks in those areas pass through to the
-                  desktop; on Linux, the window stays clickable. Left sidebar opacity is controlled
-                  separately and applies immediately.
-                </InfoTip>
-              </span>
-              <input
-                type="checkbox"
-                role="switch"
-                checked={transparent ?? false}
-                aria-checked={transparent ?? false}
-                aria-labelledby={`${id}-transparent-label`}
-                aria-describedby={`${id}-transparent`}
-                disabled={transparent === undefined || savingAppearance}
-                onChange={(event) => onTransparent(event.target.checked)}
-              />
             </label>
           </SettingsCard>
           <SettingsCard title="Accessibility">
@@ -150,10 +189,10 @@ export function SettingsPage({
             <label className="settings-row">
               <span className="settings-label">
                 <span id={`${id}-signals-label`}>Signal colors</span>
-                <InfoTip label="Signal colors" id={`${id}-signals`}>
+                <ControlDescription id={`${id}-signals`}>
                   Adds color to status labels, banners, and toasts. Every state keeps its icon and
                   written label, so nothing depends on color alone.
-                </InfoTip>
+                </ControlDescription>
               </span>
               <input
                 type="checkbox"
@@ -231,10 +270,10 @@ export function SettingsPage({
             <label className="settings-row">
               <span className="settings-label">
                 <span id={`${id}-charts-label`}>Inline charts</span>
-                <InfoTip label="Inline charts" id={`${id}-charts`}>
+                <ControlDescription id={`${id}-charts`}>
                   Shows turn time, event activity, and the last two minutes of state for each
                   session.
-                </InfoTip>
+                </ControlDescription>
               </span>
               <input
                 type="checkbox"

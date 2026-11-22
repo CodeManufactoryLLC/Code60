@@ -15,6 +15,7 @@ import type { MemorySource } from "../src/bridge/index.js";
 import type { RunEvent } from "../src/core/index.js";
 import { MemoryStore } from "../src/desktop/memory-store.js";
 import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
+import { fileViewLabels, newFileTab, selectFileView } from "./file-panel-controls.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
 const root = resolve(import.meta.dirname, "..");
@@ -83,18 +84,17 @@ function recallIds(events: readonly RunEvent[], runId: string) {
     .map((event) => JSON.parse(event.type === "note" ? (event.detail ?? "[]") : "[]") as string[]);
 }
 async function openRecall(page: Page, panel: Locator) {
-  if (await panel.getByRole("tab", { name: "Memory Recall", exact: true }).count()) {
-    await panel.getByRole("tab", { name: "Memory Recall", exact: true }).click();
+  if ((await fileViewLabels(page)).includes("Memory Recall")) {
+    await selectFileView(page, "Memory Recall");
   } else {
     if (
       (await panel.getByRole("button", { name: "Open Memory Recall", exact: true }).count()) === 0
     )
-      await panel.getByRole("button", { name: "New file tab", exact: true }).click();
+      await newFileTab(page);
     await panel.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
   }
-  await expect(panel.getByRole("tab", { name: "Memory Recall", exact: true })).toHaveAttribute(
-    "aria-selected",
-    "true",
+  await expect(panel.getByRole("combobox", { name: "Files view", exact: true })).toHaveText(
+    "Memory Recall",
   );
   await expect(page.locator(".memory-recall:visible")).toHaveCount(1);
   await expect(page.locator(".memory-recall:visible")).toHaveCSS("scrollbar-gutter", "stable");
@@ -118,10 +118,7 @@ async function send(page: Page, text: string) {
   await expect(composer).toBeEditable();
 }
 async function memoryOff(page: Page) {
-  await page.getByRole("tab", { name: "Settings", exact: true }).click();
-  const settingsToggle = page.locator("#settings-card-toggle");
-  if ((await settingsToggle.getAttribute("aria-expanded")) === "false")
-    await settingsToggle.click();
+  await page.getByRole("tab", { name: "Apps", exact: true }).click();
   await page.getByRole("tab", { name: "Memory", exact: true }).click();
   const toggle = page
     .locator("#panel-settings-memory")
@@ -194,6 +191,12 @@ for (const kind of ["Relay", "project"] as const) {
           .getByRole("dialog", { name: "Select database", exact: true })
           .getByRole("button", { name: "Create database…", exact: true })
           .click();
+        await expect(
+          page.getByRole("dialog", { name: "Select database", exact: true }),
+        ).toBeHidden();
+        await expect(
+          page.getByRole("status", { name: "Database connection required", exact: true }),
+        ).toHaveCount(0);
         await page.locator(".sidebar .project-sidebar-open").click();
         await page
           .getByRole("dialog", { name: "Open Project", exact: true })
@@ -261,26 +264,27 @@ for (const kind of ["Relay", "project"] as const) {
       await panel.getByText("Evidence quotes", { exact: true }).click();
       await expect(panel.locator("blockquote")).toContainText(memoryText);
 
-      await panel.getByRole("button", { name: "New file tab", exact: true }).click();
+      await newFileTab(page);
       await panel.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
-      await expect(panel.getByRole("tab", { name: "Memory Recall", exact: true })).toHaveCount(1);
-      const recallTab = panel.getByRole("tab", { name: "Memory Recall", exact: true });
+      expect(
+        (await fileViewLabels(page)).filter((label) => label === "Memory Recall"),
+      ).toHaveLength(1);
+      const recallTab = panel.getByRole("combobox", { name: "Files view", exact: true });
       await recallTab.press("Alt+ArrowLeft");
       await expect(recallTab).toBeFocused();
       await recallTab.press("Delete");
-      await expect(recallTab).toHaveCount(0);
+      expect(await fileViewLabels(page)).not.toContain("Memory Recall");
       await openRecall(page, panel);
       await expect(panel.locator(".memory-recall")).toContainText(memoryText);
 
       if (kind === "Relay") {
-        await panel.getByRole("button", { name: "New file tab", exact: true }).click();
+        await newFileTab(page);
         await panel.getByRole("button", { name: "Open Files", exact: true }).click();
         await expect(panel.getByLabel("File root")).toHaveValue("workspace");
-        await panel.getByRole("button", { name: "New file tab", exact: true }).click();
+        await newFileTab(page);
         await panel.getByRole("button", { name: "Open Changes", exact: true }).click();
-        await expect(panel.getByRole("tab", { name: "Changes", exact: true })).toHaveAttribute(
-          "aria-selected",
-          "true",
+        await expect(panel.getByRole("combobox", { name: "Files view", exact: true })).toHaveText(
+          "Changes",
         );
         await openRecall(page, panel);
         await send(
@@ -297,9 +301,9 @@ for (const kind of ["Relay", "project"] as const) {
         );
       } else {
         await send(page, "Plan a change");
-        await expect(
-          panel.getByRole("tab", { name: "Plan · Planned change", exact: true }),
-        ).toHaveAttribute("aria-selected", "true");
+        await expect(panel.getByRole("combobox", { name: "Files view", exact: true })).toHaveText(
+          "Plan · Planned change",
+        );
         const plan = panel.getByRole("region", { name: "Plan", exact: true });
         await expect(plan.locator(".plan-state")).toHaveText("Awaiting acceptance");
         expect((await page.evaluate(() => window.desktop.snapshot())).runs).toEqual([]);

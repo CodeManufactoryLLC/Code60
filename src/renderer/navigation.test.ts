@@ -10,6 +10,7 @@ import {
   renderedPages,
   resolvePage,
   settingsIcons,
+  settingsParents,
   settingsSectionIds,
 } from "./navigation.js";
 import { staticChildren } from "./navigation-tree.js";
@@ -32,12 +33,8 @@ describe("navigation registry", () => {
     expect(staticChildren("settings", "/db").map(({ target }) => target.id)).toEqual([
       "about",
       "advanced",
-      "appearance",
-      "memory",
-      "polling-settings",
       "table-defaults",
       "text",
-      "updates",
     ]);
   });
   it("defines every static destination once and routes aliases to rendered pages", () => {
@@ -46,7 +43,8 @@ describe("navigation registry", () => {
       pages.filter((page) => page.id !== "files").map((page) => page.id),
     );
     expect(resolvePage("files")).toBe("chat");
-    for (const section of settingsSectionIds) expect(pageGroup(section)).toBe("settings");
+    for (const section of settingsSectionIds)
+      expect(pageGroup(section)).toBe(settingsParents[section]);
     expect(pageGroup("episodic-memory")).toBe("advanced");
     expect(pageGroup("rag")).toBe("advanced");
     expect(pagesInGroup("experiments")).toEqual(["episodic-memory", "rag"]);

@@ -13,18 +13,16 @@ describe("Settings home", () => {
       expect([...html.matchAll(/aria-label="Open ([^"]+)"/g)].map((match) => match[1])).toEqual([
         "About",
         "Advanced",
-        "Appearance",
-        "Memory",
-        "Polling",
         "Table defaults",
         "Text",
-        "Updates",
       ]);
-      expect(html.match(/class="home-card"/g)).toHaveLength(8);
+      expect(html.match(/class="home-card"/g)).toHaveLength(4);
       expect(html).not.toContain("disabled");
       expect(html).not.toContain("home-card-description");
       expect(html).not.toContain('data-feature="rag"');
-      for (const id of settingsSectionIds) {
+      for (const id of settingsSectionIds.filter(
+        (id) => !["appearance", "memory", "polling-settings", "updates"].includes(id),
+      )) {
         const card = html.match(
           new RegExp(`<button[^>]*data-feature="${id}"[\\s\\S]*?</button>`),
         )?.[0];
@@ -40,12 +38,8 @@ describe("Settings home", () => {
     expect(onOpen.mock.calls.map(([id]) => id)).toEqual([
       "about",
       "advanced",
-      "appearance",
-      "memory",
-      "polling-settings",
       "table-defaults",
       "text",
-      "updates",
     ]);
   });
 });

@@ -87,36 +87,36 @@ export function RagPage({
       <SettingsHeader
         page="rag"
         tip="This is a manual snapshot of project and legacy orchestration chats and worker conversations in the connected database, including archived chats and registered projects. The application-owned Relay is independent of this database and is not indexed. New messages are included only when you rebuild. Retrieval returns matching text, not generated answers. Scores are cosine similarities, not confidence percentages."
-      >
-        <div className="button-group">
-          <button
-            type="button"
-            disabled={!database || !databaseKey || busy}
-            onClick={() => void run("build")}
-          >
-            {status?.index ? "Rebuild index" : "Index conversations"}
-          </button>
-          {busy && (
-            <button
-              type="button"
-              onClick={() => {
-                const id = status?.operation?.requestId ?? current.current;
-                if (id)
-                  void api.cancelRag(id).catch(() => setError("Cancellation failed. Try again."));
-              }}
-            >
-              Cancel
-            </button>
-          )}
-          <button
-            type="button"
-            disabled={!database || !databaseKey || busy}
-            onClick={() => void run("clear")}
-          >
-            Clear index
-          </button>
-        </div>
-      </SettingsHeader>
+        actions={[
+          {
+            id: "rag-0",
+            label: status?.index ? "Rebuild index" : "Index conversations",
+            run: () => void run("build"),
+            disabled: !database || !databaseKey || busy,
+          },
+          ...(busy
+            ? [
+                {
+                  id: "rag-1",
+                  label: "Cancel",
+                  run: () => {
+                    const id = status?.operation?.requestId ?? current.current;
+                    if (id)
+                      void api
+                        .cancelRag(id)
+                        .catch(() => setError("Cancellation failed. Try again."));
+                  },
+                },
+              ]
+            : []),
+          {
+            id: "rag-2",
+            label: "Clear index",
+            run: () => void run("clear"),
+            disabled: !database || !databaseKey || busy,
+          },
+        ]}
+      ></SettingsHeader>
       <SettingsCard>
         <dl className="rag-summary">
           <div>

@@ -36,6 +36,10 @@ export const settingsLabels = Object.fromEntries(
 export const settingsIcons = Object.fromEntries(
   settingsSections.map((section) => [section.id, section.icon]),
 ) as Record<SettingsSectionId, NavigationIconName>;
+/** Stable section IDs remain adapters; parent metadata owns their visible location. */
+export const settingsParents = Object.fromEntries(
+  settingsSections.map((section) => [section.id, section.parent]),
+) as Record<SettingsSectionId, "apps" | "settings">;
 export const groups = {
   tables: { label: pageDefinitions.tables.label, icon: "app-database" },
   advanced: { label: pageDefinitions.advanced.label, icon: "app-analyze" },
@@ -51,7 +55,7 @@ export function pagesInGroup(group: Group): PageId[] {
     .map((page) => page.id);
 }
 export function pageGroup(id: PageId | SettingsSectionId) {
-  if (isSettingsSection(id)) return "settings";
+  if (isSettingsSection(id)) return settingsParents[id];
   if (id === "tables") return "apps";
   if (id === "advanced" || id === "experiments") return "advanced";
   const group = pageDefinitions[id].group;

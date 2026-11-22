@@ -41,6 +41,7 @@ export class ApplicationAgents {
     private readonly memory: Args[4],
     private readonly modelDefaults?: ModelDefaults,
     private readonly orchestrationAutoApproval: () => boolean = () => true,
+    private readonly onPlanTimingError: () => void = () => {},
   ) {
     this.relay = new RelayService(
       deps,
@@ -51,6 +52,7 @@ export class ApplicationAgents {
       undefined,
       modelDefaults,
       orchestrationAutoApproval,
+      onPlanTimingError,
     );
     this.selected = this.relay;
   }
@@ -198,6 +200,7 @@ export class ApplicationAgents {
             },
             this.modelDefaults,
             this.orchestrationAutoApproval,
+            this.onPlanTimingError,
           );
           if (this.knowledge) runtime.attachKnowledge(this.knowledge);
           this.agents.set(request.id, runtime);

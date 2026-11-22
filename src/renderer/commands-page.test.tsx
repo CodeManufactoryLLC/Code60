@@ -30,7 +30,6 @@ it("renders labelled fields and actions without treating a saved command's metad
     "Save",
     "Discard changes",
     "Delete",
-    "New command",
   ])
     expect(html).toContain(label);
   expect(html).toContain("Review &lt;script&gt; as text.");
@@ -40,10 +39,11 @@ it("renders labelled fields and actions without treating a saved command's metad
   expect(html).toContain('aria-invalid="false"');
   expect(html).not.toContain('aria-invalid="true"');
   expect(html).toMatch(
-    /<h1[^>]*class="page-title table-title"[^>]*>.*data-icon="app-megaphone".*Command Builder<\/span><\/h1>/,
+    /<h1[^>]*class="content-page-title"[^>]*>.*data-icon="app-megaphone".*Command Builder<\/span>.*<\/h1>/,
   );
   const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
-  expect(header).toContain("New command");
+  expect(header).toContain('aria-label="Command Builder actions"');
+  expect(header).not.toContain("New command");
   expect(html.indexOf('class="commands-scroll"')).toBeGreaterThan(html.indexOf("</header>"));
 });
 it("filters suggestions by title and name only while the caret is in the first word", () => {

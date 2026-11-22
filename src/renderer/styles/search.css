@@ -229,11 +229,9 @@
 }
 
 .search-unapplied {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
+  min-width: 0;
   color: var(--accent);
+  font-size: var(--label-size, 13px);
 }
 
 .search-loading {

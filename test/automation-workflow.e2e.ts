@@ -18,6 +18,7 @@ import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 import { nativeSupervisorFixture } from "./fixtures/native-supervisor.js";
 import { recordedAgentPid } from "./fixtures/run-readiness.js";
+import { pageCommand } from "./page-header-controls.js";
 
 const root = resolve(import.meta.dirname, "..");
 
@@ -137,17 +138,16 @@ for (const updateRoute of ["startup", "install-ui"] as const) {
         await expect(wizard.getByRole("status")).toHaveText("Claude connected");
         await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
         await page.getByRole("button", { name: "Start", exact: true }).click();
-        await page.getByRole("tab", { name: "Settings", exact: true }).click();
-        await page.getByRole("button", { name: "Open Updates", exact: true }).click();
+        await page.locator("#tab-settings-updates").click();
         const updates = page.locator("#app-updates");
         await updates.getByRole("switch", { name: "Automatically check for updates" }).uncheck();
-        await updates.getByRole("button", { name: "Check for updates", exact: true }).click();
+        await (await pageCommand(page, "Check for updates")).click();
         const popup = page.getByRole("dialog", { name: "Update available", exact: true });
         await expect(popup).toBeVisible();
         await popup.getByRole("button", { name: "Later", exact: true }).click();
-        await updates.getByRole("button", { name: "Download update", exact: true }).click();
+        await (await pageCommand(page, "Download update")).click();
         const mainPid = await application.evaluate(() => process.pid);
-        await updates.getByRole("button", { name: "Install and restart", exact: true }).click();
+        await (await pageCommand(page, "Install and restart")).click();
         await expect.poll(() => alive(mainPid)).toBe(false);
         const evidence = (await readFile(join(directory, "installer-boundary.jsonl"), "utf8"))
           .trim()
@@ -370,7 +370,7 @@ test("workflow: desktop automation survives app quit, retains history and cancel
     await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await automations(page);
-    await page.getByRole("button", { name: "Actions", exact: true }).click();
+    await page.getByRole("button", { name: "Scheduled Jobs actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "New scheduled job", exact: true }).click();
     const editor = page.getByRole("region", { name: "New scheduled job", exact: true });
     await editor.getByLabel("Name", { exact: true }).fill("Retained scheduler");
@@ -387,7 +387,9 @@ test("workflow: desktop automation survives app quit, retains history and cancel
     await editor.getByRole("button", { name: "Choose repository", exact: true }).click();
     await editor.getByRole("button", { name: "Create job", exact: true }).click();
     await expect(editor).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Actions", exact: true })).toBeFocused();
+    await expect(
+      page.getByRole("button", { name: "Scheduled Jobs actions", exact: true }),
+    ).toBeFocused();
     expect((await saved()).automations).toHaveLength(1);
     expect((await saved()).automations[0].enabled).toBe(false);
     expect((await saved()).executions).toHaveLength(0);
@@ -412,11 +414,11 @@ test("workflow: desktop automation survives app quit, retains history and cancel
       await expect(job(page)).toHaveCSS("border-top-left-radius", "5px");
       await expect(job(page).locator(".automation-job-header")).toHaveCSS(
         "border-top-left-radius",
-        "3px",
+        "4px",
       );
       await expect(job(page).locator(".automation-job-header")).toHaveCSS(
         "border-bottom-left-radius",
-        "3px",
+        "4px",
       );
       await expect(controls.locator("button")).toHaveCount(3);
       await expect(controls.locator("button").nth(0)).toHaveAccessibleName(
@@ -462,7 +464,7 @@ test("workflow: desktop automation survives app quit, retains history and cancel
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await expect(job(page).locator(".automation-job-details")).toBeVisible();
       await expect(header).toHaveCSS("border-bottom-left-radius", "0px");
-      await expect(header).toHaveCSS("border-top-left-radius", "3px");
+      await expect(header).toHaveCSS("border-top-left-radius", "4px");
       await trigger.click();
       await expect(trigger).toHaveAttribute("aria-expanded", "false");
       await job(page).getByRole("button", { name: "Delete Retained scheduler" }).hover();

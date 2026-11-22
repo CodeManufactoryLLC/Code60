@@ -1,36 +1,21 @@
+import { createContext, isValidElement, type ReactNode, type RefObject, useContext } from "react";
+import { ContentPageHeader, type PageAction } from "./content-page-header.js";
 import {
-  cloneElement,
-  createContext,
-  isValidElement,
-  type ReactNode,
-  useContext,
-  useRef,
-} from "react";
-import { createPortal } from "react-dom";
-import { conversationId, conversationTitle } from "./chats.js";
-import { Icon } from "./icons.js";
-import { isSettingsSection, pageDefinitions, settingsIcons, settingsLabels } from "./navigation.js";
+  isSettingsSection,
+  type PageId,
+  pageDefinitions,
+  type SettingsSectionId,
+  settingsIcons,
+  settingsLabels,
+} from "./navigation.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import type { NavigationTarget } from "./navigation-tree.js";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from "./neobrutalism/breadcrumb.js";
-import {
-  type BreadcrumbSource,
-  breadcrumbAncestors,
-  type PageTitleId,
-} from "./page-breadcrumbs.js";
-import { useBreadcrumbHeader } from "./page-title-header.js";
 
-export type { PageTitleId } from "./page-breadcrumbs.js";
-
-export const PageTitleNavigationContext = createContext<
-  | (BreadcrumbSource & {
-      open(target: NavigationTarget): Promise<boolean>;
-      pending: boolean;
-      selectionPending?: boolean;
-      header?: boolean;
-    })
-  | null
->(null);
+export type PageTitleId = PageId | SettingsSectionId | "relay" | "orchestrator" | "worker";
+export const PageTitleNavigationContext = createContext<{
+  header?: boolean;
+  selectionPending?: boolean;
+} | null>(null);
 
 export function PageTitle({
   page,
@@ -40,6 +25,8 @@ export function PageTitle({
   children,
   target,
   breadcrumbs = true,
+  actions,
+  actionsTrigger,
 }: {
   page: PageTitleId;
   as?: "h1" | "h2";
@@ -48,10 +35,10 @@ export function PageTitle({
   children?: ReactNode;
   target?: NavigationTarget | undefined;
   breadcrumbs?: boolean;
+  actions?: readonly PageAction[] | undefined;
+  actionsTrigger?: RefObject<HTMLButtonElement | null> | undefined;
 }) {
   const navigation = useContext(PageTitleNavigationContext);
-  const slot = useRef<HTMLElement>(null);
-  const header = useBreadcrumbHeader(slot, breadcrumbs && navigation?.header === true);
   const icon =
     page === "relay"
       ? "app-steering-wheel"
@@ -72,118 +59,37 @@ export function PageTitle({
           : isSettingsSection(page)
             ? settingsLabels[page]
             : pageDefinitions[page].label;
-  const chatBreadcrumb = breadcrumbs && (page === "orchestrator" || page === "worker");
-  const title = chatBreadcrumb
-    ? isValidElement<{ children?: ReactNode }>(children)
-      ? cloneElement(children, undefined, label)
-      : label
-    : (children ?? label);
-  const heading = (
-    <Heading id={id} className={className ? `page-title ${className}` : "page-title"}>
-      {icon && <NavigationIcon name={icon} />}
-      <span
-        className={page === "home" && breadcrumbs ? "page-title-text sr-only" : "page-title-text"}
-      >
-        {title}
-      </span>
-    </Heading>
-  );
-  if (!breadcrumbs) return heading;
-  const ancestors = breadcrumbAncestors(
-    page,
-    navigation ?? { projects: [], chats: [], runs: [] },
-    target,
-  );
-  const trail = (leaf: ReactNode, interactive: boolean) => (
-    <BreadcrumbList>
-      {ancestors.map(({ label, icon, target }, index) => {
-        const home = target.kind === "page" && target.id === "home";
-        return (
-          <BreadcrumbItem
-            key={`${target.kind}:${target.id}`}
-            data-breadcrumb-key={`${target.kind}:${target.id}`}
-          >
-            {index > 0 && (
-              <Icon name="chevron--right" className="carbon-icon breadcrumb-separator" />
-            )}
-            {navigation && interactive ? (
-              <button
-                type="button"
-                className={home ? "breadcrumb-link breadcrumb-home" : "breadcrumb-link"}
-                title={home ? label : undefined}
-                disabled={
-                  navigation.pending && target.kind !== "page" && target.kind !== "settings"
-                }
-                onClick={() => void navigation.open(target)}
-              >
-                {icon && <NavigationIcon name={icon} />}
-                <span className={home ? "sr-only" : "breadcrumb-text"}>{label}</span>
-              </button>
-            ) : (
-              <span className={home ? "breadcrumb-label breadcrumb-home" : "breadcrumb-label"}>
-                {icon && <NavigationIcon name={icon} />}
-                <span className={home ? "sr-only" : "breadcrumb-text"}>{label}</span>
-              </span>
-            )}
-          </BreadcrumbItem>
-        );
-      })}
-      <BreadcrumbItem
-        aria-current="page"
-        data-breadcrumb-key={
-          target
-            ? `${target.kind}:${target.id}`
-            : `${isSettingsSection(page) ? "settings" : "page"}:${page}`
-        }
-      >
-        {ancestors.length > 0 && (
-          <Icon name="chevron--right" className="carbon-icon breadcrumb-separator" />
-        )}
-        {leaf}
-      </BreadcrumbItem>
-    </BreadcrumbList>
-  );
-  const chat = target
-    ? navigation?.chats.find((chat) => conversationId(chat) === target.id)
-    : undefined;
-  const placeholderLabel = chatBreadcrumb
-    ? label
-    : typeof children === "string" || typeof children === "number"
-      ? children
-      : chat && navigation
-        ? conversationTitle(navigation.chats, chat)
+  if (!breadcrumbs)
+    return (
+      <Heading id={id} className={className ? `page-title ${className}` : "page-title"}>
+        {icon && <NavigationIcon name={icon} />}
+        <span className="page-title-text">{children ?? label}</span>
+      </Heading>
+    );
+  const currentId = target
+    ? `${target.kind}:${target.id}`
+    : `${isSettingsSection(page) ? "settings" : "page"}:${page}`;
+  const contentLabel =
+    typeof children === "string" || typeof children === "number"
+      ? String(children)
+      : isValidElement<{ children?: ReactNode }>(children) &&
+          typeof children.props.children === "string"
+        ? children.props.children
         : label;
-  const placeholder = (
-    <span className={className ? `page-title ${className}` : "page-title"}>
-      {icon && <NavigationIcon name={icon} />}
-      <span className={page === "home" ? "page-title-text sr-only" : "page-title-text"}>
-        {placeholderLabel}
-      </span>
-    </span>
-  );
   return (
     <>
-      <Breadcrumb
-        ref={slot}
-        className={header ? "page-breadcrumbs page-title-placeholder" : "page-breadcrumbs"}
-        aria-label={header ? undefined : "Breadcrumb"}
-        aria-hidden={header ? true : undefined}
-        inert={header ? true : undefined}
-      >
-        {header ? trail(placeholder, false) : trail(heading, true)}
-      </Breadcrumb>
-      {header &&
-        createPortal(
-          <Breadcrumb
-            className="page-breadcrumbs"
-            aria-label="Breadcrumb"
-            inert={navigation?.selectionPending}
-            aria-busy={navigation?.selectionPending || undefined}
-          >
-            {trail(heading, true)}
-          </Breadcrumb>,
-          header,
-        )}
+      <ContentPageHeader
+        title={contentLabel}
+        icon={icon}
+        id={id}
+        as={Heading}
+        ownerKey={currentId}
+        actions={actions}
+        triggerRef={actionsTrigger}
+        portal={navigation?.header}
+        pending={navigation?.selectionPending}
+      />
+      <span className="page-breadcrumbs page-title-placeholder" aria-hidden="true" inert />
     </>
   );
 }

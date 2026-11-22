@@ -161,6 +161,7 @@ export class RelayService {
     private readonly identity?: { id: string; name: string; instructions: string; root: string },
     private readonly modelDefaults?: ModelDefaults,
     private readonly orchestrationAutoApproval: () => boolean = () => true,
+    private readonly onPlanTimingError: () => void = () => {},
   ) {
     const changed = () => this.changed();
     this.activity = new ActivityDisplay({ changed });
@@ -642,6 +643,7 @@ export class RelayService {
         store.id,
         this.execution,
         (owner) => this.authorize(owner),
+        { now: () => this.deps.clock.now().getTime(), onTimingError: this.onPlanTimingError },
       );
       if (!current()) return;
       this.plans = plans;

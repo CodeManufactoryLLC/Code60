@@ -377,9 +377,6 @@ async function ready(): Promise<void> {
       buttons: ["Continue"],
     });
   });
-  const transparent = await preferences.transparent();
-  let enabled = transparent;
-  const clickThrough = transparent && process.platform === "darwin";
   Menu.setApplicationMenu(applicationMenu());
   const supported =
     (process.platform === "darwin" && process.arch === "arm64") ||
@@ -463,9 +460,9 @@ async function ready(): Promise<void> {
   handle("desktop:window-appearance", (value) => {
     if (value !== undefined) throw new Error("Invalid request");
     return {
-      transparent,
-      enabled,
-      clickThrough,
+      transparent: true,
+      enabled: true,
+      clickThrough: false,
       sidebarBlurSupported,
       customWindowControls,
     };
@@ -482,11 +479,11 @@ async function ready(): Promise<void> {
   handle("desktop:transparent", async (value) => {
     const next = parseBoolean(value);
     await preferences.setTransparent(next);
-    enabled = next;
   });
   handle("desktop:background-hit-test", (value) => {
-    const ignore = parseBoolean(value);
-    if (clickThrough) window?.setIgnoreMouseEvents(ignore, { forward: true });
+    parseBoolean(value);
+    // Legacy requests cannot make the live window background noninteractive.
+    window?.setIgnoreMouseEvents(false);
   });
   handle("desktop:logs-query", (value) => {
     const query = parseLogQuery(value);
@@ -769,11 +766,10 @@ async function ready(): Promise<void> {
     minWidth: 820,
     minHeight: 600,
     title: `Code60 - ${app.getVersion()}`,
-    // Keep native alpha available for the live sidebar opacity control. The
-    // renderer separately paints opaque content and optional transparent margins.
+    // Native alpha supports live window-background opacity; foreground Cards stay opaque.
     transparent: true,
     backgroundColor: "#00000000",
-    hasShadow: !transparent,
+    hasShadow: true,
     // The window controls sit over the renderer's dedicated drag strip.
     titleBarStyle: "hidden",
     titleBarOverlay: {

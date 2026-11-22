@@ -90,8 +90,8 @@
   padding: 16px;
   min-height: 72px;
   box-sizing: border-box;
-  border-radius: calc(var(--navigation-card-radius) - var(--rule))
-    calc(var(--navigation-card-radius) - var(--rule)) 0 0;
+  border-radius: calc(var(--navigation-card-radius) - 1px) calc(var(--navigation-card-radius) - 1px)
+    0 0;
   background: var(--card-header-fill);
   color: var(--card-header-text);
 }
@@ -324,7 +324,7 @@
 }
 
 .providers-page .navigation-card:has(> .home-card-create) {
-  border: 3px dashed var(--control-border);
+  border: 1px dashed var(--control-border);
 }
 .provider-sidebar-row .chat-sidebar-artwork {
   display: flex;

@@ -40,8 +40,7 @@ it("tracks only the first row through nested disclosure changes and disconnects 
     querySelectorAll: (selector: string) => (selector.startsWith("[data-") ? marked() : rows),
   };
   const sidebar = {
-    querySelectorAll: (selector: string) =>
-      selector === ".sidebar-navigation-card" ? [card] : marked(),
+    querySelectorAll: (selector: string) => (selector === ".sidebar-section" ? [card] : marked()),
   };
   const stop = observeSidebarCardEdges(sidebar as unknown as HTMLElement);
   expect(heading.attributes).toEqual(new Set(["data-card-first"]));

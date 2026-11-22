@@ -7,6 +7,7 @@ import {
   sidebarAppearanceProperties,
   type Theme,
 } from "./appearance.js";
+import { defaultIconAppearance, parseIconAppearance } from "./icon-appearance.js";
 import {
   parseFitColumns,
   parseRowDensity,
@@ -38,6 +39,24 @@ export function useAppPreferences() {
       setSidebarAppearanceSaved(false);
     }
   }, [sidebarAppearance]);
+  const [iconAppearance, setIconAppearance] = useState(() => {
+    try {
+      return parseIconAppearance(localStorage.getItem("code60.iconAppearance"));
+    } catch {
+      return defaultIconAppearance;
+    }
+  });
+  const [iconAppearanceSaved, setIconAppearanceSaved] = useState(true);
+  useLayoutEffect(() => {
+    document.documentElement.dataset.monochrome = iconAppearance.monochrome ? "on" : "off";
+    document.documentElement.dataset.iconAnimations = iconAppearance.animations ? "on" : "off";
+    try {
+      localStorage.setItem("code60.iconAppearance", JSON.stringify(iconAppearance));
+      setIconAppearanceSaved(true);
+    } catch {
+      setIconAppearanceSaved(false);
+    }
+  }, [iconAppearance]);
   const transitionTimes = useTransitionTimes();
   useLayoutEffect(() => {
     for (const [property, value] of Object.entries(transitionTimeProperties(transitionTimes)))
@@ -108,6 +127,9 @@ export function useAppPreferences() {
   }, [fit]);
 
   return {
+    iconAppearance,
+    setIconAppearance,
+    iconAppearanceSaved,
     sidebarAppearance,
     setSidebarAppearance,
     sidebarAppearanceSaved,

@@ -13,7 +13,9 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type ElectronApplication, expect, type Locator, type Page, test } from "@playwright/test";
 import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
+import { fileViewLabels, newFileTab, selectFileView } from "./file-panel-controls.js";
 import { commitFixture } from "./fixtures/git-repository.js";
+import { pageCommand } from "./page-header-controls.js";
 
 const root = resolve(import.meta.dirname, "..");
 // Automatic integration and message Undo each write several private checkpoint and
@@ -156,7 +158,7 @@ test("workflow: conversational browser modes, external errors, cancellation and 
     await editor.getByLabel("Special instructions", { exact: true }).fill("Help with websites.");
     await editor.getByRole("button", { name: "Save", exact: true }).click();
     await page.getByRole("button", { name: "Open Browser helper", exact: true }).click();
-    await expect(page.getByRole("main", { name: "Agent", exact: true })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Browser helper", exact: true })).toBeVisible();
     await expect
       .poll(() =>
         page.evaluate(() =>
@@ -471,31 +473,18 @@ async function checkSidebarIconSpacing(entry: Locator) {
 
 async function checkHeaderBreadcrumbs(page: Page) {
   const header = page.locator(".workspace-breadcrumbs");
-  await expect(header.getByRole("navigation", { name: "Breadcrumb", exact: true })).toHaveCount(1);
-  await expect(header.getByRole("heading")).toHaveCount(1);
-  await expect(header.getByRole("heading")).toHaveCSS("font-size", "16px");
-  await expect(header.getByRole("heading")).toHaveCSS("font-weight", "700");
-  const slot = page.locator(".page-title-placeholder");
-  await expect(slot).toHaveCount(1);
-  await expect(slot).toHaveAttribute("aria-hidden", "true");
-  await expect(slot).toHaveAttribute("inert", "");
-  await expect(slot).toHaveCSS("display", "none");
-  await expect(slot.locator("button, h1, h2, [id]")).toHaveCount(0);
-  const geometry = await slot.evaluate((element) => {
-    const header = document.querySelector(".workspace-header");
-    const heading = header?.querySelector("h1, h2");
-    const panel = element.closest(".page-panel");
-    if (!header || !heading || !panel) throw new Error("Missing header heading or page panel");
-    return {
-      panel: panel.getBoundingClientRect().top,
-      slotHeight: element.getBoundingClientRect().height,
-      header: header.getBoundingClientRect().bottom,
-      ids: heading.id ? document.querySelectorAll(`#${CSS.escape(heading.id)}`).length : null,
-    };
-  });
-  expect(geometry.panel).toBeGreaterThanOrEqual(geometry.header);
-  expect(geometry.slotHeight).toBe(0);
-  if (geometry.ids !== null) expect(geometry.ids).toBe(1);
+  await expect(header.getByRole("navigation")).toHaveCount(0);
+  await expect(header.getByRole("combobox")).toHaveCount(0);
+  await expect(header.getByRole("heading")).toHaveCount(0);
+  await expect(header).toHaveCSS("box-shadow", "none");
+  await expect(header).toHaveCSS("border-radius", "5px");
+  const title = page.locator(".content-page-title:visible");
+  await expect(title).toHaveCount(1);
+  await expect(title).toHaveCSS("font-size", "16px");
+  await expect(title).toHaveCSS("font-weight", "700");
+  await expect(title.locator(".navigation-icon")).toHaveCount(1);
+  await expect(header.getByRole("button", { name: "Back", exact: true })).toBeVisible();
+  await expect(header.getByRole("button", { name: /^Color theme:/ })).toBeVisible();
 }
 
 async function checkSidebarNavigation(page: Page, repo: string) {
@@ -514,7 +503,7 @@ async function checkSidebarNavigation(page: Page, repo: string) {
 
   // Two sessions in the SAME project must retain separate tab sets and selections.
   const panel = page.locator("#chat-file-panel");
-  const tabs = panel.getByRole("tablist", { name: "File tabs", exact: true });
+  const selector = panel.getByRole("combobox", { name: "Files view", exact: true });
   const first = entries.nth(count - 2);
   const second = entries.nth(count - 1);
   await first.click();
@@ -528,66 +517,106 @@ async function checkSidebarNavigation(page: Page, repo: string) {
   await expect(panel.getByRole("treeitem", { name: "nested.txt", exact: true })).toBeVisible();
   await panel.getByRole("treeitem", { name: "result.txt", exact: true }).click();
   await expect(panel.locator(".view-lines")).toContainText("original");
-  await panel.getByRole("button", { name: "New file tab", exact: true }).click();
+  await newFileTab(page);
   await panel.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
-  await tabs.getByRole("tab", { name: "result.txt", exact: true }).click();
-  await tabs.getByRole("tab", { name: "result.txt", exact: true }).press("Alt+ArrowLeft");
+  await selectFileView(page, "result.txt");
+  await selector.press("Alt+ArrowLeft");
   await second.click();
-  await expect(tabs.getByRole("tab")).toHaveCount(0);
+  expect(await fileViewLabels(page)).toEqual([]);
   await panel.getByRole("button", { name: "Open Files", exact: true }).click();
   await panel.getByRole("treeitem", { name: "notes.txt", exact: true }).click();
   await expect(panel.locator(".view-lines")).toContainText("unstaged notes");
-  await tabs.getByRole("button", { name: "Close File Explorer", exact: true }).click();
-  await panel.getByRole("button", { name: "New file tab", exact: true }).click();
-  await tabs.getByRole("tab", { name: "notes.txt", exact: true }).click();
+  await selectFileView(page, "File Explorer");
+  await selector.press("Delete");
+  await newFileTab(page);
+  await selectFileView(page, "notes.txt");
   await first.click();
-  await expect(tabs.getByRole("tab")).toHaveText(["result.txt", "File Explorer", "Memory Recall"]);
-  await expect(tabs.getByRole("tab", { name: "result.txt", exact: true })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  await expect(selector).toHaveText("result.txt");
+  expect(await fileViewLabels(page)).toEqual(["result.txt", "File Explorer", "Memory Recall"]);
   await expect(panel.locator(".view-lines")).toContainText("original");
-  await tabs.getByRole("tab", { name: "File Explorer", exact: true }).click();
+  await selectFileView(page, "File Explorer");
   await expect(panel.getByRole("treeitem", { name: "docs", exact: true })).toHaveAttribute(
     "aria-expanded",
     "true",
   );
   await expect(panel.getByRole("treeitem", { name: "nested.txt", exact: true })).toBeVisible();
-  await tabs.getByRole("tab", { name: "result.txt", exact: true }).click();
-  await tabs.getByRole("button", { name: "Close Memory Recall", exact: true }).click();
+  await selectFileView(page, "Memory Recall");
+  await selector.press("Delete");
+  await selectFileView(page, "result.txt");
   await second.click();
-  await expect(tabs.getByRole("tab")).toHaveText(["notes.txt", "New tab"]);
-  await expect(tabs.getByRole("tab", { name: "notes.txt", exact: true })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  await expect(selector).toHaveText("notes.txt");
+  expect(await fileViewLabels(page)).toEqual(["notes.txt", "New tab"]);
   await expect(panel.locator(".view-lines")).toContainText("unstaged notes");
   await page.screenshot({ path: test.info().outputPath("session-panel-isolation.png") });
   await page.getByRole("button", { name: "Toggle files panel", exact: true }).click();
 
   for (const theme of ["light", "dark"]) {
-    await page.locator("#tab-settings").click();
-    if ((await page.locator("#settings-card-toggle").getAttribute("aria-expanded")) === "false")
-      await page.locator("#settings-card-toggle").click();
+    await page.locator("#tab-apps").click();
     await page.locator("#tab-settings-appearance").click();
     await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
     await checkHeaderBreadcrumbs(page);
-    const gray = theme === "light" ? "rgb(255, 255, 255)" : "rgb(22, 22, 22)";
+    const composerFill = theme === "light" ? "rgb(255, 255, 255)" : "rgb(22, 22, 22)";
+    const headerFill = theme === "light" ? "rgb(255, 255, 255)" : "rgb(47, 29, 55)";
+    await expect(page.locator(".workspace-breadcrumbs")).toHaveCSS("background-color", headerFill);
+    for (const header of await page.locator(".content-page-header-slot:visible").all())
+      await expect(header).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(page.locator(".page-tabs")).toHaveCSS("row-gap", "16px");
+    await expect(page.locator("#panel-settings")).toHaveCSS(
+      "background-color",
+      theme === "light" ? "rgb(255, 255, 255)" : "rgb(32, 32, 32)",
+    );
     await expect(page.locator(".sidebar")).toHaveCSS("border-width", "0px");
     await expect(page.locator(".sidebar")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(page.locator(".sidebar-navigation-card").first()).toHaveCSS(
       "background-color",
       theme === "light" ? "rgb(255, 255, 255)" : "rgb(32, 32, 32)",
     );
+    await expect(page.locator("#panel-settings")).toHaveCSS("box-shadow", "none");
+    for (const card of await page.locator(".sidebar-navigation-card").all())
+      await expect(card).toHaveCSS("box-shadow", "none");
+    for (const card of await page.locator(".sidebar-navigation-card").all())
+      await expect(card).toHaveCSS("border-radius", "5px");
+    await expect(page.locator(".sidebar-navigation-card")).toHaveCount(6);
+    await expect(page.locator(".sidebar-navigation-card > .sidebar-card-header")).toHaveCount(6);
+    for (const section of await page.locator(".sidebar-section + .sidebar-section").all())
+      await expect(section).toHaveCSS("border-top-width", "1px");
+    const canvas = theme === "light" ? "rgb(244, 248, 254)" : "rgb(17, 17, 17)";
+    await expect(page.locator(".window-background")).toHaveCSS(
+      "background-color",
+      theme === "light" ? "rgb(244, 248, 254)" : canvas,
+    );
+    await expect(page.locator(".app")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await page.mouse.move(1000, 500);
+    await expect(page.locator("#tab-settings-appearance")).toHaveCSS(
+      "background-color",
+      theme === "light" ? "rgb(147, 197, 253)" : "rgb(70, 70, 70)",
+    );
+    await expect
+      .poll(() =>
+        page
+          .locator(".sidebar-section")
+          .first()
+          .evaluate((element) => getComputedStyle(element, "::before").backgroundColor),
+      )
+      .toBe(theme === "light" ? "rgb(84, 148, 253)" : headerFill);
+    for (const section of await page.locator(".sidebar-section").all())
+      expect(
+        await section.evaluate((element) => getComputedStyle(element, "::before").backgroundColor),
+      ).toBe(theme === "light" ? "rgb(84, 148, 253)" : headerFill);
+    await expect(page.locator("#tab-home")).toHaveCSS(
+      "color",
+      theme === "light" ? "rgb(255, 255, 255)" : "rgb(215, 201, 221)",
+    );
     await expect(page.locator("body")).toHaveCSS("font-weight", "400");
     await page.locator("#tab-home").scrollIntoViewIfNeeded();
     await page.mouse.move(1000, 500);
     const geometry = await page.evaluate(() => {
       const toggle = document.querySelector(".sidebar-toggle");
-      const home = document.querySelector("#tab-home .navigation-icon");
+      const active = document.querySelector(".page-panel:not([hidden])");
+      const card = active?.querySelector(".chat-conversations") ?? active;
       const strip = document.querySelector(".app > .window-drag-strip");
       const footer = document.querySelectorAll(".footer-sidebar > .icon-button");
-      if (!toggle || !home || !strip || footer.length !== 2)
+      if (!toggle || !card || !strip || footer.length !== 2)
         throw new Error("Missing sidebar controls");
       const style = (element: Element) => ({
         color: getComputedStyle(element).color,
@@ -595,18 +624,16 @@ async function checkSidebarNavigation(page: Page, repo: string) {
         glyphOpacity: getComputedStyle(element.querySelector("svg") ?? element).opacity,
       });
       const a = toggle.getBoundingClientRect();
-      const b = home.getBoundingClientRect();
-      const nativeRow = strip.getBoundingClientRect();
+      const b = card.getBoundingClientRect();
+
       return {
-        above: a.bottom <= b.top,
-        nativeClearance: a.left >= 80,
-        centered: Math.abs((a.top + a.bottom - nativeRow.top - nativeRow.bottom) / 2) < 1,
+        inside: a.left >= b.left && a.right <= b.right && a.top >= b.top && a.bottom <= b.bottom,
+        upperLeft: Math.abs(a.left - b.left - 8) <= 1 && Math.abs(a.top - b.top - 8) <= 1,
         styles: [toggle, ...footer].map(style),
       };
     });
-    expect(geometry.above).toBe(true);
-    expect(geometry.nativeClearance).toBe(true);
-    expect(geometry.centered).toBe(true);
+    expect(geometry.inside).toBe(true);
+    expect(geometry.upperLeft).toBe(true);
     expect(geometry.styles[0]).toEqual(geometry.styles[1]);
     expect(geometry.styles[0]).toEqual(geometry.styles[2]);
 
@@ -660,6 +687,10 @@ async function checkSidebarNavigation(page: Page, repo: string) {
         // Selection finishes through the real main-process path.
         await expect(control).toHaveAttribute("aria-current", /^(page|true)$/);
       }
+      await expect(page.locator(".chat-conversations:visible")).toHaveCSS(
+        "background-color",
+        theme === "light" ? "rgb(255, 255, 255)" : "rgb(32, 32, 32)",
+      );
       await expect(composer).toHaveValue("Second sidebar draft");
       await checkHeaderBreadcrumbs(page);
       // Different chat IDs have identical visible trails. Watch the real async
@@ -678,7 +709,11 @@ async function checkSidebarNavigation(page: Page, repo: string) {
           };
           let frame = 0;
           const sample = () => {
-            const items = [...card.querySelectorAll<HTMLElement>("[data-breadcrumb-key]")];
+            const items = [
+              ...document.querySelectorAll<HTMLElement>(
+                ".content-page-heading:not(.content-page-header-fallback)",
+              ),
+            ].filter((item) => item.checkVisibility());
             const visible = [
               ...document.querySelectorAll<HTMLElement>(
                 "#panel-chat .chat-conversations > .orchestration-chat-page:not([hidden])",
@@ -686,20 +721,20 @@ async function checkSidebarNavigation(page: Page, repo: string) {
             ];
             samples.push({
               opacity: Math.min(...items.map((item) => Number(getComputedStyle(item).opacity))),
-              current: card.querySelectorAll('[aria-current="page"]').length,
+              current: items.length,
               exits: card.querySelectorAll(".breadcrumb-exit").length,
               height: card.getBoundingClientRect().height,
               trail: items
-                .map(
-                  (item) =>
-                    `${item.dataset.breadcrumbKey}:${item.textContent}:${getComputedStyle(item).opacity}`,
-                )
+                .map((item) => `${item.textContent}:${getComputedStyle(item).opacity}`)
                 .join("|"),
               visibleChats: visible.length,
               safePending: visible.every(
                 (chat) =>
                   !chat.hasAttribute("data-navigation-pending") ||
-                  (chat.inert && card.querySelector<HTMLElement>("nav")?.inert === true),
+                  (chat.inert &&
+                    document.querySelector<HTMLElement>(
+                      ".content-page-heading:not(.content-page-header-fallback)",
+                    )?.inert === true),
               ),
             });
             frame = requestAnimationFrame(sample);
@@ -716,9 +751,10 @@ async function checkSidebarNavigation(page: Page, repo: string) {
         await entry.click();
         await expect(entry).toHaveAttribute("aria-current", "true");
         await expect(composer).toHaveValue(draft);
-        await expect(page.locator(".workspace-breadcrumbs .chat-title")).toHaveAccessibleName(
-          `Rename chat: ${await entry.locator(".chat-sidebar-label").textContent()}`,
+        await expect(page.locator(".content-page-heading:visible .content-page-title")).toHaveText(
+          (await entry.locator(".chat-sidebar-label").textContent()) ?? "",
         );
+        await expect(page.locator(".workspace-breadcrumbs .page-selector-rename")).toHaveCount(0);
         await page.waitForFunction(() =>
           document
             .querySelector(".workspace-breadcrumbs")
@@ -747,17 +783,18 @@ async function checkSidebarNavigation(page: Page, repo: string) {
         ).toBeLessThan(1);
       }
       await page.screenshot({ path: test.info().outputPath(`chat-breadcrumbs-${theme}.png`) });
-      await expect(page.locator(".workspace-breadcrumbs .chat-title")).toBeVisible();
-      await expect(page.locator(".workspace-breadcrumbs .chat-title")).toHaveCSS(
+      await expect(page.locator(".content-page-heading:visible > button")).toBeVisible();
+      await expect(page.locator(".content-page-heading:visible > button")).toHaveCSS(
         "text-decoration-line",
-        "underline",
+        "none",
       );
       await expect(page.locator(".sidebar .chat-sidebar-status")).toHaveCount(0);
       await expect(page.getByRole("button", { name: "New session", exact: true })).toHaveCount(0);
       const box = composer.locator("..");
       await page.locator(".sidebar-toggle").focus();
-      await expect(box).toHaveCSS("border-width", "2px");
-      await expect(box).toHaveCSS("background-color", gray);
+      await expect(box).toHaveCSS("border-width", "1px");
+      await expect(box).toHaveCSS("background-color", composerFill);
+      await expect(composer).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       const bounds = await box.boundingBox();
       await composer.focus();
       await expect(box).toHaveCSS(
@@ -776,7 +813,8 @@ async function checkSidebarNavigation(page: Page, repo: string) {
         "aria-current",
         "true",
       );
-      await expect(page.locator("#projects-card-toggle")).toHaveAttribute("aria-expanded", "false");
+      await expect(page.locator("#projects-card-toggle")).toHaveCount(0);
+      await expect(page.locator("#chat-pages")).not.toHaveAttribute("hidden");
       await page.locator("#tab-chat").press("ArrowRight");
       await expect(project.locator(".project-chat-toggle")).toHaveAttribute(
         "aria-expanded",
@@ -802,21 +840,26 @@ async function checkSidebarNavigation(page: Page, repo: string) {
       });
       expect(observed).toEqual({ disabled: [], retained: true });
     }
-    await page.locator("#tab-settings").press("ArrowRight");
     await page.locator("#advanced-toggle").press("ArrowRight");
     await page.locator("#experiments-toggle").press("ArrowRight");
-    await page.locator("#tab-settings").press("ArrowLeft");
-    for (const id of ["settings-pages", "advanced-pages", "experiment-pages"])
+    await page.locator("#advanced-toggle").press("ArrowLeft");
+    for (const id of ["advanced-pages", "experiment-pages"])
       await expect(page.locator(`#${id}`)).toHaveAttribute("inert", "");
-    await page.locator("#tab-settings").press("ArrowRight");
-    for (const id of ["advanced-toggle", "experiments-toggle"])
-      await expect(page.locator(`#${id}`)).toHaveAttribute("aria-expanded", "false");
-    await page.locator("#tab-apps").press("ArrowRight");
+    await expect(page.locator("#settings-pages")).not.toHaveAttribute("inert");
+    await page.locator("#advanced-toggle").press("ArrowRight");
+    await expect(page.locator("#advanced-toggle")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator("#experiments-toggle")).toHaveAttribute("aria-expanded", "false");
     await page.locator("#tables-toggle").press("ArrowRight");
-    await page.locator("#tab-apps").press("ArrowLeft");
+    await page.locator("#tables-toggle").press("ArrowLeft");
     await expect(page.locator("#tables-toggle")).toHaveAttribute("aria-expanded", "false");
-    await page.locator("#tab-apps").press("ArrowRight");
+    await expect(page.locator("#app-pages")).not.toHaveAttribute("inert");
     await expect(page.locator("#table-pages")).toHaveAttribute("inert", "");
+    await page.locator("#tab-apps").click();
+    await page.mouse.move(1000, 500);
+    await expect(page.locator("#tab-apps")).toHaveCSS(
+      "background-color",
+      theme === "light" ? "rgb(84, 148, 253)" : "rgb(47, 29, 55)",
+    );
     await page.screenshot({ path: test.info().outputPath(`sidebar-navigation-${theme}.png`) });
     await project.locator(".project-chat-toggle").press("ArrowRight");
     const row = entries.last().locator("..");
@@ -1241,9 +1284,6 @@ for (const custom of [false, true]) {
         );
 
         if (custom) {
-          const disclosure = page.locator("#settings-card-toggle");
-          if ((await disclosure.getAttribute("aria-expanded")) === "false")
-            await disclosure.click();
           await page
             .locator("#settings-pages")
             .getByRole("tab", { name: "Text", exact: true })
@@ -1334,7 +1374,7 @@ for (const custom of [false, true]) {
           await page.getByRole("button", { name: "Open Workflow Agent", exact: true }).click();
         } else await page.getByRole("button", { name: "Relay", exact: true }).click();
         await expect(
-          page.getByRole("main", { name: custom ? "Agent" : "Relay", exact: true }),
+          page.getByRole("main", { name: custom ? "Workflow Agent" : "Relay", exact: true }),
         ).toBeVisible();
         const composer = page
           .locator(".orchestration-chat-page:visible")
@@ -1351,6 +1391,7 @@ for (const custom of [false, true]) {
         await expect(modelPicker).toHaveText("Fixture Two");
         // A confirmed option change dismisses an open picker, so reopen only after it settles.
         await expect(modelPicker).toHaveAttribute("aria-disabled", "false");
+        await expect(modelMenu).toHaveCount(0);
         await modelPicker.click();
         await expect(
           modelMenu.getByRole("menuitemradio", { name: "Low", exact: true }),
@@ -1365,6 +1406,7 @@ for (const custom of [false, true]) {
           })
           .toBe("high");
         await expect(modelPicker).toHaveAttribute("aria-disabled", "false");
+        await expect(modelMenu).toHaveCount(0);
         await modelPicker.click();
         await modelMenu
           .getByRole("menuitem", {
@@ -1416,23 +1458,32 @@ for (const custom of [false, true]) {
         const existingPlans = (await page.evaluate(() => window.desktop.snapshot())).chat.plans;
         const documentText =
           (await plan.getByRole("article", { name: "Plan document" }).textContent()) ?? "";
-        await planPanel
-          .getByRole("tab", { name: "Plan · Relay target plan", exact: true })
-          .press("Delete");
+        await planPanel.getByRole("combobox", { name: "Files view", exact: true }).press("Delete");
         await expect(plan).toHaveCount(0);
         await planPanel.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
+        await expect(planPanel.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(
+          0,
+        );
+        await newFileTab(page);
         const viewPlan = planPanel.getByRole("button", { name: "View Plan", exact: true });
         await viewPlan.focus();
         await viewPlan.press("Enter");
         await expect(plan.getByRole("article", { name: "Plan document" })).toHaveText(documentText);
         await expect(
-          planPanel.getByRole("tab", { name: "Plan · Relay target plan", exact: true }),
+          planPanel.getByRole("combobox", { name: "Files view", exact: true }),
         ).toBeFocused();
+        await expect(planPanel.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(
+          0,
+        );
+        await newFileTab(page);
         await viewPlan.focus();
         await viewPlan.press("Space");
         await expect(
-          planPanel.getByRole("tab", { name: "Plan · Relay target plan", exact: true }),
-        ).toHaveCount(1);
+          planPanel.getByRole("combobox", { name: "Files view", exact: true }),
+        ).toHaveText("Plan · Relay target plan");
+        expect(
+          (await fileViewLabels(page)).filter((label) => label === "Plan · Relay target plan"),
+        ).toHaveLength(1);
         expect((await page.evaluate(() => window.desktop.snapshot())).chat.plans).toEqual(
           existingPlans,
         );
@@ -1462,12 +1513,10 @@ for (const custom of [false, true]) {
         await expect(workerRow).toHaveAttribute("aria-description", /Worker\. Awaiting input/);
         // Parent changes are never inherited by workers without their own saved default.
         expect(worker.view?.sessionState?.model?.id).toBe("fixture-model");
-        const parentTabsBeforeWorker = await planPanel.getByRole("tab").evaluateAll((tabs) =>
-          tabs.map((tab) => ({
-            label: tab.textContent,
-            selected: tab.getAttribute("aria-selected"),
-          })),
-        );
+        const parentTabsBeforeWorker = await fileViewLabels(page);
+        const parentSelectedBeforeWorker = await planPanel
+          .getByRole("combobox", { name: "Files view", exact: true })
+          .textContent();
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
         await expect(page.getByRole("button", { name: "View Plan", exact: true })).toHaveCount(0);
         await checkAgentMessageSpacing(
@@ -1481,13 +1530,11 @@ for (const custom of [false, true]) {
           .locator(`#chat-${worker.record.id}`)
           .getByRole("button", { name: "Model", exact: true });
         await expect(workerModel).toHaveText("Fixture Model");
-        const workerTabs = page.getByRole("tablist", { name: "File tabs", exact: true });
-        await expect(workerTabs.getByRole("tab")).toHaveCount(0);
-        await page.getByRole("button", { name: "New file tab", exact: true }).click();
+        const workerSelector = page.getByRole("combobox", { name: "Files view", exact: true });
+        expect(await fileViewLabels(page)).toEqual([]);
+        await newFileTab(page);
         await page.getByRole("button", { name: "Open Memory Recall", exact: true }).click();
-        await expect(
-          workerTabs.getByRole("tab", { name: "Memory Recall", exact: true }),
-        ).toHaveAttribute("aria-selected", "true");
+        await expect(workerSelector).toHaveText("Memory Recall");
         await workerModel.click();
         await modelMenu.getByRole("menuitemradio", { name: "Fixture Two", exact: true }).click();
         await expect(workerModel).toHaveText("Fixture Two");
@@ -1512,9 +1559,7 @@ for (const custom of [false, true]) {
           .toBeUndefined();
         await page.locator(`[id="conversation-${worker.record.id}"]`).click();
         await expect(workerModel).toHaveText("Fixture Two");
-        await expect(
-          workerTabs.getByRole("tab", { name: "Memory Recall", exact: true }),
-        ).toHaveAttribute("aria-selected", "true");
+        await expect(workerSelector).toHaveText("Memory Recall");
         // Cached worker text can show before selection settles; a click meanwhile is ignored.
         await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
         await page
@@ -1524,17 +1569,13 @@ for (const custom of [false, true]) {
         await expect(page.locator("#navigation-sidebar")).not.toHaveAttribute("aria-busy", "true");
         // Worker pages share this class and model text, so prove the parent chat is shown.
         await expect(
-          page.getByRole("main", { name: custom ? "Agent" : "Relay", exact: true }),
+          page.getByRole("main", { name: custom ? "Workflow Agent" : "Relay", exact: true }),
         ).toBeVisible();
         await expect(modelPicker).toHaveText("Fixture Two");
-        expect(
-          await planPanel.getByRole("tab").evaluateAll((tabs) =>
-            tabs.map((tab) => ({
-              label: tab.textContent,
-              selected: tab.getAttribute("aria-selected"),
-            })),
-          ),
-        ).toEqual(parentTabsBeforeWorker);
+        expect(await fileViewLabels(page)).toEqual(parentTabsBeforeWorker);
+        await expect(
+          planPanel.getByRole("combobox", { name: "Files view", exact: true }),
+        ).toHaveText(parentSelectedBeforeWorker ?? "");
         const parentChat = page.locator(".orchestration-chat-page:visible");
         // Worker completion queues a separate autonomous parent turn. Wait for
         // its known reply and idle UI before capturing either layout sample.
@@ -1594,8 +1635,6 @@ for (const custom of [false, true]) {
           "utf8",
         );
         for (const source of ["Sessions", "Worktrees"]) {
-          const apps = page.locator("#apps-card-toggle");
-          if ((await apps.getAttribute("aria-expanded")) === "false") await apps.click();
           const tables = page.locator("#tables-toggle");
           if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
           await page.getByRole("tab", { name: source, exact: true }).click();
@@ -1628,9 +1667,13 @@ for (const custom of [false, true]) {
             .getByRole("button", { name: custom ? "Workflow Agent" : "Relay", exact: true })
             .click();
           await expect(
-            projectPanel.getByRole("tab", { name: "result.txt", exact: true }),
-          ).toHaveAttribute("aria-selected", "true");
+            projectPanel.getByRole("combobox", { name: "Files view", exact: true }),
+          ).toHaveText("result.txt");
           await expect(projectPanel.locator(".view-lines")).toContainText("human accepted target");
+          await expect(
+            projectPanel.getByRole("button", { name: "View Plan", exact: true }),
+          ).toHaveCount(0);
+          await newFileTab(page);
           const openPlan = projectPanel.getByRole("button", { name: "View Plan", exact: true });
           await openPlan.focus();
           await openPlan.press(source === "Sessions" ? "Enter" : "Space");
@@ -1638,12 +1681,23 @@ for (const custom of [false, true]) {
             plan.getByRole("heading", { name: savedPlan.title, exact: true }),
           ).toBeVisible();
           await expect(projectPanel).toBeHidden();
-          expect((await page.evaluate(() => window.desktop.snapshot())).chat.plans?.at(-1)).toEqual(
-            savedPlan,
-          );
-          expect(
+          const restoredPlan = (
+            await page.evaluate(() => window.desktop.snapshot())
+          ).chat.plans?.at(-1);
+          expect(restoredPlan).toEqual(savedPlan);
+          const restoredRecord = JSON.parse(
             await readFile(join(planRoot, ".code60/plans", `${savedPlan.id}.json`), "utf8"),
-          ).toBe(savedRecord);
+          );
+          const originalRecord = JSON.parse(savedRecord);
+          // Running timer checkpoints may advance; browsing cannot change the plan document or authority.
+          expect(restoredRecord).toEqual({
+            ...originalRecord,
+            executionTiming: expect.any(Object),
+          });
+          expect(restoredRecord.executionTiming.elapsedMs).toBeGreaterThanOrEqual(
+            originalRecord.executionTiming.elapsedMs,
+          );
+          expect(restoredRecord.revision).toBe(originalRecord.revision);
           await checkCheckout("human accepted target\n");
         }
         checks.push(
@@ -1977,11 +2031,7 @@ test("workflow: reopening restores projects and saved chats on Relay without res
         "true",
       );
       const chat = page.locator(".orchestration-chat-page:visible");
-      await expect(
-        page
-          .locator(".workspace-breadcrumbs")
-          .getByRole("button", { name: "Rename chat: Chat 1", exact: true }),
-      ).toBeVisible();
+      await expect(await pageCommand(page, "Rename")).toBeVisible();
       const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
       const text = `Saved exchange ${i + 1}`;
       await expect(composer).toBeEditable();
@@ -1990,10 +2040,7 @@ test("workflow: reopening restores projects and saved chats on Relay without res
       await composer.press("Enter");
       await expect(chat.locator(".event.message .chat-markdown").first()).toHaveText("ok");
       const title = `Saved project ${i + 1}`;
-      await page
-        .locator(".workspace-breadcrumbs")
-        .getByRole("button", { name: /^Rename chat:/ })
-        .click();
+      await (await pageCommand(page, "Rename")).click();
       const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
       await rename.getByRole("textbox", { name: "Chat name", exact: true }).fill(title);
       await rename.getByRole("button", { name: "Save", exact: true }).click();
@@ -2014,16 +2061,9 @@ test("workflow: reopening restores projects and saved chats on Relay without res
       "true",
     );
     const archivedChat = page.locator(".orchestration-chat-page:visible");
-    await expect(
-      page
-        .locator(".workspace-breadcrumbs")
-        .getByRole("button", { name: "Rename chat: Chat 2", exact: true }),
-    ).toBeVisible();
+    await expect(await pageCommand(page, "Rename")).toBeVisible();
     await expect(archivedChat.getByRole("combobox")).toBeEditable();
-    await page
-      .locator(".workspace-breadcrumbs")
-      .getByRole("button", { name: /^Rename chat:/ })
-      .click();
+    await (await pageCommand(page, "Rename")).click();
     const rename = page.getByRole("dialog", { name: "Rename chat", exact: true });
     await rename.getByRole("textbox", { name: "Chat name", exact: true }).fill("Hidden saved chat");
     await rename.getByRole("button", { name: "Save", exact: true }).click();
@@ -2224,9 +2264,7 @@ test("workflow: custom assistants without a database, instruction edits, archive
     };
     await expect(page.locator(".custom-agent-actions")).toHaveCount(0);
     for (const theme of ["light", "dark"]) {
-      await page.locator("#tab-settings").click();
-      if ((await page.locator("#settings-card-toggle").getAttribute("aria-expanded")) === "false")
-        await page.locator("#settings-card-toggle").click();
+      await page.locator("#tab-apps").click();
       await page.locator("#tab-settings-appearance").click();
       await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption(theme);
       await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
@@ -2280,7 +2318,7 @@ test("workflow: custom assistants without a database, instruction edits, archive
     expect(beforeOpen.database).toBeNull();
     expect(beforeOpen.chats.filter((chat) => chat.customAgentId)).toHaveLength(0);
     await page.getByRole("button", { name: "Open Reviewer", exact: true }).click();
-    await expect(page.getByRole("main", { name: "Agent", exact: true })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Reviewer", exact: true })).toBeVisible();
     const composer = page
       .locator(".orchestration-chat-page:visible")
       .getByRole("combobox", { name: "Message to orchestrator", exact: true });
@@ -2291,7 +2329,7 @@ test("workflow: custom assistants without a database, instruction edits, archive
     await composer.fill("Reviewer unsent draft");
     await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
     await page.getByRole("button", { name: "Open Writer", exact: true }).click();
-    await expect(page.getByRole("main", { name: "Agent", exact: true })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Writer", exact: true })).toBeVisible();
     await expect(composer).toHaveValue("");
     await checkSidebarIconSpacing(
       page.locator("#custom-agent-pages").getByRole("button", { name: "Writer", exact: true }),
@@ -2364,11 +2402,11 @@ test("workflow: custom assistants without a database, instruction edits, archive
       page.locator("#custom-agent-pages").getByRole("button", { name: "Reviewer", exact: true }),
     ).toHaveCount(0);
     expect(await readFile(statePath)).toEqual(saved);
-    await page.getByRole("button", { name: "Archived", exact: true }).click();
+    await (await pageCommand(page, "Archived")).click();
     await (await cardMenu("Reviewer"))
       .getByRole("menuitem", { name: "Restore", exact: true })
       .click();
-    await page.getByRole("button", { name: "Active assistants", exact: true }).click();
+    await (await pageCommand(page, "Active assistants")).click();
     await expect(
       page.locator("#custom-agent-pages").getByRole("button", { name: "Reviewer", exact: true }),
     ).toBeVisible();
@@ -2402,7 +2440,7 @@ test("workflow: custom assistants without a database, instruction edits, archive
     // Restore only synthetic evidence, then retry using the same visible entry.
     await writeFile(statePath, saved);
     await recoveryEntry.click();
-    await expect(page.getByRole("main", { name: "Agent", exact: true })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Reviewer", exact: true })).toBeVisible();
     await expect(
       page.getByRole("combobox", { name: "Message to orchestrator", exact: true }),
     ).toBeEditable();
@@ -2675,7 +2713,9 @@ test("workflow: completed project plans reopen latest after restart with narrow 
         expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("original\n");
       }
       await plan.getByRole("button", { name: "Accept", exact: true }).click();
-      await expect(plan.getByText("2 out of 2", { exact: true })).toBeVisible({ timeout: 30_000 });
+      await expect(plan.getByText("100% (2 out of 2)", { exact: true })).toBeVisible({
+        timeout: 30_000,
+      });
       await expect.poll(() => readFile(join(repo, "result.txt"), "utf8")).toBe("planned result\n");
     }
     const completed = (await page.evaluate(() => window.desktop.snapshot())).chat;
@@ -2695,8 +2735,6 @@ test("workflow: completed project plans reopen latest after restart with narrow 
     const geometry = [];
     await page.setViewportSize({ width: 1600, height: 1000 });
     for (const size of [14, 32, 64]) {
-      const settings = page.locator("#settings-card-toggle");
-      if ((await settings.getAttribute("aria-expanded")) === "false") await settings.click();
       await page.locator("#settings-pages").getByRole("tab", { name: "Text", exact: true }).click();
       await page
         .getByRole("group", { name: "Button Text", exact: true })
@@ -2715,9 +2753,8 @@ test("workflow: completed project plans reopen latest after restart with narrow 
       await expect
         .poll(() => panel.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
         .toBe(120);
-      await panel
-        .getByRole("tab", { name: "Plan · Second planned change", exact: true })
-        .press("Delete");
+      await panel.getByRole("combobox", { name: "Files view", exact: true }).press("Delete");
+      await newFileTab(page);
       const view = panel.getByRole("button", { name: "View Plan", exact: true });
       await expect(view).toHaveCSS("font-size", `${size}px`);
       const bounds = await view.evaluate((button) => {
@@ -2760,9 +2797,7 @@ test("workflow: completed project plans reopen latest after restart with narrow 
       .getByLabel("Font size")
       .fill("14");
     await page.locator(`[id="conversation-${chatId}"]`).click();
-    await panel
-      .getByRole("tab", { name: "Plan · Second planned change", exact: true })
-      .press("Delete");
+    await panel.getByRole("combobox", { name: "Files view", exact: true }).press("Delete");
     const previousPids = new Set((await processes()).map((entry) => entry.pid));
     const workerDirectories = (await page.evaluate(() => window.desktop.snapshot())).runs.map(
       (run) => run.record.worktree,
@@ -2779,6 +2814,7 @@ test("workflow: completed project plans reopen latest after restart with narrow 
     await page.locator(`[id="conversation-${chatId}"]`).click();
     const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
     if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    await newFileTab(page);
     const reopen = page
       .locator("#chat-file-panel")
       .getByRole("button", { name: "View Plan", exact: true });
@@ -2885,18 +2921,19 @@ test("workflow: seventeen retained assistant file panels release inactive views 
         page.getByRole("alert").filter({ hasText: "Too many Relay file views" }),
       ).toHaveCount(0);
       if (!index) {
-        await panel.getByRole("tab", { name: "same.txt", exact: true }).press("Alt+ArrowLeft");
-        await expect(panel.getByRole("tab")).toHaveText(["same.txt", "File Explorer"]);
+        await panel
+          .getByRole("combobox", { name: "Files view", exact: true })
+          .press("Alt+ArrowLeft");
+        expect(await fileViewLabels(page)).toEqual(["same.txt", "File Explorer"]);
       }
     }
     await page
       .locator("#custom-agent-pages")
       .getByRole("button", { name: "Panel 1", exact: true })
       .click();
-    await expect(panel.getByRole("tab")).toHaveText(["same.txt", "File Explorer"]);
-    await expect(panel.getByRole("tab", { name: "same.txt", exact: true })).toHaveAttribute(
-      "aria-selected",
-      "true",
+    expect(await fileViewLabels(page)).toEqual(["same.txt", "File Explorer"]);
+    await expect(panel.getByRole("combobox", { name: "Files view", exact: true })).toHaveText(
+      "same.txt",
     );
     await expect(panel.locator(".view-lines")).toContainText("owned panel 1");
     for (const entry of evidence)
@@ -3046,14 +3083,15 @@ test("workflow: session review arrivals preserve closed tabs and archived eviden
     await send("Implement task loop", 2);
     const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
     if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
-    await panel.getByRole("tab", { name: "Changes", exact: true }).press("Delete");
+    expect(await fileViewLabels(page)).toContain("Changes");
+    await selectFileView(page, "Changes");
+    await panel.getByRole("combobox", { name: "Files view", exact: true }).press("Delete");
     await panel.getByRole("button", { name: "Open Files", exact: true }).click();
     await panel.getByRole("treeitem", { name: "task.txt", exact: true }).click();
-    const savedTabs = await panel
-      .getByRole("tab")
-      .evaluateAll((tabs) =>
-        tabs.map((tab) => ({ text: tab.textContent, selected: tab.getAttribute("aria-selected") })),
-      );
+    const savedTabs = await fileViewLabels(page);
+    const selectedTab = await panel
+      .getByRole("combobox", { name: "Files view", exact: true })
+      .textContent();
     await group.locator(`[id="conversation-${a}"]`).click();
     await expect(page.locator(`.orchestration-chat-page[data-chat-id="${a}"]`)).toBeVisible();
     await expect
@@ -3062,17 +3100,11 @@ test("workflow: session review arrivals preserve closed tabs and archived eviden
     await send("Implement second task loop", 3);
     await group.locator(`[id="conversation-${b}"]`).click();
     await expect(page.locator(`.orchestration-chat-page[data-chat-id="${b}"]`)).toBeVisible();
-    await expect
-      .poll(() =>
-        panel.getByRole("tab").evaluateAll((tabs) =>
-          tabs.map((tab) => ({
-            text: tab.textContent,
-            selected: tab.getAttribute("aria-selected"),
-          })),
-        ),
-      )
-      .toEqual(savedTabs);
-    await expect(panel.getByRole("tab", { name: "Changes", exact: true })).toHaveCount(0);
+    await expect(panel.getByRole("combobox", { name: "Files view", exact: true })).toHaveText(
+      selectedTab ?? "",
+    );
+    expect(await fileViewLabels(page)).toEqual(savedTabs);
+    expect(await fileViewLabels(page)).not.toContain("Changes");
     const archive = async (id: string) => {
       await group.locator(`[id="conversation-${id}"]`).click({ button: "right" });
       await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
@@ -3080,8 +3112,6 @@ test("workflow: session review arrivals preserve closed tabs and archived eviden
     };
     await archive(a);
     const openReview = async () => {
-      const apps = page.locator("#apps-card-toggle");
-      if ((await apps.getAttribute("aria-expanded")) === "false") await apps.click();
       const tables = page.locator("#tables-toggle");
       if ((await tables.getAttribute("aria-expanded")) === "false") await tables.click();
       await page.getByRole("tab", { name: "Sessions", exact: true }).click();

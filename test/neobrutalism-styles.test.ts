@@ -25,6 +25,8 @@ it("compiles prefixed surface/chat utilities with live aliases and no reset or u
     .join("\n");
   expect(css).toContain(".nb\\:border-2");
   expect(css).toContain("border-width: 2px");
+  expect(css).toContain(".nb\\:border {");
+  expect(css).toContain("border-width: 1px");
   expect(css).toContain("border-color: var(--nb-card-border, var(--panel-border))");
   expect(css).toContain("background-color: var(--nb-card-fill, var(--surface))");
   expect(css).toContain("var(--nb-card-shadow, var(--card-shadow))");

@@ -18,7 +18,6 @@ import {
   promptLabels,
   sourceLabels,
 } from "./prompt-editor-model.js";
-import { TableControlGroup } from "./table-controls.js";
 
 export function PromptEditorPage({
   prompts,
@@ -82,42 +81,36 @@ export function PromptEditorPage({
   return (
     <main className="prompt-editor" aria-labelledby={`${id}-title`}>
       <div className="table-controls">
-        <PageTitle page="prompts" className="table-title" id={`${id}-title`} />
-        <TableControlGroup label="Template actions">
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Save"
-            data-active={dirty && preview.ok ? "true" : undefined}
-            disabled={busy || !dirty || !preview.ok}
-            onClick={async () => {
-              if (await onSave(selected.id, text)) setDraft(undefined);
-            }}
-          >
-            <Icon name="checkmark" />
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Discard changes"
-            disabled={busy || !dirty}
-            onClick={() => setDraft(undefined)}
-          >
-            <Icon name="close" />
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Reset to default"
-            data-tooltip={`Reset to the ${restores} template`}
-            disabled={busy || selected.source !== "database"}
-            onClick={async () => {
-              if (await onReset(selected.id)) setDraft(undefined);
-            }}
-          >
-            <Icon name="renew" />
-          </button>
-        </TableControlGroup>
+        <PageTitle
+          page="prompts"
+          className="table-title"
+          id={`${id}-title`}
+          actions={[
+            {
+              id: "prompt-editor-0",
+              label: "Save",
+              run: async () => {
+                if (await onSave(selected.id, text)) setDraft(undefined);
+              },
+              disabled: busy || !dirty || !preview.ok,
+            },
+            {
+              id: "prompt-editor-1",
+              label: "Discard changes",
+              run: () => setDraft(undefined),
+              disabled: busy || !dirty,
+            },
+            {
+              id: "prompt-editor-2",
+              label: "Reset to default",
+              reason: `Reset to the ${restores} template`,
+              run: async () => {
+                if (await onReset(selected.id)) setDraft(undefined);
+              },
+              disabled: busy || selected.source !== "database",
+            },
+          ]}
+        />
       </div>
       <div className="prompt-editor-body">
         <nav className="prompt-editor-list" aria-label="Prompt templates">

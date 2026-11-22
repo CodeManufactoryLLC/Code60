@@ -6,7 +6,8 @@ import {
 } from "../bridge/index.js";
 import type { SidebarAppearance } from "./appearance.js";
 
-const blurError = "Native sidebar blur could not be applied. Try changing the blur strength again.";
+const blurError =
+  "Native window background blur could not be applied. Try changing the blur strength again.";
 
 /** Own subscriptions, batched visible geometry, and immediate hidden-state reporting. */
 export function observeSidebarBackdrop(
@@ -15,7 +16,7 @@ export function observeSidebarBackdrop(
   splash: boolean,
   setError: (message: string) => void,
 ) {
-  const element = document.querySelector<HTMLElement>(".sidebar-background");
+  const element = document.querySelector<HTMLElement>(".window-background");
   const forced = window.matchMedia("(forced-colors: active)");
   let frame = 0;
   let disposed = false;

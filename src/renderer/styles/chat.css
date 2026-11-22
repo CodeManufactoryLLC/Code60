@@ -1230,7 +1230,8 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   gap: 0;
   min-width: 300px;
   min-height: 0;
-  overflow: hidden;
+  /* Keep the workspace as the sticky header's scroll owner. */
+  overflow: clip;
 }
 
 .message-copy {
@@ -1375,4 +1376,11 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
 .event.prompt .message-copy-feedback {
   left: auto;
   right: 0;
+}
+
+/* The visible title and connection commands live in the card's shared header. */
+.orchestration-chat-heading:not(:has(.worker-chat-identity)) {
+  padding: 0;
+  margin: 0;
+  gap: 0;
 }

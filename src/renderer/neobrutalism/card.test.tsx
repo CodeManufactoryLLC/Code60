@@ -17,7 +17,7 @@ it("keeps a noninteractive shell and valid span parts inside native buttons", ()
     </Card>,
   );
   expect(html).toContain('data-slot="card" data-size="sm"');
-  expect(html).toContain("nb:border-2 nb:border-solid");
+  expect(html).toContain("nb:border nb:border-solid");
   expect(html).toContain("nb:shadow-shadow");
   const button = html.slice(html.indexOf("<button"), html.indexOf("</button>"));
   expect(button).not.toContain("<div");

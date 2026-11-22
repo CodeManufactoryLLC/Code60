@@ -250,3 +250,18 @@ it.each([
     expect(actual).toBe(hash);
   },
 );
+
+it.each([
+  ["app-history-back", "history-back.png"],
+  ["app-icon-animations", "animation-wheel.png"],
+  ["app-history-forward", "history-forward.png"],
+  ["app-theme-system", "theme-eclipse.png"],
+  ["app-theme-dark", "theme-night.png"],
+  ["app-theme-light", "theme-sun.png"],
+] as const)("uses the supplied decorative history poster for %s", (name, poster) => {
+  const html = renderToStaticMarkup(<NavigationIcon name={name} />);
+  expect(html).toContain(poster);
+  expect(html).toContain(`data-icon="${name}"`);
+  expect(html).toContain('data-animated="true"');
+  expect(html).toContain('alt="" aria-hidden="true" draggable="false"');
+});

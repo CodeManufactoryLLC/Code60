@@ -22,6 +22,10 @@ function navigation(
   });
   return renderToStaticMarkup(
     <PageTabBar
+      iconAnimations
+      onIconAnimationsChange={() => {}}
+      theme="system"
+      onThemeChange={() => {}}
       {...history}
       tabs={{ ...initialTabs, active }}
       settingsSection={settingsSection}
@@ -54,10 +58,11 @@ function navigation(
 describe("database connection navigation", () => {
   it("groups Relay and Custom Assistants beneath a navigable Assistants heading", () => {
     const html = navigation(null);
-    expect(html).toMatch(/class="[^"]*sidebar-navigation-card"/);
+    expect(html).toMatch(/class="[^"]*sidebar-navigation-card\b/);
     expect(html.match(/data-slot="card"/g)).toHaveLength(7);
-    expect(html).toContain('id="assistants-toggle"');
-    expect(html).toContain('aria-controls="assistants-pages"');
+    expect(html.match(/class="[^"]*sidebar-section[^"]*"/g)).toHaveLength(6);
+    expect(html).not.toContain('id="assistants-toggle"');
+    expect(html).toContain('id="assistants-pages"');
     expect(html).toContain('data-icon="app-assistants"');
     expect(html.indexOf('id="assistants-pages"')).toBeLessThan(
       html.indexOf('id="tab-custom-agents"'),
@@ -95,9 +100,11 @@ describe("database connection navigation", () => {
       expect(html.indexOf('class="icon-button sidebar-toggle"')).toBeGreaterThan(
         html.indexOf('<header class="workspace-header"'),
       );
-      expect(html.indexOf('class="icon-button sidebar-toggle"')).toBeLessThan(
+      expect(html.indexOf('class="icon-button sidebar-toggle"')).toBeGreaterThan(
         html.indexOf("</header>"),
       );
+      expect(html).toContain('<div class="workspace-panel-controls">');
+      expect(html).toContain('id="workspace-panel-actions"');
     },
   );
   it.each([true, false])(
@@ -180,7 +187,7 @@ describe("database connection navigation", () => {
       expect(html).not.toContain("sidebar-header");
       expect(html).toContain('title="Add Project"');
       const action = html.indexOf('class="icon-button project-sidebar-open"');
-      expect(action).toBeLessThan(html.indexOf('id="projects-card-toggle"'));
+      expect(html).not.toContain('id="projects-card-toggle"');
       expect(action).toBeLessThan(html.indexOf('id="chat-pages"'));
       expect(html).not.toContain('class="page-tab-label">Add Project</span>');
       expect(html).not.toContain(">project</span>");
@@ -197,7 +204,7 @@ describe("database connection navigation", () => {
       ["table-defaults", "Table defaults"],
       ["text", "Text"],
       ["polling-settings", "Polling"],
-      ["updates", "Updates"],
+      ["updates", "Update Manager"],
       ["about", "About"],
     ] as const;
     for (const [section, label] of sections) {
@@ -210,7 +217,7 @@ describe("database connection navigation", () => {
     expect(html.match(/<button[^>]*id="tab-settings-appearance"[^>]*>/)?.[0]).toContain(
       'aria-selected="true"',
     );
-    expect(html.indexOf('id="settings-pages"')).toBeLessThan(
+    expect(html.indexOf('id="app-pages"')).toBeLessThan(
       html.indexOf('id="tab-settings-appearance"'),
     );
     expect(html.indexOf('id="tab-settings-about"')).toBeLessThan(
@@ -223,12 +230,8 @@ describe("database connection navigation", () => {
       "experiments-toggle",
       "tab-episodic-memory",
       "tab-rag",
-      "tab-settings-appearance",
-      "tab-settings-memory",
-      "tab-settings-polling-settings",
       "tab-settings-table-defaults",
       "tab-settings-text",
-      "tab-settings-updates",
     ];
     for (let index = 1; index < order.length; index++) {
       expect(html.indexOf(`id="${order[index - 1]}"`)).toBeLessThan(
@@ -239,6 +242,20 @@ describe("database connection navigation", () => {
 });
 
 describe("sidebar labels and disclosure icons", () => {
+  it.each(["appearance", "memory", "polling-settings", "updates"] as const)(
+    "keeps the selected Apps preference %s in its always-open card",
+    (section) => {
+      const html = navigation(null, undefined, section, "settings", false);
+      expect(html.match(/<button[^>]*id="tab-settings"[^>]*>/)?.[0]).toContain(
+        'aria-selected="false"',
+      );
+      expect(html.match(/<button[^>]*id="tab-apps"[^>]*>/)?.[0]).toContain('data-active="false"');
+      expect(html.indexOf(`id="tab-settings-${section}"`)).toBeLessThan(
+        html.indexOf('id="settings-pages"'),
+      );
+    },
+  );
+
   it("nests Data Viewer alphabetically under Apps and gives every child the grid icon", () => {
     const html = navigation("/database.sqlite");
     const order = [
@@ -325,8 +342,9 @@ describe("sidebar labels and disclosure icons", () => {
         "experiment-pages",
       ]) {
         const group = html.match(new RegExp(`<div[^>]*id="${id}"[^>]*>`))?.[0];
-        expect(group).toContain(`aria-hidden="${!expanded}"`);
-        if (expanded) {
+        const closed = !expanded && !["chat-pages", "app-pages", "settings-pages"].includes(id);
+        expect(group).toContain(`aria-hidden="${closed}"`);
+        if (!closed) {
           expect(group).not.toContain('hidden=""');
           expect(group).not.toContain('inert=""');
         } else {
@@ -351,9 +369,9 @@ describe("sidebar labels and disclosure icons", () => {
       expect(promptTab).toContain("Prompt Builder");
       expect(promptTab).toContain('data-icon="app-ai"');
       expect(project).toContain("<svg");
-      expect(html.match(/<img/g)).toHaveLength(31);
-      expect(html.match(/class="carbon-icon"/g)).toHaveLength(11);
-      expect(html.match(/class="navigation-icon"/g)).toHaveLength(33);
+      expect(html.match(/<img/g)).toHaveLength(33);
+      expect(html.match(/class="carbon-icon"/g)).toHaveLength(3);
+      expect(html.match(/class="navigation-icon"/g)).toHaveLength(35);
       for (const [id, icon, label] of [
         ["tab-home", "app-home2", "Home"],
         ["tab-search", "app-search", "Search"],
@@ -372,7 +390,7 @@ describe("sidebar labels and disclosure icons", () => {
         ["tab-settings-appearance", "app-color-palette", "Appearance"],
         ["tab-settings-text", "app-text-size", "Text"],
         ["tab-settings-polling-settings", "app-heart-rate", "Polling"],
-        ["tab-settings-updates", "app-cloud-computing", "Updates"],
+        ["tab-settings-updates", "app-cloud-computing", "Update Manager"],
         ["tab-settings-about", "app-info", "About"],
         ["advanced-toggle", "app-analyze", "Advanced"],
         ["experiments-toggle", "app-chemical", "Experiments"],
@@ -402,15 +420,13 @@ describe("sidebar labels and disclosure icons", () => {
         "home-card-toggle",
         "assistants-toggle",
         "projects-card-toggle",
+        "providers-card-toggle",
         "apps-card-toggle",
         "settings-card-toggle",
       ]) {
-        const toggle = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0];
-        expect(toggle).toContain(`aria-expanded="${expanded}"`);
-        expect(toggle).toContain('class="icon-button sidebar-card-toggle"');
-        expect(toggle).toContain('data-tooltip=""');
-        expect(toggle).not.toContain("title=");
+        expect(html).not.toContain(`id="${id}"`);
       }
+      expect(html.match(/sidebar-navigation-card sidebar-section/g)).toHaveLength(5);
       for (const id of ["tables-toggle", "advanced-toggle", "experiments-toggle"]) {
         const toggle = html.match(new RegExp(`<button[^>]*id="${id}"[\\s\\S]*?</button>`))?.[0];
         expect(toggle).toContain(`aria-expanded="${expanded}"`);
@@ -432,5 +448,33 @@ describe("window navigation history", () => {
     expect(back).not.toContain("disabled");
     expect(forward).toContain("disabled");
     expect(html.indexOf('aria-label="Back"')).toBeGreaterThan(html.indexOf("</nav>"));
+    const cardStart = html.indexOf(
+      'class="nb:group/card',
+      html.indexOf('<header class="workspace-header"'),
+    );
+    expect(html.indexOf('aria-label="Navigation history"')).toBeGreaterThan(cardStart);
+    expect(html).toContain('data-icon="app-history-back"');
+    expect(html).not.toContain('data-icon="app-history-forward"');
+    expect(html).toContain('class="history-placeholder" aria-hidden="true"');
+    expect(html).not.toContain('data-icon="arrow--left"');
   });
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])(
+    "reserves disabled history positions without arrow artwork (%s/%s)",
+    (canGoBack, canGoForward) => {
+      const html = navigation(null, undefined, null, "home", false, true, false, {
+        canGoBack,
+        canGoForward,
+      });
+      expect(html.includes('data-icon="app-history-back"')).toBe(canGoBack);
+      expect(html.includes('data-icon="app-history-forward"')).toBe(canGoForward);
+      expect(html.match(/class="history-placeholder"/g) ?? []).toHaveLength(
+        Number(!canGoBack) + Number(!canGoForward),
+      );
+    },
+  );
 });

@@ -1,7 +1,9 @@
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import type { Versions } from "../bridge/index.js";
 import { AboutSection } from "./about-section.js";
+import type { PageAction } from "./content-page-header.js";
 
 const versions: Versions = {
   code60: "0.2.1",
@@ -20,6 +22,18 @@ const versions: Versions = {
   },
   onnxRuntime: { name: "onnxruntime-node", version: "1.30.0", execution: "CPU, offline sidecar" },
 };
+
+const captured = vi.hoisted(() => ({ actions: [] as readonly PageAction[] }));
+vi.mock("./settings-layout.js", async (original) => {
+  const actual = await original<typeof import("./settings-layout.js")>();
+  return {
+    ...actual,
+    SettingsHeader: (props: Parameters<typeof actual.SettingsHeader>[0]) => {
+      captured.actions = props.actions ?? [];
+      return createElement(actual.SettingsHeader, props);
+    },
+  };
+});
 
 it("shows configured model provenance and actual runtime details beside existing versions", () => {
   const html = renderToStaticMarkup(<AboutSection versions={versions} />);
@@ -43,6 +57,8 @@ it("handles older snapshots, absent runtime metadata and unavailable versions", 
   expect(html).toContain("<dt>Embedding model</dt><dd>Unavailable</dd>");
   expect(html).toContain("<dt>ONNX Runtime version</dt><dd>Unavailable</dd>");
   const missing = renderToStaticMarkup(<AboutSection versions={undefined} />);
-  expect(missing).toContain('disabled=""');
+  expect(missing).toContain('aria-label="About actions"');
+  expect(missing).not.toContain('aria-label="Copy version info"');
   expect(missing).not.toContain("<dt>");
+  expect(captured.actions).toMatchObject([{ label: "Copy version info", disabled: true }]);
 });

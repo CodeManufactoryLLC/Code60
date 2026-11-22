@@ -315,11 +315,16 @@ export const pages = [
 ] as const satisfies readonly PageDefinition[];
 
 export const settingsSections = [
-  { id: "about", label: "About", icon: "app-info" },
-  { id: "appearance", label: "Appearance", icon: "app-color-palette" },
-  { id: "memory", label: "Memory", icon: "app-bookshelf" },
-  { id: "polling-settings", label: "Polling", icon: "app-heart-rate" },
-  { id: "table-defaults", label: "Table defaults", icon: "app-table" },
-  { id: "text", label: "Text", icon: "app-text-size" },
-  { id: "updates", label: "Updates", icon: "app-cloud-computing" },
-] as const satisfies readonly { id: string; label: string; icon: string }[];
+  { id: "about", label: "About", icon: "app-info", parent: "settings" },
+  { id: "appearance", label: "Appearance", icon: "app-color-palette", parent: "apps" },
+  { id: "memory", label: "Memory", icon: "app-bookshelf", parent: "apps" },
+  { id: "polling-settings", label: "Polling", icon: "app-heart-rate", parent: "apps" },
+  { id: "table-defaults", label: "Table defaults", icon: "app-table", parent: "settings" },
+  { id: "text", label: "Text", icon: "app-text-size", parent: "settings" },
+  { id: "updates", label: "Update Manager", icon: "app-cloud-computing", parent: "apps" },
+] as const satisfies readonly {
+  id: string;
+  label: string;
+  icon: string;
+  parent: "apps" | "settings";
+}[];

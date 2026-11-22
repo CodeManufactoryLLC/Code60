@@ -7,7 +7,7 @@ import {
   sidebarAppearanceProperties,
 } from "./appearance.js";
 
-describe("saved sidebar appearance", () => {
+describe("saved background appearance (legacy storage)", () => {
   it.each([null, "broken", "null", "[]", "42", '"opacity"'])(
     "uses readable defaults for invalid stored data: %s",
     (raw) => expect(parseSidebarAppearance(raw)).toEqual(defaultSidebarAppearance),
@@ -22,7 +22,7 @@ describe("saved sidebar appearance", () => {
       blur: 0,
     });
     expect(sidebarAppearanceProperties({ opacity: 35, blur: 12 })).toEqual({
-      "--sidebar-background-opacity": "35%",
+      "--window-background-opacity": "35%",
     });
   });
 });

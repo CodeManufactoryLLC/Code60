@@ -235,24 +235,23 @@ requests by explicit conversation/generation ownership, including file previews,
 worker controls, review reads, memory and cleanup. Keep built-in Relay unchanged.
 Custom definitions are private, revision-checked and database-independent.
 
-## Sidebar transparency
+## Window background opacity and native blur
 
-Create the desktop window with native alpha support and a clear background so the
-sidebar opacity slider can reveal the desktop immediately. The renderer keeps the
-splash and main content opaque. The saved Transparent background flag still gates
-other transparent margins and macOS click-through; it must not gate native alpha
-needed by the sidebar. Do not add click-through to the sidebar itself.
+Create the foreground window with native alpha and a clear background. One live
+renderer backdrop covers the entire window; foreground cards and the splash remain
+opaque. Preserve the stored percentage record. The removed transparency toggle's
+legacy flag never gates paint, native alpha or mouse input: the whole foreground
+window stays clickable, including margins at zero opacity. Retain legacy validated
+IPC interfaces without permitting click-through.
 
-## Native sidebar backdrop
-
-Use only an owned, non-focusable, mouse-transparent BaseWindow with native macOS
-vibrancy behind the main window. It must have no web contents or screen capture.
-Clamp its bounds to the owned main window and follow movement, resize and zoom.
-Strength blends native material opacity, not a configurable Gaussian radius.
-Hide on splash, collapse, opaque tint, minimized/hidden state and forced colors.
-Reset on renderer navigation/loss; close it and remove listeners on owner close or
-shutdown. Validate the narrow width/strength/visibility bridge request. Keep Linux
-supported with blur unavailable rather than an ineffective CSS substitute.
+Native blur uses an owned, non-focusable, mouse-transparent BaseWindow with macOS
+vibrancy, no web contents or screen capture, and the owner's entire content bounds.
+Derive all bounds in main; the legacy bounded viewport-width request only gates
+visibility alongside strength. Follow owner movement/resize; hide on splash, opaque
+tint, minimized/hidden state and forced colors, independently of sidebar collapse.
+Reset on renderer navigation/loss and dispose windows/listeners on owner close.
+Report fixed native failures separately from renderer preference-write failures.
+Linux retains opacity with native blur unavailable, without a CSS blur substitute.
 
 Transparent Linux windows use three renderer caption buttons in the native drag
 strip because Electron hides its native caption controls for translucent windows.
@@ -265,7 +264,7 @@ do not use Electron 45 macOS isVisible for visibility authority. Keep its backdr
 hidden in Mission Control. Event-driven native failures notify only the owner
 renderer through a payload-free event after closing the decorative backdrop.
 
-Native sidebar backdrop visibility follows owner show/hide/minimize events and immediate
+Native window backdrop visibility follows owner show/hide/minimize events and immediate
 renderer hidden reports, without Electron's macOS native visibility predicate. Hide the
 decorative window from Mission Control. A payload-free failure notice reports native
 event failures beside Appearance controls, separately from preference save errors; a
@@ -285,3 +284,29 @@ main-owned blocking reasons; keep sidebar/gallery/details state and actions alig
 Reserve provider transitions across Relay/Custom Assistant sends, including
 pending request preparation. Reload saved project chats on primary changes;
 recovering an invalid primary retains all unaffected verified memberships.
+
+## Plan execution time
+
+Display Execution time above the 12px progress bar, with a once-per-second local
+clock only while the visible plan is running. Use shared duration formatting and
+role=timer with aria-live=off. Progress is Math.round(completed / total * 100),
+followed by the equally weighted task count; neither timing nor counts belong to
+Markdown. View Plan is only in the centered blank/empty Files choices; retain
+latest-plan selection, keyboard focus, tab identity and captured conversation
+ownership, including Relay/custom assistants browsing a project's files.
+
+Optional host-owned executionTiming on Plan contains elapsedMs, runningSince and
+historyIncomplete. New drafts start at zero; legacy executed plans without timing
+show Not recorded. Resuming a legacy plan records new time with a recorded-only
+label. Only running intervals count, once per plan rather than per worker. Queue,
+pause/failure/finished periods do not count. State-transition writes finalize
+intervals; five-second serialized private-record checkpoints preserve revisions,
+accepted revision and Markdown. A checkpoint failure preserves saved state and
+reports a fixed desktop warning without changing execution authority.
+
+Recovery removes running anchors, retains the last checkpoint and pauses existing
+execution as before; never count offline time or restore authority. An abrupt
+crash may lose the last five-second interval (or more if storage writes failed).
+Undo restores checkpoint timing, clears anchors and freezes discarded plans.
+Owner teardown cancels timers; failed timing writes do not authorize or dispatch
+work. This adds no preference, agent-write field, IPC endpoint or dependency.

@@ -2,7 +2,7 @@ export function observeSidebarCardEdges(sidebar: HTMLElement) {
   const rowSelector =
     ".page-tab, .chat-sidebar-row, .project-chat-heading, .chat-page-heading, .sidebar-settings-heading, .project-sidebar-open, .project-session-new";
   const update = () => {
-    for (const card of sidebar.querySelectorAll(".sidebar-navigation-card")) {
+    for (const card of sidebar.querySelectorAll(".sidebar-section")) {
       for (const previous of card.querySelectorAll("[data-card-first]")) {
         previous.removeAttribute("data-card-first");
       }

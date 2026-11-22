@@ -106,7 +106,7 @@ it("respects global polling pause while retaining initial and manual status read
   const { automation, element } = mount(true);
   await vi.advanceTimersByTimeAsync(60_000);
   expect(automation).toHaveBeenCalledTimes(1);
-  element.props.children[0].props.children[1].props.onClick();
+  element.props.children[0].props.children.props.actions[0].run();
   await vi.advanceTimersByTimeAsync(0);
   expect(automation).toHaveBeenCalledTimes(2);
 });

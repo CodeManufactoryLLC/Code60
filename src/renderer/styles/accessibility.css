@@ -1,5 +1,10 @@
 /* Accessibility styles. Imported into its declared layer by style.css. */
 
+/* This preference stops icon artwork only; layout/status motion keeps its settings. */
+:root[data-icon-animations="off"] :is(.navigation-icon, .carbon-icon) {
+  animation: none;
+}
+
 @media (forced-colors: active) {
   :root {
     --shadow-color: CanvasText;
@@ -28,7 +33,7 @@
   }
 
   .sidebar-navigation-card,
-  .sidebar-navigation-card::before,
+  .sidebar-section::before,
   .file-panel-toolbar {
     background: Canvas;
   }
@@ -59,11 +64,7 @@
     color: HighlightText;
   }
 
-  .app:has(.sidebar)::before {
-    display: none;
-  }
-
-  .sidebar-background {
+  .window-background {
     opacity: 1;
     background: Canvas;
     backdrop-filter: none;
@@ -366,8 +367,7 @@
 
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
   .sidebar :is(button:not(.icon-button, .sidebar-resize), .sidebar-settings-heading),
-  .chat-sidebar-row,
-  .file-tab {
+  :where(.chat-sidebar-row) {
     transition: none;
   }
 }
@@ -535,5 +535,18 @@
   }
   .automation-job-controls > button:focus-visible {
     outline: none;
+  }
+}
+
+/* Tint artwork only; leave labels, surfaces, code and content images untouched. */
+.icon-color-filter {
+  position: absolute;
+  pointer-events: none;
+}
+
+@media (forced-colors: none) {
+  :root[data-monochrome="on"]
+    :is(.navigation-icon, .carbon-icon, .agent-logo, .context-donut > svg) {
+    filter: var(--icon-base-filter, brightness(1)) url("#code60-icon-monochrome");
   }
 }

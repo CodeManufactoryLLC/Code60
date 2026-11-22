@@ -2,7 +2,7 @@ import type { EventEmitter } from "node:events";
 import { BaseWindow, type BrowserWindow } from "electron";
 import { inactiveSidebarBackdrop, type SidebarBackdropRequest } from "../bridge/index.js";
 
-/** A native, mouse-transparent backdrop behind the owned foreground window only. */
+/** Full-window native blur. The class/transport retain their legacy sidebar names. */
 export class SidebarBackdrop {
   private backdrop: BaseWindow | undefined;
   private request: SidebarBackdropRequest = inactiveSidebarBackdrop;
@@ -35,7 +35,7 @@ export class SidebarBackdrop {
   update(request: SidebarBackdropRequest) {
     if (this.disposed) return;
     this.request = request;
-    if (this.sync() === false) throw new Error("Native sidebar blur is unavailable.");
+    if (this.sync() === false) throw new Error("Native window background blur is unavailable.");
   }
 
   private readonly reset = () => {
@@ -70,13 +70,6 @@ export class SidebarBackdrop {
         return;
       }
       const bounds = this.owner.getContentBounds();
-      const zoom = this.owner.webContents.getZoomFactor();
-      const pixels = Math.max(0, Math.min(bounds.width, Math.round(width * zoom)));
-      if (!pixels) {
-        this.backdrop?.hide();
-        this.backdropShown = false;
-        return;
-      }
       if (!this.backdrop || this.backdrop.isDestroyed()) {
         this.backdrop = new BaseWindow({
           show: false,
@@ -97,7 +90,7 @@ export class SidebarBackdrop {
         this.backdrop.contentView.setBackgroundColor("#00000000");
         this.backdrop.setIgnoreMouseEvents(true);
       }
-      this.backdrop.setBounds({ ...bounds, width: pixels });
+      this.backdrop.setBounds(bounds);
       this.backdrop.setOpacity(strength / 100);
       if (!this.backdropShown) {
         this.backdrop.showInactive();

@@ -12,49 +12,26 @@
   --sidebar-reveal: 1;
   --sidebar-track-width: calc(var(--sidebar-expanded-width) * var(--sidebar-reveal));
   --sidebar-toggle-width: 28px;
+  --panel-controls-height: 44px;
   transition: --sidebar-reveal var(--motion) var(--ease);
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: transparent;
 }
 
 .app:has(.sidebar[data-open="false"]) {
   --sidebar-reveal: 0;
 }
 
-/* Paint the workspace behind cards while preserving native sidebar transparency. */
-.app:has(.sidebar)::before {
-  content: "";
+/* One decorative layer owns the complete window backdrop; foregrounds stay sharp. */
+.window-background {
   position: fixed;
   inset: 0;
-  background: var(--workspace-background);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.app:has(.sidebar[data-open="true"])::before {
-  clip-path: inset(0 0 0 calc(var(--sidebar-left-inset) + var(--sidebar-track-width)));
-}
-
-:root[data-transparent="true"] .app::before {
-  display: none;
-}
-
-/* One background spans the full left area; all controls paint sharply above it. */
-.sidebar-background {
-  position: fixed;
-  inset: 0 auto 0 0;
-  width: calc(var(--sidebar-left-inset) + var(--sidebar-track-width));
   z-index: 0;
   background: var(--workspace-background);
-  background-size: 100vw 100dvh;
-  opacity: var(--sidebar-background-opacity);
+  opacity: var(--window-background-opacity);
   pointer-events: none;
-}
-
-.app:has(.sidebar[data-open="false"]) .sidebar-background {
-  display: none;
 }
 
 .app:has(.sidebar) > :is(.window-drag-strip, .database-notice, .app-workspace) {
@@ -62,22 +39,8 @@
   z-index: 1;
 }
 
-/* Do not paint another solid surface behind the sidebar's adjustable tint. */
-body:has(.app .sidebar) {
-  background: transparent;
-}
-
-.app:has(.sidebar[data-open="true"]) {
-  background: linear-gradient(
-    to right,
-    transparent calc(var(--sidebar-left-inset) + var(--sidebar-track-width)),
-    var(--bg) calc(var(--sidebar-left-inset) + var(--sidebar-track-width))
-  );
-}
-
-:root[data-transparent="true"],
-:root[data-transparent="true"] body,
-:root[data-transparent="true"] .app {
+/* No opaque paint beneath the live alpha layer. The splash retains its own fill. */
+body:has(.app .window-background) {
   background: transparent;
 }
 
@@ -90,7 +53,7 @@ body:has(.app .sidebar) {
 
 .app-workspace {
   position: relative;
-  --nav-row-height: max(40px, calc(2.5 * var(--nav-font-size, 15px) + 2px));
+  --nav-row-height: calc(2px + 38 * var(--nav-font-size, 15px) / 15);
   display: grid;
   grid-template-columns: var(--sidebar-track-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
@@ -124,32 +87,54 @@ body:has(.app .sidebar) {
   grid-column: 1;
   min-width: 0;
   margin-right: var(--breadcrumb-right-inset, 0px);
-  /* Large title preferences may wrap; keep the content area usable. */
+  /* History and global appearance controls retain their shared header height. */
   max-height: 40vh;
   overflow: auto;
-  scrollbar-gutter: stable both-edges;
   box-sizing: border-box;
-  /* Header margin and inner padding retain the 12px first-row inset. */
-  padding: 4px calc(var(--page-padding) - 1px);
+  --header-side-padding: calc((var(--page-padding) - 1px) / 2);
+  padding: 2px var(--header-side-padding);
+  min-height: 54px;
+  scrollbar-gutter: auto;
   gap: 0;
   --nb-card-fill: var(--card-header-fill);
+  --nb-card-shadow: none;
+  border-radius: 5px;
+  container: page-header / inline-size;
   position: relative;
   z-index: 3;
   -webkit-app-region: no-drag;
 }
 
-.workspace-breadcrumbs .page-breadcrumbs li {
-  min-height: var(--nav-row-height);
-}
-
-.app-workspace:has(> .sidebar[data-open="false"]) .workspace-breadcrumbs {
-  /* Keep the card on the content track throughout the shared reveal transition. */
+/* A stable overlay row follows the main card without entering hidden page owners. */
+.workspace-panel-controls {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: start;
+  position: relative;
+  z-index: 4;
+  box-sizing: border-box;
+  height: var(--panel-controls-height);
+  margin: 5px var(--breadcrumb-right-inset, 0px) 0 0;
+  padding: 3px 7px;
+  border: 1px solid var(--panel-border);
+  border-bottom-color: transparent;
+  border-radius: var(--navigation-card-radius) var(--navigation-card-radius) 0 0;
+  background: transparent;
   display: flex;
-  justify-content: safe center;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
 }
 
-.app-workspace:has(> .sidebar[data-open="false"]) .workspace-breadcrumbs ol {
-  justify-content: safe center;
+.workspace-panel-controls > #workspace-panel-actions {
+  margin-left: auto;
+  pointer-events: auto;
+}
+
+/* Remove shell shadows without changing nested cards or inspector surfaces. */
+.page-panel[data-slot="card"],
+.chat-conversations {
+  box-shadow: none;
 }
 
 /* Primary content is a surface card beside the navigation. */
@@ -163,10 +148,22 @@ body:has(.app .sidebar) {
   min-height: 0;
   min-width: 0;
   position: relative;
-  /* Retain the former 3px combined edge without duplicating Card chrome. */
+  /* The in-flow content header shares the stationary corner-control row. */
   padding: 1px;
   gap: 0;
   overflow: hidden;
+}
+
+/* A quiet grid belongs to the main reading plane, beneath its content surfaces. */
+@media (forced-colors: none) {
+  .page-panel[data-slot="card"]:not(#panel-chat),
+  .chat-conversations {
+    background-color: var(--content-background);
+    background-image:
+      linear-gradient(to right, var(--content-grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--content-grid-line) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
 }
 
 .page-panel > :is(.error-banner, .warning-banner) {
@@ -245,8 +242,21 @@ dialog::backdrop {
   color: var(--on-destructive);
 }
 
-/* Dark plum bands separate compact headers from near-black reading surfaces. */
-:root[data-color-scheme="dark"] .workspace-breadcrumbs {
+/* Light navigation and reading cards share the white foreground fill. */
+@media (forced-colors: none) {
+  :root:not([data-color-scheme="dark"]) .workspace-breadcrumbs {
+    --card-header-fill: var(--content-background);
+    --card-header-text: #111111;
+    --card-header-muted: #303848;
+    --card-header-hover: #e8eefb;
+  }
+}
+
+/* Header controls inherit contrasting colors for their own card surface. */
+:root .workspace-breadcrumbs {
+  --button-weight: 700;
+  --title-weight: 700;
+  font-weight: 700;
   --text: var(--card-header-text);
   --muted: var(--card-header-muted);
   --focus-line: var(--card-header-text);
@@ -255,4 +265,45 @@ dialog::backdrop {
   --hover-bg: var(--card-header-hover);
   --accent-bg: var(--card-header-hover);
   --control-hover: var(--card-header-hover);
+}
+
+/* Each retained page publishes into its own stationary card header. */
+.content-page-header-slot {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex-shrink: 0;
+  min-width: 0;
+  min-height: var(--panel-controls-height);
+  margin-bottom: var(--page-header-gap);
+  background: transparent;
+}
+.content-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: var(--panel-controls-height);
+  padding: 4px 44px;
+  margin: 0;
+}
+.content-page-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  text-align: center;
+  overflow-wrap: anywhere;
+  font: var(--title-weight, 700) var(--title-size, 16px) / 1.25 var(--title-font, var(--font));
+  --letter-spacing: var(--title-spacing, normal);
+  text-transform: var(--title-case, none);
+}
+.content-page-heading > button {
+  flex-shrink: 0;
+}
+.content-page-header-slot:has(> .content-page-heading:not(.content-page-header-fallback))
+  > .content-page-header-fallback {
+  display: none;
 }

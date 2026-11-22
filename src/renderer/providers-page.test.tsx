@@ -1,7 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import type { DesktopApi, Snapshot } from "../bridge/index.js";
-import { breadcrumbAncestors } from "./page-breadcrumbs.js";
 import { type ProviderManagement, providerActionReasons } from "./provider-management.js";
 import { ProvidersPage } from "./providers-page.js";
 import { ProvidersSidebar } from "./providers-sidebar.js";
@@ -72,7 +71,7 @@ it("keeps Add Provider present and disabled when all providers are added and sha
   expect(html).toContain('role="alert">Save failed. Retry.');
 });
 
-it("scopes saved defaults to the selected provider and uses the Providers breadcrumb", () => {
+it("scopes saved defaults to the selected provider and shows the provider title", () => {
   const html = renderToStaticMarkup(
     <ProvidersPage
       snapshot={snapshot}
@@ -87,22 +86,15 @@ it("scopes saved defaults to the selected provider and uses the Providers breadc
   expect(html).not.toContain("Claude model");
   expect(html).toContain('aria-label="Clear codex orchestrator model default"');
   expect(html).not.toContain("Permissions");
-  expect(
-    breadcrumbAncestors("provider", { projects: [], chats: [], runs: [] }).map(
-      (crumb) => crumb.label,
-    ),
-  ).toEqual(["Home", "Providers"]);
 });
 
-it("mirrors provider navigation and primary status in a mounted inert sidebar group", () => {
+it("mirrors provider navigation and primary status in an always-open sidebar card", () => {
   const html = renderToStaticMarkup(
     <ProvidersSidebar
       setup={snapshot.agentSetup}
       management={management}
       selectedId="codex"
       active
-      expanded={false}
-      onExpanded={() => {}}
       onHome={() => {}}
       onOpen={() => {}}
       onKeyDown={() => {}}
@@ -112,10 +104,10 @@ it("mirrors provider navigation and primary status in a mounted inert sidebar gr
     />,
   );
   expect(html).toContain('aria-label="Add Provider"');
-  expect(html).toContain('aria-label="Expand Providers"');
+  expect(html).not.toContain('id="providers-card-toggle"');
   expect(html).toContain('id="provider-codex"');
   expect(html).toContain('aria-current="page"');
-  expect(html).toContain('hidden="" inert="" aria-hidden="true"');
+  expect(html.match(/<div[^>]*id="provider-pages"[^>]*>/)?.[0]).not.toMatch(/hidden|inert/);
   expect(html.match(/aria-label="More actions for /g)).toHaveLength(2);
 });
 

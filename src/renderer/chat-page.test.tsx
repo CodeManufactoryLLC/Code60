@@ -1,8 +1,23 @@
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { DesktopApi, DesktopRun, OrchestrationChat, ReviewSummary } from "../bridge/index.js";
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import { ChatPage } from "./chat-page.js";
+import type { PageAction } from "./content-page-header.js";
+
+const capturedHeader = vi.hoisted(() => ({ actions: [] as readonly PageAction[] }));
+vi.mock("./content-page-header.js", async (original) => {
+  const actual = await original<typeof import("./content-page-header.js")>();
+  return {
+    ...actual,
+    ContentPageHeader: (props: Parameters<typeof actual.ContentPageHeader>[0]) => {
+      capturedHeader.actions = props.actions ?? [];
+      return createElement(actual.ContentPageHeader, props);
+    },
+  };
+});
+
 import { MessageCopy } from "./message-controls.js";
 
 const run = (id: string, status: RunStatus): RunView => ({
@@ -168,7 +183,8 @@ describe("orchestration activity presentation", () => {
         error: "Connection failed",
       },
     );
-    expect(html).toContain("Retry connection");
+    expect(html).toContain('aria-label="Relay actions"');
+    expect(html).not.toContain(">Retry connection</button>");
     expect(html).toContain("Connection failed");
     expect(html).toContain("History isn’t being saved");
     expect(html).not.toContain("New session");
@@ -252,7 +268,8 @@ describe("orchestration activity presentation", () => {
       expect(html).toContain('class="chat-connecting" role="status"');
       expect(html.match(/<div class="chat-connecting"[\s\S]*?<\/div>/)?.[0]).not.toContain("<img");
       expect(html).toContain(">Connecting...</span>");
-      expect(html).toContain(">Cancel</button>");
+      expect(html).toContain('aria-haspopup="menu"');
+      expect(html).not.toContain(">Cancel</button>");
       expect(html).not.toContain("Give Code60 a task.");
       expect(html).not.toContain('class="chat-progress activity-display"');
       expect(html).not.toContain('class="activity-timer"');
@@ -305,10 +322,15 @@ describe("orchestration activity presentation", () => {
     for (const status of ["idle", "running"] as const) {
       const html = render(status, [], [], [], [], null);
       expect(html.match(/<textarea[^>]*>/)?.[0]).toContain("disabled");
-      expect(html.match(/<button[^>]*class="[^"]*chat-title"[^>]*>/)?.[0]).toContain("disabled");
+      expect(html).not.toContain("page-selector-rename");
+      expect(html).toContain('aria-haspopup="menu"');
       const action = html.match(/<button[^>]*class="[^"]*composer-send"[^>]*>/)?.[0];
       expect(action).toContain("disabled");
-      expect(html).toContain("Connect to database");
+      expect(html).not.toContain(">Connect to database</button>");
+      expect(capturedHeader.actions.find((action) => action.id === "rename")?.disabled).toBe(true);
+      expect(capturedHeader.actions.find((action) => action.id === "connect")?.label).toBe(
+        "Connect to database",
+      );
     }
   });
   it("labels only identified MCP tools in historical activity", () => {

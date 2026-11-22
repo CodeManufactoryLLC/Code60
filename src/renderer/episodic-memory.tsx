@@ -148,29 +148,29 @@ export function EpisodicMemoryPage({
   return (
     <main className="episodic-memory" aria-label="Episodic Memory">
       <header className="memory-heading">
-        <PageTitle page="episodic-memory" as="h2" />
-        <div className="button-group">
-          <button
-            type="button"
-            aria-expanded={editing}
-            aria-controls="memory-prompt-editor"
-            onClick={() => setEditing(!editing)}
-          >
-            Edit prompt
-          </button>
-          <button
-            type="button"
-            disabled={busy || (!result && !error && !status)}
-            onClick={() => {
-              setResult(undefined);
-              setError("");
-              setStatus("");
-              extractButton.current?.focus();
-            }}
-          >
-            Clear
-          </button>
-        </div>
+        <PageTitle
+          page="episodic-memory"
+          as="h2"
+          actions={[
+            {
+              id: "episodic-memory-0",
+              label: "Edit prompt",
+              checked: editing,
+              run: () => setEditing(!editing),
+            },
+            {
+              id: "episodic-memory-1",
+              label: "Clear",
+              run: () => {
+                setResult(undefined);
+                setError("");
+                setStatus("");
+                extractButton.current?.focus();
+              },
+              disabled: busy || (!result && !error && !status),
+            },
+          ]}
+        />
       </header>
       <section
         id="memory-prompt-editor"

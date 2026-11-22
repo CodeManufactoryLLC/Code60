@@ -1,22 +1,25 @@
 // Adapted from neobrutalism.dev/r/dropdown-menu.json; see README.md and LICENSE.
 import { type RefObject, useEffect, useId, useRef, useState } from "react";
 import { AnchoredMenu } from "../anchored-menu.js";
+import type { PageAction } from "../content-page-header.js";
 import { Icon } from "../icons.js";
 import { Button } from "./button.js";
 
 /** Upstream dropdown presentation with Code60's native, anchored menu lifecycle. */
 export function DropdownMenu({
   label,
+  iconOnly = false,
   active,
   disabled,
   items,
   triggerRef,
 }: {
   label: string;
+  iconOnly?: boolean;
   active: boolean;
   disabled: boolean;
-  items: readonly { label: string; run(): void }[];
-  triggerRef?: RefObject<HTMLButtonElement | null>;
+  items: readonly PageAction[];
+  triggerRef?: RefObject<HTMLButtonElement | null> | undefined;
 }) {
   const id = useId();
   const localTrigger = useRef<HTMLButtonElement>(null);
@@ -34,6 +37,9 @@ export function DropdownMenu({
     <>
       <Button
         ref={trigger}
+        className={iconOnly ? "icon-button" : undefined}
+        aria-label={iconOnly ? label : undefined}
+        title={iconOnly ? label : undefined}
         aria-haspopup="menu"
         aria-expanded={expanded}
         aria-controls={expanded ? id : undefined}
@@ -45,7 +51,7 @@ export function DropdownMenu({
           open(event.key === "ArrowUp");
         }}
       >
-        {label}
+        {!iconOnly && label}
         <Icon name="chevron--down" />
       </Button>
       {expanded && position && (

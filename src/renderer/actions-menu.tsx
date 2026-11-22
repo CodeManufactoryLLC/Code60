@@ -1,6 +1,7 @@
 import type { Rectangle } from "@glideapps/glide-data-grid";
 import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "./icons.js";
+import { clampMenuPosition } from "./menu-anchor.js";
 import { menuTypeahead } from "./menu-typeahead.js";
 
 type MenuItem = {
@@ -36,11 +37,7 @@ export function ActionsMenu({
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     let restore = true;
     const rect = menu.current?.getBoundingClientRect();
-    if (rect)
-      setPosition({
-        left: Math.max(8, Math.min(bounds.x, innerWidth - rect.width - 8)),
-        top: Math.max(8, Math.min(bounds.y + bounds.height, innerHeight - rect.height - 8)),
-      });
+    if (rect) setPosition(clampMenuPosition(bounds.x, bounds.y + bounds.height, rect));
     // The grid refocuses its canvas after a click, so focus the menu once that has happened.
     const timer = setTimeout(() =>
       menu.current
