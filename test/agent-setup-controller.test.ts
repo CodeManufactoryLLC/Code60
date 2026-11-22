@@ -7,7 +7,7 @@ import { ChatCheckpoints } from "../src/desktop/chat-checkpoints.js";
 import { DesktopController } from "../src/desktop/controller.js";
 import { filePreferences } from "../src/desktop/preferences.js";
 import { openProjectDatabase, sqliteAvailable } from "../src/desktop/projects.js";
-import { FakeAgents, FakeClock, FakeGit, FakeProcesses } from "./fakes.js";
+import { FakeAgents, FakeClock, FakeGit, FakeProcesses, type TurnScript } from "./fakes.js";
 
 const directories: string[] = [];
 const controllers: DesktopController[] = [];
@@ -17,10 +17,10 @@ afterEach(async () => {
     directories.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })),
   );
 });
-async function fixture(relay = false) {
+async function fixture(relay = false, script?: TurnScript) {
   const dir = await fs.mkdtemp(join(tmpdir(), "code60-setup-controller-"));
   directories.push(dir);
-  const agents = new FakeAgents();
+  const agents = new FakeAgents(script);
   const preferences = filePreferences(join(dir, "state", "desktop.json"));
   const detect = vi.fn(async () => {});
   const openDatabase = vi.fn(openProjectDatabase);
@@ -171,7 +171,10 @@ it("a failed addition remains disabled after abandonment", async () => {
 it.runIf(sqliteAvailable())(
   "enforces enabled membership in manual dispatch, saved configurations and authenticated worker tools",
   async () => {
-    const { dir, controller, agents, identity, attempt } = await fixture();
+    let working = false;
+    const { dir, controller, agents, identity, attempt } = await fixture(false, () =>
+      working ? "hang" : "end_turn",
+    );
     await controller.beginAgentSetup({ mode: "primary" });
     await attempt("claude");
     await controller.finishAgentSetup(identity());
@@ -221,7 +224,9 @@ it.runIf(sqliteAvailable())(
     await controller.beginAgentSetup({ mode: "add" });
     await attempt("codex");
     await controller.finishAgentSetup(identity());
-    agents.script = () => "hang";
+    // Existing sessions capture their script when created; keep this turn active
+    // until teardown rather than relying on the timing of an already-ended turn.
+    working = true;
     await controller.orchestrationChatAction({ type: "send", id: chatId as string, text: "work" });
     expect((await call("code60_browser", { action: "status" })).body.result).toMatchObject({
       mode: "headless",
