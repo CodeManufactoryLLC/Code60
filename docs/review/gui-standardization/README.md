@@ -43,7 +43,10 @@ The right edge of the breadcrumb Card has one Color theme button. It shows the
 selected preference and cycles System → Dark → Light → System. System remains
 the default; saved selections and the Settings Theme selector stay synchronized.
 Artwork plays once on activation; hover/focus stays still and reduced motion or
-forced colors uses the poster. The current-page selector stays centered.
+forced colors uses the poster. The current-page selector stays centered. Main page and conversation backgrounds
+also have a subtle stationary 24px grid with 1px lines, using faint black in Light
+and faint white in Dark. Nested reading surfaces remain solid; forced colors
+suppresses the grid.
 
 | Light mode | Dark mode |
 | --- | --- |

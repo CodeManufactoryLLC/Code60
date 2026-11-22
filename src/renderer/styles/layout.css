@@ -155,11 +155,15 @@ body:has(.app .window-background) {
   overflow: hidden;
 }
 
-/* Paint only the main reading plane; nested controls and Cards retain their fills. */
+/* A quiet grid belongs to the main reading plane, beneath its content surfaces. */
 @media (forced-colors: none) {
-  .page-panel[data-slot="card"],
+  .page-panel[data-slot="card"]:not(#panel-chat),
   .chat-conversations {
     background-color: var(--content-background);
+    background-image:
+      linear-gradient(to right, var(--content-grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--content-grid-line) 1px, transparent 1px);
+    background-size: 24px 24px;
   }
 }
 

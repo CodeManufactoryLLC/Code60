@@ -2140,6 +2140,15 @@ test("desktop: breadcrumb theme button cycles saved modes and follows System", a
     const root = page.locator("html");
     const composer = page.getByRole("combobox", { name: "Message to orchestrator", exact: true });
     await composer.fill("Keep the theme-switch draft");
+    await expect(page.locator(".chat-conversations:visible")).toHaveCSS(
+      "background-image",
+      /linear-gradient/,
+    );
+    await expect(page.locator(".chat-conversations:visible")).toHaveCSS(
+      "background-size",
+      "24px 24px, 24px 24px",
+    );
+    await expect(page.locator(".composer:visible")).toHaveCSS("background-image", "none");
     const geometry = async () => {
       await expect
         .poll(() =>
@@ -2193,6 +2202,15 @@ test("desktop: breadcrumb theme button cycles saved modes and follows System", a
     await expect(icon).toHaveAttribute("src", /theme-eclipse[^/]*\.gif\?play=/);
     await selectSettingsPage(page, "Appearance");
     const theme = page.getByRole("combobox", { name: "Theme", exact: true });
+    const mainCard = page.locator("#panel-settings");
+    await expect(mainCard).toHaveCSS("background-image", /linear-gradient/);
+    await expect(mainCard).toHaveCSS("background-size", "24px 24px, 24px 24px");
+    for (const surface of [
+      header,
+      page.locator(".sidebar-navigation-card"),
+      page.locator(".settings-group").first(),
+    ])
+      await expect(surface).toHaveCSS("background-image", "none");
     await expect(theme).toHaveValue("system");
     await theme.selectOption("light");
     await expect(button).toHaveAccessibleName("Color theme: Light. Switch to System mode");
@@ -2205,15 +2223,18 @@ test("desktop: breadcrumb theme button cycles saved modes and follows System", a
     await expect(theme).toHaveValue("system");
     await expect(icon).toHaveAttribute("src", /theme-eclipse[^/]*\.png$/);
     await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "active" });
+    await expect(mainCard).toHaveCSS("background-image", "none");
     await button.click();
     await expect(theme).toHaveValue("dark");
     await expect(icon).toHaveAttribute("src", /theme-night[^/]*\.png$/);
     await button.focus();
     await expect(button).toBeFocused();
     await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "none" });
+    await expect(mainCard).toHaveCSS("background-image", /linear-gradient/);
     await page.screenshot({ path: test.info().outputPath("breadcrumb-theme-dark.png") });
     await button.click();
     await expect(theme).toHaveValue("light");
+    await expect(mainCard).toHaveCSS("background-image", /linear-gradient/);
     await page.screenshot({ path: test.info().outputPath("breadcrumb-theme-light.png") });
     await selectSettingsPage(page, "Text");
     const font = page

@@ -1097,3 +1097,15 @@ Hover/focus alone stays still; reduced motion/forced colors use posters and syst
 focus outlines. Monochrome settings apply through the shared icon pipeline.
 This is another human-only access path to Theme, with no new persistence, bridge
 method, dependency, availability rule or agent-write authority.
+
+## Main content background grid
+
+Primary page Cards and the conversation Card use a stationary 24px square grid
+behind their content: 1px lines at 4.5% black in Light and 5.5% white in Dark,
+over the existing opaque reading surface. Paint it as the Card's CSS background,
+with no overlay element or input interception. Breadcrumbs, navigation, inspectors,
+nested Cards, fields, composer and message bubbles keep their own fills. The Chat
+layout wrapper remains transparent. Forced colors removes the decorative grid;
+reduced motion needs no special handling because the pattern does not animate.
+No setting, capability, persistence, bridge or availability change is introduced;
+no catalog update is needed for this background-only presentation change.
