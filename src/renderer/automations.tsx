@@ -9,6 +9,7 @@ import type {
 } from "../bridge/index.js";
 import { AutomationForm } from "./automation-form.js";
 import { AutomationJob } from "./automation-job.js";
+import { AutomationTranscriptModal } from "./automation-transcript.js";
 import { DataTable, type TableOptions } from "./data-table.js";
 import { Modal } from "./modal.js";
 import { Accordion } from "./neobrutalism/accordion.js";
@@ -68,6 +69,7 @@ export function AutomationsPage({
   const pending = useRef(false);
   const [editor, setEditor] = useState<AutomationEditor>();
   const [evidence, setEvidence] = useState("");
+  const [transcriptExecution, setTranscriptExecution] = useState<string>();
   const generation = useRef(0);
   const pageGeneration = useRef(0);
   const actionsTrigger = useRef<HTMLButtonElement>(null);
@@ -144,7 +146,7 @@ export function AutomationsPage({
     try {
       const result = await api.automation(request);
       if (!current()) return;
-      if (evidenceRequest) setEvidence(JSON.stringify(result, null, 2));
+      if (request.action === "diff") setEvidence(JSON.stringify(result, null, 2));
       await refreshLatest.current();
     } catch (error) {
       if (current()) setActionError((error as Error).message);
@@ -286,7 +288,7 @@ export function AutomationsPage({
               type="button"
               className="small"
               disabled={busy}
-              onClick={() => void act({ action: "transcript", executionId: execution.id })}
+              onClick={() => setTranscriptExecution(execution.id)}
             >
               Transcript
             </button>
@@ -300,6 +302,14 @@ export function AutomationsPage({
             </button>
           </div>
         </section>
+      )}
+      {visible && transcriptExecution && (
+        <AutomationTranscriptModal
+          key={transcriptExecution}
+          api={api}
+          executionId={transcriptExecution}
+          onClose={() => setTranscriptExecution(undefined)}
+        />
       )}
       {evidence && (
         <Modal

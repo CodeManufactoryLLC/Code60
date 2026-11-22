@@ -6,6 +6,7 @@ import {
 } from "../contracts/index.js";
 
 export type {
+  AutomationTranscript,
   RendererAutomationDraft,
   SchedulerStatus,
   ServiceStatus,

@@ -439,6 +439,11 @@ Preserve single-flight reads, hidden-view disposal,
 stale-response rejection and native consent. Use the shared neo-brutalist tokens,
 saved typography and forced-color system edges without bright dark-mode panels.
 No new preload method, setting, persisted schema or migration is introduced.
+Open execution transcripts subscribe before reading, coalesce saved-chunk notices,
+assemble adjacent text chunks and show the saved execution outcome. Closing, hiding
+or replacing the modal releases its subscription and rejects late reads. Evidence
+reads share the core run writer queue to avoid partially appended JSONL records;
+stream notices do not mutate schedule revisions.
 
 ### Approved agent memory
 

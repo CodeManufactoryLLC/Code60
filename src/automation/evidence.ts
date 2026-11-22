@@ -7,7 +7,7 @@ import type { Scheduler } from "./scheduler.js";
 
 /** Read evidence without reconciling, recovering, applying, or starting an agent. */
 export async function executionEvidence(
-  scheduler: Scheduler,
+  scheduler: Pick<Scheduler, "execution">,
   deps: CoreDeps,
   env: Readonly<NodeJS.ProcessEnv>,
   executionId: string,
@@ -40,7 +40,10 @@ export async function executionEvidence(
   const entries: AutomationTranscript["entries"] = [];
   let size = 0;
   let truncated = false;
-  for (const event of events) {
+  let stream: "message" | "thought" | undefined;
+  for (const [index, event] of events.entries()) {
+    // Raw protocol records accompany the normalized chunks; never render them twice.
+    if (event.type === "acp" || event.type === "sessionState") continue;
     const text =
       "text" in event && typeof event.text === "string"
         ? event.text
@@ -48,26 +51,44 @@ export async function executionEvidence(
           ? `${event.kind}: ${event.decision}`
           : event.type === "status"
             ? event.status
-            : "";
+            : event.type === "toolCall"
+              ? `${event.title}: ${event.status}`
+              : "";
+    const previous = entries.at(-1);
+    const merge = stream === event.type && previous?.type === event.type;
+    stream = event.type === "message" || event.type === "thought" ? event.type : undefined;
     if (!text) continue;
     const remaining = 48_000 - size;
-    if (remaining <= 0 || entries.length >= 500) {
+    if (remaining <= 0 || (!merge && entries.length >= 500)) {
       truncated = true;
       break;
     }
-    entries.push({
-      at: event.at,
-      type:
-        event.type === "message" ||
-        event.type === "prompt" ||
-        event.type === "permission" ||
-        event.type === "status"
-          ? event.type
-          : "note",
-      text: text.slice(0, remaining),
-    });
+    if (merge && previous) previous.text += text.slice(0, remaining);
+    else
+      entries.push({
+        key: String(index),
+        at: event.at,
+        type:
+          event.type === "message" ||
+          event.type === "thought" ||
+          event.type === "prompt" ||
+          event.type === "permission" ||
+          event.type === "status"
+            ? event.type
+            : event.type === "toolCall"
+              ? "tool"
+              : "note",
+        text: text.slice(0, remaining),
+      });
     size += Math.min(text.length, remaining);
     if (text.length > remaining) truncated = true;
   }
-  return { executionId, runId: record.id, entries, truncated };
+  return {
+    executionId,
+    runId: record.id,
+    status: execution.status,
+    reason: execution.reason,
+    entries,
+    truncated,
+  };
 }

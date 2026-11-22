@@ -126,6 +126,71 @@ describe("shared record-store coordination", () => {
     expect(await fs.readdir(join(root, "r1"))).toEqual(["run.json"]);
   });
 
+  it("waits for same-run appends before reading live transcripts across aliases", async () => {
+    const fs = memoryFs();
+    const append = fs.appendFile.getMockImplementation();
+    if (!append) throw new Error("Missing fixture writer");
+    const entered = deferred();
+    const release = deferred();
+    fs.appendFile.mockImplementationOnce(async (path, data) => {
+      await append(path, data.slice(0, 10));
+      entered.resolve();
+      await release.promise;
+      await append(path, data.slice(10));
+    });
+    const a = createRecordStore(fs, root);
+    const b = createRecordStore({ ...fs }, alias);
+    const event = { runId: "r1", at: "t", type: "message" as const, text: "one\ntwo" };
+    const writing = a.appendEvent(event);
+    await entered.promise;
+    const reading = b.readEvents("r1");
+    try {
+      await b.appendEvent({ ...event, runId: "other" });
+      expect(await b.readEvents("other")).toHaveLength(1);
+      expect(fs.readFile).toHaveBeenCalledTimes(1);
+    } finally {
+      release.resolve();
+      await writing;
+    }
+    expect(await reading).toEqual([event]);
+  });
+
+  it("serializes 600 ordered fragments around a delayed failed read without poisoning the writer", async () => {
+    const fs = memoryFs();
+    const a = createRecordStore(fs, root);
+    const b = createRecordStore({ ...fs }, alias);
+    const event = (i: number) => ({
+      runId: "r1",
+      at: "t",
+      type: "message" as const,
+      text: `${i} \n`,
+    });
+    await Promise.all(Array.from({ length: 300 }, (_, i) => a.appendEvent(event(i))));
+    const entered = deferred();
+    const release = deferred();
+    fs.readFile.mockImplementationOnce(async () => {
+      entered.resolve();
+      await release.promise;
+      throw new Error("Fixture read failure");
+    });
+    const reading = b.readEvents("r1");
+    const rejected = expect(reading).rejects.toThrow("Could not read events.jsonl");
+    await entered.promise;
+    const writesBefore = fs.appendFile.mock.calls.length;
+    const writing = Promise.all(
+      Array.from({ length: 300 }, (_, i) => a.appendEvent(event(300 + i))),
+    );
+    try {
+      await b.appendEvent({ ...event(0), runId: "other" });
+      expect(fs.appendFile.mock.calls.length).toBe(writesBefore + 1);
+    } finally {
+      release.resolve();
+    }
+    await rejected;
+    await writing;
+    expect(await b.readEvents("r1")).toEqual(Array.from({ length: 600 }, (_, i) => event(i)));
+  });
+
   it("deduplicates only in-flight aliased listings and isolates returned records", async () => {
     const fs = memoryFs();
     const a = createRecordStore(fs, root);

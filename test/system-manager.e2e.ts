@@ -175,6 +175,99 @@ test("desktop: System Manager service actions, pushed status and navigation race
   }
 });
 
+test("desktop: transcript subscription coalesces notices and rejects closed execution reads", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "c60-transcript-fixture-"));
+  const output = join(directory, "fixture");
+  let application: Awaited<ReturnType<typeof launchDesktop>> | undefined;
+  try {
+    await build({
+      configFile: false,
+      logLevel: "error",
+      define: { "process.env.NODE_ENV": JSON.stringify("development") },
+      build: {
+        outDir: output,
+        minify: false,
+        lib: {
+          entry: resolve(import.meta.dirname, "fixtures/automation-transcript.tsx"),
+          formats: ["es"],
+          fileName: () => "fixture.js",
+        },
+      },
+    });
+    const html = join(output, "index.html");
+    await writeFile(
+      html,
+      '<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'"><div id="root"></div><script type="module" src="./fixture.js"></script>',
+    );
+    application = await launchDesktop(directory, directory, join(directory, "unused.sqlite"));
+    const ready = application.waitForEvent("window");
+    await application.evaluate(({ BrowserWindow }, html) => {
+      const window = new BrowserWindow({
+        show: true,
+        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+      });
+      void window.loadFile(html);
+    }, html);
+    const page = await ready;
+    const modal = page.getByRole("dialog", { name: "Execution transcript", exact: true });
+    const close = () =>
+      modal.getByRole("button", { name: "Close Execution transcript", exact: true }).click();
+    const pending = () => page.evaluate(() => window.automationTranscriptFixture.pending());
+    const listenerCount = () => page.evaluate(() => window.automationTranscriptFixture.listeners());
+    await page.getByRole("button", { name: "Open A", exact: true }).click();
+    // StrictMode's disposed first read must not publish into the retained instance.
+    await expect.poll(pending).toEqual(["A", "A"]);
+    expect(await listenerCount()).toBe(1);
+    await page.evaluate(() => window.automationTranscriptFixture.reply("disposed"));
+    await page.evaluate(() => window.automationTranscriptFixture.reply("First "));
+    await expect(modal.locator("pre")).toHaveText("First ");
+    await page.evaluate(() => {
+      for (let i = 0; i < 30; i++) window.automationTranscriptFixture.changed();
+    });
+    await expect.poll(pending).toEqual(["A"]);
+    await page.evaluate(() => window.automationTranscriptFixture.reply("First line\n  last"));
+    await expect.poll(pending).toEqual(["A"]); // One follow-up closes the read/notice race.
+    await page.evaluate(() => window.automationTranscriptFixture.fail());
+    await expect(modal.getByRole("alert")).toContainText("Received content is kept");
+    await expect(modal.locator("pre")).toHaveText("First line\n  last");
+    await expect(modal.getByRole("status")).toHaveText("running");
+    await modal.getByRole("button", { name: "Retry transcript", exact: true }).click();
+    await expect.poll(pending).toEqual(["A"]);
+    await close();
+    expect(await listenerCount()).toBe(0);
+    await page.getByRole("button", { name: "Open B", exact: true }).click();
+    await expect.poll(pending).toEqual(["A", "B", "B"]);
+    await page.evaluate(() => window.automationTranscriptFixture.reply("late A", "finished"));
+    await page.evaluate(() => window.automationTranscriptFixture.reply("disposed B"));
+    await page.evaluate(() => window.automationTranscriptFixture.reply("B content", "cancelled"));
+    await expect(modal.locator("pre")).toHaveText("B content");
+    await expect(modal.getByRole("status")).toHaveText("cancelled");
+    await expect(modal).not.toContainText("late A");
+    // Replace the execution on the same mounted component while a read is pending.
+    await page.evaluate(() => window.automationTranscriptFixture.changed());
+    await expect.poll(pending).toEqual(["B"]);
+    await page.evaluate(() => window.automationTranscriptFixture.switchExecution("C"));
+    await expect.poll(pending).toEqual(["B", "C"]);
+    await expect(modal.locator("pre")).toHaveCount(0);
+    await page.evaluate(() => window.automationTranscriptFixture.reply("late B", "finished"));
+    await page.evaluate(() => window.automationTranscriptFixture.reply("C content", "failed"));
+    await expect(modal.locator("pre")).toHaveText("C content");
+    await expect(modal.getByRole("status")).toHaveText("failed");
+    expect(
+      await page.evaluate(() =>
+        window.automationTranscriptFixture.subscriptionsAtRead.every((count) => count === 1),
+      ),
+    ).toBe(true);
+    await close();
+    expect(await listenerCount()).toBe(0);
+    await page.evaluate(() => window.automationTranscriptFixture.changed());
+    expect(await pending()).toEqual([]);
+  } finally {
+    await application?.close().catch(() => {});
+    await removeDesktopFixture(directory, { recursive: true, force: true });
+  }
+});
+
 test("workflow: Scheduling Service lifecycle uses verified native status and preserves history", async () => {
   test.skip(
     process.platform !== "linux",

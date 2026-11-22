@@ -211,29 +211,34 @@ export function createRecordStore(fs: RecordFs, dir: string): RecordStore {
       return parseRecord(text, id);
     },
     async readEvents(id) {
-      const text = await fs.readFile(join(runDir(id), "events.jsonl"), "utf8").catch(() => {
-        throw new Error(`Could not read events.jsonl for run '${id}'`);
-      });
-      const events: RunEvent[] = [];
-      for (const [index, line] of text
-        .split("\n")
-        .filter((entry) => entry !== "")
-        .entries()) {
-        try {
-          const value: unknown = JSON.parse(line);
-          const type = (value as { type?: unknown } | null)?.type;
-          if (typeof type === "string" && !RUN_EVENT_TYPES.has(type)) {
-            if ((value as { runId?: unknown }).runId !== id) throw new Error("Mismatched run ID");
-            continue;
+      let result: RunEvent[] = [];
+      // Share the writer queue so a live read cannot observe a partial JSONL append.
+      await enqueue(id, async () => {
+        const text = await fs.readFile(join(runDir(id), "events.jsonl"), "utf8").catch(() => {
+          throw new Error(`Could not read events.jsonl for run '${id}'`);
+        });
+        const events: RunEvent[] = [];
+        for (const [index, line] of text
+          .split("\n")
+          .filter((entry) => entry !== "")
+          .entries()) {
+          try {
+            const value: unknown = JSON.parse(line);
+            const type = (value as { type?: unknown } | null)?.type;
+            if (typeof type === "string" && !RUN_EVENT_TYPES.has(type)) {
+              if ((value as { runId?: unknown }).runId !== id) throw new Error("Mismatched run ID");
+              continue;
+            }
+            const event = runEventSchema.parse(value, { jitless: true });
+            if (event.runId !== id) throw new Error("Mismatched run ID");
+            events.push(event);
+          } catch {
+            throw new Error(`Invalid events.jsonl for run '${id}' at event ${index + 1}`);
           }
-          const event = runEventSchema.parse(value, { jitless: true });
-          if (event.runId !== id) throw new Error("Mismatched run ID");
-          events.push(event);
-        } catch {
-          throw new Error(`Invalid events.jsonl for run '${id}' at event ${index + 1}`);
         }
-      }
-      return events;
+        result = events;
+      });
+      return result;
     },
     async list(strict = false) {
       const key = strict ? JSON.stringify([await canonical(), "strict"]) : await canonical();
