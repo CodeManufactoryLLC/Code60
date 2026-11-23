@@ -64,7 +64,7 @@ to the controlling page. No browser capability installs services or replaces cod
   bridge, automation and platform and has no browser or Electron dependency.
 - gateway composes application and automation once, validates HTTP/session boundaries,
   serves assets, owns client interactions and private local service management.
-- management parses the narrow code60 open/service CLI and calls gateway/platform APIs.
+- management parses the narrow code60 setup/status/open/service/pairing CLI and calls gateway/platform APIs.
   It offers no run, prompt or agent-command execution interface.
 - automation retains its separate scheduler policy/store and an internal legacy protocol
   adapter. Only the gateway is installed as a production service.
@@ -109,9 +109,8 @@ Phase 3 additionally builds unpublished platform payloads for macOS arm64 and
 Linux x64 from fresh locked production dependencies, with bundled native CPU
 libraries, assets, models, notices and provenance. A separate private npm bootstrap
 embeds both exact descriptors and uses only Node built-ins for bounded download,
-verification and safe extraction into private staging. Its executable provides
-help/version only; public setup, persistent installation and release activation
-remain later work. The legacy npm tarball stays available. See the
+verification and safe extraction into private staging. Its original executable provided
+help/version only; Phases 4–5 below add persistent installation and setup. The legacy npm tarball stays available. See the
 [artifact workflow](docs/distribution/artifacts.md). No product capability changes.
 
 Phase 4 adds internal managed installation orchestration in management, with
@@ -2955,3 +2954,23 @@ crash may lose the last five-second interval (or more if storage writes failed).
 Undo restores checkpoint timing, clears anchors and freezes discarded plans.
 Owner teardown cancels timers; failed timing writes do not authorize or dispatch
 work. This adds no preference, agent-write field, IPC endpoint or dependency.
+
+## Explicit setup and database onboarding
+
+Phase 5 exposes setup/status in the private distribution candidate. The Node-only
+bootstrap validates prerequisites, verifies acquisition and installs files before
+delegating to the durable launcher; installed management composes gateway service
+and onboarding APIs. Separate profile approval and default-no service consent are
+required. Non-TTY operation edits no profiles; without Code60's --yes it returns
+explicit files-only success and a continuation command. No provider authority is
+seeded and no execution is resumed. Updates and public publication remain deferred.
+
+Only the fixed authenticated private prepare-database operation may initialize the
+default under XDG_DATA_HOME/code60/databases/default.sqlite. ApplicationHost owns
+serialization and strict selection metadata; existing files are validated read-only
+before initialization-capable paths. Missing/damaged/custom selections never cause
+replacement. New defaults publish exclusively from staged complete SQLite files.
+Normal startup/open do not create defaults. Setup has a separate non-reclaiming
+ownership lock; partial registration or active generations are preserved on failure.
+Read-only status reports bounded availability without repair, pairing or launches.
+See [setup behavior](docs/distribution/setup.md).

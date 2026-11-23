@@ -32,6 +32,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     process.argv.slice(2),
   ).catch((error: unknown) => {
     process.stderr.write(`${error instanceof Error ? error.message : "Managed launcher failed"}\n`);
-    process.exitCode = 1;
+    process.exitCode ||= 1;
   });
 }

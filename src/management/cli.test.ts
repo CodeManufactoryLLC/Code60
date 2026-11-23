@@ -77,3 +77,15 @@ it.each(["on", "off"])("requires explicit non-TTY consent for pairing %s", async
   await expect(runManagement(["pairing", action], env)).rejects.toThrow("--yes");
   expect(await readdir(directory)).toEqual([]);
 });
+
+it("combined status is read-only on fresh state and accepts no mutation flags", async () => {
+  const { env, directory } = await environment();
+  const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  await runManagement(["status"], env);
+  const value = JSON.parse(String(output.mock.calls[0]?.[0]));
+  expect(value.installation.state).toBe("not-installed");
+  expect(value.backend.installed).toBe(false);
+  expect(value.database.state).toBe("unavailable");
+  expect(await readdir(directory)).toEqual([]);
+  await expect(runManagement(["status", "--yes"], env)).rejects.toThrow("Use code60 status");
+});

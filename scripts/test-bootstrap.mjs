@@ -46,15 +46,6 @@ await runCommand(async (signal) => {
         signal,
         timeout: 10_000,
       });
-    await assert.rejects(
-      execute(process.execPath, [join(root, "bin/code60.mjs"), "setup"], {
-        env,
-        cwd: temporary,
-        signal,
-        timeout: 10_000,
-      }),
-      { code: 1 },
-    );
     const { stagePayload, installPayload } = await import(
       pathToFileURL(join(root, "lib/index.mjs")).href
     );
@@ -108,7 +99,7 @@ await runCommand(async (signal) => {
           bootstrapVersion: packageJson.version,
           descriptor: staged.descriptor,
           help: true,
-          setupUnavailable: true,
+          setupSupported: true,
           noDependencies: true,
           persistentLauncher: true,
           bootstrapCacheRemoved: true,

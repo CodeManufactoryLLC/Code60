@@ -11,7 +11,14 @@ import {
   parseOrchestrationProvider,
   parsePollSettings,
 } from "../bridge/index.js";
-import { atomicReplace, privateDirectory, writePrivateFile } from "../platform/index.js";
+import {
+  atomicReplace,
+  type FileIdentity,
+  installationSnapshot,
+  privateDirectory,
+  writeInstallationFile,
+  writePrivateFile,
+} from "../platform/index.js";
 
 /** Remembers the selected project database between launches. */
 export interface DesktopPreferences {
@@ -19,6 +26,8 @@ export interface DesktopPreferences {
   setModelDefaults?(record: ModelDefaultsRecord): Promise<void>;
   agentSetup?(): Promise<AgentSetupRecord | null>;
   setAgentSetup?(record: AgentSetupRecord): Promise<void>;
+  selection?(): Promise<{ path?: string; identity: FileIdentity | null }>;
+  selectInitial?(database: string, previous: FileIdentity | null): Promise<void>;
   read(): Promise<string | undefined>;
   write(database: string): Promise<void>;
   polling?(): Promise<PollSettingsPatch>;
@@ -77,7 +86,38 @@ export function filePreferences(file: string): DesktopPreferences & {
     pending = result.catch(() => {});
     return result;
   }
+  async function selection() {
+    const snapshot = await installationSnapshot(file, 1024 * 1024, true);
+    const value: unknown = snapshot ? JSON.parse(snapshot.text) : {};
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      throw new Error("Invalid database selection metadata");
+    const data = value as Record<string, unknown>;
+    if (
+      Object.hasOwn(data, "database") &&
+      (typeof data.database !== "string" ||
+        !isAbsolute(data.database) ||
+        /[\0\r\n]/.test(data.database))
+    )
+      throw new Error("Invalid saved database selection; existing metadata preserved");
+    return {
+      ...(typeof data.database === "string" ? { path: data.database } : {}),
+      identity: snapshot?.identity ?? null,
+    };
+  }
   return {
+    selection,
+    selectInitial(database, previous) {
+      const result = pending.then(async () => {
+        const current = await selection();
+        if (JSON.stringify(current.identity) !== JSON.stringify(previous))
+          throw new Error("Database selection changed during setup");
+        const value = await load(true);
+        await privateDirectory(dirname(file));
+        await writeInstallationFile(file, `${JSON.stringify({ ...value, database })}\n`, previous);
+      });
+      pending = result.catch(() => {});
+      return result;
+    },
     async modelDefaults() {
       return parseModelDefaults((await load()).modelDefaults ?? { version: 1, providers: {} });
     },

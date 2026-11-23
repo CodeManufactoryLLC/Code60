@@ -106,26 +106,33 @@ export async function cleanupAcceptance(run, id) {
   return inventory;
 }
 
-async function stage(context, input, harness, archive, version, payload, managed) {
+async function stage(context, input, harness, archive, version, payload, managed, setup = false) {
   await mkdir(join(context, "driver/test/fixtures"), { recursive: true });
   await mkdir(join(context, "driver/test/clean-install"), { recursive: true });
   await mkdir(input);
   await mkdir(join(harness, "bin"), { recursive: true });
   await cp(archive, join(input, "package.tgz"));
-  const application = managed
-    ? `/installation/customer-home/.local/share/code60/releases/${payload.archive.sha256}`
-    : "/installation/product/node_modules/code60";
+  const application = setup
+    ? `/installation/code60/releases/${payload.archive.sha256}`
+    : managed
+      ? `/installation/customer-home/.local/share/code60/releases/${payload.archive.sha256}`
+      : "/installation/product/node_modules/code60";
   await writeFile(
     join(harness, "layout.json"),
     JSON.stringify({
       application,
+      setup,
       fakeAgent: managed
         ? "/installation/fixtures/fake-agent.mjs"
         : `${application}/fixtures/fake-agent.mjs`,
-      launcher: managed ? "/installation/customer-home/.local/bin/code60" : null,
+      launcher: setup
+        ? "/work/home/.local/bin/code60"
+        : managed
+          ? "/installation/customer-home/.local/bin/code60"
+          : null,
     }),
   );
-  if (managed) {
+  if (managed || setup) {
     await mkdir(join(harness, "bootstrap/lib"), { recursive: true });
     await mkdir(join(harness, "bootstrap/bin"));
     await cp(
@@ -140,15 +147,18 @@ async function stage(context, input, harness, archive, version, payload, managed
         join(repository, "scripts/distribution", name),
         join(harness, "bootstrap/lib", name),
       );
-    await writeFile(join(harness, "bootstrap/package.json"), '{"type":"module","private":true}');
+    await writeFile(
+      join(harness, "bootstrap/package.json"),
+      JSON.stringify({ type: "module", private: true, version: payload.version }),
+    );
     await writeFile(
       join(harness, "bootstrap/platforms.json"),
       JSON.stringify({ "linux-x64": payload }),
     );
     await writeFile(join(harness, "bootstrap/lib/index.mjs"), bootstrapAdapter);
     await cp(
-      join(repository, "test/clean-install/install-managed.mjs"),
-      join(harness, "install-managed.mjs"),
+      join(repository, `test/clean-install/${setup ? "install-setup" : "install-managed"}.mjs`),
+      join(harness, setup ? "install-setup.mjs" : "install-managed.mjs"),
     );
   }
 
@@ -171,9 +181,20 @@ async function stage(context, input, harness, archive, version, payload, managed
     await cp(join(repository, "test/clean-install", name), join(context, name));
   for (const name of ["support.mjs", "install.mjs", "runtime.mjs", "probe.mjs", "supervisor.mjs"])
     await cp(join(repository, "test/clean-install", name), join(harness, name));
-  await chmod(join(harness, "supervisor.mjs"), 0o755);
+  if (setup) {
+    for (const name of ["backend-supervisor.mjs", "backend-supervisor-command.mjs"])
+      await cp(join(repository, "test/fixtures", name), join(harness, name));
+    await cp(
+      join(repository, "test/clean-install/runtime-setup.mjs"),
+      join(harness, "runtime-setup.mjs"),
+    );
+  }
+  await chmod(join(harness, setup ? "backend-supervisor-command.mjs" : "supervisor.mjs"), 0o755);
   for (const name of ["systemctl", "launchctl", "xdg-open"])
-    await symlink("../supervisor.mjs", join(harness, "bin", name));
+    await symlink(
+      setup ? "../backend-supervisor-command.mjs" : "../supervisor.mjs",
+      join(harness, "bin", name),
+    );
   for (const name of ["fake-agent.mjs", "fake-agent-app.mjs"])
     await cp(join(repository, "test/fixtures", name), join(harness, name));
   for (const name of ["golden-journey.ts", "browser-actions.ts", "git-repository.ts"])
@@ -203,10 +224,13 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
   const root = await realpath(directory);
   let payload;
   let archive;
-  const managed = args[0] === "--managed";
+  const setup = args[0] === "--setup";
+  const managed = args[0] === "--managed" || setup;
   if (args[0] === "--payload" || managed) {
     if (args.length !== 2)
-      throw new Error("Use npm run test:packaged:clean -- --payload <descriptor.json>");
+      throw new Error(
+        "Use npm run test:packaged:clean -- --payload|--managed|--setup <descriptor.json>",
+      );
     const path = resolve(root, args[1]);
     payload = descriptor(JSON.parse(await readFile(path, "utf8")));
     archive = join(dirname(path), payload.archive.name);
@@ -310,6 +334,7 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
       version,
       payload,
       managed,
+      setup,
     );
     summary.playwright = version;
     const uid = process.platform === "linux" ? process.getuid() || 1000 : 1000;
@@ -402,11 +427,13 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
             ...mount("volume", state, "/work"),
             image,
             "node",
-            managed
-              ? "/harness/install-managed.mjs"
-              : payload
-                ? "/harness/test/clean-install/install-payload.mjs"
-                : "/harness/install.mjs",
+            setup
+              ? "/harness/install-setup.mjs"
+              : managed
+                ? "/harness/install-managed.mjs"
+                : payload
+                  ? "/harness/test/clean-install/install-payload.mjs"
+                  : "/harness/install.mjs",
           ],
           4 * 60_000,
         );
@@ -423,7 +450,13 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
         "--network",
         "none",
         ...fixtures,
-        ...mount("volume", installation, "/installation", true),
+        ...mount("volume", installation, "/installation", !setup),
+        ...(setup
+          ? ["releases", "activations"].flatMap((part) => [
+              "--mount",
+              `type=volume,source=${installation},target=/installation/code60/${part},volume-subpath=code60/${part},readonly,volume-nocopy`,
+            ])
+          : []),
         ...mount("volume", work, "/work"),
         ...extra,
         "-e",
@@ -458,7 +491,7 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
         observed.network !== "none" ||
         observed.user !== `${uid}:${gid}` ||
         Object.keys(observed.ports ?? {}).length ||
-        observed.mounts.length !== 5
+        observed.mounts.length !== (setup ? 7 : 5)
       )
         throw new Error("Customer isolation inspection failed.");
       for (const item of observed.mounts) {
@@ -470,8 +503,17 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
             throw new Error("Unexpected customer bind mount.");
         } else if (
           item.Type !== "volume" ||
-          !["/installation", "/work"].includes(item.Destination) ||
-          (item.Destination === "/installation" && item.RW)
+          ![
+            "/installation",
+            "/work",
+            ...(setup ? ["/installation/code60/releases", "/installation/code60/activations"] : []),
+          ].includes(item.Destination) ||
+          (item.Destination === "/installation" && item.RW !== setup) ||
+          (setup &&
+            ["/installation/code60/releases", "/installation/code60/activations"].includes(
+              item.Destination,
+            ) &&
+            item.RW)
         )
           throw new Error("Unexpected customer volume mount.");
       }
@@ -496,6 +538,12 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
           "-e",
           "SHELL=/bin/sh",
           ...mount("volume", state, "/work"),
+          ...(setup
+            ? [
+                "--mount",
+                `type=volume,source=${installation},target=/installation/code60/databases,volume-subpath=code60/databases,readonly,volume-nocopy`,
+              ]
+            : []),
           ...mount("bind", output, "/evidence"),
           driver,
         ],
@@ -515,16 +563,19 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
       await rejected("leaked child", /Installed process leak detected/, () =>
         probe(runtime, "verify-cleanup"),
       );
-      await rejected("supervisor mutation", /refuses native supervisor\/opener mutations/, () =>
-        docker([
-          "exec",
-          runtime,
-          "/harness/bin/systemctl",
-          "--user",
-          "enable",
-          "--now",
-          "code60-backend.service",
-        ]),
+      await rejected(
+        "supervisor mutation",
+        /refuses (?:native|unexpected backend) supervisor(?:\/opener)? mutations/,
+        () =>
+          docker([
+            "exec",
+            runtime,
+            "/harness/bin/systemctl",
+            "--user",
+            "enable",
+            "--now",
+            setup ? "unexpected.service" : "code60-backend.service",
+          ]),
       );
     });
     await checked("missing renderer/model detection", async () => {
@@ -544,7 +595,7 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
           mount(
             "volume",
             mask,
-            `${managed ? `/installation/customer-home/.local/share/code60/releases/${payload.archive.sha256}` : "/installation/product/node_modules/code60"}${target}`,
+            `${setup ? `/installation/code60/releases/${payload.archive.sha256}` : managed ? `/installation/customer-home/.local/share/code60/releases/${payload.archive.sha256}` : "/installation/product/node_modules/code60"}${target}`,
             true,
           ),
           kind === "model" ? ["sleep", "infinity"] : [],
