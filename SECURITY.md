@@ -262,3 +262,34 @@ npm run scan:secrets
 The command downloads the pinned scanner without installing npm dependencies.
 Exit code 0 means no findings, 1 means findings, and 2 means the scan could not
 complete. Do not treat a download, checksum, execution, or report error as clean.
+
+
+## Scoped Codex setup
+
+The authenticated controlling browser can explicitly request installation of the
+fixed `@openai/codex@0.171.0` package from `https://registry.npmjs.org`. No browser
+operation accepts a command, path, package name or environment override. This is
+a narrow exception to application/package installation restrictions, not a general
+installer. Installation runs as the non-root backend user, with npm lifecycle
+scripts disabled, isolated npm configuration, private staging and atomic activation
+under `~/.local/share/code60/providers/codex/0.171.0`. Existing CLIs and user
+configuration are preserved. The managed copy is preferred by the standard connector.
+
+A short-lived owned Codex app-server process performs only initialization and
+structured ChatGPT device-code login over bounded stdio. Only the exact HTTPS
+verification destination `https://auth.openai.com/codex/device` is accepted. The
+provider owns credentials in its normal backend-user storage. Code60 receives a
+temporary device challenge, not the account password or credentials. Challenges
+are returned only by setup/attempt-bound requests owned by the controlling page;
+they are excluded from shared snapshots, browser storage, diagnostics and transcripts.
+Provider output and errors are discarded or mapped to fixed messages. Normal agent
+work and the fresh post-login verification use ACP, without login-process tools.
+
+One setup attempt runs at a time. Installation has a ten-minute deadline, login
+fifteen minutes and protocol requests fifteen seconds. Cancel, dismissal, reload,
+control loss, configuration replacement and shutdown abort owned work and await
+process-group cleanup. Late/stale results cannot verify membership. Cancellation
+does not log out the provider or erase credentials it has already issued. The
+persistent dev-container home retains both managed binaries and credentials;
+it must be treated as private user state, not a disposable cache. Custom commands
+and other providers require manual authentication in this release.

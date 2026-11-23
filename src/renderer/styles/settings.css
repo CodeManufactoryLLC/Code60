@@ -603,6 +603,31 @@ button.settings-group-reset {
   accent-color: var(--accent);
 }
 
+.codex-device-login {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.codex-device-login output {
+  font-family: monospace;
+  font-size: 16px;
+  font-weight: 700;
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+.codex-device-login > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.codex-device-login p {
+  margin: 0;
+}
+
 .agent-review {
   padding: 0;
   margin: 0;

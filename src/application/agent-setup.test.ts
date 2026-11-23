@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { parseAgentSetupRecord, parseSetupAttempt } from "../bridge/index.js";
 import { AgentSetup, type SetupDependencies } from "./agent-setup.js";
+import { CodexSetupError } from "./codex-login.js";
+import { PROVIDERS, ProviderMissingError } from "./provider-catalog.js";
 
 function fixture() {
   const commands: Record<string, readonly [string, ...string[]]> = {
@@ -256,4 +258,164 @@ it("retains the previous record on save failure and excludes overlapping writes 
   release();
   await pending;
   expect(setup.record?.primary).toBe("codex");
+});
+
+function codexFixture() {
+  const f = fixture();
+  const provider = PROVIDERS.find((value) => value.id === "codex");
+  if (!provider) throw new Error("Codex fixture missing");
+  f.commands.codex = provider.command;
+  let installed = false;
+  let authenticated = false;
+  let finishLogin: () => void = () => {};
+  f.deps.detect = vi.fn(async () => {
+    if (!installed) throw new ProviderMissingError("Codex");
+  });
+  f.deps.probe = vi.fn(async () => {
+    if (!authenticated)
+      throw Object.assign(new Error("private auth error"), { authRequired: true });
+  });
+  f.deps.codex = {
+    install: vi.fn(async () => {
+      installed = true;
+    }),
+    login: vi.fn(async (_signal, challenge) => {
+      challenge({ verificationUrl: "https://auth.openai.com/codex/device", userCode: "ABCD-1234" });
+      await new Promise<void>((resolve) => {
+        finishLogin = resolve;
+      });
+      authenticated = true;
+    }),
+    cleanup: vi.fn(async () => {}),
+  };
+  f.setup.begin({ mode: "primary" });
+  return {
+    ...f,
+    finishLogin: () => finishLogin(),
+    installed: () => {
+      installed = true;
+    },
+    authenticated: () => {
+      installed = true;
+      authenticated = true;
+    },
+  };
+}
+it("owns install/login challenges privately and verifies ACP before saving v1 membership", async () => {
+  const f = codexFixture();
+  await f.attempt("codex");
+  expect(f.setup.snapshot().session).toMatchObject({
+    codexAction: "install",
+    failureReason: "missing",
+  });
+  const started = f.setup.startCodex(f.identity(), "page-a", true);
+  const address = { ...f.identity(), ...started };
+  await vi.waitFor(() =>
+    expect(f.setup.readCodex(address, "page-a").challenge?.userCode).toBe("ABCD-1234"),
+  );
+  expect(JSON.stringify(f.setup.snapshot())).not.toContain("ABCD-1234");
+  expect(JSON.stringify(f.setup.snapshot())).not.toContain("https://auth.openai.com");
+  expect(() => f.setup.readCodex(address, "page-b")).toThrow("no longer current");
+  expect(() => f.setup.readCodex({ ...address, attemptId: crypto.randomUUID() }, "page-a")).toThrow(
+    "no longer current",
+  );
+  expect(() => f.setup.startCodex(f.identity(), "page-a", true)).toThrow();
+  expect(f.deps.save).not.toHaveBeenCalled();
+  f.finishLogin();
+  await vi.waitFor(() => expect(f.setup.snapshot().session?.phase).toBe("success"));
+  expect(f.setup.readCodex(address, "page-a").challenge).toBeNull();
+  await f.setup.finish(f.identity());
+  expect(f.setup.record).toMatchObject({ version: 1, primary: "codex", enabled: ["codex"] });
+  expect(JSON.stringify(f.setup.record)).not.toContain("ABCD-1234");
+});
+it("cancels login, waits for owned cleanup and ignores late success", async () => {
+  const f = codexFixture();
+  f.installed();
+  await f.attempt("codex");
+  expect(f.setup.snapshot().session?.codexAction).toBe("login");
+  const started = f.setup.startCodex(f.identity(), "page-a", false);
+  const address = { ...f.identity(), ...started };
+  await vi.waitFor(() => expect(f.setup.readCodex(address, "page-a").challenge).not.toBeNull());
+  await expect(f.setup.cancelCodex(address, "page-b")).rejects.toThrow("no longer current");
+  const cancelled = f.setup.cancelCodex(address, "page-a");
+  f.finishLogin();
+  await cancelled;
+  expect(f.setup.snapshot().session).toMatchObject({ phase: "select", verified: [] });
+  expect(f.deps.codex?.cleanup).toHaveBeenCalled();
+  expect(f.deps.save).not.toHaveBeenCalled();
+  expect(() => f.setup.readCodex(address, "page-a")).toThrow();
+});
+it("reuses an existing login and preserves manual setup for custom commands", async () => {
+  const f = codexFixture();
+  f.authenticated();
+  await f.attempt("codex");
+  expect(f.setup.snapshot().session?.phase).toBe("success");
+  expect(f.deps.codex?.install).not.toHaveBeenCalled();
+  expect(f.deps.codex?.login).not.toHaveBeenCalled();
+  const custom = codexFixture();
+  custom.commands.codex = ["/custom/adapter"];
+  await custom.attempt("codex");
+  expect(custom.setup.snapshot().session?.codexAction).toBeUndefined();
+  expect(() => custom.setup.startCodex(custom.identity(), "page", true)).toThrow("unavailable");
+});
+it("offers compatible installation for unsupported login and never grants connection on login failure", async () => {
+  const f = codexFixture();
+  f.installed();
+  await f.attempt("codex");
+  if (!f.deps.codex) throw new Error("Missing fixture authentication");
+  f.deps.codex.login = vi.fn(async () => {
+    throw new CodexSetupError("unsupported");
+  });
+  const { attemptId } = f.setup.startCodex(f.identity(), "page", false);
+  await vi.waitFor(() =>
+    expect(f.setup.snapshot().session).toMatchObject({
+      phase: "failed",
+      codexAction: "install",
+      failureReason: "unsupported",
+    }),
+  );
+  expect(f.setup.readCodex({ ...f.identity(), attemptId }, "page").challenge).toBeNull();
+  await expect(f.setup.finish(f.identity())).rejects.toThrow();
+});
+it("rejects new attempts while cancellation drains and coalesces repeated cancellation", async () => {
+  const f = codexFixture();
+  await f.attempt("codex");
+  const hooks = f.deps.codex;
+  if (!hooks) throw new Error("Missing authentication fixture");
+  let release: () => void = () => {};
+  hooks.cleanup = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+  );
+  const first = f.setup.cancel(f.identity());
+  const second = f.setup.cancel(f.identity());
+  expect(() => f.setup.startCodex(f.identity(), "page", true)).toThrow("cleanup");
+  await expect(f.attempt("codex")).rejects.toThrow("cleanup");
+  expect(() => f.setup.begin({ mode: "primary" })).toThrow("cleanup");
+  await vi.waitFor(() => expect(hooks.cleanup).toHaveBeenCalledOnce());
+  expect(hooks.install).not.toHaveBeenCalled();
+  release();
+  await Promise.all([first, second]);
+  expect(f.setup.snapshot().session?.phase).toBe("select");
+  await f.attempt("codex");
+  expect(f.setup.snapshot().session?.codexAction).toBe("install");
+});
+it("offers the compatible copy when an installed CLI cannot open ACP, without echoing provider output", async () => {
+  const f = codexFixture();
+  f.installed();
+  f.deps.probe = vi.fn(async () => {
+    throw new Error("PRIVATE_UNSUPPORTED_CLI_OUTPUT");
+  });
+  await f.attempt("codex");
+  expect(f.setup.snapshot().session).toMatchObject({
+    phase: "failed",
+    detected: true,
+    failureReason: "connection",
+    codexAction: "install",
+  });
+  expect(JSON.stringify(f.setup.snapshot())).not.toContain("PRIVATE_UNSUPPORTED");
+  expect(f.deps.codex?.install).not.toHaveBeenCalled();
+  expect(f.deps.save).not.toHaveBeenCalled();
 });

@@ -260,6 +260,11 @@ export class DesktopKnowledge {
       reason =
         "Project homes remain available without an open chat; closing the last chat creates no replacement.";
       action = "Use New Session on the project home to explicitly create a chat.";
+    } else if (cap.id === "providers") {
+      reason =
+        "Provider setup is available without a database or verified provider; Codex installation and device-code login require an explicit action in the controlling setup dialog.";
+      action =
+        "Providers → Add Provider → Codex. Install if missing, sign in on the official page, and wait for connection verification. Custom commands require manual setup.";
     } else if (cap.prerequisite === "provider" && !state.providers.length) {
       status = "blocked";
       reason = "No verified enabled provider.";

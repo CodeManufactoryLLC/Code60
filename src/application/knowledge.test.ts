@@ -267,7 +267,12 @@ describe("DesktopKnowledge", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: "providers",
-          availability: expect.objectContaining({ status: "available" }),
+          agentAccess: "read",
+          availability: expect.objectContaining({
+            status: "available",
+            reason: expect.stringContaining("explicit action in the controlling setup dialog"),
+            action: expect.stringContaining("Install if missing"),
+          }),
         }),
       ]),
     );

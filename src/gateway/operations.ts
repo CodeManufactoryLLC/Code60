@@ -8,6 +8,7 @@ import { logProjectId } from "../application/index.js";
 import {
   parseAction,
   parseBoolean,
+  parseCodexSetupIdentity,
   parseConfigurationId,
   parseDatabaseMode,
   parseDatabaseWrite,
@@ -165,6 +166,18 @@ export function applicationOperations(
   handle("provider-action", (value) => controller.providerAction(parseProviderAction(value)));
   handle("setup-begin", (value) => controller.beginAgentSetup(parseSetupBegin(value)));
   handle("setup-attempt", (value) => controller.attemptAgentSetup(parseSetupAttempt(value)));
+  handle("setup-codex-install", (value) =>
+    controller.startCodexSetup(parseSetupSession(value), interactions.currentOwner(), true),
+  );
+  handle("setup-codex-login", (value) =>
+    controller.startCodexSetup(parseSetupSession(value), interactions.currentOwner(), false),
+  );
+  handle("setup-codex-read", (value) =>
+    controller.readCodexSetup(parseCodexSetupIdentity(value), interactions.currentOwner()),
+  );
+  handle("setup-codex-cancel", (value) =>
+    controller.cancelCodexSetup(parseCodexSetupIdentity(value), interactions.currentOwner()),
+  );
   handle("setup-cancel", (value) => controller.cancelAgentSetup(parseSetupSession(value)));
   handle("setup-finish", (value) => controller.finishAgentSetup(parseSetupSession(value)));
   handle("setup-abandon", (value) => controller.abandonAgentSetup(parseSetupSession(value)));

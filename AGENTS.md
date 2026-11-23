@@ -65,7 +65,7 @@ environments.
 - `npm run dev` starts an isolated foreground Node backend and Vite with Fast Refresh.
   `npm start` opens the installed backend in a browser.
 - The optional [Linux dev container](.devcontainer/README.md) uses
-  `npm run devcontainer` on the host with `prepare`, `up`, `exec` or `down`. Docker must already
+  `npm run devcontainer` on the host with `prepare`, `up`, `start`, `exec` or `down`. Docker must already
   be running. Keep container dependencies separate from host files; clean up owned
   containers and exported images after tests, retaining documented caches.
   Use one worktree/container per concurrent agent. Run preparation before editor

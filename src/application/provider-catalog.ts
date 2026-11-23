@@ -7,6 +7,11 @@ import type { Config } from "../core/index.js";
 import { assertSupportedPlatform, environmentValue } from "../platform/index.js";
 
 type Command = readonly [string, ...string[]];
+export class ProviderMissingError extends Error {
+  constructor(name: string) {
+    super(`${name} was not found.`);
+  }
+}
 interface Provider extends SetupProvider {
   command: Command;
   prerequisites?: string[];
@@ -35,7 +40,7 @@ export const PROVIDERS: Provider[] = [
     command: ["npx", "-y", "@agentclientprotocol/codex-acp"],
     prerequisites: ["codex", "codex-acp"],
     guidance:
-      "Install Codex and sign in with codex login. Retry when ready. Connecting may download the ACP adapter through npx.",
+      "Use Install Codex and sign in, or Sign in to Codex, to connect from this dialog. Custom launch commands require their own external setup. Connecting may download the ACP adapter through npx.",
   },
   {
     id: "copilot",
@@ -124,5 +129,5 @@ export async function detectProvider(
     provider.prerequisites &&
     !(await Promise.all(provider.prerequisites.map(exists))).some(Boolean)
   )
-    throw new Error(`${provider.name} was not found.`);
+    throw new ProviderMissingError(provider.name);
 }

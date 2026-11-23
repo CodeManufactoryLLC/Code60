@@ -1,5 +1,11 @@
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
-import type { ApplicationClient, SetupBegin, Snapshot } from "../bridge/index.js";
+import {
+  type ApplicationClient,
+  type CodexChallenge,
+  codexChallengeSchema,
+  type SetupBegin,
+  type Snapshot,
+} from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { Icon } from "./icons.js";
 import { DialogContent } from "./neobrutalism/dialog.js";
@@ -28,6 +34,11 @@ export function AgentSetupWizard({
   const autoSaveSession = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [codexStarting, setCodexStarting] = useState(false);
+  const [codexAttempt, setCodexAttempt] = useState<{ sessionId: string; attemptId: string } | null>(
+    null,
+  );
+  const [challenge, setChallenge] = useState<CodexChallenge | null>(null);
   const setup = snapshot.agentSetup;
   const session = setup?.session;
   const providers = setup?.providers ?? [];
@@ -41,6 +52,9 @@ export function AgentSetupWizard({
   const busy =
     starting ||
     saving ||
+    codexStarting ||
+    session?.phase === "installing" ||
+    session?.phase === "authenticating" ||
     session?.phase === "detecting" ||
     session?.phase === "connecting" ||
     (session?.phase === "success" && !success && !error);
@@ -88,6 +102,35 @@ export function AgentSetupWizard({
     autoSaveSession.current = session.id;
     void finish();
   }, [session?.phase, session?.id, finish]);
+  useEffect(() => {
+    setChallenge(null);
+    const read = api.readCodexSetup;
+    if (
+      !codexAttempt ||
+      !read ||
+      session?.id !== codexAttempt.sessionId ||
+      !["installing", "authenticating", "connecting"].includes(session.phase)
+    )
+      return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const progress = await read(codexAttempt);
+        if (stopped) return;
+        const parsed = codexChallengeSchema.safeParse(progress.challenge);
+        setChallenge(progress.phase === "authenticating" && parsed.success ? parsed.data : null);
+      } catch {
+        if (!stopped) setChallenge(null);
+      }
+      if (!stopped) timer = setTimeout(() => void poll(), 1_000);
+    };
+    void poll();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [api, codexAttempt, session?.id, session?.phase]);
   async function invoke(action: () => Promise<void>) {
     setError("");
     try {
@@ -108,6 +151,8 @@ export function AgentSetupWizard({
     attemptInFlight.current = true;
     setPending({ provider, revision: snapshot.revision });
     setError("");
+    setChallenge(null);
+    setCodexAttempt(null);
     try {
       await api.attemptAgentSetup({ sessionId: session.id, provider });
     } catch (cause) {
@@ -115,6 +160,23 @@ export function AgentSetupWizard({
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       attemptInFlight.current = false;
+    }
+  }
+  async function startCodex(install: boolean) {
+    const start = install ? api.installCodexForSetup : api.loginCodexForSetup;
+    if (!session || !start || attemptInFlight.current || busy) return;
+    attemptInFlight.current = true;
+    setCodexStarting(true);
+    setError("");
+    setChallenge(null);
+    try {
+      const result = await start({ sessionId: session.id });
+      setCodexAttempt({ sessionId: session.id, attemptId: result.attemptId });
+    } catch {
+      setError("Could not start Codex setup. Retry.");
+    } finally {
+      attemptInFlight.current = false;
+      setCodexStarting(false);
     }
   }
   async function addAnother() {
@@ -217,12 +279,41 @@ export function AgentSetupWizard({
                   ? success
                     ? `${candidate.name} connected`
                     : "Saving connection…"
-                  : session?.phase === "connecting"
-                    ? `Connecting to ${candidate.name}…`
-                    : success
-                      ? `${candidate.name} connected`
-                      : ""}
+                  : session?.phase === "installing"
+                    ? "Installing Codex…"
+                    : session?.phase === "authenticating"
+                      ? "Waiting for Codex sign-in…"
+                      : session?.phase === "connecting"
+                        ? `Connecting to ${candidate.name}…`
+                        : success
+                          ? `${candidate.name} connected`
+                          : ""}
             </p>
+            {challenge && session?.phase === "authenticating" && (
+              <section className="codex-device-login" aria-label="Codex sign-in">
+                <output aria-label="Device code">{challenge.userCode}</output>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void navigator.clipboard
+                        .writeText(challenge.userCode)
+                        .catch(() =>
+                          setError("Could not copy the device code. Select and copy it instead."),
+                        )
+                    }
+                  >
+                    Copy code
+                  </button>
+                  <a href={challenge.verificationUrl} target="_blank" rel="noopener noreferrer">
+                    Open sign-in page
+                  </a>
+                </div>
+                <section aria-label="Sign-in help">
+                  <p>Enter this code on the sign-in page. Keep this dialog open until connected.</p>
+                </section>
+              </section>
+            )}
             {busy && (
               <progress
                 aria-label={
@@ -249,7 +340,10 @@ export function AgentSetupWizard({
             onClick={() =>
               session &&
               void invoke(async () => {
-                await api.cancelAgentSetup({ sessionId: session.id });
+                if (codexAttempt && api.cancelCodexSetup) await api.cancelCodexSetup(codexAttempt);
+                else await api.cancelAgentSetup({ sessionId: session.id });
+                setCodexAttempt(null);
+                setChallenge(null);
                 setPending(null);
               })
             }
@@ -291,6 +385,21 @@ export function AgentSetupWizard({
                 Choose another provider
               </button>
             )}
+            {candidate?.id === "codex" &&
+              session.codexAction &&
+              (session.codexAction === "install"
+                ? api.installCodexForSetup
+                : api.loginCodexForSetup) && (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => void startCodex(session.codexAction === "install")}
+                >
+                  {session.codexAction === "install"
+                    ? "Install Codex and sign in"
+                    : "Sign in to Codex"}
+                </button>
+              )}
             <button
               type="button"
               className="primary"

@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+export type {
+  CodexChallenge,
+  CodexSetupIdentity,
+  CodexSetupProgress,
+  CodexSetupStarted,
+} from "../contracts/index.js";
+export {
+  CODEX_VERIFICATION_URL,
+  codexChallengeSchema,
+  parseCodexSetupIdentity,
+} from "../contracts/index.js";
+
 z.config({ jitless: true });
 const provider = z
   .string()
@@ -50,7 +62,24 @@ export interface AgentSetupSession {
   mode: "primary" | "add";
   role: "primary" | "additional";
   candidate: string | null;
-  phase: "select" | "detecting" | "connecting" | "success" | "failed";
+  phase:
+    | "select"
+    | "detecting"
+    | "connecting"
+    | "installing"
+    | "authenticating"
+    | "success"
+    | "failed";
+  codexAction?: "install" | "login";
+  failureReason?:
+    | "missing"
+    | "authentication"
+    | "install"
+    | "login"
+    | "unsupported"
+    | "timeout"
+    | "connection"
+    | "cleanup";
   detected: boolean;
   error: string | null;
   primary: string | null;

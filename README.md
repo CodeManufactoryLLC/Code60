@@ -14,7 +14,7 @@ code60 service install
 code60 open
 ```
 
-Installation asks for confirmation before creating a launchd or user systemd service. Use `--yes` only for an explicitly authorized unattended service change. Provider CLIs keep their own authentication; Code60 never installs providers or asks for their passwords.
+Installation asks for confirmation before creating a launchd or user systemd service. Use `--yes` only for an explicitly authorized unattended service change. Provider CLIs keep their own authentication; Code60 never asks for their passwords. Standard Codex setup can install a pinned compatible CLI after you explicitly choose **Install Codex and sign in**. Other providers use their own installation flows.
 
 `code60 open` opens Code60 directly. Pairing codes are skipped by default. Each
 browser still gets its own session, and **Take control** explicitly replaces the
@@ -31,7 +31,11 @@ seconds. Enter it in the browser. Restarting the backend requires a new code in
 that mode. With pairing off, any browser on this computer can connect; enable
 pairing when you want an explicit local authorization step.
 
-Complete provider verification in the browser. Create or select a database and open a project through the host-side chooser. Project workers require Git with an initial commit. Relay can explicitly target a direct folder. Accept the displayed plan to dispatch work, inspect the automatically integrated changes, and use message Undo to restore covered files and return the request unsent. Undo does not reverse external website effects.
+Complete provider verification in the browser. Select **Codex** to connect an existing authenticated installation. If missing, choose **Install Codex and sign in**; otherwise choose **Sign in to Codex** when prompted. Copy the displayed device code, open the sign-in page in its separate tab, and authorize with your ChatGPT account. Device-code login must be enabled in your ChatGPT security settings. Keep setup open until the fresh connection check and automatic save finish. **Connected** confirms both succeeded.
+
+Codex installation uses non-root npm with lifecycle scripts disabled and the official registry, pinned to `@openai/codex@0.171.0`. Code60 activates its private copy under `~/.local/share/code60/providers/codex/0.171.0` and prefers it for the standard Codex connector without changing configuration or replacing an existing CLI. Codex stores credentials in its normal backend-user home. Closing/cancelling setup, reloading, taking control in another tab or stopping the backend cancels the owned installation/login process; it does not log out an account or remove issued credentials. Retry requests a new attempt. Unsupported CLIs offer the compatible installation; custom launch commands retain manual setup. Account switching, logout and API-key entry are outside this setup flow.
+
+ Create or select a database and open a project through the host-side chooser. Project workers require Git with an initial commit. Relay can explicitly target a direct folder. Accept the displayed plan to dispatch work, inspect the automatically integrated changes, and use message Undo to restore covered files and return the request unsent. Undo does not reverse external website effects.
 
 ## Backend management
 
@@ -79,7 +83,12 @@ Development uses isolated configuration/state under ignored `test-results/dev`, 
 An optional [Linux development container](.devcontainer/README.md) provides an
 isolated non-root x64 environment for development and headless browser tests.
 Docker Desktop is optional; the container uses a local Linux Docker engine with
-Compose v2. Native host development does not require Docker.
+Compose v2. After the host's initial `npm ci`, run `npm run devcontainer -- start`
+to prepare the container and open the printed browser URL without VS Code.
+Ctrl+C stops it and cleans up its containers/images, retaining caches and each
+worktree's private provider home. Provider tools and file-based logins persist
+across container recreation; see the guide for installation and sign-in.
+Native host development does not require Docker.
 
 ```sh
 npm run check

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
@@ -35,9 +35,14 @@ async function checkout(worktree = false) {
   git("worktree", "add", "-qb", "fixture", linked);
   return linked;
 }
-function control({ unavailable = false, failStartup = false, failRemoval = false } = {}) {
-  let containers = ["owned-container"];
-  let images = ["owned-image"];
+function control({
+  unavailable = false,
+  failStartup = false,
+  failRemoval = false,
+  fresh = false,
+} = {}) {
+  let containers = fresh ? [] : ["owned-container"];
+  let images = fresh ? [] : ["owned-image"];
   const run = vi.fn(async (file, args) => {
     if (file === "git") return execFileSync(file, args, { encoding: "utf8" });
     if (file === "docker") {
@@ -45,6 +50,7 @@ function control({ unavailable = false, failStartup = false, failRemoval = false
         if (unavailable) throw new Error("daemon unavailable");
         return "linux\n";
       }
+      if (args[1] === "ls" && args.includes("status=running")) return "owned-container\n";
       if (args[1] === "ls")
         return `${(args[0] === "container" ? containers : images).join("\n")}\n`;
       if (args[0] === "rm") containers = [];
@@ -54,14 +60,16 @@ function control({ unavailable = false, failStartup = false, failRemoval = false
       }
       return "";
     }
+    containers = ["owned-container"];
+    images = ["owned-image"];
     if (failStartup) throw new Error("build failed");
     return "";
   });
-  return { run, write: vi.fn(), available: async () => true };
+  return { run, write: vi.fn(), develop: vi.fn(async () => {}), available: async () => true };
 }
 
 it("generates isolated amd64 mounts and keeps root initialization away from the checkout", () => {
-  const { compose } = containerConfiguration("/source with spaces", "/main/.git", 1001, 1002, {
+  const { compose, id } = containerConfiguration("/source with spaces", "/main/.git", 1001, 1002, {
     gateway: 44000,
     vite: 44001,
   });
@@ -75,6 +83,7 @@ it("generates isolated amd64 mounts and keeps root initialization away from the 
   expect(
     service.volumes.filter((mount) => mount.type === "volume").map((mount) => mount.target),
   ).toEqual([
+    "/home/node",
     "/source with spaces/node_modules",
     "/source with spaces/dist",
     "/home/node/.npm",
@@ -89,8 +98,111 @@ it("generates isolated amd64 mounts and keeps root initialization away from the 
   expect(service.environment.GIT_CONFIG_GLOBAL).toBe("/dev/null");
   expect(service.environment.CODE60_DEV_GATEWAY_PORT).toBe("44000");
   expect(service.environment.CODE60_VITE_PORT).toBe("44001");
+  expect(service.environment.NPM_CONFIG_PREFIX).toBe("/home/node/.local");
+  expect(service.environment.PATH.split(":")[0]).toBe("/home/node/.local/bin");
+  expect(compose.volumes.home.name).toBe(`code60-dev-${id}-home`);
+  expect(compose.volumes.home.labels["com.code60.kind"]).toBe("provider-state");
+  expect(compose.services["cache-init"].volumes).toContainEqual({
+    type: "volume",
+    source: "home",
+    target: "/cache/home",
+    volume: { nocopy: true },
+  });
   expect(JSON.stringify(compose)).not.toContain("docker.sock");
 });
+
+it.each([false, true])(
+  "starts the app with dependencies, models and browser forwarding (%s)",
+  async (linked) => {
+    const ports = control({ fresh: true });
+    const closed = vi.fn();
+    ports.forward = vi.fn(async () => closed);
+    const root = await checkout(linked);
+    await manageContainer(root, "start", [], ports);
+    const calls = ports.run.mock.calls.filter(([file]) => file === process.execPath);
+    expect(calls.map(([, args]) => args.slice(args.indexOf("--") + 1))).toEqual([
+      calls[0][1],
+      ["env", "ONNXRUNTIME_NODE_INSTALL=skip", "npm", "ci"],
+      ["npm", "run", "prepare:models"],
+    ]);
+    expect(calls[2][2]).toMatchObject({ inherit: true, stdin: "ignore" });
+    expect(ports.develop).toHaveBeenCalledWith(root, "owned-container", { signal: undefined });
+    const config = JSON.parse(
+      await readFile(join(root, ".devcontainer/local/compose.json"), "utf8"),
+    );
+    const env = config.services.code60.environment;
+    expect(ports.forward).toHaveBeenCalledWith(
+      root,
+      "owned-container",
+      {
+        gateway: Number(env.CODE60_DEV_GATEWAY_PORT),
+        vite: Number(env.CODE60_VITE_PORT),
+      },
+      { signal: undefined },
+    );
+    expect(closed).toHaveBeenCalledOnce();
+    expect(ports.run.mock.calls).toContainEqual(["docker", ["rm", "owned-container"]]);
+    await expect(stat(join(root, ".devcontainer/local/start.lock"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  },
+);
+
+it("refuses to take ownership of existing worktree containers", async () => {
+  const ports = control();
+  await expect(manageContainer(await checkout(), "start", [], ports)).rejects.toThrow(
+    "already has containers",
+  );
+  expect(ports.run.mock.calls.some(([, args]) => args[0] === "stop" || args[0] === "rm")).toBe(
+    false,
+  );
+});
+
+it("preserves another start's lock and leaves its containers alone", async () => {
+  const root = await checkout();
+  const ports = control({ fresh: true });
+  await manageContainer(root, "prepare", [], ports);
+  const lock = join(root, ".devcontainer/local/start.lock");
+  await mkdir(lock);
+  await expect(manageContainer(root, "start", [], ports)).rejects.toThrow("already owned");
+  expect((await stat(lock)).isDirectory()).toBe(true);
+  expect(
+    ports.run.mock.calls.some(
+      ([file, args]) => file === "docker" && ["stop", "rm"].includes(args[0]),
+    ),
+  ).toBe(false);
+});
+
+it.each(["ci", "prepare:models", "forward", "dev"])(
+  "cleans partial start failures (%s)",
+  async (step) => {
+    const ports = control({ fresh: true });
+    const invoke = ports.run;
+    const controller = new AbortController();
+    const closed = vi.fn();
+    ports.signal = controller.signal;
+    ports.forward = vi.fn(async () => {
+      if (step === "forward") throw new Error("forward failed");
+      return closed;
+    });
+    ports.run = vi.fn(async (file, args, options) => {
+      if (file === process.execPath && args.at(-1) === step) {
+        throw new Error(`${step} failed`);
+      }
+      return invoke(file, args, options);
+    });
+    ports.develop = vi.fn(async () => {
+      controller.abort();
+      throw new Error("dev failed");
+    });
+    await expect(manageContainer(await checkout(), "start", [], ports)).rejects.toThrow(
+      `${step} failed`,
+    );
+    expect(invoke.mock.calls).toContainEqual(["docker", ["rm", "owned-container"], undefined]);
+    expect(invoke.mock.calls).toContainEqual(["docker", ["image", "rm", "owned-image"], undefined]);
+    expect(closed).toHaveBeenCalledTimes(step === "dev" ? 1 : 0);
+  },
+);
 
 it.each([false, true])(
   "prepares real Git checkouts and linked worktrees without Docker (%s)",
@@ -157,16 +269,22 @@ it("prepares concurrent linked worktrees with matching, distinct container and e
   }
   expect(new Set(forwarded).size).toBe(4);
   expect(configs[0].compose.name).not.toBe(configs[1].compose.name);
+  expect(configs[0].compose.volumes.home.name).not.toBe(configs[1].compose.volumes.home.name);
   expect(Object.values(configs[0].compose.volumes).map((value) => value.name)).not.toEqual(
     Object.values(configs[1].compose.volumes).map((value) => value.name),
   );
 });
 
-it("reports a stopped daemon before attempting builds", async () => {
-  const ports = control({ unavailable: true });
-  await expect(manageContainer(await checkout(), "up", [], ports)).rejects.toThrow("Start Docker");
-  expect(ports.run.mock.calls.some(([file]) => file === process.execPath)).toBe(false);
-});
+it.each(["up", "start"])(
+  "reports a stopped daemon before attempting builds (%s)",
+  async (action) => {
+    const ports = control({ unavailable: true });
+    await expect(manageContainer(await checkout(), action, [], ports)).rejects.toThrow(
+      "Start Docker",
+    );
+    expect(ports.run.mock.calls.some(([file]) => file === process.execPath)).toBe(false);
+  },
+);
 
 it("passes terminal commands as exact arguments and prepares before startup", async () => {
   const ports = control();

@@ -229,7 +229,12 @@ describe("browser capability catalog", () => {
       prerequisite: "none",
     });
     expect(providers?.limitations).toContain("stopped interactive agent work");
-    expect(providers?.limitations).toContain("No automatic installation or management MCP tools");
+    expect(providers?.limitations).toContain(
+      "explicit installation of pinned @openai/codex@0.171.0",
+    );
+    expect(providers?.limitations).toContain(
+      "Custom Codex commands and other providers use manual setup",
+    );
   });
   it("classifies model switching as provider-dependent and human-only with role-scoped defaults", () => {
     expect(APPLICATION_CAPABILITIES.find((c) => c.id === "model-settings")).toMatchObject({

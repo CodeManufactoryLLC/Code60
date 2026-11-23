@@ -10,6 +10,7 @@ export default defineConfig({
     "transmission-workflow.e2e.ts",
     "renderer-replay.e2e.ts",
     "navigation-icons.e2e.ts",
+    "provider-login.e2e.ts",
   ],
   workers: 1,
   timeout: 60_000,

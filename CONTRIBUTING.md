@@ -84,10 +84,14 @@ assets, foreground backend and offline embedding model without service enrollmen
 
 Use the [Linux development container](.devcontainer/README.md) for a non-root
 Linux x64 environment with isolated dependencies and model/browser caches.
-Run `npm run devcontainer -- prepare` after host dependency installation, then
-use the documented editor or terminal workflow. Docker must already be running.
+After host dependency installation, use `npm run devcontainer -- start` to
+prepare dependencies/models and run Code60 with host-browser forwarding, without
+an editor. Ctrl+C cleans up. Alternatively, run `npm run devcontainer -- prepare`
+and use the documented editor or terminal workflow. Docker must already be running.
 Always finish a test session with `npm run devcontainer -- down`; it removes owned
-containers and exported images while preserving caches and test evidence.
+containers and exported images while preserving caches, the private provider home
+and test evidence. Global npm provider tools install to the persistent home prefix;
+sign in inside the container, independently of host credentials.
 
 Preparation reserves a stable gateway/Vite port pair for each worktree and generates
 matching editor forwarding without remapping. Agents in separate worktrees can
@@ -108,7 +112,7 @@ For the container workflow, run these commands from your own checkout:
 
 | Location | Work |
 | --- | --- |
-| Host | Initial `npm ci` for the pinned CLI; `npm run devcontainer -- prepare`, `up`, `exec` and `down`; authenticated Git fetch/commit/push and PR operations. |
+| Host | Initial `npm ci` for the pinned CLI; `npm run devcontainer -- prepare`, `up`, `start`, `exec` and `down`; authenticated Git fetch/commit/push and PR operations. |
 | Container | Explicit dependency/Chromium/model preparation, development, builds and checks through `exec` or the isolated editor terminal. Use synthetic Git identities in test repositories. |
 
 For example, `npm run devcontainer -- exec npm run check` runs Linux checks with

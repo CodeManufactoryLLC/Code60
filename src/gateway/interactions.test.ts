@@ -40,3 +40,31 @@ it("expires unanswered decisions and dismisses the browser dialog", async () => 
   expect(interactions.list("page")).toEqual([]);
   await expect(interactions.choices("page", { id })).rejects.toThrow("expired");
 });
+
+it("derives private setup ownership from active asynchronous page context and revokes detached pages", async () => {
+  const interactions = new Interactions([], () => {});
+  expect(() => interactions.currentOwner()).toThrow("no longer active");
+  expect(() => interactions.run("unattached", () => interactions.currentOwner())).toThrow(
+    "no longer active",
+  );
+  interactions.attach("page-a");
+  interactions.attach("page-b");
+  const owners = await Promise.all(
+    ["page-a", "page-b"].map((owner) =>
+      interactions.run(owner, async () => {
+        await Promise.resolve();
+        return interactions.currentOwner();
+      }),
+    ),
+  );
+  expect(owners).toEqual(["page-a", "page-b"]);
+  interactions.run("page-a", () => {
+    interactions.detach("page-a");
+    expect(() => interactions.currentOwner()).toThrow("no longer active");
+  });
+  expect(interactions.run("page-b", () => interactions.currentOwner())).toBe("page-b");
+  interactions.close();
+  expect(() => interactions.run("page-b", () => interactions.currentOwner())).toThrow(
+    "no longer active",
+  );
+});

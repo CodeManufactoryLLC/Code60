@@ -4,12 +4,14 @@ import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promis
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { forwardContainerPorts, runContainerDevelopment } from "./devcontainer-forward.mjs";
 import { withDevelopmentPorts } from "./devcontainer-ports.mjs";
 
 const execute = promisify(execFile);
 const repository = fileURLToPath(new URL("..", import.meta.url));
 const label = "com.code60.devcontainer";
-const cacheTargets = {
+const volumeTargets = {
+  home: "/home/node",
   dependencies: "node_modules",
   build: "dist",
   npm: "/home/node/.npm",
@@ -25,13 +27,13 @@ export function containerConfiguration(root, common, uid = 1000, gid = 1000, pai
   const id = workspaceId(root);
   const project = `code60-dev-${id}`;
   const labels = { [label]: id };
-  const caches = Object.keys(cacheTargets);
+  const caches = Object.keys(volumeTargets);
   const cacheVolumes = caches.map((name) => ({
     type: "volume",
     source: name,
-    target: cacheTargets[name].startsWith("/")
-      ? cacheTargets[name]
-      : join(root, cacheTargets[name]),
+    target: volumeTargets[name].startsWith("/")
+      ? volumeTargets[name]
+      : join(root, volumeTargets[name]),
     volume: { nocopy: true },
   }));
   const mounts = [{ type: "bind", source: root, target: root }];
@@ -68,10 +70,12 @@ export function containerConfiguration(root, common, uid = 1000, gid = 1000, pai
           depends_on: { "cache-init": { condition: "service_completed_successfully" } },
           environment: {
             HOME: "/home/node",
+            NPM_CONFIG_PREFIX: "/home/node/.local",
+            PATH: "/home/node/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             SHELL: "/bin/bash",
             CODE60_DEV_GATEWAY_PORT: String(pair.gateway),
             CODE60_VITE_PORT: String(pair.vite),
-            PLAYWRIGHT_BROWSERS_PATH: cacheTargets.browsers,
+            PLAYWRIGHT_BROWSERS_PATH: volumeTargets.browsers,
             GIT_CONFIG_GLOBAL: "/dev/null",
             GIT_TERMINAL_PROMPT: "0",
             VITEST_MAX_WORKERS: "2",
@@ -84,7 +88,10 @@ export function containerConfiguration(root, common, uid = 1000, gid = 1000, pai
       volumes: Object.fromEntries(
         caches.map((name) => [
           name,
-          { name: `${project}-${name}`, labels: { ...labels, "com.code60.kind": "cache" } },
+          {
+            name: `${project}-${name}`,
+            labels: { ...labels, "com.code60.kind": name === "home" ? "provider-state" : "cache" },
+          },
         ]),
       ),
     },
@@ -94,7 +101,13 @@ export function containerConfiguration(root, common, uid = 1000, gid = 1000, pai
 async function run(
   file,
   args,
-  { cwd, inherit = false, signal, timeout = inherit ? 30 * 60_000 : 30_000 } = {},
+  {
+    cwd,
+    inherit = false,
+    stdin = "inherit",
+    signal,
+    timeout = inherit ? 30 * 60_000 : 30_000,
+  } = {},
 ) {
   signal?.throwIfAborted();
   const env = { ...process.env };
@@ -104,7 +117,12 @@ async function run(
       .stdout;
   await new Promise((resolveRun, reject) => {
     const grouped = process.platform !== "win32";
-    const child = spawn(file, args, { cwd, env, detached: grouped, stdio: "inherit" });
+    const child = spawn(file, args, {
+      cwd,
+      env,
+      detached: grouped,
+      stdio: [stdin, "inherit", "inherit"],
+    });
     let escalation;
     let interrupted = false;
     const kill = (kind) => {
@@ -162,8 +180,11 @@ async function save(file, value) {
 }
 
 export async function manageContainer(directory, action, args = [], ports = {}) {
-  if (!["prepare", "up", "exec", "down"].includes(action) || (action !== "exec" && args.length))
-    throw new Error("Use devcontainer prepare|up|exec <command> [args...]|down.");
+  if (
+    !["prepare", "up", "start", "exec", "down"].includes(action) ||
+    (action !== "exec" && args.length)
+  )
+    throw new Error("Use devcontainer prepare|up|start|exec <command> [args...]|down.");
   if (action === "exec" && !args.length) throw new Error("Supply a command after exec.");
   const invoke = ports.run ?? run;
   const root = await realpath(directory);
@@ -278,10 +299,93 @@ export async function manageContainer(directory, action, args = [], ports = {}) 
       failures.push(new Error("Owned containers or images remain; inspect their workspace label."));
     if (failures.length) throw new AggregateError(failures, "Container cleanup did not complete.");
     write(
-      "Owned containers and images removed. Dependency, build, browser and model caches retained.\n",
+      "Owned containers and images removed. Private provider home and dependency, build, browser and model caches retained.\n",
     );
   };
   if (action === "down") return cleanup();
+  if (action === "start") {
+    await manageContainer(root, "prepare", [], ports);
+    const lock = join(local, "start.lock");
+    try {
+      await mkdir(lock);
+    } catch (error) {
+      if (error.code === "EEXIST")
+        throw new Error("Container start is already owned by another process in this worktree.");
+      throw error;
+    }
+    let owned = false;
+    let closeForwarding;
+    const errors = [];
+    try {
+      if ((await list("container")).length)
+        throw new Error(
+          "This worktree already has containers. Use down only if you own them, then retry start.",
+        );
+      owned = true;
+      await manageContainer(root, "up", [], ports);
+      const executeInContainer = (command, timeout = 30 * 60_000) =>
+        invoke(
+          process.execPath,
+          [cli, "exec", ...cliArgs, "--default-user-env-probe", "none", "--", ...command],
+          {
+            cwd: root,
+            inherit: true,
+            stdin: "ignore",
+            signal: ports.signal,
+            timeout,
+          },
+        );
+      write("Preparing container dependencies and offline models…\n");
+      // The CPU runtime is bundled; this container does not expose a GPU.
+      await executeInContainer(["env", "ONNXRUNTIME_NODE_INSTALL=skip", "npm", "ci"]);
+      await executeInContainer(["npm", "run", "prepare:models"]);
+      const running = (
+        await invoke("docker", [
+          "container",
+          "ls",
+          "--quiet",
+          "--filter",
+          `label=${label}=${id}`,
+          "--filter",
+          "label=com.docker.compose.service=code60",
+          "--filter",
+          "status=running",
+        ])
+      )
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+      if (running.length !== 1)
+        throw new Error("Expected exactly one running development container.");
+      const config = JSON.parse(await readFile(join(local, "compose.json"), "utf8"));
+      const env = config.services.code60.environment;
+      const pair = {
+        gateway: Number(env.CODE60_DEV_GATEWAY_PORT),
+        vite: Number(env.CODE60_VITE_PORT),
+      };
+      closeForwarding = await (ports.forward ?? forwardContainerPorts)(root, running[0], pair, {
+        signal: ports.signal,
+      });
+      write(
+        `Browser forwarding: http://127.0.0.1:${pair.gateway}\nOpen this URL when Development Code60 is ready. Press Ctrl+C to stop and clean up.\n`,
+      );
+      await (ports.develop ?? runContainerDevelopment)(root, running[0], { signal: ports.signal });
+    } catch (error) {
+      errors.push(error);
+    } finally {
+      for (const release of [closeForwarding, owned ? cleanup : undefined]) {
+        try {
+          await release?.();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      await rm(lock, { recursive: true });
+    }
+    if (errors.length === 1) throw errors[0];
+    if (errors.length) throw new AggregateError(errors, "Container start and cleanup failed.");
+    return;
+  }
   if (action === "up") {
     await manageContainer(root, "prepare", [], ports);
     try {
@@ -314,18 +418,26 @@ export async function manageContainer(directory, action, args = [], ports = {}) 
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const abort = new AbortController();
-  const stop = () => abort.abort();
-  process.once("SIGINT", stop);
-  process.once("SIGTERM", stop);
+  let signalExitCode;
+  const interrupt = () => {
+    signalExitCode = 130;
+    abort.abort();
+  };
+  const terminate = () => {
+    signalExitCode = 143;
+    abort.abort();
+  };
+  process.on("SIGINT", interrupt);
+  process.on("SIGTERM", terminate);
   try {
     await manageContainer(repository, process.argv[2], process.argv.slice(3), {
       signal: abort.signal,
     });
   } catch (error) {
     process.stderr.write(`${error.message}\n`);
-    process.exitCode = error.exitCode || (abort.signal.aborted ? 130 : 1);
+    process.exitCode = signalExitCode ?? (error.exitCode || 1);
   } finally {
-    process.removeListener("SIGINT", stop);
-    process.removeListener("SIGTERM", stop);
+    process.removeListener("SIGINT", interrupt);
+    process.removeListener("SIGTERM", terminate);
   }
 }

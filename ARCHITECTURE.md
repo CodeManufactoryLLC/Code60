@@ -55,7 +55,9 @@ IDs bound to the controlling page. Agent gateways never receive this human API.
 
 The security contract is the authenticated loopback transport described above and
 in [SECURITY.md](SECURITY.md). Browser confirmation and chooser decisions belong
-to the controlling page. No browser capability installs services or replaces code.
+to the controlling page. No browser capability installs services or replaces Code60 itself. An explicit human
+action in provider setup may install the pinned Codex CLI into private, versioned
+Code60-managed user storage; it cannot select packages, commands or destinations.
 
 ## Runtime modules
 
@@ -85,10 +87,20 @@ npm run dev uses isolated config/state, a foreground Node backend and Vite Fast 
 Renderer changes preserve active backend work; backend changes restart gracefully.
 The optional Linux x64 development container isolates dependencies and caches,
 including for linked worktrees. Development-only port overrides support editor
+and standalone browser
 forwarding: each worktree reserves a stable gateway/Vite port pair in common Git
 metadata under an exclusive preparation lock. Generated container/editor settings
 use that same pair, supporting concurrent worktrees with independent cleanup and
-the original loopback origin and authentication intact. Explicit gateway ports require development assets;
+the original loopback origin and authentication intact. The contributor-only
+`npm run devcontainer -- start` command prepares container dependencies/models and
+owns foreground development plus two host-loopback TCP forwards over Docker exec
+stdio. Container listeners remain loopback-only; no Docker ports are published.
+A dedicated stdin control channel stops development gracefully before cancellation/failure
+cleanup removes its containers/images and retains caches. A worktree-specific private
+home volume retains container-created provider logins/configuration and tools. npm
+global installs use that home's `.local` prefix on PATH. The root initializer sees
+only named volumes and sets the home to mode 0700; no host credentials are imported.
+Provider state survives normal container/image cleanup. Explicit gateway ports require development assets;
 production still uses an allocated loopback port. See the
 [container workflow](.devcontainer/README.md). No user service is installed.
 Production is an npm tarball requiring Node 24 and npm, with compiled assets, notices and
@@ -1454,7 +1466,9 @@ The Code60 desktop app is the interactive interface. It is a standalone Electron
 
 - **Agent setup.** Every installation, including existing users with a legacy provider preference, must complete the desktop wizard once. The desktop-owned catalog presents Antigravity, Claude, Codex, Copilot, Droid, Kiro and OpenCode alphabetically with bundled logos in button cards that start detection and connection immediately on click or keyboard activation, without radio inputs or a Continue step. Wizard headings are 16px and text/controls 13px, independent of larger page-title preferences. Choose a Primary / Orchestrator, detect its executable and prerequisites, then initialize ACP and create a session without a prompt. Successful verification automatically commits through the existing main-process finish action, without add-another questions, review pages or confirmation dialogs. The result stays open with Close and an optional Add another agent action; failures offer Close and Retry. Save failures retain verification for an explicit save retry and never claim Connected. Each optional addition starts a new add transaction, preserving the saved primary and earlier successes even when a later attempt fails or is dismissed. Only Detected and Connected label agent status; progress and failures are separate. Settings offers Add agents and Change primary. Changing primary requires all active orchestration work to finish or stop; adding agents preserves live chats. Existing settings remain active until the verified connection is saved automatically.
 
-- **Setup transaction and probes.** The main process owns the candidate, role, phase, errors and verified set, recovered through snapshots after renderer reload. A single attempt runs at a time. Detection refreshes desktop PATH and checks provider-specific prerequisites; npx alone does not establish Claude/Codex detection. Configured command overrides remain authoritative. Existing npx adapters may download when connecting; Code60 never installs provider CLIs or stores login credentials. A probe initializes ACP and creates a session in a generated private `code60-agent-probe-*` temporary directory independent of the database. It sends no prompts and creates no runs, transcripts or worktrees. The existing 15-second timeout and process cleanup apply; stop the process before removing the directory. Cancellation, dismissal, config changes, renderer loss/reload and shutdown cancel attempts and discard stale completions. Completed verification stays in memory until committed or abandoned.
+- **Setup transaction and probes.** The main process owns the candidate, role, phase, errors and verified set, recovered through snapshots after renderer reload. A single attempt runs at a time. Detection refreshes desktop PATH and checks provider-specific prerequisites; npx alone does not establish Claude/Codex detection. Configured command overrides remain authoritative. Existing npx adapters may download when connecting; Code60 can explicitly install the pinned Codex CLI and initiate device-code login
+for its standard integration. Other provider CLIs remain externally installed.
+Codex owns its credential files; Code60 never stores authentication tokens. A probe initializes ACP and creates a session in a generated private `code60-agent-probe-*` temporary directory independent of the database. It sends no prompts and creates no runs, transcripts or worktrees. The existing 15-second timeout and process cleanup apply; stop the process before removing the directory. Cancellation, dismissal, config changes, renderer loss/reload and shutdown cancel attempts and discard stale completions. Completed verification stays in memory until committed or abandoned.
 
 - **Enabled agents.** The automatically invoked finish action atomically writes `agentSetup` version 1 to desktop preferences: primary provider, enabled IDs and SHA-256 identities of verified command argument arrays. Legacy preferences never satisfy this gate and available agents are never imported automatically. Persisted membership means configured, not a live connection. Automatic chat startup, manual and MCP worker dispatch, continuation, and saved run configuration validation require completed setup and an enabled provider with an unchanged command identity. Snapshots and MCP provider lists contain only enabled agents. Changing a verified command requires verification again. Core accepts resolved desktop configuration; scheduled execution uses its saved configuration and lifecycle. Native desktop defaults add `agy acp`, `copilot --acp --stdio`, and `kiro-cli acp`, retaining Claude/Codex npx adapters and the existing Droid/OpenCode commands.
 
@@ -2929,3 +2943,21 @@ crash may lose the last five-second interval (or more if storage writes failed).
 Undo restores checkpoint timing, clears anchors and freezes discarded plans.
 Owner teardown cancels timers; failed timing writes do not authorize or dispatch
 work. This adds no preference, agent-write field, IPC endpoint or dependency.
+
+
+## Codex setup installation and login
+
+Human-only setup actions install pinned Codex 0.171.0 into a versioned private
+managed directory, preserving existing installations. Authentication uses a short-lived
+Codex app-server over stdio, with structured device-code messages and no agent
+threads or prompts. ACP still verifies the final connection. Login challenges are
+ephemeral and readable only by their initiating controlling page, never shared
+snapshots, transcripts or diagnostics. Closing/reloading/taking control cancels
+pending attempts and stops owned processes; already-issued credentials are retained.
+The existing v1 verified-membership record remains unchanged. Native backends use
+their user home; containers retain provider state in their private home volume.
+
+The application and gateway-owned scheduler select the discovered Codex executable
+for the standard ACP adapter through its documented `CODEX_PATH` override, so probes
+and normal work use the same managed or installed CLI as login. Explicit backend
+`CODEX_PATH` and custom launch commands remain authoritative and use manual setup.

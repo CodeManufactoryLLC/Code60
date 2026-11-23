@@ -5,11 +5,13 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ApplicationHost,
+  codexProviderAgents,
   DesktopAutomations,
   DesktopLogStore,
   DesktopWorkflows,
   filePreferences,
   openProjectDatabase,
+  prepareCodexEnvironment,
   type TransmissionClient,
 } from "../application/index.js";
 import { startSchedulerRuntime } from "../automation/index.js";
@@ -92,7 +94,7 @@ export async function startGateway(options: GatewayOptions = {}) {
       options.developmentPort > 65535)
   )
     throw new Error("A development port between 1 and 65535 requires development assets.");
-  const env = options.env ?? process.env;
+  const env = await prepareCodexEnvironment(options.env ?? process.env);
   const assetsRoot = options.assets ?? fileURLToPath(new URL("../renderer/", import.meta.url));
   const assets = new Map<string, string>();
   if (!options.developmentAssets) {
@@ -177,7 +179,11 @@ export async function startGateway(options: GatewayOptions = {}) {
   let scheduler: Awaited<ReturnType<typeof startSchedulerRuntime>> | undefined;
   let schedulerError: string | null = null;
   try {
-    scheduler = await startSchedulerRuntime(env, options.deps ?? defaultDeps());
+    const schedulerDeps = options.deps ?? defaultDeps();
+    scheduler = await startSchedulerRuntime(env, {
+      ...schedulerDeps,
+      agents: codexProviderAgents(schedulerDeps.agents, env),
+    });
   } catch {
     schedulerError = "Scheduled jobs are unavailable. Check scheduler storage and ownership.";
   }

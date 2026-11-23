@@ -7,6 +7,7 @@ import type {
   Action,
   ActionResult,
   ChatUndoResult,
+  CodexSetupIdentity,
   Command,
   DeleteCommand,
   DesktopRun,
@@ -179,6 +180,7 @@ import { BrowserAutomation } from "./browser-automation.js";
 import { ChatCheckpoints } from "./chat-checkpoints.js";
 import { savedChatReferences } from "./chat-reference.js";
 import { ChatStore } from "./chat-store.js";
+import { codexProviderAgents, createCodexProvider } from "./codex-provider.js";
 import {
   type ChatSession,
   ConversationCoordinator,
@@ -1887,12 +1889,15 @@ export class ApplicationHost {
       });
   }
 
+  private readonly deps: CoreDeps;
   constructor(
-    private readonly deps: CoreDeps,
+    dependencies: CoreDeps,
     private readonly env: Readonly<Record<string, string | undefined>>,
     private readonly dialogs: DesktopDialogs,
     private readonly storage: DesktopStorage,
   ) {
+    const deps = { ...dependencies, agents: codexProviderAgents(dependencies.agents, this.env) };
+    this.deps = deps;
     this.modelDefaults = new ModelDefaults(storage.preferences, () => this.changed(null));
     this.memory = new MemoryService(
       join(stateHome(env), "code60", "memory"),
@@ -1933,7 +1938,9 @@ export class ApplicationHost {
       storage.ragModelRoot ?? fileURLToPath(new URL("../../models/", import.meta.url)),
       storage.ragExecutor,
     );
+    const codexProvider = createCodexProvider(this.env);
     this.agentSetup = new AgentSetup({
+      codex: codexProvider,
       command: (id) => this.config?.agents[id]?.command,
       detect: async (id, command, signal) => {
         if (this.storage.refreshPath) await this.storage.refreshPath(signal);
@@ -1943,6 +1950,10 @@ export class ApplicationHost {
             await desktopPath({ env: this.env, signal }),
           );
         signal.throwIfAborted();
+        if (id === "codex") {
+          const managed = await codexProvider.environment();
+          if (managed.PATH) setEnvironmentPath(this.env as NodeJS.ProcessEnv, managed.PATH);
+        }
         await (this.storage.detectAgent ?? detectProvider)(id, command, this.env);
         signal.throwIfAborted();
       },
@@ -2269,6 +2280,18 @@ export class ApplicationHost {
   }
   cancelAgentSetup(request?: SetupIdentity): Promise<void> {
     return this.agentSetup.cancel(request);
+  }
+  startCodexSetup(request: SetupIdentity, owner: string, install: boolean) {
+    return this.exclusive(async () => {
+      await this.setConfig(desktopConfig(await loadConfig(this.deps.fs, this.env)));
+      return this.agentSetup.startCodex(request, owner, install);
+    });
+  }
+  readCodexSetup(request: CodexSetupIdentity, owner: string) {
+    return this.agentSetup.readCodex(request, owner);
+  }
+  cancelCodexSetup(request: CodexSetupIdentity, owner: string) {
+    return this.agentSetup.cancelCodex(request, owner);
   }
   abandonAgentSetup(request: SetupIdentity): Promise<void> {
     return this.exclusive(() => this.agentSetup.abandon(request));
