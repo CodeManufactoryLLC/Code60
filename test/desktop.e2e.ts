@@ -7375,8 +7375,7 @@ test("desktop: automatic project edits support ordinary corrections, pinned revi
       name: "Implement task loop",
       exact: true,
     });
-    await firstTask.getByRole("button").last().focus();
-    await page.keyboard.press("Enter");
+    await firstTask.getByRole("button").last().press("Enter");
     await expect(review.locator(".review-files")).toContainText("task.txt");
     // Opening the same immutable revision reuses the tab first opened by its quiet link.
     await openFileViews(page);
@@ -8132,8 +8131,12 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
       page.locator("#tab-settings"),
       page.locator("#advanced-toggle"),
       page.locator("#experiments-toggle"),
-    ])
-      if ((await disclosure.getAttribute("aria-expanded")) === "false") await disclosure.click();
+    ]) {
+      if ((await disclosure.getAttribute("aria-expanded")) === "false") {
+        await disclosure.click();
+        await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+      }
+    }
     const pageIcons = [
       ["tab-home", "app-home2"],
       ["tab-assistants", "app-assistants"],

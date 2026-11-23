@@ -11,7 +11,14 @@ export async function openFileViews(page: Page) {
 
 export async function selectFileView(page: Page, label: string, index = 0) {
   const list = await openFileViews(page);
-  await list.getByRole("option", { name: label, exact: true }).nth(index).click();
+  const option = list.getByRole("option", { name: label, exact: true }).nth(index);
+  if (label === "+ New Tab") {
+    // Navigate the last action into the list's viewport before pointer commit,
+    // rather than asking the automation's scrolling to move its outer surfaces.
+    await list.press("End");
+    await expect(option).toHaveAttribute("data-active", "true");
+  }
+  await option.click();
   await expect(page.getByRole("combobox", { name: "Files view", exact: true })).toBeFocused();
 }
 
