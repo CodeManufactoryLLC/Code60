@@ -20,11 +20,13 @@
     "src/application/rag-worker.ts",
     "src/application/memory-worker.ts",
     "scripts/dev-backend.mjs",
+    ".devcontainer/init-volumes.mjs",
     "test/fixtures/fake-transmission.mjs"
   ],
   "project": [
     "src/**/*.{ts,tsx,cts}",
     "scripts/**/*.{mjs,cjs}",
+    ".devcontainer/*.mjs",
     "test/**/*.{ts,tsx,mjs}",
     "*config*.ts"
   ],

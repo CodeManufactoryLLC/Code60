@@ -76,6 +76,11 @@ npm run dev
 
 Development uses isolated configuration/state under ignored `test-results/dev`, a foreground Node backend and Vite React Fast Refresh. It prints a browser address, plus a code only when pairing is enabled. UI edits preserve running agents; backend edits restart gracefully. Production login services and user data are untouched.
 
+An optional [Linux development container](.devcontainer/README.md) provides an
+isolated non-root x64 environment for development and headless browser tests.
+Docker Desktop is optional; the container uses a local Linux Docker engine with
+Compose v2. Native host development does not require Docker.
+
 ```sh
 npm run check
 npm run test:browser

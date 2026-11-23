@@ -4,24 +4,27 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { expect, it, vi } from "vitest";
+import { developmentPort } from "../scripts/dev-ports.mjs";
 
 const scriptUrl = new URL("../scripts/dev.mjs", import.meta.url).href;
 const source = (await readFile(new URL(scriptUrl), "utf8"))
   .replace(/^import .*;\r?$/gm, "")
   .replace(/^const \{ spawnOwnedProcess \} = await import\(.*\);\r?$/m, "")
   .replaceAll("import.meta.url", "scriptUrl");
-function session(pendingCommand) {
+function session(pendingCommand, env = {}) {
   const children = [];
   const signals = {};
   let changed;
   let scheduled;
+  const listeners = [];
+  let selectedPort = 1234;
   let release;
   const pending = new Promise((resolve) => {
     release = resolve;
   });
   const process = {
     execPath: "fixture-node",
-    env: {},
+    env,
     stdout: {},
     stderr: { write: vi.fn() },
     once: (name, action) => {
@@ -63,6 +66,7 @@ function session(pendingCommand) {
     return child;
   };
   const done = runInNewContext(`(async () => {\n${source}\n})()`, {
+    developmentPort,
     URL,
     scriptUrl,
     fileURLToPath,
@@ -74,10 +78,12 @@ function session(pendingCommand) {
     createServer: () => ({
       once() {},
       listen(_port, _host, ready) {
+        listeners.push([_port, _host]);
+        selectedPort = _port || 1234;
         ready();
       },
       address() {
-        return { port: 1234 };
+        return { port: selectedPort };
       },
       close(ready) {
         ready();
@@ -94,6 +100,7 @@ function session(pendingCommand) {
   });
   return {
     done,
+    listeners,
     children,
     process,
     signals,
@@ -117,6 +124,35 @@ it("restarts only the backend for compiled changes and stops every development p
   dev.signals.SIGTERM();
   await vi.waitFor(() => expect(dev.process.exitCode).toBe(143));
   for (const child of dev.children) expect(child.stop).toHaveBeenCalled();
+});
+it("selects an explicit loopback Vite port and preserves the gateway port across restarts", async () => {
+  const dev = session(undefined, { CODE60_VITE_PORT: "43161", CODE60_DEV_GATEWAY_PORT: "43160" });
+  await dev.done;
+  expect(dev.listeners).toEqual([[43161, "127.0.0.1"]]);
+  expect(dev.children.find((child) => child.command.includes("--strictPort")).command).toContain(
+    "43161",
+  );
+  dev.change();
+  await vi.waitFor(() => expect(dev.apps()).toHaveLength(2));
+  expect(dev.process.env.CODE60_DEV_GATEWAY_PORT).toBe("43160");
+  dev.signals.SIGTERM();
+  await vi.waitFor(() => expect(dev.process.exitCode).toBe(143));
+});
+it("retains ephemeral Vite selection without overrides", async () => {
+  const dev = session();
+  await dev.done;
+  expect(dev.listeners).toEqual([[0, "127.0.0.1"]]);
+  dev.signals.SIGTERM();
+  await vi.waitFor(() => expect(dev.process.exitCode).toBe(143));
+});
+it.each([
+  { CODE60_VITE_PORT: "65536" },
+  { CODE60_DEV_GATEWAY_PORT: "invalid" },
+  { CODE60_VITE_PORT: "43160", CODE60_DEV_GATEWAY_PORT: "43160" },
+])("rejects invalid or overlapping development ports before spawning (%j)", async (env) => {
+  const dev = session(undefined, env);
+  await expect(dev.done).rejects.toThrow(/ports must differ|between 1 and 65535/);
+  expect(dev.children).toEqual([]);
 });
 it("stops Vite and the compiler when the backend fails", async () => {
   const dev = session();

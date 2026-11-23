@@ -64,7 +64,7 @@ npm run dev
 ```
 
 Development serves React through Vite Fast Refresh and an isolated foreground
-backend. It prints the loopback URL and pairing code; no login service or native
+backend. It prints the loopback URL and, when enabled, a pairing code; no login service or native
 window is created. Backend changes restart that development backend; renderer
 changes preserve it.
 
@@ -79,6 +79,19 @@ They must never require live agents or credentials.
 `npm run test:packaged` installs it in a temporary prefix and checks the CLI,
 assets, foreground backend and offline embedding model without service enrollment.
 `npm run test:rag:model` exercises the actual offline model and worker lifecycle.
+
+### Linux development container
+
+Use the [Linux development container](.devcontainer/README.md) for a non-root
+Linux x64 environment with isolated dependencies and model/browser caches.
+Run `npm run devcontainer -- prepare` after host dependency installation, then
+use the documented editor or terminal workflow. Docker must already be running.
+Always finish a test session with `npm run devcontainer -- down`; it removes owned
+containers and exported images while preserving caches and test evidence.
+
+The editor workflow uses fixed loopback development ports 43160 (gateway) and
+43161 (Vite), forwarded without remapping. Ordinary host development keeps its
+existing allocated ports. The container does not validate native login services.
 
 ### Workflow QA
 
@@ -132,8 +145,8 @@ Desktop Stop all and quit do not stop service-owned automations.
 branches, functions and lines. The checker never rewrites it. Add meaningful tests
 before raising a floor; lowering a floor requires an explicit reviewed baseline
 change with a reason. Do not exclude executable code to improve coverage. The
-matching Vitest V8 provider includes unimported production files, including the
-CommonJS preload. Only tests and declarations are excluded. Keep the coverage
+matching Vitest V8 provider includes unimported production files.
+Only tests and declarations are excluded. Keep the coverage
 provider exactly aligned with Vitest when changing either dependency.
 
 `npm test` and `npm run test:watch` remain available without coverage. `check`
@@ -152,16 +165,13 @@ worker assets remain discoverable through build/Vite/packaging entry points.
 `test/unused-gates.test.mjs` also runs Knip on a fixture containing deliberate
 unused files, exports and a dependency, without suppressing categories.
 
-The explicit external-binary exceptions are `mkfifo` (POSIX storage fixtures)
-and `openbox` (the isolated Linux caption-control journey). Openbox is supplied by
-the container/CI operating-system packages and stopped by its owning test; it is
-not an npm executable. These exceptions do not exclude code, exports or issue
-categories from analysis.
+The external-binary exception is `mkfifo`, used by POSIX storage fixtures.
+It does not exclude code, exports or issue categories from analysis.
 
-The only dependency exceptions are `@wyw-in-js/shared` and `app-builder-lib`:
+The only dependency exception is `@wyw-in-js/shared`:
 `test/dependency-compatibility.test.ts` intentionally inspects these installed
 transitive dependencies to verify security overrides without adding them as
-runtime dependencies. `mkfifo` is an OS binary used by POSIX file-safety tests.
+runtime dependencies.
 Document any new exception narrowly. Remove code only after verifying it is not
 an entry point or dynamic asset.
 

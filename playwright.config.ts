@@ -1,8 +1,10 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./test",
+  outputDir: "test-results/browser",
   testMatch: [
     "browser-workflow.e2e.ts",
+    "development.e2e.ts",
     "browser-features.e2e.ts",
     "file-browser.e2e.ts",
     "transmission-workflow.e2e.ts",

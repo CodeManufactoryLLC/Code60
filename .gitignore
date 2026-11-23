@@ -24,6 +24,7 @@ playwright-report/
 # Local IDE settings
 .idea/
 .vscode/
+.devcontainer/local/
 
 # Operating system metadata
 .DS_Store

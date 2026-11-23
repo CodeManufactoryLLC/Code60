@@ -53,6 +53,7 @@ export interface GatewayOptions {
   assets?: string;
   modelRoot?: string;
   developmentAssets?: string;
+  developmentPort?: number;
   onStop?: () => Promise<void>;
   workflowClients?: { current: TransmissionClient; legacy: TransmissionClient };
 }
@@ -83,6 +84,14 @@ const mime: Record<string, string> = {
 
 /** One application owner and scheduler; clients never construct runtimes or open stores. */
 export async function startGateway(options: GatewayOptions = {}) {
+  if (
+    options.developmentPort !== undefined &&
+    (!options.developmentAssets ||
+      !Number.isInteger(options.developmentPort) ||
+      options.developmentPort < 1 ||
+      options.developmentPort > 65535)
+  )
+    throw new Error("A development port between 1 and 65535 requires development assets.");
   const env = options.env ?? process.env;
   const assetsRoot = options.assets ?? fileURLToPath(new URL("../renderer/", import.meta.url));
   const assets = new Map<string, string>();
@@ -619,7 +628,7 @@ export async function startGateway(options: GatewayOptions = {}) {
   try {
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
-      server.listen(0, "127.0.0.1", resolve);
+      server.listen(options.developmentPort ?? 0, "127.0.0.1", resolve);
     });
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("Could not bind the backend.");

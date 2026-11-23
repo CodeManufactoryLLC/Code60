@@ -25,7 +25,7 @@ Use the existing harness, not a new QA plugin or a live agent.
 ## Exercise the production path
 
 - Drive visible controls through the real renderer, loopback API, bridge and main
-  process. The checked-in golden path is `test/agent-workflow.e2e.ts`.
+  process. The checked-in golden path is `test/browser-workflow.e2e.ts`.
 - Start first-use journeys in isolated HOME/config/state with **no saved verified
   setup**. A fixture may configure the fake provider executable, but cannot mark
   setup complete. Create the database and open the project through the UI.

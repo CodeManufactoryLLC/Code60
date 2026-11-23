@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { rm } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { cleanBuild } from "./clean-build.mjs";
 
-await rm(new URL("../dist/", import.meta.url), { recursive: true, force: true });
+await cleanBuild(fileURLToPath(new URL("../dist/", import.meta.url)));
 for (const args of [
   ["node_modules/typescript/bin/tsc", "-p", "tsconfig.build.json"],
   ["node_modules/vite/bin/vite.js", "build"],

@@ -83,6 +83,12 @@ pause settings, and never replays uncertain work. Status reads never repair or i
 
 npm run dev uses isolated config/state, a foreground Node backend and Vite Fast Refresh.
 Renderer changes preserve active backend work; backend changes restart gracefully.
+The optional Linux x64 development container isolates dependencies and caches,
+including for linked worktrees. Development-only port overrides support editor
+forwarding: gateway 43160 and Vite 43161, with the original loopback origin and
+authentication intact. Explicit gateway ports require development assets;
+production still uses an allocated loopback port. See the
+[container workflow](.devcontainer/README.md). No user service is installed.
 Production is an npm tarball requiring Node 24 and npm, with compiled assets, notices and
 explicitly prepared pinned models. Updates are manual: stop, replace package, repair service,
 start. Release preparation and protected-branch/version/tag rules remain in RELEASING.md.

@@ -33,6 +33,10 @@ environments.
   The scheduler uses its fixed internal service entrypoint.
 - `npm run dev` starts an isolated foreground Node backend and Vite with Fast Refresh.
   `npm start` opens the installed backend in a browser.
+- The optional [Linux dev container](.devcontainer/README.md) uses
+  `npm run devcontainer` on the host with `prepare`, `up`, `exec` or `down`. Docker must already
+  be running. Keep container dependencies separate from host files; clean up owned
+  containers and exported images after tests, retaining documented caches.
 - Run browser journeys with `npm run test:browser` using headless Playwright and isolated
   HOME/config/state. They exercise the built Node backend and real UI. Never install a
   real user service or use live providers during routine testing. Native service validation
