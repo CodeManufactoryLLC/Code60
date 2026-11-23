@@ -865,6 +865,18 @@
   flex-wrap: wrap;
 }
 
+.composer-mode .neo-toggle {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.composer-mode .auto-approval-state {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .mode-trigger {
   min-width: 0;
   max-width: 100%;

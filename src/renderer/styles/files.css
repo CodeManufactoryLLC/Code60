@@ -219,7 +219,7 @@ button.file-open-link {
 }
 
 @media (max-width: 1200px) {
-  .chat-workspace-body[data-file-panel-open="true"] > .chat-conversations {
+  .chat-workspace-body > .chat-conversations {
     --stacked-transcript-min: 120px;
     flex: 1 0 auto;
     min-height: 300px;

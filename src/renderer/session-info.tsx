@@ -273,7 +273,10 @@ function AutoApprovalToggle({
           }
         }}
       >
-        Code60 auto-approval <span aria-hidden="true">{enabled ? "On" : "Off"}</span>
+        <span>Code60 auto-approval</span>
+        <span className="auto-approval-state" aria-hidden="true">
+          {enabled ? "On" : "Off"}
+        </span>
       </Toggle>
       {error && <span role="alert">Could not save Code60 auto-approval. Try again.</span>}
     </>
