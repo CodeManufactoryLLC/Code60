@@ -11,21 +11,18 @@ export async function workflowDirectoryIdentity(path: string): Promise<string> {
 }
 async function excerpt(root: string, name: string): Promise<string | null> {
   const path = join(root, name);
-  const before = await lstat(path, { bigint: true }).catch((error: NodeJS.ErrnoException) => {
-    if (error.code === "ENOENT") return null;
-    throw error;
-  });
-  if (!before) return null;
-  if (!before.isFile() || before.isSymbolicLink())
-    throw new Error("Unsafe repository context file");
   const file = await open(
     path,
-    constants.O_RDONLY | constants.O_NONBLOCK | (constants.O_NOFOLLOW ?? 0),
-  );
+    constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW,
+  ).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    if (error.code === "ELOOP") throw new Error("Unsafe repository context file");
+    throw error;
+  });
+  if (!file) return null;
   try {
     const start = await file.stat({ bigint: true });
-    if (before.dev !== start.dev || before.ino !== start.ino)
-      throw new Error("Repository context changed");
+    if (!start.isFile()) throw new Error("Unsafe repository context file");
     const buffer = Buffer.alloc(32_768);
     const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
     const end = await file.stat({ bigint: true });

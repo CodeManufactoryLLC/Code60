@@ -1,6 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
@@ -257,7 +266,8 @@ it("retains accepted records across desktop close, and refuses redirected worktr
     record.id,
   );
   expect(f.call).toHaveBeenCalledTimes(1);
-  await rm(record.worktree, { recursive: true });
+  // Keep the old inode allocated while modeling directory replacement.
+  await rename(record.worktree, record.worktree + ".original");
   await mkdir(record.worktree);
   const read = (await reopened.request({ action: "read", id: record.id })) as WorkflowRead;
   expect(read.connected).toBe(false);

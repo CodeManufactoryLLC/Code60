@@ -108,6 +108,28 @@ function state(run) {
     ...(run.decision ? { decision: run.decision } : {}),
   };
 }
+function start(args) {
+  let run = [...runs.values()].find((r) => r.plan.idempotencyKey === args.idempotencyKey);
+  if (!run) {
+    run = {
+      id: randomUUID(),
+      plan: args,
+      status: "running",
+      mode: "implementing",
+      accepted: [],
+      events: [],
+    };
+    run.worker = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      stdio: "ignore",
+    });
+    writeFileSync(join(args.repository, "workflow-result.txt"), "isolated fixture result\n");
+    runs.set(run.id, run);
+    event(run, "started");
+    event(run, "tool", { session: "worker", detail: "Read fixture file: pending" });
+    event(run, "tool", { session: "worker", detail: "Read fixture file: completed" });
+  }
+  return run;
+}
 const server = createServer(async (req, res) => {
   res.setHeader("content-type", "application/json");
   if (req.headers.authorization !== `Bearer ${token}`) {
@@ -132,25 +154,7 @@ const server = createServer(async (req, res) => {
     }
     let run = args.runId ? runs.get(args.runId) : undefined;
     if (operation === "start_workflow") {
-      run = [...runs.values()].find((r) => r.plan.idempotencyKey === args.idempotencyKey);
-      if (!run) {
-        run = {
-          id: randomUUID(),
-          plan: args,
-          status: "running",
-          mode: "implementing",
-          accepted: [],
-          events: [],
-        };
-        run.worker = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
-          stdio: "ignore",
-        });
-        writeFileSync(join(args.repository, "workflow-result.txt"), "isolated fixture result\n");
-        runs.set(run.id, run);
-        event(run, "started");
-        event(run, "tool", { session: "worker", detail: "Read fixture file: pending" });
-        event(run, "tool", { session: "worker", detail: "Read fixture file: completed" });
-      }
+      run = start(args);
     }
     if (!run) throw new Error("Unknown workflow");
     if (operation === "get_workflow_events") {
@@ -236,6 +240,11 @@ await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 writeFileSync(join(root, "endpoint.json"), JSON.stringify({ port: server.address().port, token }), {
   mode: 0o600,
 });
+if (process.argv[3] === "--retained") {
+  const run = start(JSON.parse(readFileSync(join(root, "fixture-plan.json"), "utf8")));
+  writeFileSync(join(root, "fixture-snapshot.json"), JSON.stringify(state(run)));
+  save();
+}
 writeFileSync(join(root, "fixture-ready"), String(process.pid));
 process.once("SIGTERM", () => {
   for (const run of runs.values()) run.worker?.kill("SIGTERM");

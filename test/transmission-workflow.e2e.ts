@@ -476,9 +476,32 @@ test("workflow: Transmission staging.18 retained history and controls use its or
     }),
   );
   await mkdir(engineRoot, { recursive: true, mode: 0o700 });
+  const definition = {
+    name: "Retained legacy workflow",
+    tasks: [
+      {
+        name: "Legacy task",
+        instructions: "Inspect saved files",
+        verify: "Read baseline",
+        checks: [],
+      },
+    ],
+    repairs: 2,
+    retries: 2,
+    autoApprove: true,
+  };
+  await writeFile(
+    join(engineRoot, "fixture-plan.json"),
+    JSON.stringify({
+      ...definition,
+      repository: worktree,
+      confirmed: true,
+      idempotencyKey: key,
+    }),
+  );
   const engine = spawn(
     process.execPath,
-    [join(root, "test/fixtures/fake-transmission.mjs"), engineRoot],
+    [join(root, "test/fixtures/fake-transmission.mjs"), engineRoot, "--retained"],
     { stdio: "ignore" },
   );
   const exit = new Promise<void>((done) => engine.once("exit", () => done()));
@@ -487,34 +510,7 @@ test("workflow: Transmission staging.18 retained history and controls use its or
     await expect
       .poll(() => readFile(join(engineRoot, "fixture-ready"), "utf8").catch(() => ""))
       .not.toBe("");
-    const endpoint = JSON.parse(await readFile(join(engineRoot, "endpoint.json"), "utf8"));
-    const definition = {
-      name: "Retained legacy workflow",
-      tasks: [
-        {
-          name: "Legacy task",
-          instructions: "Inspect saved files",
-          verify: "Read baseline",
-          checks: [],
-        },
-      ],
-      repairs: 2,
-      retries: 2,
-      autoApprove: true,
-    };
-    // Model the state left by the previous desktop and its already-running external engine.
-    const response = await fetch(`http://127.0.0.1:${endpoint.port}/start_workflow`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${endpoint.token}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        ...definition,
-        repository: worktree,
-        confirmed: true,
-        idempotencyKey: key,
-      }),
-    });
-    expect(response.ok).toBe(true);
-    const snapshot = await response.json();
+    const snapshot = JSON.parse(await readFile(join(engineRoot, "fixture-snapshot.json"), "utf8"));
     const now = new Date().toISOString();
     await writeFile(
       join(registry, "registry.json"),
