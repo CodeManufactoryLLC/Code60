@@ -96,7 +96,7 @@ Schema version: 1
 - Access: Projects heading → circular Add Project; project row → + (New Session); Projects page → New Project; project home → New Session; project row → red × (Close Project); project row → chevron (expand/collapse)
 - Prerequisite: database
 - Agent access: read
-- Confirmation: The authenticated host folder chooser allows directory creation within locally configured roots. Confirm the full selected path to open; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.
+- Confirmation: The authenticated host folder chooser allows directory creation within locally configured roots. Click to select a folder, double-click or press Enter to browse, then choose the folder. Confirm the full selected path to open. Back, Forward and Up navigate the chooser; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.
 - Limits: Opening or selecting a project is a human action; opening never initializes Git. Archiving the last displayed project chat returns to its home without a replacement. New Session explicitly creates a chat. Project chat auto-names are limited to 19 characters. Manual names and existing titles are unchanged. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.
 - Pages: `projects`, `project`, `chat`
 - Settings sections: none
@@ -176,7 +176,7 @@ Schema version: 1
 
 - ID: `files`
 - Status: shipped
-- Purpose: Browse files and bounded read-only previews in tabs owned by the individual chat or worker session. The Files view dropdown selects among open views; File Explorer, Changes and Memory Recall remain available alongside its + New Tab item. File/document views have Close current tab below the header.
+- Purpose: Browse files and bounded read-only previews in tabs owned by the individual chat or worker session. Select a tree row with one click. Double-click or press Enter to open a file or toggle a folder; the chevron also toggles it. The Files view dropdown selects among open views; File Explorer, Changes and Memory Recall remain available alongside its + New Tab item. File/document views have Close current tab below the header.
 - Access: Chat → upper-right corner of main content card → Toggle files panel
 - Prerequisite: runtime
 - Agent access: read

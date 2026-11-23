@@ -173,6 +173,16 @@ describe("browser capability catalog", () => {
       limitations: expect.stringContaining("Icon contrast spreads its shades"),
     });
   });
+  it("describes chooser and Explorer navigation", () => {
+    expect(
+      APPLICATION_CAPABILITIES.find((c) => c.id === "projects")?.confirmation.includes(
+        "Back, Forward and Up",
+      ),
+    ).toBe(true);
+    expect(APPLICATION_CAPABILITIES.find((c) => c.id === "files")?.purpose).toContain(
+      "Double-click or press Enter",
+    );
+  });
   it("locates the file panel toggle in the main content card corner", () => {
     expect(APPLICATION_CAPABILITIES.find((c) => c.id === "files")).toMatchObject({
       access: "Chat → upper-right corner of main content card → Toggle files panel",

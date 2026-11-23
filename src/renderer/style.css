@@ -53,17 +53,6 @@
   color: var(--text, #111);
   padding: 2px 8px;
 }
-.host-chooser {
-  max-height: 40vh;
-  overflow: auto;
-  list-style: none;
-  padding: 0;
-}
-.host-chooser button {
-  width: 100%;
-  text-align: left;
-  margin: 2px 0;
-}
 html,
 body,
 #root {

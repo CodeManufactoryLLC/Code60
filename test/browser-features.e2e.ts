@@ -195,11 +195,9 @@ test("browser: scheduled job runs in an isolated worktree while the browser is c
       );
     await form.getByRole("button", { name: "Choose repository", exact: true }).click();
     const chooser = first.page.getByRole("dialog", { name: "Choose folder", exact: true });
-    await chooser
-      .getByRole("button", { name: `Open folder ${fixture.directory}`, exact: true })
-      .click();
-    await chooser.getByRole("button", { name: "Open folder scheduled-repo", exact: true }).click();
-    await chooser.getByRole("button", { name: "Select this folder", exact: true }).click();
+    await chooser.getByRole("option", { name: fixture.directory, exact: true }).dblclick();
+    await chooser.getByRole("option", { name: "scheduled-repo", exact: true }).dblclick();
+    await chooser.getByRole("button", { name: "Choose folder", exact: true }).click();
     await first.page
       .getByRole("dialog", { name: "Use this automation repository?", exact: true })
       .getByRole("button", { name: "Confirm", exact: true })

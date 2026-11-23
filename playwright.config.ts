@@ -4,6 +4,7 @@ export default defineConfig({
   testMatch: [
     "browser-workflow.e2e.ts",
     "browser-features.e2e.ts",
+    "file-browser.e2e.ts",
     "transmission-workflow.e2e.ts",
     "renderer-replay.e2e.ts",
     "navigation-icons.e2e.ts",

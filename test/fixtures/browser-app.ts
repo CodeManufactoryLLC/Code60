@@ -53,8 +53,11 @@ export async function browserApp(
   }
   let gateway = await startGateway({ env, roots: [directory], assets: resolve("dist/renderer") });
   const contexts = new Set<Awaited<ReturnType<Browser["newContext"]>>>();
-  async function open() {
-    const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  async function open(options: { hasTouch?: boolean } = {}) {
+    const context = await browser.newContext({
+      viewport: { width: 1600, height: 1000 },
+      ...options,
+    });
     contexts.add(context);
     const page = await context.newPage();
     await page.goto(gateway.origin);
@@ -101,9 +104,9 @@ export async function createDatabase(page: Page, directory: string) {
     .getByRole("button", { name: "Create database…", exact: true })
     .click();
   const chooser = page.getByRole("dialog", { name: "Create database", exact: true });
-  await chooser.getByRole("button", { name: `Open folder ${directory}`, exact: true }).click();
+  await chooser.getByRole("option", { name: directory, exact: true }).dblclick();
   await chooser.getByLabel("Database filename", { exact: true }).fill("projects.sqlite");
-  await chooser.getByRole("button", { name: "Create database here", exact: true }).click();
+  await chooser.getByRole("button", { name: "Create database", exact: true }).click();
   await expect(chooser).toHaveCount(0);
 }
 export async function openProject(page: Page, directory: string, name: string) {
@@ -117,9 +120,9 @@ export async function openProject(page: Page, directory: string, name: string) {
     .getByRole("button", { name: "Open Folder", exact: true })
     .click();
   const chooser = page.getByRole("dialog", { name: "Choose folder", exact: true });
-  await chooser.getByRole("button", { name: `Open folder ${directory}`, exact: true }).click();
-  await chooser.getByRole("button", { name: `Open folder ${name}`, exact: true }).click();
-  await chooser.getByRole("button", { name: "Select this folder", exact: true }).click();
+  await chooser.getByRole("option", { name: directory, exact: true }).dblclick();
+  await chooser.getByRole("option", { name, exact: true }).click();
+  await chooser.getByRole("button", { name: "Choose folder", exact: true }).click();
   await page
     .getByRole("dialog", { name: "Open project?", exact: true })
     .getByRole("button", { name: "Confirm", exact: true })
