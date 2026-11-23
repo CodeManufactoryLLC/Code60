@@ -6,3 +6,7 @@ Pairing codes are optional and off by default. Direct entry still requires a
 same-origin JSON handshake and per-tab tokens; never remove auth checks from
 application operations or events. Only private local management can change pairing
 policy. Changes revoke page sessions/decisions, not approved work.
+
+Explicit ports are a Node-only development option requiring development assets.
+Production keeps allocated loopback ports; forwarded development access must use
+the exact gateway origin. Never loosen Host/Origin validation for container access.

@@ -14,7 +14,11 @@ afterEach(async () => {
     await rm(fixture.directory, { recursive: true, force: true });
   }
 });
-async function fixture(developmentAssets?: string, requirePairing?: boolean) {
+async function fixture(
+  developmentAssets?: string,
+  requirePairing?: boolean,
+  developmentPort?: number,
+) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-gateway-")));
   const assets = join(directory, "assets");
   await mkdir(assets);
@@ -39,10 +43,35 @@ async function fixture(developmentAssets?: string, requirePairing?: boolean) {
     assets,
     roots: [directory],
     ...(developmentAssets ? { developmentAssets } : {}),
+    ...(developmentPort === undefined ? {} : { developmentPort }),
   });
   owned.push({ directory, gateway });
   return { directory, gateway, env };
 }
+it("restricts explicit ports to valid development asset sessions", async () => {
+  await expect(startGateway({ developmentPort: 43160 })).rejects.toThrow(
+    "requires development assets",
+  );
+  for (const port of [0, -1, 1.5, 65536, Number.NaN])
+    await expect(
+      startGateway({ developmentAssets: "http://127.0.0.1:43161", developmentPort: port }),
+    ).rejects.toThrow("between 1 and 65535");
+});
+it("binds the requested development port while retaining strict origins", async () => {
+  const probe = createServer();
+  probe.listen(0, "127.0.0.1");
+  await once(probe, "listening");
+  const address = probe.address();
+  if (!address || typeof address === "string") throw new Error("Missing fixture port");
+  await new Promise<void>((resolveClose) => probe.close(() => resolveClose()));
+  const { gateway } = await fixture("http://127.0.0.1:43161", undefined, address.port);
+  expect(gateway.origin).toBe(`http://127.0.0.1:${address.port}`);
+  expect((await fetch(`${gateway.origin}/api/connection`)).status).toBe(200);
+  expect(
+    (await fetch(`${gateway.origin}/api/connection`, { headers: { Origin: "http://127.0.0.1:1" } }))
+      .status,
+  ).toBe(403);
+});
 it("authenticates operations, rejects hostile origins and serves only its asset manifest", async () => {
   const { gateway } = await fixture();
   const request = (path: string, value: unknown, headers: Record<string, string> = {}) =>

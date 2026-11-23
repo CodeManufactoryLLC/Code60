@@ -3,8 +3,13 @@ import { watch } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { developmentPort } from "./dev-ports.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
+const vitePort = developmentPort(process.env.CODE60_VITE_PORT, "CODE60_VITE_PORT");
+const gatewayPort = developmentPort(process.env.CODE60_DEV_GATEWAY_PORT, "CODE60_DEV_GATEWAY_PORT");
+if (vitePort !== undefined && vitePort === gatewayPort)
+  throw new Error("Development gateway and Vite ports must differ.");
 execFileSync(process.execPath, ["node_modules/typescript/bin/tsc", "-p", "tsconfig.build.json"], {
   cwd: root,
   stdio: "inherit",
@@ -14,7 +19,7 @@ const { spawnOwnedProcess } = await import("../dist/platform/index.js");
 const probe = createServer();
 await new Promise((resolve, reject) => {
   probe.once("error", reject);
-  probe.listen(0, "127.0.0.1", resolve);
+  probe.listen(vitePort ?? 0, "127.0.0.1", resolve);
 });
 const port = probe.address().port;
 await new Promise((resolve) => probe.close(resolve));

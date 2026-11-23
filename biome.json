@@ -19,7 +19,9 @@
       "src/**/*.css",
       "*.config.ts",
       "scripts/**/*.mjs",
-      "scripts/**/*.cjs"
+      "scripts/**/*.cjs",
+      ".devcontainer/*.json",
+      ".devcontainer/*.mjs"
     ]
   },
   "formatter": {
