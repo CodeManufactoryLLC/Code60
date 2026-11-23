@@ -13,9 +13,11 @@ The active policy:
 - Blocks force pushes and deletion.
 - Has no bypass actors, including administrators, apps, or deploy keys.
 
-The aggregate check requires both Linux Node 22.12/24 checks/builds, all three
-Linux desktop shards, and the separate DEB/AppImage installer job to succeed.
-These jobs start independently; failures, cancellations and skips block success.
+The aggregate check requires Linux Node 24 unit/static/coverage checks, browser
+journeys, installed npm package/offline-model smoke checks and clean installation
+acceptance plus pinned Linux platform-payload acceptance to succeed. Clean installation downloads the exact tarball produced
+by the package job; the other jobs start independently. Failures, cancellations
+and skips block aggregate success.
 macOS validation runs separately. Do not require release-only checks or enable a merge queue
 without first adding its `merge_group` CI trigger.
 

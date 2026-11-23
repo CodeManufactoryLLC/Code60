@@ -1,6 +1,24 @@
 export { resolveCommand } from "./command.js";
 export { DiagnosticTail, diagnosticMessage, diagnosticText } from "./diagnostics.js";
 export { environmentValue, mergeSearchPath, setEnvironmentPath, userHome } from "./environment.js";
+export {
+  absoluteInstallationPath,
+  createInstallationParents,
+  exclusiveInstallationLink,
+  executableInstallationFile,
+  type FileIdentity,
+  installationDirectory,
+  installationFileCode,
+  installationLink,
+  installationSnapshot,
+  installationTreeIdentity,
+  lockInstallation,
+  publishInstallationLink,
+  removeInstallationTree,
+  syncInstallationDirectory,
+  verifyInstallationNode,
+  writeInstallationFile,
+} from "./installation-files.js";
 export { isPrivateIPv4, primaryPrivateIPv4 } from "./lan-address.js";
 export { containedPath, samePath } from "./paths.js";
 export {

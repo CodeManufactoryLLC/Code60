@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
@@ -23,8 +23,13 @@ it("makes provider storage private without changing existing login files", async
   await writeFile(auth, '{"fixture":"retained"}', { mode: 0o600 });
   for (let n = 0; n < 2; n++) await initializeVolumes(root, process.getuid(), process.getgid());
   expect((await stat(join(root, "home"))).mode & 0o777).toBe(0o700);
-  expect((await stat(auth)).mode & 0o777).toBe(0o600);
-  expect(await readFile(auth, "utf8")).toBe('{"fixture":"retained"}');
+  const file = await open(auth, "r");
+  try {
+    expect((await file.stat()).mode & 0o777).toBe(0o600);
+    expect(await file.readFile("utf8")).toBe('{"fixture":"retained"}');
+  } finally {
+    await file.close();
+  }
 });
 
 it("refuses a symlink in place of the provider home", async () => {

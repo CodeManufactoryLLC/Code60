@@ -110,6 +110,32 @@ Headless Playwright exercises the built browser/backend path on host or CI; nati
 changes use fake supervisors unless separately authorized. Old Electron tests and native
 installer gates are replaced by browser journeys and clean-prefix tarball checks.
 
+Clean installation acceptance additionally runs the installed tarball outside the
+checkout in a non-root Linux customer container. A separate browser driver shares
+its isolated loopback namespace; only installation may access public npm. The
+installed prefix is read-only at runtime, and the existing golden journey is shared
+between checkout and installed-package fixtures. This is test tooling, not a new
+installation command or native service validation.
+
+Phase 3 additionally builds unpublished platform payloads for macOS arm64 and
+Linux x64 from fresh locked production dependencies, with bundled native CPU
+libraries, assets, models, notices and provenance. A separate private npm bootstrap
+embeds both exact descriptors and uses only Node built-ins for bounded download,
+verification and safe extraction into private staging. Its executable provides
+help/version only; public setup, persistent installation and release activation
+remain later work. The legacy npm tarball stays available. See the
+[artifact workflow](docs/distribution/artifacts.md). No product capability changes.
+
+Phase 4 adds internal managed installation orchestration in management, with
+ownership, filesystem and publication primitives in platform. The private bootstrap
+carries only that Node-only dependency closure and the existing artifact verifier.
+Private receipts, non-reclaiming installation locks, immutable activation generations
+and an atomic current symlink make ~/.local/bin/code60 independent of npm's cache.
+Shell edits require a preview and explicit interactive approval; user profiles are
+never executed for discovery. No legacy migration, public setup, database/service
+initialization, implicit update or uninstall is introduced. See the
+[installation internals](docs/distribution/installation.md).
+
 ## Current exclusions
 
 No Electron shell, native window effects, automatic updater, bundled Node, public/internet

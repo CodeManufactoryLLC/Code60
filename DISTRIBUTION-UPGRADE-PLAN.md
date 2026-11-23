@@ -35,7 +35,7 @@ service/shell changes still require clear instructions or consent.
 ### Existing implementation
 
 - Code60 is a browser-only Node application supporting macOS Apple Silicon and
-  Linux x64. There is no dev container or current Docker development harness.
+  Linux x64. Phases 1–2 add an isolated dev container and Docker acceptance harness.
 - The management CLI already implements open, service and pairing operations.
   The gateway owns the application and scheduler; native service controls have
   injectable test boundaries.
@@ -167,6 +167,13 @@ a linked worktree. No host service, provider credential or shell profile changes
 
 ## Phase 2 — Clean installation acceptance harness
 
+**Status:** implemented. Fresh non-root Linux x64 customer/driver runs pass the
+installed golden journey, offline model and negative probes. Concurrent runs and
+independent cleanup are validated; terminal cancellation exits 130 with verified
+owned cleanup. Installation may access public npm; runtime networking is disabled.
+Real native service validation remains outside this harness. Required PR CI must
+pass before delivery.
+
 **PR outcome:** packaged installation is tested independently of the configured
 development environment.
 
@@ -195,6 +202,15 @@ unproven when a fake supervisor is used.
 **Depends on:** Phase 1.
 
 ## Phase 3 — Platform payloads and bootstrap artifacts
+
+**Status:** implemented and locally validated. Fresh Linux x64 and native macOS
+arm64 payloads pass CLI/backend/assets and real offline CPU/model smoke checks.
+The Linux payload completes the shared first-use golden journey and fault probes;
+two concurrent runs verify independent cleanup. A private bootstrap containing both
+real descriptors passes packed CLI and staging/model acceptance. Required PR CI
+and exact-commit native workflow validation must pass before delivery. No artifact
+publication, real login service or public setup is included. See the
+[artifact workflow](docs/distribution/artifacts.md).
 
 **PR outcome:** release tooling produces verified, installable macOS arm64 and
 Linux x64 application payloads plus a small npm bootstrap.
@@ -225,6 +241,16 @@ platforms, malformed archives and missing assets fail before activation.
 **Depends on:** Phase 2.
 
 ## Phase 4 — Persistent installation, launcher and shell integration
+
+**Status:** implemented and locally validated. Managed installation, cache-independent
+launchers, explicit owned repair, atomic activation, non-reclaiming locks and
+previewed shell integration are covered by focused and full checks. Linux Bash,
+zsh and fish startup cases and concurrent managed golden journeys pass; native
+Bash/zsh and packed-bootstrap managed smoke pass on this Mac. Fish is unavailable
+on this host and is required on the disposable native CI runner. Required PR CI
+and exact-commit native validation must pass before delivery. This is the first
+supported layout, with no legacy recognition, migration or compatibility layer.
+Public setup remains Phase 5. See [installation internals](docs/distribution/installation.md).
 
 **PR outcome:** an installed release has a durable `code60` command independent
 of npm's cache.

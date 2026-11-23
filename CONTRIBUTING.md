@@ -80,6 +80,13 @@ They must never require live agents or credentials.
 assets, foreground backend and offline embedding model without service enrollment.
 `npm run test:rag:model` exercises the actual offline model and worker lifecycle.
 
+For independent Linux installation acceptance, build the tarball and run
+`npm run test:packaged:clean` on the host. The [clean-install guide](test/clean-install/README.md)
+describes the fresh customer environment, separate browser driver, online installation
+and offline runtime checks. It reuses the complete golden journey and preserves
+evidence under `test-results/clean-install`. This additional CI gate does not
+replace existing browser, package or model checks.
+
 ### Linux development container
 
 Use the [Linux development container](.devcontainer/README.md) for a non-root
@@ -396,7 +403,25 @@ contribution under the project's license. Use your own name and email.
 ## Browser and package CI
 
 PRs and main pushes run Linux Node 24 unit/static/coverage checks, browser journeys
-and clean-prefix npm package/offline-model smoke tests. The aggregate required
+and clean-prefix npm package/offline-model smoke tests. A dependent clean-install
+job tests that exact package in isolated customer/driver containers. The aggregate required
 check remains **CI passed**. Manual native validation runs on macOS Apple Silicon
 with Node 24. No native installer or automatic publisher remains. Actual launchd
 and systemd login/update lifecycle checks are required before release claims.
+
+## Platform distribution candidates
+
+See the [artifact workflow](docs/distribution/artifacts.md) for `npm run package:payload`,
+`npm run test:payload`, `npm run package:bootstrap` and clean installed-payload
+acceptance. Build Linux in the pinned amd64 container and macOS on Apple Silicon.
+Retain per-run evidence and remove owned test resources; do not publish artifacts,
+install a login service or enable public setup during this contributor workflow.
+
+## Managed installation acceptance
+
+See [installation internals](docs/distribution/installation.md). Standard tests build
+the narrow Node-only distribution closure for real launcher subprocesses.
+`npm run test:installation` exercises isolated shell fixtures; require fish in the
+Linux container and disposable native runner. The managed clean-install mode adds
+the full installed production golden journey after removing bootstrap/npm caches.
+No contributor check edits your profiles or installs your login service.

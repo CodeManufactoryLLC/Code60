@@ -75,6 +75,20 @@ environments.
   HOME/config/state. They exercise the built Node backend and real UI. Never install a
   real user service or use live providers during routine testing. Native service validation
   requires an explicitly isolated/authorized environment. Unit/static checks do not prove E2E success.
+- Run `npm run test:packaged:clean` on the host for the
+  [clean installation acceptance harness](test/clean-install/README.md), after building
+  the tarball. It isolates the installed customer from the checkout and browser driver;
+  preserve its run-specific evidence and verify owned Docker cleanup. Never mount
+  the Docker socket into a development or customer container to run it.
+- For platform artifact changes, follow the [artifact workflow](docs/distribution/artifacts.md).
+  Preserve legacy tarball acceptance and run the payload mode separately. Build
+  native dependencies on their actual target, keep scripts disabled during fresh
+  staging, and never substitute emulation for native macOS evidence. Private
+  bootstrap candidates expose help/version only until installation phases land.
+- Managed installation changes follow the [installation internals](docs/distribution/installation.md).
+  Run the managed clean-install mode and real shell tests as well as artifact-only
+  regression checks. Installer APIs stay internal; do not install a real service,
+  edit this user's profiles, add legacy compatibility or reclaim uncertain locks.
 - Put unit tests next to the code as `*.test.ts`. Cross-cutting tests live in
   `test/`. `test/boundaries.test.ts` enforces the module dependency rules from
   `ARCHITECTURE.md`; update it only together with that document.

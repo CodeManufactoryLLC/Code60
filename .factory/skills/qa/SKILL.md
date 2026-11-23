@@ -66,6 +66,21 @@ Use the existing harness, not a new QA plugin or a live agent.
 - Build with `npm run package:app`, then run `npm run test:packaged` to verify an
   installed npm tarball, bundled browser assets and offline embedding assets.
   This smoke test does not install a login service.
+- For clean installation changes, also run `npm run test:packaged:clean` on the host
+  after packaging. Follow the [harness guide](../../../test/clean-install/README.md).
+  Its separate driver reuses the golden scenario against an installed, offline
+  customer runtime; preserve run-specific traces and verified Docker cleanup.
+- Platform payload changes additionally follow the [artifact workflow](../../../docs/distribution/artifacts.md):
+  run `npm run test:payload` on each supported target and the explicit Linux
+  payload mode of the clean-install harness. Preserve the existing tarball journey.
+  Verify extraction needs no npm/compiler/scripts and record both targets' exact
+  descriptors, model results and owned staging/process cleanup. Bootstrap help and
+  unavailable setup are acceptance checks, not evidence of a working installer.
+- Managed installation changes follow the [installation internals](../../../docs/distribution/installation.md).
+  Exercise the managed clean-install mode after cache removal and real login/
+  interactive shells. Keep artifact-only and legacy journeys independent. Assert
+  owned receipts/current pointer, command identity, preserved profile contents,
+  cancellation and lock behavior. Never edit host profiles or install host fish.
 - If a required runtime, browser, model or platform is unavailable, mark that
   journey BLOCKED. Do not substitute static checks for runtime evidence.
 - Close test browser contexts, isolated gateways and provider processes on every

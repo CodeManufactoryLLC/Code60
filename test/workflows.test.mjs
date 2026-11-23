@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
@@ -56,7 +55,13 @@ describe("branch protection policy", () => {
     expect(ci.on.pull_request).toBeNull();
     expect(ci.on.push).toEqual({ branches: ["main"] });
     expect(ci.jobs.passed.if).toBe("always()");
-    expect(ci.jobs.passed.needs).toEqual(["check", "browser", "package"]);
+    expect(ci.jobs.passed.needs).toEqual([
+      "check",
+      "browser",
+      "package",
+      "clean-install",
+      "payload",
+    ]);
   });
 });
 
@@ -71,6 +76,42 @@ describe("browser and package validation", () => {
       ).toBe(true);
     expect(ci.jobs.browser.steps.some((step) => step.run === "npm run test:browser")).toBe(true);
     expect(ci.jobs.package.steps.some((step) => step.run === "npm run test:packaged")).toBe(true);
+    expect(ci.jobs["clean-install"].needs).toBe("package");
+    expect(ci.jobs["clean-install"]["timeout-minutes"]).toBe(30);
+    expect(
+      ci.jobs["clean-install"].steps.some(
+        (step) =>
+          step.name === "Prepare isolated runner Docker engine" && step["timeout-minutes"] === 2,
+      ),
+    ).toBe(true);
+    expect(
+      ci.jobs["clean-install"].steps.some((step) => step.run === "npm run test:packaged:clean"),
+    ).toBe(true);
+    expect(ci.jobs.passed.steps[0].env.CLEAN_INSTALL).toContain("needs.clean-install.result");
+    expect(
+      ci.jobs.payload.steps.some(
+        (step) => step.run === "npm run devcontainer -- exec npm run package:payload",
+      ),
+    ).toBe(true);
+    expect(
+      ci.jobs.payload.steps.some(
+        (step) =>
+          step.run === "npm run test:packaged:clean -- --payload release/payloads/linux-x64.json",
+      ),
+    ).toBe(true);
+    expect(ci.jobs.passed.steps[0].env.PAYLOAD).toContain("needs.payload.result");
+    expect(
+      ci.jobs.payload.steps.some(
+        (step) =>
+          step.run === "npm run test:packaged:clean -- --managed release/payloads/linux-x64.json",
+      ),
+    ).toBe(true);
+    expect(
+      ci.jobs.payload.steps.some(
+        (step) =>
+          step.run === "npm run devcontainer -- exec npm run test:installation -- --require-fish",
+      ),
+    ).toBe(true);
     expect(JSON.stringify(ci)).not.toContain("electron");
   });
   it("runs native Apple Silicon validation without signing secrets or real service installation", () => {
@@ -86,6 +127,12 @@ describe("browser and package validation", () => {
     expect(Object.keys(release.on)).toEqual(["workflow_dispatch"]);
     expect(release.jobs.preflight.if).toBe("github.ref == 'refs/heads/main'");
     expect(release.jobs.package.needs).toEqual(["preflight", "mac"]);
+    expect(release.jobs.payload.env).toEqual({ COMPOSE_BAKE: "false" });
+    expect(release.jobs.bootstrap.needs).toEqual(["preflight", "mac", "payload"]);
+    expect(nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:payload")).toBe(
+      true,
+    );
+    expect(JSON.stringify(release)).not.toContain("npm publish");
     expect(release.permissions).toEqual({ contents: "read" });
     expect(packageJson.scripts["test:browser"]).toBe("npm run build && playwright test");
   });

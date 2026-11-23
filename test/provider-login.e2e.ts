@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, open, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { browserApp } from "./fixtures/browser-app.js";
@@ -94,11 +94,15 @@ test("browser: fresh Codex install, private device login, ACP verification, save
     expect(JSON.parse(states).agentSetup.version).toBe(1);
     expect(states).not.toMatch(/QA60|auth\.openai/);
     for (const name of await readdir(join(fixture.directory, "state"), { recursive: true })) {
-      const file = join(fixture.directory, "state", name);
-      if ((await stat(file)).isFile())
-        expect(await readFile(file, "utf8")).not.toMatch(
-          /QA60-1234|PRIVATE_PROVIDER_ERROR|auth\.openai\.com\/codex\/device/,
-        );
+      const file = await open(join(fixture.directory, "state", name), "r");
+      try {
+        if ((await file.stat()).isFile())
+          expect(await file.readFile("utf8")).not.toMatch(
+            /QA60-1234|PRIVATE_PROVIDER_ERROR|auth\.openai\.com\/codex\/device/,
+          );
+      } finally {
+        await file.close();
+      }
     }
     await fixture.restart();
     const reopened = await fixture.open();
