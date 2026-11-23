@@ -115,6 +115,7 @@ describe("browser and package validation", () => {
     expect(Object.keys(release.on)).toEqual(["workflow_dispatch"]);
     expect(release.jobs.preflight.if).toBe("github.ref == 'refs/heads/main'");
     expect(release.jobs.package.needs).toEqual(["preflight", "mac"]);
+    expect(release.jobs.payload.env).toEqual({ COMPOSE_BAKE: "false" });
     expect(release.jobs.bootstrap.needs).toEqual(["preflight", "mac", "payload"]);
     expect(nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:payload")).toBe(
       true,

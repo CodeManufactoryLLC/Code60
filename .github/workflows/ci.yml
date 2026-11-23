@@ -102,6 +102,9 @@ jobs:
     name: Linux platform payload acceptance
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # The runner's Compose 2.x Bake path omits the CLI's temporary Dockerfile grant.
+    # Scope the classic builder selection to this disposable job only.
+    env: { COMPOSE_BAKE: "false" }
     steps:
       - uses: actions/checkout@v7
         with: { persist-credentials: false }

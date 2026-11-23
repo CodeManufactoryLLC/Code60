@@ -93,3 +93,8 @@ The manual native workflow accepts an exact PR commit and retains the macOS payl
 manual release generation verifies both targets against its clean selected commit
 before assembling the bootstrap. It uploads workflow artifacts only, with no npm
 publication or GitHub Release asset mutation.
+
+CI scopes `COMPOSE_BAKE=false` to its disposable Linux payload job so the runner's
+Compose 2.x uses its classic builder with the Dev Container CLI's temporary
+Dockerfile. This does not change the host Docker configuration or disable
+filesystem entitlement checks. See [Compose builder selection](https://docs.docker.com/compose/how-tos/dependent-images/).
