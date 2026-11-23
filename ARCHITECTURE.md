@@ -98,6 +98,13 @@ Headless Playwright exercises the built browser/backend path on host or CI; nati
 changes use fake supervisors unless separately authorized. Old Electron tests and native
 installer gates are replaced by browser journeys and clean-prefix tarball checks.
 
+Clean installation acceptance additionally runs the installed tarball outside the
+checkout in a non-root Linux customer container. A separate browser driver shares
+its isolated loopback namespace; only installation may access public npm. The
+installed prefix is read-only at runtime, and the existing golden journey is shared
+between checkout and installed-package fixtures. This is test tooling, not a new
+installation command or native service validation.
+
 ## Current exclusions
 
 No Electron shell, native window effects, automatic updater, bundled Node, remote/LAN

@@ -66,6 +66,10 @@ Use the existing harness, not a new QA plugin or a live agent.
 - Build with `npm run package:app`, then run `npm run test:packaged` to verify an
   installed npm tarball, bundled browser assets and offline embedding assets.
   This smoke test does not install a login service.
+- For clean installation changes, also run `npm run test:packaged:clean` on the host
+  after packaging. Follow the [harness guide](../../../test/clean-install/README.md).
+  Its separate driver reuses the golden scenario against an installed, offline
+  customer runtime; preserve run-specific traces and verified Docker cleanup.
 - If a required runtime, browser, model or platform is unavailable, mark that
   journey BLOCKED. Do not substitute static checks for runtime evidence.
 - Close test browser contexts, isolated gateways and provider processes on every

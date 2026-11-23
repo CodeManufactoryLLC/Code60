@@ -21,7 +21,12 @@
     "src/application/memory-worker.ts",
     "scripts/dev-backend.mjs",
     ".devcontainer/init-volumes.mjs",
-    "test/fixtures/fake-transmission.mjs"
+    "test/fixtures/fake-transmission.mjs",
+    "test/clean-install/install.mjs",
+    "test/clean-install/runtime.mjs",
+    "test/clean-install/probe.mjs",
+    "test/clean-install/supervisor.mjs",
+    "test/clean-install/installed.config.ts"
   ],
   "project": [
     "src/**/*.{ts,tsx,cts}",

@@ -80,6 +80,13 @@ They must never require live agents or credentials.
 assets, foreground backend and offline embedding model without service enrollment.
 `npm run test:rag:model` exercises the actual offline model and worker lifecycle.
 
+For independent Linux installation acceptance, build the tarball and run
+`npm run test:packaged:clean` on the host. The [clean-install guide](test/clean-install/README.md)
+describes the fresh customer environment, separate browser driver, online installation
+and offline runtime checks. It reuses the complete golden journey and preserves
+evidence under `test-results/clean-install`. This additional CI gate does not
+replace existing browser, package or model checks.
+
 ### Linux development container
 
 Use the [Linux development container](.devcontainer/README.md) for a non-root
@@ -392,7 +399,8 @@ contribution under the project's license. Use your own name and email.
 ## Browser and package CI
 
 PRs and main pushes run Linux Node 24 unit/static/coverage checks, browser journeys
-and clean-prefix npm package/offline-model smoke tests. The aggregate required
+and clean-prefix npm package/offline-model smoke tests. A dependent clean-install
+job tests that exact package in isolated customer/driver containers. The aggregate required
 check remains **CI passed**. Manual native validation runs on macOS Apple Silicon
 with Node 24. No native installer or automatic publisher remains. Actual launchd
 and systemd login/update lifecycle checks are required before release claims.
