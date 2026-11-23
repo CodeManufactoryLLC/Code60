@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { sha256 } from "./distribution/acquire.mjs";
+import { bootstrapAdapter } from "./distribution/bootstrap-adapter.mjs";
 import { runCommand } from "./distribution/command.mjs";
 import { descriptorPair, nodeRange, targets } from "./distribution/descriptor.mjs";
 
@@ -55,15 +56,8 @@ export async function packageBootstrap(root, input, { signal } = {}) {
     await cp(join(root, "scripts/distribution/bootstrap.mjs"), join(temporary, "bin/code60.mjs"));
     for (const name of ["acquire.mjs", "archive.mjs", "descriptor.mjs"])
       await cp(join(root, "scripts/distribution", name), join(temporary, "lib", name));
-    await writeFile(
-      join(temporary, "lib/index.mjs"),
-      `import { readFile } from "node:fs/promises";
-import { acquirePayload } from "./acquire.mjs";
-import { platform } from "./descriptor.mjs";
-const descriptors = JSON.parse(await readFile(new URL("../platforms.json", import.meta.url), "utf8"));
-export function stagePayload(options) { return acquirePayload(descriptors[platform()], options); }
-`,
-    );
+    await cp(join(root, "build/distribution"), join(temporary, "lib/runtime"), { recursive: true });
+    await writeFile(join(temporary, "lib/index.mjs"), bootstrapAdapter);
     for (const name of ["LICENSE", "NOTICE", "TRADEMARKS.md"])
       await cp(join(root, name), join(temporary, name));
     const { stdout } = await execute(

@@ -26,10 +26,11 @@ await runCommand(async (signal) => {
       { signal },
     );
     assert.ok(
-      entries.every((entry) =>
-        /^package\/(?:bin\/code60\.mjs|lib\/(?:index|acquire|archive|descriptor)\.mjs|package\.json|platforms\.json|LICENSE|NOTICE|TRADEMARKS\.md)$/.test(
-          entry.path,
-        ),
+      entries.every(
+        (entry) =>
+          /^package\/(?:bin\/code60\.mjs|lib\/(?:index|acquire|archive|descriptor)\.mjs|package\.json|platforms\.json|LICENSE|NOTICE|TRADEMARKS\.md)$/.test(
+            entry.path,
+          ) || /^package\/lib\/runtime\/(?:management|platform)\/[a-z-]+\.js$/.test(entry.path),
       ),
     );
     const root = join(temporary, "unpacked/package");
@@ -54,7 +55,9 @@ await runCommand(async (signal) => {
       }),
       { code: 1 },
     );
-    const { stagePayload } = await import(pathToFileURL(join(root, "lib/index.mjs")).href);
+    const { stagePayload, installPayload } = await import(
+      pathToFileURL(join(root, "lib/index.mjs")).href
+    );
     const staged = await stagePayload({
       parent: temporary,
       signal,
@@ -72,6 +75,30 @@ await runCommand(async (signal) => {
       [join(repository, "scripts/distribution/probe-native.mjs"), staged.root],
       { env, cwd: temporary, signal, timeout: 120_000, maxBuffer: 1024 ** 2 },
     );
+    const home = join(temporary, "managed-home");
+    await mkdir(home, { mode: 0o700 });
+    const managedEnv = { ...env, HOME: home, SHELL: "/bin/bash" };
+    const managed = await installPayload({
+      env: managedEnv,
+      signal,
+      acquisition: {
+        transport: (url) =>
+          createReadStream(join(repository, "release/payloads", basename(new URL(url).pathname))),
+      },
+    });
+    await rm(join(temporary, "unpacked"), { recursive: true });
+    const persistent = await execute(managed.launcher, ["--help"], {
+      env: managedEnv,
+      cwd: "/",
+      signal,
+      timeout: 15000,
+    });
+    assert.match(persistent.stdout, /code60 service/);
+    await execute(
+      process.execPath,
+      [join(repository, "scripts/distribution/probe-native.mjs"), managed.release],
+      { env: managedEnv, cwd: "/", signal, timeout: 120000, maxBuffer: 1024 ** 2 },
+    );
     const output = join(repository, "test-results/bootstrap", `${Date.now()}-${process.pid}`);
     await mkdir(output, { recursive: true, mode: 0o700 });
     await writeFile(
@@ -83,6 +110,8 @@ await runCommand(async (signal) => {
           help: true,
           setupUnavailable: true,
           noDependencies: true,
+          persistentLauncher: true,
+          bootstrapCacheRemoved: true,
           model: probe.stdout.trim(),
         },
         null,

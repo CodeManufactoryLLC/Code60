@@ -28,3 +28,10 @@ mismatched provenance, verifies archive hashes and assembles the bootstrap.
 It retains workflow artifacts only; it does not publish npm packages or release
 assets. The bootstrap's public setup and persistent installation are not yet
 implemented. Version bumps remain explicit release-preparation work.
+
+Phase 4 additionally requires the managed installed-package journey and real shell
+acceptance described in [installation internals](docs/distribution/installation.md).
+The bootstrap build now compiles a narrow Node-only installer/launcher closure;
+its build job installs development dependencies, while the artifact itself retains
+zero runtime dependencies. Public setup remains unavailable and publication stays
+an explicit later release action.

@@ -21,9 +21,9 @@
     "test:rag:model": "node scripts/prepare-models.mjs --verify && npm run build && node scripts/test-rag-model.mjs",
     "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "npm run build:distribution && vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage && node scripts/check-coverage.mjs",
+    "test:coverage": "npm run build:distribution && vitest run --coverage && node scripts/check-coverage.mjs",
     "test:logs:performance": "npm run build && node scripts/benchmark-logs.mjs",
     "test:relay:performance": "npm run build && node scripts/benchmark-relay.mjs",
     "test:tactics:live": "npm run build && node scripts/evaluate-tactics.mjs",
@@ -47,10 +47,12 @@
     "service": "node dist/management/main.js service",
     "test:browser": "npm run build && playwright test",
     "package:app": "npm run build && node scripts/prepare-package.mjs && node scripts/package-app.mjs",
-    "package:payload": "npm run build && node scripts/prepare-package.mjs && node scripts/package-payload.mjs",
-    "package:bootstrap": "node scripts/package-bootstrap.mjs",
+    "package:payload": "npm run build && npm run build:distribution && node scripts/prepare-package.mjs && node scripts/package-payload.mjs",
+    "package:bootstrap": "npm run build:distribution && node scripts/package-bootstrap.mjs",
     "test:payload": "node scripts/test-payload.mjs",
-    "test:bootstrap": "node scripts/test-bootstrap.mjs"
+    "test:bootstrap": "node scripts/test-bootstrap.mjs",
+    "build:distribution": "node scripts/build-distribution.mjs",
+    "test:installation": "npm run build:distribution && node scripts/test-installation.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^2.4.0",

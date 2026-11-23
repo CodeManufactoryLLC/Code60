@@ -6,7 +6,10 @@ import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 
 export const prefix = "/installation/product";
-export const application = `${prefix}/node_modules/code60`;
+const layout = JSON.parse(await readFile("/harness/layout.json", "utf8"));
+export const application = layout.application;
+export const fakeAgent = layout.fakeAgent;
+export const launcher = layout.launcher;
 export const execute = promisify(execFile);
 
 export function architecture(expected = "x64") {
@@ -83,10 +86,14 @@ export async function fresh(home) {
 }
 
 export async function cli(args, env) {
-  return execute(process.execPath, [join(application, "dist/management/main.js"), ...args], {
-    env,
-    cwd: "/work",
-    timeout: 15_000,
-    maxBuffer: 2 * 1024 * 1024,
-  });
+  return execute(
+    launcher ?? process.execPath,
+    launcher ? args : [join(application, "dist/management/main.js"), ...args],
+    {
+      env,
+      cwd: "/work",
+      timeout: 15_000,
+      maxBuffer: 2 * 1024 * 1024,
+    },
+  );
 }

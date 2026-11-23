@@ -410,6 +410,7 @@ it("packs only builtins bootstrap files with both exact descriptors and inert CL
     join(root, "package.json"),
     JSON.stringify({ name: "code60", version: "0.4.1", license: "Apache-2.0" }),
   );
+  await cp("build/distribution", join(root, "build/distribution"), { recursive: true });
   const archive = await packageBootstrap(root, input);
   const result = await execute("tar", ["-tzf", archive]);
   expect(result.stdout).not.toMatch(/node_modules|dist\/|models\/|test\//);

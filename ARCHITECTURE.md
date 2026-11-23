@@ -114,6 +114,16 @@ help/version only; public setup, persistent installation and release activation
 remain later work. The legacy npm tarball stays available. See the
 [artifact workflow](docs/distribution/artifacts.md). No product capability changes.
 
+Phase 4 adds internal managed installation orchestration in management, with
+ownership, filesystem and publication primitives in platform. The private bootstrap
+carries only that Node-only dependency closure and the existing artifact verifier.
+Private receipts, non-reclaiming installation locks, immutable activation generations
+and an atomic current symlink make ~/.local/bin/code60 independent of npm's cache.
+Shell edits require a preview and explicit interactive approval; user profiles are
+never executed for discovery. No legacy migration, public setup, database/service
+initialization, implicit update or uninstall is introduced. See the
+[installation internals](docs/distribution/installation.md).
+
 ## Current exclusions
 
 No Electron shell, native window effects, automatic updater, bundled Node, remote/LAN

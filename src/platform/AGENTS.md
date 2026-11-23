@@ -15,3 +15,8 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
   running/stopped/unavailable separately. Never treat supervisor failure as stopped,
   follow service-definition symlinks or mutate registration during status reads.
 - Use the diagnostic utility for best-effort credential redaction before clipping errors and bounded stderr. It is not a transcript scrubber or a PII anonymizer.
+
+- Installation ownership uses its dedicated non-reclaiming lock. Do not reuse
+  lockPrivateState's stale-owner cleanup for distribution. Preserve uncertain
+  locks and possibly published activations. Validate private receipts, directory
+  containment and file identities; never repair by chmod/chown or sudo.

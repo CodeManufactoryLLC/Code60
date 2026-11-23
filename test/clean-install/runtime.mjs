@@ -5,6 +5,7 @@ import {
   application,
   architecture,
   evidence,
+  fakeAgent,
   fresh,
   publicConnection,
   waitFor,
@@ -24,7 +25,7 @@ await writeFile(
       claude: {
         command: [
           process.execPath,
-          `${application}/fixtures/fake-agent.mjs`,
+          fakeAgent,
           "--relay",
           "--session-info",
           "--process-log",

@@ -28,6 +28,10 @@ jobs:
       - run: npm run package:app
       - run: npm run test:packaged
       - run: node scripts/test-rag-model.mjs
+      - name: Supply fish on disposable native runner
+        timeout-minutes: 5
+        run: brew install fish
+      - run: npm run test:installation -- --require-fish
       - run: npm run package:payload
       - run: npm run test:payload
       - uses: actions/upload-artifact@v7.0.2
@@ -36,6 +40,15 @@ jobs:
           path: release/payloads/
           retention-days: 14
           if-no-files-found: error
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: native-installation-evidence
+          path: |
+            test-results/installation/
+            test-results/payload/
+          retention-days: 7
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v7.0.2
         if: failure()
         with:
