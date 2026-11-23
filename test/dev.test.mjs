@@ -1,43 +1,44 @@
 import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { expect, it, vi } from "vitest";
 
-// Execute the actual entry point with only its OS/process dependencies replaced.
 const scriptUrl = new URL("../scripts/dev.mjs", import.meta.url).href;
 const source = (await readFile(new URL(scriptUrl), "utf8"))
   .replace(/^import .*;\r?$/gm, "")
   .replace(/^const \{ spawnOwnedProcess \} = await import\(.*\);\r?$/m, "")
   .replaceAll("import.meta.url", "scriptUrl");
-
-function session(platform, pendingCommand, failReplacement = false) {
+function session(pendingCommand) {
   const children = [];
   const signals = {};
-  let scheduled;
   let changed;
+  let scheduled;
   let release;
   const pending = new Promise((resolve) => {
     release = resolve;
   });
   const process = {
-    platform,
     execPath: "fixture-node",
-    on: (name, handler) => {
-      signals[name] = handler;
+    env: {},
+    stdout: {},
+    stderr: { write: vi.fn() },
+    once: (name, action) => {
+      signals[name] = action;
     },
   };
   const watcher = Object.assign(new EventEmitter(), { close: vi.fn() });
-  const watch = vi.fn((_path, _options, handler) => {
-    changed = handler;
+  const watch = vi.fn((_path, _options, callback) => {
+    changed = callback;
     return watcher;
   });
   const spawnOwnedProcess = async (command) => {
     let finish;
+    let stopped;
     const exited = new Promise((resolve) => {
       finish = resolve;
     });
-    let stopping;
     const child = {
       command,
       exited,
@@ -45,21 +46,18 @@ function session(platform, pendingCommand, failReplacement = false) {
       stderr: { pipe: vi.fn() },
       exit: (code) => finish({ code }),
       stop: vi.fn(() => {
-        stopping ??= Promise.resolve().then(() => finish({ code: 0 }));
-        return stopping;
+        stopped ??= Promise.resolve().then(() => finish({ code: 0 }));
+        return stopped;
       }),
     };
+    child.stdout.on = (_event, listener) => {
+      if (command.includes("--watch")) listener("Found 0 errors. Watching for file changes.");
+      return child.stdout;
+    };
     children.push(child);
-    if (command.includes("build") && !command.includes("--watch")) child.exit(0);
     if (
-      failReplacement &&
-      command[0] === "fixture-electron" &&
-      children.filter((child) => child.command[0] === "fixture-electron").length === 2
-    )
-      child.exit(9);
-    if (
-      (pendingCommand === "app" && command[0] === "fixture-electron") ||
-      (pendingCommand === "watcher" && command.includes("--watch"))
+      (pendingCommand === "backend" && command.includes("scripts/dev-backend.mjs")) ||
+      (pendingCommand === "compiler" && command.includes("--watch"))
     )
       await pending;
     return child;
@@ -68,19 +66,31 @@ function session(platform, pendingCommand, failReplacement = false) {
     URL,
     scriptUrl,
     fileURLToPath,
+    join,
     process,
     watch,
     spawnOwnedProcess,
-    electron: "fixture-electron",
+    WeakSet,
+    createServer: () => ({
+      once() {},
+      listen(_port, _host, ready) {
+        ready();
+      },
+      address() {
+        return { port: 1234 };
+      },
+      close(ready) {
+        ready();
+      },
+    }),
     execFileSync: vi.fn(),
-    console: { error: vi.fn() },
+    fetch: async () => ({ ok: true }),
+    AbortSignal,
     setTimeout: (callback) => {
       scheduled = callback;
       return 1;
     },
-    clearTimeout: () => {
-      scheduled = undefined;
-    },
+    clearTimeout: () => {},
   });
   return {
     done,
@@ -94,60 +104,46 @@ function session(platform, pendingCommand, failReplacement = false) {
       changed();
       scheduled();
     },
-    apps: () => children.filter((child) => child.command[0] === "fixture-electron"),
+    apps: () => children.filter((child) => child.command.includes("scripts/dev-backend.mjs")),
   };
 }
-
-it("stops watchers when the replacement app exits during restart", async () => {
-  const dev = session("linux", undefined, true);
+it("restarts only the backend for compiled changes and stops every development process", async () => {
+  const dev = session();
   await dev.done;
-  dev.change();
-  await vi.waitFor(() => expect(dev.process.exitCode).toBe(9));
-  expect(dev.apps()).toHaveLength(2);
-  expect(dev.apps()[0].stop).toHaveBeenCalledWith(25_000);
-  for (const child of dev.children) expect(child.stop).toHaveBeenCalled();
-});
-
-it("preserves the POSIX app grace period on restart and shutdown", async () => {
-  const dev = session("linux");
-  await dev.done;
+  expect(dev.children.some((child) => child.command.includes("build"))).toBe(false);
   dev.change();
   await vi.waitFor(() => expect(dev.apps()).toHaveLength(2));
   expect(dev.apps()[0].stop).toHaveBeenCalledWith(25_000);
   dev.signals.SIGTERM();
-  await vi.waitFor(() => expect(dev.process.exitCode).toBe(130));
-  expect(dev.apps()[1].stop).toHaveBeenCalledWith(25_000);
-  for (const child of dev.children.filter((child) => child.command.includes("--watch")))
-    expect(child.stop).toHaveBeenCalledWith(5_000);
-});
-
-it("stops every development process after a file-watcher error", async () => {
-  const dev = session("linux");
-  await dev.done;
-  dev.watcher.emit("error", new Error("watcher failed"));
-  await vi.waitFor(() => expect(dev.process.exitCode).toBe(1));
-  expect(dev.watcher.close).toHaveBeenCalled();
+  await vi.waitFor(() => expect(dev.process.exitCode).toBe(143));
   for (const child of dev.children) expect(child.stop).toHaveBeenCalled();
 });
-
-it.each(["app", "watcher"])(
-  "does not orphan a %s launched while shutdown starts",
-  async (command) => {
-    const dev = session("linux", command);
-    await vi.waitFor(() =>
-      expect(
-        dev.children.some((child) =>
-          command === "app"
-            ? child.command[0] === "fixture-electron"
-            : child.command.includes("--watch"),
-        ),
-      ).toBe(true),
-    );
-    dev.signals.SIGINT();
-    dev.release();
-    await dev.done;
-    await vi.waitFor(() => expect(dev.process.exitCode).toBe(130));
-    for (const child of dev.children) expect(child.stop).toHaveBeenCalled();
-    if (command === "app") expect(dev.watch).not.toHaveBeenCalled();
-  },
-);
+it("stops Vite and the compiler when the backend fails", async () => {
+  const dev = session();
+  await dev.done;
+  dev.apps()[0].exit(9);
+  await vi.waitFor(() => expect(dev.process.exitCode).toBe(9));
+  for (const child of dev.children) expect(child.stop).toHaveBeenCalled();
+});
+it("cleans up after watcher failure", async () => {
+  const dev = session();
+  await dev.done;
+  dev.watcher.emit("error", new Error("fixture"));
+  await vi.waitFor(() => expect(dev.process.exitCode).toBe(1));
+  expect(dev.watcher.close).toHaveBeenCalled();
+});
+it.each(["backend", "compiler"])("does not orphan a %s launched during shutdown", async (kind) => {
+  const dev = session(kind);
+  await vi.waitFor(() =>
+    expect(
+      kind === "backend"
+        ? dev.apps().length
+        : dev.children.filter((child) => child.command.includes("--watch")).length,
+    ).toBe(1),
+  );
+  dev.signals.SIGINT();
+  dev.release();
+  await dev.done;
+  await vi.waitFor(() => expect(dev.process.exitCode).toBe(130));
+  for (const child of dev.children) expect(child.stop).toHaveBeenCalled();
+});

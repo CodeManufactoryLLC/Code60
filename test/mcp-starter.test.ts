@@ -1,10 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseConfig } from "../src/core/index.js";
 
 const starterUrl = new URL("../mcp.default.json", import.meta.url);
-const require = createRequire(import.meta.url);
 afterEach(() => vi.unstubAllEnvs());
 
 describe("bundled MCP starter", () => {
@@ -28,13 +26,8 @@ describe("bundled MCP starter", () => {
     });
   });
 
-  it("ships as a readable resource in desktop and CLI distributions", async () => {
+  it("ships as a readable resource in the Node application distribution", async () => {
     vi.stubEnv("CODE60_RELEASE", "0");
-    const packaging = require("../scripts/packaging-config.cjs");
-    expect(packaging.extraResources).toContainEqual({
-      from: "mcp.default.json",
-      to: "mcp.default.json",
-    });
     const manifest = JSON.parse(
       await readFile(new URL("../package.json", import.meta.url), "utf8"),
     );

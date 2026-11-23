@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
-import type { DesktopApi, MemoryDetail } from "../bridge/index.js";
+import type { ApplicationClient, MemoryDetail } from "../bridge/index.js";
 import { MemoryRecall, RecallGroup, RecallMemory } from "./memory-recall.js";
 
 const at = "2026-11-15T12:00:00.000Z";
@@ -17,7 +17,7 @@ it("omits introductory and source-history messages while retaining recorded turn
   for (const turn of [1, 3]) {
     const html = renderToStaticMarkup(
       <MemoryRecall
-        api={{} as DesktopApi}
+        api={{} as ApplicationClient}
         source={{
           owner: "owner",
           runId: "run",

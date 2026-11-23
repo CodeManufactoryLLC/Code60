@@ -1,7 +1,7 @@
 import { StrictMode, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  type DesktopApi,
+  type ApplicationClient,
   type DetailFrame,
   type DetailPayload,
   type DetailRequest,
@@ -152,7 +152,7 @@ const api = {
     changed();
     if (!hold) publish(context);
   },
-} as unknown as DesktopApi;
+} as unknown as ApplicationClient;
 function Fixture() {
   const [enabled, setEnabled] = useState(true);
   const [active, setActive] = useState(true);

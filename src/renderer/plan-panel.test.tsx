@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
-import type { DesktopApi, Plan } from "../bridge/index.js";
+import type { ApplicationClient, Plan } from "../bridge/index.js";
 import { PlanPanel } from "./plan-panel.js";
 
 function render(
@@ -33,7 +33,7 @@ function render(
     })),
   };
   return renderToStaticMarkup(
-    <PlanPanel plan={plan} api={{} as DesktopApi} currentChat="chat" project={null} />,
+    <PlanPanel plan={plan} api={{} as ApplicationClient} currentChat="chat" project={null} />,
   );
 }
 it("shows escaped target assignments and warns before accepting direct edits", () => {

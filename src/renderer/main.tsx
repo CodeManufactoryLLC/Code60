@@ -1,7 +1,6 @@
 import { createRoot } from "react-dom/client";
-import type { DesktopApi } from "../bridge/index.js";
-import { App } from "./app.js";
 import { migrateAppearance } from "./appearance.js";
+import { BrowserApp } from "./browser-app.js";
 import { migrateTypography } from "./typography.js";
 import "@fontsource/ibm-plex-sans/300.css";
 import "@fontsource/ibm-plex-sans/300-italic.css";
@@ -22,13 +21,7 @@ import "@fontsource/roboto/600.css";
 import "./fonts.css";
 import "./style.css";
 
-declare global {
-  interface Window {
-    desktop: DesktopApi;
-  }
-}
-
 migrateAppearance(localStorage);
 migrateTypography(localStorage);
 const root = document.getElementById("root");
-if (root) createRoot(root).render(<App api={window.desktop} />);
+if (root) createRoot(root).render(<BrowserApp />);

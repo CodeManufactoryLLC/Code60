@@ -82,7 +82,7 @@ Schema version: 1
 - Access: Home → Custom Assistants or Sidebar → Assistants → Custom Assistants → New Assistant; assistant card → More actions → Edit or Archive; title actions → Archived → card → More actions → Restore
 - Prerequisite: none
 - Agent access: human-only
-- Confirmation: Archiving confirms natively, stops only the assistant and preserves history.
+- Confirmation: Archiving requires browser confirmation, stops only the assistant and preserves history.
 - Limits: Up to 64 assistants, 120-character names and 32,000-character instructions. Shared verified provider required for chat. Independent histories, workspaces, workers and memory scope; no automatic task resumption. Stop the assistant and its workers before editing. Edits refresh provider context on next human Send, preserving history. No management MCP tools.
 - Pages: `custom-agents`
 - Settings sections: none
@@ -96,7 +96,7 @@ Schema version: 1
 - Access: Projects heading → circular Add Project; project row → + (New Session); Projects page → New Project; project home → New Session; project row → red × (Close Project); project row → chevron (expand/collapse)
 - Prerequisite: database
 - Agent access: read
-- Confirmation: The native folder picker allows directory creation. Confirm the full selected path to open; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.
+- Confirmation: The authenticated host folder chooser allows directory creation within locally configured roots. Confirm the full selected path to open; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.
 - Limits: Opening or selecting a project is a human action; opening never initializes Git. Archiving the last displayed project chat returns to its home without a replacement. New Session explicitly creates a chat. Project chat auto-names are limited to 19 characters. Manual names and existing titles are unchanged. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.
 - Pages: `projects`, `project`, `chat`
 - Settings sections: none
@@ -166,7 +166,7 @@ Schema version: 1
 - Access: Chat → latest user message → Undo
 - Prerequisite: runtime
 - Agent access: human-only
-- Confirmation: Native confirmation names request and targets, warns about replacing an unsent draft and direct-folder manual edits. Isolated conflicts block rather than overwrite newer edits.
+- Confirmation: Browser confirmation names request and targets, warns about replacing an unsent draft and direct-folder manual edits. Isolated conflicts block rather than overwrite newer edits.
 - Limits: Zero-edit requests can rewind. The request and saved-code references return unsent. Direct-folder snapshots also rewind manual edits since their checkpoint; Git metadata and Code60 state are excluded. Direct preimages and current Undo reads allow 32 MiB total regular-file contents, 10,000 entries per folder and 64 directory levels; links are unsupported. Nested children share parent coverage; adding a parent after child execution needs a new request. Checkpoints have bounded 256 MiB storage and 100 prior requests. Interrupted Undo requires explicit recovery, even without a live provider. No automatic commit or reversal of external effects.
 - Pages: none
 - Settings sections: none
@@ -265,7 +265,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: read
 - Confirmation: Existing permissions apply.
-- Limits: Database-independent. Add Provider verifies catalog connectors. Set as Primary preserves other memberships and uses saved command verification; Disconnect removes only Code60 membership and retains model defaults, history and external login. Both actions require stopped desktop agent work and no setup transaction. The primary cannot disconnect until another provider is primary. Verified membership is not live connection health. No automatic installation or management MCP tools.
+- Limits: Database-independent. Add Provider verifies catalog connectors. Set as Primary preserves other memberships and uses saved command verification; Disconnect removes only Code60 membership and retains model defaults, history and external login. Both actions require stopped interactive agent work and no setup transaction. The primary cannot disconnect until another provider is primary. Verified membership is not live connection health. No automatic installation or management MCP tools.
 - Pages: `providers`, `provider`
 - Settings sections: none
 - Tools: none
@@ -303,7 +303,7 @@ Schema version: 1
 - ID: `continuity`
 - Status: shipped
 - Purpose: Maintain bounded session continuity between turns.
-- Access: Automatic between-turn desktop lifecycle
+- Access: Automatic between-turn application lifecycle
 - Prerequisite: provider
 - Agent access: read
 - Confirmation: Existing permissions apply.
@@ -321,7 +321,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Human installation and schedule consent.
-- Limits: Transcripts subscribe before reading, refresh from saved-chunk notices, retain partial content on errors and show bounded evidence with execution status. Desktop quit/Stop all does not stop service-owned work. Delete requires native confirmation and refuses active jobs; evidence is preserved. Run state is independent of schedule enablement and history paging. Older services without live job state require a service restart for run/stop controls. Reduced motion and forced colors keep the stop glyph static. Awareness never installs or probes the service.
+- Limits: Transcripts subscribe before reading, refresh from saved-chunk notices, retain partial content on errors and show bounded evidence with execution status. Closing the browser and interactive Stop all leave scheduled work running. Stopping the backend stops both. Delete requires browser confirmation and refuses active jobs; evidence is preserved. Run state is independent of schedule enablement and history paging. Older services without live job state require a service restart for run/stop controls. Reduced motion and forced colors keep the stop glyph static. Awareness never installs or probes the service.
 - Pages: `automations`
 - Settings sections: none
 - Tools: none
@@ -335,7 +335,7 @@ Schema version: 1
 - Prerequisite: runtime
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
-- Limits: The player shows run activity with tool calls collapsed until expanded, recorded execution time, accepted-task progress and ordered task configuration/results. Pause and resume are available for new Transmission 0.1.0-staging.20 workflows. Existing staging.18 records use their original engine. Stop is terminal. Execution runs on macOS with Node >=24.22 <25. Automatic permission approvals default on. Work continues after desktop quit; no login service is installed. Prompt drafting uses the verified primary provider, bounded root README/package scripts and no tools; generated fields never start work. Source files, HEAD and index stay unchanged; worktrees/evidence remain. No automatic apply or Undo integration. Read-only views never restart the engine. The staging.18 restart path can exceed retry allowances. One active or uncertain workflow per source checkout; at most 100 ordered tasks with 30 checks each, repair/retry allowances 0–30 (default two), and 200 retained workflows within 8 MiB. Activity is paginated with labelled excerpts above 32,768 characters per detail and a display window of 1,000 events within one million characters. Drafting is bounded to 20 messages, 120 seconds, and 160,000 characters each for composed context and output.
+- Limits: The player shows run activity with tool calls collapsed until expanded, recorded execution time, accepted-task progress and ordered task configuration/results. Pause and resume are available for new Transmission 0.1.0-staging.20 workflows. Existing staging.18 records use their original engine. Stop is terminal. Execution runs on macOS with Node >=24.22 <25. Automatic permission approvals default on. Work continues after closing the browser or stopping the Code60 backend; the backend stop confirmation explains this. No login service is installed. Prompt drafting uses the verified primary provider, bounded root README/package scripts and no tools; generated fields never start work. Source files, HEAD and index stay unchanged; worktrees/evidence remain. No automatic apply or Undo integration. Read-only views never restart the engine. The staging.18 restart path can exceed retry allowances. One active or uncertain workflow per source checkout; at most 100 ordered tasks with 30 checks each, repair/retry allowances 0–30 (default two), and 200 retained workflows within 8 MiB. Activity is paginated with labelled excerpts above 32,768 characters per detail and a display window of 1,000 events within one million characters. Drafting is bounded to 20 messages, 120 seconds, and 160,000 characters each for composed context and output.
 - Pages: `workflows`
 - Settings sections: none
 - Tools: none
@@ -344,12 +344,12 @@ Schema version: 1
 
 - ID: `system-manager`
 - Status: shipped
-- Purpose: Manage the macOS/Linux Scheduling Service through System Manager. Status checks run automatically every two seconds after a completed read while the page and window are visible. Verified status distinguishes Not installed, Stopped and Running, with Install, Start or Stop as the main action. Stop pauses jobs and cancels active scheduled work before stopping the service; there is no separate pause-and-cancel button. Jobs paused is separate from runtime status; Resume jobs remains available for existing paused jobs, and Repair and Uninstall remain in Service options. No public Code60 CLI is available.
+- Purpose: Inspect Backend Service scheduling health automatically every two seconds. Jobs paused is separate from backend lifetime.
 - Access: Apps → System Manager
 - Prerequisite: none
 - Agent access: human-only
-- Confirmation: Human service consent; native confirmation for service controls.
-- Limits: Automatic status checks respect global Pause polling and back off to at most sixty seconds on failure; manual Refresh Scheduling Service remains available in the title actions menu. Awareness never installs, probes or controls the service. Checking or unavailable status never guesses a lifecycle action. A standalone running scheduler is labelled Not installed and has no native Stop action. No database is required.
+- Confirmation: Human CLI consent is required for service changes; scheduled jobs retain their own explicit controls.
+- Limits: Automatic checks respect global Pause polling and back off to at most sixty seconds on failure. Manual Refresh Backend Service is available. Install, repair, start, stop and uninstall use local code60 service commands. No database is required; awareness never probes or controls the service.
 - Pages: `system-manager`
 - Settings sections: none
 - Tools: none
@@ -372,12 +372,12 @@ Schema version: 1
 
 - ID: `settings`
 - Status: shipped
-- Purpose: Change appearance, text, polling and application options. Text typefaces include locally bundled Scientifica; OCR-A is no longer offered. Table defaults start at Low density (44px rows), with row, column and heading lines off; saved global and per-table choices are retained. Options include Icon animations (on by default), Monochrome icons with a color selector (gray by default) and Icon contrast (0–200%, default 100%), whole-window background opacity (0–100%) and native macOS desktop blur strength (0–100%). Transparent Linux windows retain minimize, maximize/restore and guarded close controls in the title bar, including the splash and first-use setup.
-- Access: Sidebar → Settings for About, Advanced, Table defaults and Text; Apps → Appearance → Window background or Icons; Apps → Polling; breadcrumb card → Color theme or Icon animations
+- Purpose: Change appearance, text, polling and application options. Text typefaces include locally bundled Scientifica; OCR-A is no longer offered. Table defaults start at Low density (44px rows), with row, column and heading lines off; saved global and per-table choices are retained. Options include Icon animations (on by default), Monochrome icons with a color selector (gray by default) and Icon contrast (0–200%, default 100%). Browser-native window management is outside Code60.
+- Access: Sidebar → Settings for About, Advanced, Table defaults and Text; Apps → Appearance → Icons or Theme; Apps → Polling; breadcrumb card → Color theme or Icon animations
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
-- Limits: Only explicitly allowlisted values are included in awareness. Each sidebar foreground card has a dedicated top-right chevron to expand or collapse its children without changing the current page. Home/Search is also collapsible. Header navigation never toggles expansion; Assistants opens a database-independent page with Relay and Custom Assistants cards. Hidden children are inert; explicit child navigation reveals ancestors. Monochrome is off by default; enabling it immediately tints icon artwork, provider logos and animated frames in shades of the selected color while preserving transparency and playback. Its color defaults to gray (#808080). Icon contrast spreads its shades from a flat color at 0%, through the standard range at 100%, to black/white extremes at 200%. Color and contrast persist locally and are retained when disabled. Forced colors bypasses the tint. The breadcrumb Icon animations toggle immediately freezes GIF artwork and CSS icon pulses app-wide, with a transparent block over its wheel when off. Re-enabling plays the wheel once; other icons wait for their usual triggers. Playback is on by default and saved locally alongside icon color/contrast. Page, panel, popover and status-text transitions remain unchanged; reduced motion and forced colors still suppress icon playback. The breadcrumb Color theme button shows System (eclipse), Dark (night) or Light (sun) and cycles System → Dark → Light → System on activation. System is the default and follows OS appearance; explicit choices persist locally and stay synchronized with Apps → Appearance → Theme. Window background sliders are saved locally and apply immediately across the title strip, margins and footer regardless of sidebar size or collapse. There is no separate Transparent background switch. Foreground cards, text and icons stay opaque and sharp; the background remains interactive even at zero opacity. Native desktop blur is macOS-only; strength blends the system-managed blur, not a pixel radius. Lower Background opacity to see it. Native blur failures appear beside its Appearance controls; adjust the slider to retry. Linux retains opacity with blur disabled. Forced colors use an opaque background without blur.
+- Limits: Only explicitly allowlisted values are included in awareness. Each sidebar foreground card has a dedicated top-right chevron to expand or collapse its children without changing the current page. Home/Search is also collapsible. Header navigation never toggles expansion; Assistants opens a database-independent page with Relay and Custom Assistants cards. Hidden children are inert; explicit child navigation reveals ancestors. Monochrome is off by default; enabling it immediately tints icon artwork, provider logos and animated frames in shades of the selected color while preserving transparency and playback. Its color defaults to gray (#808080). Icon contrast spreads its shades from a flat color at 0%, through the standard range at 100%, to black/white extremes at 200%. Color and contrast persist locally and are retained when disabled. Forced colors bypasses the tint. The breadcrumb Icon animations toggle immediately freezes GIF artwork and CSS icon pulses app-wide, with a transparent block over its wheel when off. Re-enabling plays the wheel once; other icons wait for their usual triggers. Playback is on by default and saved locally alongside icon color/contrast. Page, panel, popover and status-text transitions remain unchanged; reduced motion and forced colors still suppress icon playback. The breadcrumb Color theme button shows System (eclipse), Dark (night) or Light (sun) and cycles System → Dark → Light → System on activation. System is the default and follows OS appearance; explicit choices persist locally and stay synchronized with Apps → Appearance → Theme.
 - Pages: `apps`, `advanced`, `experiments`, `settings`
 - Settings sections: `appearance`, `table-defaults`, `text`, `polling-settings`, `about`
 - Tools: none
@@ -386,14 +386,28 @@ Schema version: 1
 
 - ID: `updates`
 - Status: shipped
-- Purpose: Check, download and install macOS arm64 and Linux x64 desktop releases.
-- Access: Apps → Update Manager → title actions
-- Prerequisite: runtime
+- Purpose: Review the manual package update procedure.
+- Access: Apps → Update Manager
+- Prerequisite: none
 - Agent access: human-only
-- Confirmation: Human approval before installation and shutdown.
-- Limits: Development builds may be unavailable; awareness does not check or download. App updates stop the installed Scheduling Service before replacement. After installation, startup upgrades its registration, verifies the matching app version and restores its prior global pause state. Packaged startup also reconciles an active older service after manual installation; stopped and uninstalled services stay stopped. Automatic recovery requires the native service PID to match the responding scheduler and never replaces a newer or unknown version. Recovery has one exclusive owner. AppImages require executable and parent locations protected from other users. Failed recovery keeps schedules, history and pending restart evidence for System Manager repair.
+- Confirmation: Local terminal consent is required for service changes. Histories, worktrees and settings are preserved.
+- Limits: Requires Node 24 and npm. Stop the backend, install the replacement npm tarball, repair the service registration and start the backend. No automatic downloads, native installers or bundled runtime.
 - Pages: none
 - Settings sections: `updates`
+- Tools: none
+
+## Browser access and backend
+
+- ID: `browser-runtime`
+- Status: shipped
+- Purpose: Connect a browser to the local Code60 backend and manage its lifetime.
+- Access: Terminal → code60 open; browser footer → Stop Code60 Backend
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Take control explicitly replaces another browser's control; stale page confirmations are rejected. Stopping the backend confirms cancellation of all interactive and scheduled work. Restart never replays uncertain tasks.
+- Limits: macOS Apple Silicon and Linux x64 require Node 24. The opt-in per-user backend starts at login. Browsers connect without a code by default, with per-tab sessions and one controlling browser. Local code60 pairing on/off/status makes the code requirement optional; setting changes require consent and revoke browser sessions without cancelling approved work. When enabled, the code is single-use and expires after sixty seconds. Closing or refreshing a browser preserves approved work. Workspace chooser roots default to the user's home and require local configuration to expand. No Electron, remote hosting or general agent execution CLI.
+- Pages: none
+- Settings sections: none
 - Tools: none
 
 ## RAG experiment
@@ -404,7 +418,7 @@ Schema version: 1
 - Access: Settings → Advanced → Experiments → RAG
 - Prerequisite: database
 - Agent access: human-only
-- Confirmation: Native confirmation before Clear.
+- Confirmation: Browser confirmation before Clear.
 - Limits: Excludes Relay; no automatic indexing or agent retrieval.
 - Pages: `rag`
 - Settings sections: none
@@ -460,7 +474,7 @@ Schema version: 1
 - Access: Apps → Data Viewer → Logs; title actions → Pause/Resume viewing, Refresh logs or Clear logs
 - Prerequisite: none
 - Agent access: human-only
-- Confirmation: Native confirmation before Clear.
+- Confirmation: Browser confirmation before Clear.
 - Limits: Never exposed to agents, MCP or awareness.
 - Pages: `logs`
 - Settings sections: none

@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import type { DesktopApi, Plan, PlanAction, PlanSummary } from "../bridge/index.js";
+import type { ApplicationClient, Plan, PlanAction, PlanSummary } from "../bridge/index.js";
 import { durationText } from "./chat-presentation.js";
 import { useTicker } from "./ticker.js";
 
@@ -26,7 +26,7 @@ export function PlanPanel({
   project,
 }: {
   plan: Plan;
-  api: DesktopApi;
+  api: ApplicationClient;
   currentChat: string | undefined;
   project: string | null;
 }) {
@@ -182,7 +182,7 @@ export function PlanPanelLoader({
   project,
 }: {
   summary: PlanSummary;
-  api: DesktopApi;
+  api: ApplicationClient;
   currentChat: string | undefined;
   project: string | null;
 }) {

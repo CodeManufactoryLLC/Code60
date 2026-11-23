@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { Action, DesktopApi, DesktopRun } from "../bridge/index.js";
+import type { Action, ApplicationClient, DesktopRun } from "../bridge/index.js";
 import type { useAppPreferences } from "./app-preferences.js";
 import type { FileTabAction, FileTabs } from "./file-tabs.js";
 import type { FileBrowser } from "./files.js";
@@ -11,11 +11,10 @@ import type { DesktopState } from "./snapshot-state.js";
 import type { PageTabs, SettingsSectionId } from "./tabs.js";
 import type { Transcripts } from "./transcripts.js";
 import type { useUpdates } from "./updates.js";
-import type { useWindowAppearance } from "./window-appearance.js";
 
 export interface AppPagesProps {
   providerManagement: import("./provider-management.js").ProviderManagement;
-  api: DesktopApi;
+  api: ApplicationClient;
   state: DesktopState | undefined;
   project: ReturnType<typeof useProjectScope> & {
     filePanel: SessionPanel;
@@ -28,7 +27,7 @@ export interface AppPagesProps {
   };
   preferences: ReturnType<typeof useAppPreferences>;
   sidebarBlurError: string;
-  appearance: ReturnType<typeof useWindowAppearance>;
+  appearance: { sidebarBlurSupported: boolean; customWindowControls: boolean };
   updates: ReturnType<typeof useUpdates>;
   tabs: PageTabs;
   settingsSection: SettingsSectionId | null;

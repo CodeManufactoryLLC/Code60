@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { AutomationTranscript, DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient, AutomationTranscript } from "../bridge/index.js";
 import { Modal } from "./modal.js";
 
 export function AutomationTranscriptModal({
@@ -7,7 +7,7 @@ export function AutomationTranscriptModal({
   executionId,
   onClose,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   executionId: string;
   onClose(): void;
 }) {

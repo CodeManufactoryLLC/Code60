@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
-import type { DesktopApi, SetupBegin, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, SetupBegin, Snapshot } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { Icon } from "./icons.js";
 import { DialogContent } from "./neobrutalism/dialog.js";
@@ -13,7 +13,7 @@ export function AgentSetupWizard({
 }: {
   windowControls?: ReactNode;
   snapshot: Snapshot;
-  api: DesktopApi;
+  api: ApplicationClient;
   mode: SetupBegin["mode"];
   onClose(): void;
 }) {

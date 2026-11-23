@@ -1,14 +1,14 @@
 # Agent Instructions
 
 This project is a Node.js application for orchestrating agents, with an
-Electron and React desktop app with an internal background scheduler. Keep
+React browser app with a unified login backend. Keep
 changes reliable in both the desktop app and automated, non-interactive
 environments.
 
 ## Architecture and Module Rules
 
 - Read `ARCHITECTURE.md` before changing behavior. It defines the modules
-  (`desktop`, `bridge`, `renderer`, `core`, `automation`, `agents`, `git`, `contracts`, `platform`), their
+  (`application`, `gateway`, `management`, `bridge`, `renderer`, `core`, `automation`, `agents`, `git`, `contracts`, `platform`), their
   dependency rules, and the non-goals.
 - Each `src/<module>/AGENTS.md` adds rules for that module. Follow them when
   changing its code.
@@ -25,22 +25,18 @@ environments.
   coverage-enabled test suite with versioned four-metric gates. Run it before
   every commit. Never lower coverage floors or broaden Knip exclusions to hide
   findings; document explicitly reviewed exceptions. CI for PRs and pushes to main runs only on
-  Linux with Node.js 22.12 and 24. macOS checks run with Node.js 24 only
+  Linux with Node.js 24. macOS checks run with Node.js 24 only
   in the manually requested release workflow.
 - `npm run format` applies Biome formatting and safe fixes to TypeScript,
   JSON, and workflow files. Markdown is not auto-formatted.
 - `npm run build` compiles `src` to `dist` and builds the renderer with Vite.
   The scheduler uses its fixed internal service entrypoint.
-- `npm run dev` builds and starts the desktop app, rebuilding and restarting it
-  on changes. `npm start` starts the built app.
-- Run desktop (Electron/Playwright, `test/desktop.e2e.ts`) tests locally only in
-  the Linux container: `npm run test:desktop:container` (add
-  `-- --grep "<name>"` to narrow). Do not run `npm run test:desktop` on the
-  host; it opens windows on the user's machine. CI and native-platform
-  validation (macOS, packaged and installer tests) are the only places
-  it runs directly. If Docker is unavailable, stop and report it rather than
-  falling back to the host. Unit tests and `npm run check` run on the host;
-  `npm run check` does not run the desktop tests.
+- `npm run dev` starts an isolated foreground Node backend and Vite with Fast Refresh.
+  `npm start` opens the installed backend in a browser.
+- Run browser journeys with `npm run test:browser` using headless Playwright and isolated
+  HOME/config/state. They exercise the built Node backend and real UI. Never install a
+  real user service or use live providers during routine testing. Native service validation
+  requires an explicitly isolated/authorized environment. Unit/static checks do not prove E2E success.
 - Put unit tests next to the code as `*.test.ts`. Cross-cutting tests live in
   `test/`. `test/boundaries.test.ts` enforces the module dependency rules from
   `ARCHITECTURE.md`; update it only together with that document.
@@ -93,8 +89,8 @@ environments.
   other resources on normal exit, errors, and interruption signals.
 - Make keyboard controls discoverable and consistent with existing behavior.
   Do not rely on color alone to convey status.
-- Keep the renderer sandboxed. Expose new capabilities only as narrow preload
-  methods, validated in `src/bridge` and checked in the main process.
+- Keep browser capabilities narrow: validate ApplicationClient requests in bridge and gateway.
+  Bind every browser interaction to its authenticated page; never expose generic filesystem or shell access.
 
 ## Node.js and Process Safety
 
@@ -110,7 +106,7 @@ environments.
   other processes.
 - Desktop diagnostics use only strict typed metadata and fixed messages through
   the optional sink. Never capture raw errors, prompts, transcripts, payloads,
-  paths or command/environment values. The scheduler must not enable desktop capture.
+  paths or command/environment values. The scheduler must not enable application diagnostic capture.
 - Diagnostic retention (seven days / 20 MiB) applies only to private desktop
   JSONL segments, never existing transcripts, run records or databases.
 - Write files only to intended locations, and avoid overwriting user data

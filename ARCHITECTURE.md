@@ -1,7 +1,106 @@
 # Architecture
 
-Status: implemented. Code60 is an Electron desktop application for macOS and Linux.
-The background scheduler retains an internal headless executor; there is no public Code60 CLI.
+Code60 is a browser-only local Node 24 application for macOS Apple Silicon and Linux x64.
+There is no Electron runtime, preload, native window, bundled Node runtime or automatic updater.
+The following browser runtime rules supersede desktop transport, native presentation,
+service ownership and distribution descriptions retained in the capability specifications below.
+The detailed checkpoint, authority, storage, provider and execution safeguards still apply.
+
+Short explanations of major choices live in [Architectural Views](docs/architectural-views/README.md).
+
+## Browser runtime
+
+One per-user login backend owns ApplicationHost and a scheduler runtime. React connects
+through authenticated loopback HTTP operations and a bounded event stream. Closing,
+refreshing or crashing a browser releases only client views, pending confirmations,
+setup transactions and subscriptions. Approved agents, memory extraction and schedules
+continue. Interactive Stop all does not stop scheduled work. Stop Code60 Backend stops both.
+Backend restart restores evidence and future scheduling, never uncertain effects or live authority.
+A scheduler storage/startup failure is reported independently of healthy interactive work.
+
+```mermaid
+flowchart LR
+  Browser[React browser UI] --> Gateway[Local gateway]
+  Management[Local management CLI] --> Gateway
+  Gateway --> Application[ApplicationHost]
+  Gateway --> Automation[Scheduler runtime]
+  Application --> Core[Core, Git and ACP agents]
+  Automation --> Core
+  Application --> Storage[Existing stores and Node sidecars]
+```
+
+The gateway binds only 127.0.0.1 on an allocated port. Private connection metadata
+contains the local management token; it is never sent to browsers. Browsers connect
+without a pairing code by default through a same-origin JSON handshake that issues
+an ephemeral session token. code60 open opens the token-free URL. Local
+`code60 pairing on|off|status` controls the optional code requirement; mutations
+require explicit consent (--yes without a TTY). When required, code60 open also
+prints a short-lived single-use code. Browser tokens are held in per-tab session
+storage and sent only to the exact origin in explicit headers. Changing the policy
+persists private gateway/settings.json, revokes old browser sessions and pending
+page interactions, and leaves approved execution running. The setting is unavailable
+to browser/agent APIs. Offline changes require exclusive backend ownership.
+One browser controls execution; taking control is explicit. Page identities invalidate
+stale requests and confirmations. Backend restart invalidates browser sessions. Origin,
+Host, strict schemas, quotas, CSP and an asset manifest constrain the web boundary.
+Management routes require a separate private token and reject browser origins.
+
+Browser choosers accept only backend-owned selection tokens, never arbitrary paths.
+Workspace roots default to the user's home and can be changed only in private local
+settings. Directory/file identity and containment are rechecked. Existing files cannot
+be replaced by Create database. Confirmations use expiring, single-use backend interaction
+IDs bound to the controlling page. Agent gateways never receive this human API.
+
+## Browser security
+
+The security contract is the authenticated loopback transport described above and
+in [SECURITY.md](SECURITY.md). Browser confirmation and chooser decisions belong
+to the controlling page. No browser capability installs services or replaces code.
+
+## Runtime modules
+
+- application owns conversations, execution coordination, stores, reviews, polling,
+  memory, search and their injected confirmation/picker ports. It depends on core,
+  bridge, automation and platform and has no browser or Electron dependency.
+- gateway composes application and automation once, validates HTTP/session boundaries,
+  serves assets, owns client interactions and private local service management.
+- management parses the narrow code60 open/service CLI and calls gateway/platform APIs.
+  It offers no run, prompt or agent-command execution interface.
+- automation retains its separate scheduler policy/store and an internal legacy protocol
+  adapter. Only the gateway is installed as a production service.
+- bridge and contracts remain browser-safe validation/type boundaries; renderer calls
+  a fixed ApplicationClient. Browser modules never import backend or Node code.
+- core, agents, git and platform retain their existing responsibilities. Cross-module
+  imports use public index.js entries. Only renderer imports React; no module imports Electron.
+
+The login service is opt-in: launchd on macOS and user systemd on Linux. Install,
+repair, stop and uninstall require explicit consent; non-TTY calls require --yes.
+Service management pins absolute Node/application paths and preserves private state.
+Legacy scheduler handoff verifies stopped ownership before acquiring its store, preserves
+pause settings, and never replays uncertain work. Status reads never repair or install.
+
+## Development and delivery
+
+npm run dev uses isolated config/state, a foreground Node backend and Vite Fast Refresh.
+Renderer changes preserve active backend work; backend changes restart gracefully.
+Production is an npm tarball requiring Node 24 and npm, with compiled assets, notices and
+explicitly prepared pinned models. Updates are manual: stop, replace package, repair service,
+start. Release preparation and protected-branch/version/tag rules remain in RELEASING.md.
+Headless Playwright exercises the built browser/backend path on host or CI; native service
+changes use fake supervisors unless separately authorized. Old Electron tests and native
+installer gates are replaced by browser journeys and clean-prefix tarball checks.
+
+## Current exclusions
+
+No Electron shell, native window effects, automatic updater, bundled Node, remote/LAN
+hosting, multiple simultaneous controlling clients, automatic task replay or generic public
+agent-execution CLI. Storage consolidation and feature-module reorganization are separate work.
+
+## Retained capability specifications
+
+References to desktop/main/native below describe the preceding implementation. For process
+ownership, transport, confirmations, chooser access and distribution, Browser runtime above
+is authoritative. Existing persisted filenames including desktop.json remain for compatibility.
 
 ## What it does
 
@@ -387,13 +486,13 @@ locked, bounded registry; uncertain starts never become replacement workflows.
 
 Transmission owns background execution, verification, repairs and recovery. These
 are explicit exceptions to the retry/recovery non-goals, not new Relay authority.
-Closing Code60 or a project does not cancel these workflows. Stop all retains its
-desktop-only scope. Explicit workflow cancellation retains partial files/evidence.
+Closing the browser, stopping the backend or closing a project does not cancel these workflows. Stop all retains its
+interactive application scope. Explicit workflow cancellation retains partial files/evidence.
 A versioned TRANSMISSION_STATE_DIR suppresses login registration. Read-only UI
 operations never start/restart the engine; explicit reconnect can resume approved
 work. The player routes pause, resume, guidance and stop by saved run and engine identity.
 Unversioned records retain their staging.18 engine, state directory and original start key.
-Execution time is reconstructed from server events, including across desktop restarts.
+Execution time is reconstructed from server events, including across backend restarts.
 The staging.18 engine can exceed its fresh-session retry allowance across
 restarts; server fixes are outside this prototype and no exactly-once claim is made.
 
@@ -1493,7 +1592,7 @@ Monaco and its worker/language assets are bundled locally and loaded on the firs
 
 ### Polling
 
-The desktop main process owns one scheduler (`src/desktop/poller.ts`) for every external read the app repeats. Live agent events are pushed by the orchestrator and are never polled. There is no file watching.
+The desktop main process owns one scheduler (`src/application/poller.ts`) for every external read the app repeats. Live agent events are pushed by the orchestrator and are never polled. There is no file watching.
 
 | Source | Reads | Default | Range |
 | --- | --- | --- | --- |
@@ -1587,20 +1686,8 @@ The desktop `ConversationCoordinator` owns in-memory chat generations/scopes, wo
 
 ### Desktop security
 
-- The renderer runs with context isolation, the Chromium sandbox, no Node.js integration, and a restrictive Content Security Policy. Navigation, new windows, and `<webview>` are blocked.
-- The preload script exposes a fixed set of methods (`windowAppearance`, `setWindowTheme`, `setTransparent`, `setBackgroundHitTest`, `snapshot`, `connectDatabase`, `chooseFolder`, `openProject`, `removeProject`, `clearProjects`, `poll`, `setPollSettings`, `setPollingPaused`, `setVisibility`, `setFileContext`, `readDiff`, `cancelDiff`, `readReview`, `readReviewFile`, `captureReview`, `reviewAction`, `checkGit`, `beginGitSetup`, `previewGitSetupFile`, `initializeGit`, `commitGitSetup`, `cancelGitSetup`, `beginAgentSetup`, `attemptAgentSetup`, `cancelAgentSetup`, `finishAgentSetup`, `abandonAgentSetup`, `setOrchestrationProvider`, `testOrchestrationProvider`, `cancelOrchestrationTest`, `extractMemory`, `cancelMemoryExtraction`, `orchestrationChatAction`, `knowledgeRenderer`, `reportKnowledge`, `start`, `saveConfiguration`, `deleteConfiguration`, `savePromptTemplate`, `resetPromptTemplate`, `action`, `stopAll`, `subscribe`, `onMenu`, `update`, `onUpdate`), never `ipcRenderer` or raw channels.
-- The main process accepts IPC only from the app's own page, validates every request in `bridge` (known fields, sizes, run-ID and permission-ID formats, once-only answers), and acts only on runs recorded in the open workspace or the app-wide orchestration chats. Orchestration chat actions accept only an existing chat's run ID, never arbitrary agent commands or directories. There are no generic file reads or command execution; `setFileContext` is limited to the current project and its listed worktrees as described above. Database and new-project paths come only from native pickers in the main process; `openProject` and `removeProject` accept only a path already in the connected database's history. `poll` accepts only the known source names, and the worktrees source reads only worktrees reported by Git for the open repository. `setPollSettings` accepts only the known sources and whole-second intervals within each source's range.
-- The orchestration chat receives one built-in Code60 MCP stdio server, in addition to user-configured MCP servers. It exposes read/search tools for Sessions, Messages, Events, Configurations, Worktrees and Polling, plus the worker tools below. Its sidecar calls only a token-authenticated endpoint bound to `127.0.0.1`. Requests are size- and time-bounded, tool arguments are strictly validated, and worker mutations require the current project/chat scope token. The gateway is revoked when the chat is replaced and closes on shutdown. Workers receive configured servers but no Code60 MCP server. User servers cannot replace the reserved `code60` entry or inherit its gateway credentials. The Operating Contract is behavioral guidance, not a security boundary; the main-process allowlist, scope checks and in-memory ownership checks enforce the boundary. No built-in tool accepts SQL, arbitrary commands, environment settings or target directories.
-- **Desktop self-knowledge.** Relay and project chats (never workers) receive five read-only tools: `code60_get_capabilities`, `code60_get_app_state`, `code60_list_customizations`, `code60_read_customization` and `code60_read_view`. A browser-safe catalog in `src/contracts/knowledge.ts` classifies every shipped capability, page, settings section and agent-visible tool; `docs/capabilities.md` is generated from it and `test/capabilities.test.ts` fails `npm run check` on drift. The desktop `DesktopKnowledge` read model derives availability (available/blocked/unsupported/unknown) and open-state metadata from existing owners on demand, with separate runtime, customization and UI revisions, revision-bound cursors, 8,000-character content pages and a 64 KiB response cap. The renderer reports presentation-only navigation and Files-panel tab metadata through the fixed `knowledgeRenderer`/`reportKnowledge` preload methods; main validates the renderer generation, per-view sequence and project/epoch or Relay conversation/generation owner, and discards reports on reload or owner close/replacement. Content reads return only the caller's own plans/reviews or an already loaded preview. Each delivered turn appends a separately labelled envelope of at most 8 KiB with counts, revisions and blockers, never inventories, transcripts, drafts, credentials, environments, MCP headers, diagnostic logs or memory records. `code60_get_context` keeps its fields and adds a compact `knowledge` hint. Awareness never selects projects, opens views, scans files, starts providers or grants authority; UI selection is never an execution target.
-- Updates are batched about every 40 ms. Each carries a revision number and the
-  previous broadcast revision. The renderer subscribes before reading its initial
-  snapshot and buffers at most 32 update frames during each read. A buffer
-  overflow or missing broadcast triggers a fresh full snapshot, not a silently
-  incomplete event merge. Recovery keeps the subscription and permits only one
-  snapshot read at a time, with three attempts per recovery before an actionable
-  reload error. Disposal ignores late reads. This protects the current app stream;
-  selected-view detail compatibility remains until the app stream is summary-only.
-
+The former Electron renderer/preload isolation is removed. The authoritative
+security boundary is [browser security](#browser-security).
 
 ## Runtime
 
@@ -2012,84 +2099,9 @@ The Prompt Builder groups its four system templates beneath an initially expande
 
 ### Desktop distribution
 
-The release workflow packages the Electron desktop as an Apple Silicon macOS DMG,
-Linux x64 DEB/AppImage.
-The bundle ID is `com.codemanufactory.code60`; the
-Linux GUI executable is `code60-desktop`.
-Installers bundle the desktop runtime and preserve existing config, preferences,
-and user-selected database paths. Git and provider CLIs remain external.
-Apps → Update Manager offers explicit Check for updates, Download update, cancellation,
-and Install and restart on all distributed targets. The main-process `Poller` also
-schedules app-wide release checks after 30 seconds and then four hours after each
-check completes, independently of workspace polling and its pause switch. Checks
-are single-flight, run only from idle update state, stop on shutdown, and never
-download automatically. Background failures stay quiet; manual failures are shown.
-The on-by-default automatic-check switch persists as `updateCheck` in desktop.json;
-fixed `auto-on`/`auto-off` update actions change it without affecting shared configuration.
-A footer button opens Apps → Update Manager and labels availability, download progress,
-or readiness to install. A popup offers Download now / Later once per version,
-remembered in renderer local storage, and waits for other dialogs to close.
-`electron-updater` reads the
-fixed public GitHub release feed and validates downloaded SHA-512 checksums;
-macOS also retains native signature verification. Stable builds
-stay on stable releases; prerelease builds can receive their channel and stable
-releases. Downgrades, background downloads and quit-time installation are disabled.
-No renderer request accepts a URL, path or command: `update` accepts only fixed
-actions, and `onUpdate` pushes revisioned progress, including across renderer reloads.
-Development builds report updates unavailable. Downloads cancel on quit and have
-a 30-minute deadline. Installation asks with a native dialog and shuts down all
-agents, gateways and polling before replacing the app. Config, records and databases
-are kept. macOS uses the signed ZIP update, Linux DEB uses an
-asynchronous, five-minute-bounded `pkexec /usr/bin/dpkg -i` authorization, and AppImage
-stages a complete executable beside the original before atomic replacement.
-Linux authorization or installation failures are shown before closing the stopped app.
-The main process rejects other renderer requests during installation.
-Before replacement, app updates persist scheduler restart intent, cancel active
-automation work and stop the installed Scheduling Service. On the first launch
-after installation, startup repairs the previously consented registration using
-the new runtime, verifies its reported app version and absence of recovery blocks,
-then restores and verifies the saved global pause state before clearing restart
-intent. Packaged startup also detects and reconciles an active older scheduler
-after a manual app installation. Stopped or uninstalled services are not activated
-without pending restart intent. Development startup does not reconcile versions.
-Native repair refuses to replace a registration after a failed stop unless native
-inspection proves the service stopped (launchd must show the job absent from a successful domain inventory). Native supervisor PID and socket responder PID must match before automatic stop or reactivation. Update recovery holds an exclusive private process-owned lock; concurrent launches cannot consume the same intent. Automatic reconciliation never replaces newer or unknown release versions. AppImage executable and canonical ancestor ownership/permissions must exclude replacement by other users before any pause, stop or registration rewrite. No app version is persisted in registration; the live process supplies it. Stop, upgrade and reactivation failures
-remain visible and retain recovery intent; definitions, occurrence history and
-worktrees are never removed or replayed by this sequence.
-Release staging verifies channel metadata against the exact final artifacts.
-The macOS ZIP and platform channel YAML files are published alongside installers.
-
-Desktop packages use a viridian (`#40826d`) desktop icon with centered black
-D-DIN Regular 60 numerals. The fill reaches every edge except for the
-upper-right chamfer, which reveals a black background. The desktop cut extends
-352px into the 1024px icon so it remains visible inside macOS's rounded icon mask.
-`scripts/generate-icon.mjs`
-renders `packaging/icon.png` from the wordmark styles and bundled font using Electron.
-
-On macOS and Linux, before restoring sessions or accepting agent launches, the desktop reads PATH
-from the user's interactive login shell once, asynchronously, with a three-second
-deadline and a 64 KiB output limit. It runs the probe in the home directory and
-stops the probe's process group on completion, failure, timeout, or shutdown.
-Only PATH is imported; shell output and other environment variables are never
-logged or imported. Shell PATH entries precede inherited entries, followed by
-`~/.local/bin`, `~/bin`, `/opt/homebrew/bin` on macOS, `/usr/local/bin`, and
-standard system directories. Empty, relative, and duplicate entries are removed.
-Missing or failing shells use inherited PATH and the same fallbacks. This applies
-to Git, agent connection tests, orchestration chats, and workers; absolute agent
-commands remain authoritative. Configuration files are unchanged.
-
-macOS releases use Developer ID signing and notarization. Packaging preserves
-Electron's Node mode because orchestration providers launch the bundled MCP
-sidecar with the app executable and `ELECTRON_RUN_AS_NODE=1`. Packaged tests
-exercise that path through its authenticated gateway. The renderer remains
-sandboxed; the desktop refuses `--no-sandbox` launches, including AppImage
-fallbacks. Packaging adds no shared configuration fields; the only update bridge
-methods are the fixed-action `update` and `onUpdate` described above.
-
-
-Agent setup bridge requests carry only mode, session UUID and catalog provider ID. They never accept executable commands, environments or working directories. The legacy provider setter cannot select an unverified primary; the old connection-test action is unavailable while a setup session exists.
-
-Native ACP launch references: [Antigravity](https://antigravity.google/docs/cli/acp/), [GitHub Copilot](https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server), and [Kiro](https://kiro.dev/docs/cli/reference/cli-commands/).
+Distribution uses a Node 24 npm tarball, manual updates and an explicit per-user
+login backend on macOS Apple Silicon and Linux x64. See [RELEASING.md](RELEASING.md).
+Native installers, signing, bundled Node and the automatic updater are removed.
 
 ### Guided initial Git setup
 
@@ -2348,37 +2360,8 @@ disclosures, theme behavior and transitions. Search loading artwork is unchanged
 
 ## Window background controls
 
-Apps → Appearance → Window background provides Background opacity (0–100%,
-default 100%), Background blur strength (0–100%, default 0), and Reset background.
-Both sliders apply live to one full-window decorative backdrop, including the
-native-control strip, margins and footer, regardless of sidebar width or collapse.
-Cards, fields, text, icons, menus and dialogs retain their own opaque/sharp surfaces.
-The splash remains opaque and never enables native blur. Forced colors uses an
-opaque Canvas backdrop with native blur off. Keep native drag/caption regions and
-all background areas interactive even at zero opacity; there is no click-through
-mode or separate Transparent background toggle.
-
-Retain bounded percentages in the existing `code60.sidebarAppearance` local storage
-record without resetting values or advancing appearance migrations. Internal
-SidebarAppearance/backdrop transport names remain compatibility adapters for the
-window-wide controls. Legacy desktop.json transparency values and validated IPC
-methods remain compatible records/interfaces, but cannot gate live alpha, repaint
-margins or enable mouse-event passthrough. Capability reads report native alpha
-available and clickThrough false. Show preference-write and native-blur failures
-separately and allow slider/Reset retries. Do not expose these values through agent
-write tools or awareness.
-
-The foreground native window always supports alpha. On macOS, an owned,
-non-focusable, mouse-transparent BaseWindow with no web contents or capture
-permission supplies native vibrancy behind the complete owner content bounds.
-Strength blends the OS-managed material, not a pixel blur radius. The legacy strict
-bounded width/strength/visibility request reports viewport width; positive width
-only gates visibility, while main derives all coordinates and full dimensions from
-its owner. Follow owner move/resize/show/hide/minimize/fullscreen; hide on splash,
-opaque tint, document hiding and forced colors. Reset on renderer navigation/loss
-and dispose all listeners/windows on owner close or shutdown. Native failure closes
-the backdrop and reports a fixed, payload-free error. Linux retains live background
-opacity, with the blur slider disabled; do not substitute CSS blur on foregrounds.
+Native window transparency, backdrop blur and window controls are removed.
+The browser uses the normal opaque application background.
 
 ## Neo-brutalist presentation
 
@@ -2809,24 +2792,9 @@ background opacity and introduces no setting or capability/catalog change.
 
 ## Apps-owned preferences and Update Manager
 
-Appearance, Memory, Polling controls and Update Manager are direct Apps children,
-alphabetical alongside existing Apps destinations. They appear in the Apps sidebar
-and Apps home Cards, with Home → Apps breadcrumbs and matching keyboard parents.
-They no longer appear on the Settings home/sidebar. Settings retains About,
-Advanced, Table defaults and Text. Existing Data Viewer → Polling remains the
-separate polling monitor; Apps → Polling retains its existing controls/monitor action.
-
-Update Manager is the visible name everywhere for the existing updates destination;
-retain check/download/cancel/install/automatic-check behavior and native consent.
-Stable settings section IDs, DOM IDs and navigation/history target kinds remain
-compatibility adapters inside the retained settings render owner. Shared descriptor
-parent metadata owns visible ancestry; do not duplicate preference state or views.
-Revealing a promoted page opens Apps without forcing Settings open. Collapsing an
-ancestor preserves selection/content and marks the correct collapsed parent; Left
-returns focus to the actual owner. Preserve cached content, page actions, focus,
-request ownership, saved values, bridge contracts and database availability.
-Capability labels/access paths and recovery advice use Apps/Update Manager; keep
-capability IDs, availability rules and all execution/agent-write authority unchanged.
+Apps retains appearance, memory, polling and Update Manager navigation.
+Update Manager displays manual installation and backend repair instructions.
+It performs no network checks or binary replacement.
 
 ## Simplified workspace header and title artwork
 

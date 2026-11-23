@@ -3,6 +3,19 @@ import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, sep } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ChatStore } from "../src/application/chat-store.js";
+import { ApplicationHost } from "../src/application/controller.js";
+import type {
+  ChatSession,
+  ConversationCoordinator,
+} from "../src/application/conversation-coordinator.js";
+import type { DesktopPreferences } from "../src/application/preferences.js";
+import { ProjectSessionStore } from "../src/application/project-session.js";
+import { type ProjectDatabase, sqliteAvailable } from "../src/application/projects.js";
+import type { RagExecutor } from "../src/application/rag-service.js";
+import { RagStore } from "../src/application/rag-store.js";
+import type { RagConversation } from "../src/application/rag-worker.js";
+import type { ReviewStore } from "../src/application/reviews.js";
 import {
   assembleOperatingContract,
   BUILTIN_COMMANDS,
@@ -25,26 +38,13 @@ import {
   loadConfig,
   openWorkspace,
 } from "../src/core/index.js";
-import { ChatStore } from "../src/desktop/chat-store.js";
-import { DesktopController } from "../src/desktop/controller.js";
-import type {
-  ChatSession,
-  ConversationCoordinator,
-} from "../src/desktop/conversation-coordinator.js";
-import type { DesktopPreferences } from "../src/desktop/preferences.js";
-import { ProjectSessionStore } from "../src/desktop/project-session.js";
-import { type ProjectDatabase, sqliteAvailable } from "../src/desktop/projects.js";
-import type { RagExecutor } from "../src/desktop/rag-service.js";
-import { RagStore } from "../src/desktop/rag-store.js";
-import type { RagConversation } from "../src/desktop/rag-worker.js";
-import type { ReviewStore } from "../src/desktop/reviews.js";
 import type { Git, TaskGit } from "../src/git/index.js";
 import { privateDirectory } from "../src/platform/index.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
 import { verifiedAgents } from "./fixtures/verified-agents.js";
 
 let directory: string;
-let controller: DesktopController;
+let controller: ApplicationHost;
 let agents: FakeAgents;
 let git: FakeGit;
 let confirm: ReturnType<typeof vi.fn<(title: string, detail: string) => Promise<boolean>>>;
@@ -249,7 +249,7 @@ beforeEach(async () => {
   ragSources = [];
   ragWaitForAbort = false;
   ragStarted = false;
-  controller = new DesktopController(
+  controller = new ApplicationHost(
     controllerDeps(),
     {
       XDG_CONFIG_HOME: join(directory, "config"),
@@ -671,7 +671,7 @@ describe("retained project runtimes", {
         await gate;
         throw new Error("disk is full");
       });
-    const updates: ReturnType<DesktopController["snapshot"]>[] = [];
+    const updates: ReturnType<ApplicationHost["snapshot"]>[] = [];
     const unsubscribe = controller.subscribe((snapshot) => updates.push(snapshot));
     const opening = controller.open(path);
     try {
@@ -1995,7 +1995,7 @@ describe("retained project runtimes", {
   async function prepareRelay() {
     await controller.shutdown(true);
     orchestrationProvider = "claude";
-    controller = new DesktopController(
+    controller = new ApplicationHost(
       controllerDeps(),
       { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
       { confirm },
@@ -2575,7 +2575,7 @@ describe("desktop orchestration", () => {
     expect(originals.length).toBeGreaterThan(0);
     const load = vi.spyOn(ChatStore.prototype, "load");
     const before = agents.specs.length;
-    controller = new DesktopController(
+    controller = new ApplicationHost(
       controllerDeps(),
       { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
       { confirm },
@@ -3388,7 +3388,7 @@ describe("prompt templates", () => {
 
 describe("project database", () => {
   it("requires a database before opening a project", async () => {
-    const fresh = new DesktopController(
+    const fresh = new ApplicationHost(
       controllerDeps(),
       { XDG_STATE_HOME: join(directory, "state") },
       { confirm },
@@ -3494,7 +3494,7 @@ describe("project database", () => {
   it("reconnects on launch and reports a saved database that is gone", async () => {
     await controller.open(directory);
     const restart = () =>
-      new DesktopController(controllerDeps(), {}, { confirm }, { openDatabase, preferences });
+      new ApplicationHost(controllerDeps(), {}, { confirm }, { openDatabase, preferences });
     const again = restart();
     await again.restore();
     expect(again.snapshot()).toMatchObject({
@@ -3597,7 +3597,7 @@ describe("app-wide orchestration chat", {
     await controller.shutdown(true);
     await store.save({ ...saved, tactic: "retired-tactic" });
     agents = new FakeAgents();
-    controller = new DesktopController(
+    controller = new ApplicationHost(
       controllerDeps(),
       { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
       { confirm },
@@ -3653,7 +3653,7 @@ describe("app-wide orchestration chat", {
       await controller.shutdown(true);
       agents = new FakeAgents(() => "end_turn");
       agents.restoreUnavailable = handoff;
-      controller = new DesktopController(
+      controller = new ApplicationHost(
         controllerDeps(),
         { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
         { confirm },
@@ -3741,7 +3741,7 @@ describe("app-wide orchestration chat", {
       await fs.writeFile(join(chatDirectory, ".code60", "plans", `${randomUUID()}.json`), "{");
     }
     agents = new FakeAgents(() => "end_turn");
-    controller = new DesktopController(
+    controller = new ApplicationHost(
       controllerDeps(),
       { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
       { confirm },
@@ -3806,7 +3806,7 @@ describe("app-wide orchestration chat", {
     agents = new FakeAgents(() => "end_turn");
     agents.restoreUnavailable = true;
     agents.startError = new Error("provider unavailable");
-    controller = new DesktopController(
+    controller = new ApplicationHost(
       controllerDeps(),
       { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
       { confirm },
@@ -3835,7 +3835,7 @@ describe("app-wide orchestration chat", {
     });
     await controller.shutdown(true);
     agents = new FakeAgents();
-    controller = new DesktopController(
+    controller = new ApplicationHost(
       controllerDeps(),
       { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
       { confirm },
@@ -3860,7 +3860,7 @@ describe("app-wide orchestration chat", {
     await fs.rename(metadata, `${metadata}.preserved`);
     await fs.writeFile(metadata, "not a directory");
     agents = new FakeAgents();
-    controller = new DesktopController(
+    controller = new ApplicationHost(
       controllerDeps(),
       { XDG_CONFIG_HOME: join(directory, "config"), XDG_STATE_HOME: join(directory, "state") },
       { confirm },
@@ -6443,7 +6443,7 @@ describe.skipIf(!sqliteAvailable())("registered-project Search navigation", () =
     orchestrationProvider = "claude";
     const adapter: CoreDeps["git"] = git;
     adapter.repoInfo = async (cwd) => ({ topLevel: cwd, commonDir: join(cwd, ".git") });
-    controller = new DesktopController(
+    controller = new ApplicationHost(
       controllerDeps(),
       {
         XDG_CONFIG_HOME: join(directory, "config"),

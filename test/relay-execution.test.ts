@@ -13,8 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { ExecutionHost, type ExecutionOwner } from "../src/application/execution-host.js";
 import { DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
-import { ExecutionHost, type ExecutionOwner } from "../src/desktop/execution-host.js";
 import { FakeAgents, FakeGit, FakeProcesses, flush } from "./fakes.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 

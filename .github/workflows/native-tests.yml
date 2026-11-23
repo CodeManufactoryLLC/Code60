@@ -1,108 +1,39 @@
-name: Native tests
+name: Native Node and browser tests
 on:
   workflow_call:
     inputs:
       ref:
-        description: Exact commit to test
         required: true
         type: string
-      suite:
-        description: unit or desktop
-        required: true
-        type: string
-      shard:
-        description: One-based desktop shard index
-        required: false
-        default: 1
-        type: number
-      shards:
-        description: Total desktop shard count
-        required: false
-        default: 1
-        type: number
-      unit_filter:
-        description: Optional Vitest file filter; skips coverage gates
-        required: false
-        default: ""
-        type: string
-      desktop_grep:
-        description: Optional Playwright --grep pattern
-        required: false
-        default: ""
-        type: string
-      release:
-        description: Run with the release job environment
-        required: false
-        default: false
-        type: boolean
 permissions:
   contents: read
 jobs:
   test:
-    name: ${{ inputs.suite == 'desktop' && format('desktop {0}/{1}', inputs.shard, inputs.shards) || 'unit' }}
     runs-on: macos-15
     timeout-minutes: 45
-    env:
-      CODE60_RELEASE: ${{ inputs.release && '1' || '' }}
-      RELEASE_SHA: ${{ inputs.release && inputs.ref || '' }}
     steps:
-      - name: Reject unknown suites
-        if: inputs.suite != 'unit' && inputs.suite != 'desktop'
-        run: exit 1
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-          cache: npm
-          package-manager-cache: false
-      - name: Verify runner architecture and configure fixture Git identity
-        run: |
-          test "$(uname -m)" = arm64
-          git config --global user.name 'Code60 CI'
-          git config --global user.email 'ci@example.invalid'
+        with: { node-version: "24", cache: npm, package-manager-cache: false }
+      - name: Verify Apple Silicon runner
+        run: test "$(uname -m)" = arm64
       - run: npm ci
-      - run: node scripts/install-electron.mjs
-      - name: Unit tests with coverage gates
-        if: inputs.suite == 'unit' && inputs.unit_filter == ''
-        run: npm run check
-      - name: Filtered unit tests without coverage gates
-        if: inputs.suite == 'unit' && inputs.unit_filter != ''
-        shell: bash
-        env:
-          UNIT_FILTER: ${{ inputs.unit_filter }}
-        run: |
-          node node_modules/vitest/vitest.mjs run "$UNIT_FILTER"
-      - name: Retain coverage reports
-        uses: actions/upload-artifact@v7.0.2
-        if: always() && inputs.suite == 'unit' && inputs.unit_filter == ''
-        with:
-          name: coverage-macos-15-node-24
-          path: coverage/
-          retention-days: 7
-          if-no-files-found: warn
-          overwrite: true
-      - if: inputs.suite == 'desktop'
-        run: npm run prepare:models
-      - name: Desktop tests
-        if: inputs.suite == 'desktop'
-        shell: bash
-        env:
-          SHARD: ${{ inputs.shard }}
-          SHARDS: ${{ inputs.shards }}
-          DESKTOP_GREP: ${{ inputs.desktop_grep }}
-        run: |
-          args=(--fully-parallel "--shard=$SHARD/$SHARDS")
-          if [ -n "$DESKTOP_GREP" ]; then args+=(--grep "$DESKTOP_GREP" --pass-with-no-tests); fi
-          npm run build
-          node node_modules/@playwright/test/cli.js test "${args[@]}"
+      - run: npx --no-install playwright install chromium
+      - run: npm run check
+      - run: npm run prepare:models
+      - run: npm run test:browser
+      - run: npm run package:app
+      - run: npm run test:packaged
+      - run: node scripts/test-rag-model.mjs
       - uses: actions/upload-artifact@v7.0.2
         if: failure()
         with:
-          name: native-macos-15-${{ inputs.suite }}-${{ inputs.shard }}-failure
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-          overwrite: true
+          {
+            name: native-failure,
+            path: test-results/,
+            retention-days: 7,
+            if-no-files-found: ignore,
+          }

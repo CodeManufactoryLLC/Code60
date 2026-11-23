@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DesktopApi, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, Snapshot } from "../bridge/index.js";
 import type { Theme } from "./appearance.js";
 import { Splash } from "./splash.js";
 
@@ -24,7 +24,7 @@ function render(
   } as Snapshot;
   return renderToStaticMarkup(
     <Splash
-      api={{} as DesktopApi}
+      api={{} as ApplicationClient}
       snapshot={snapshot}
       ready={ready}
       busy={busy}

@@ -42,11 +42,11 @@ files remain in place. **Steer** queues guidance for a subsequent turn. Answer a
 pending question using its offered choices. A lost response leaves the outcome
 unconfirmed. If stop acknowledgement is pending, use Stop workflow again to confirm cleanup for the same run.
 
-Work continues after Code60 quits. Opening history or refreshing never starts
+Work continues after closing the browser or stopping the Code60 backend. Opening history or refreshing never starts
 an engine. On disconnection, the player retains the last verified state.
 The header menu offers **Reconnect engine** for that workflow and explains that
 unfinished approved work may continue. Global Pause polling pauses observations.
-Desktop Stop all retains its desktop-owned scope.
+Stop all retains its interactive application scope.
 
 If a start is unconfirmed, preserve its worktree and use **Recover same start
 request**. This reuses the approved payload and idempotency key. Never create a
@@ -72,8 +72,8 @@ Do not interpret a quiet/disconnected UI as evidence that execution stopped.
 
 ## Prototype validation
 
-The Linux container journeys use a scripted Transmission HTTP engine, a fake
-drafting provider, the production desktop bridge and real Git repositories.
+The headless browser journeys use a scripted Transmission HTTP engine, a fake
+drafting provider, the production browser gateway and bridge and real Git repositories.
 They exercise manual and prompt-assisted starts, clarification and refinement,
 pause and same-run resume across reload, rejection and acceptance evidence,
 steering, permission choices, connection loss, and stop acknowledgment. A second
@@ -81,7 +81,7 @@ journey opens an unversioned staging.18 registry and checks that actions reach
 its original engine. Independent assertions check the engine run ID, worker
 exit, retained worktree files, and unchanged source HEAD and index.
 
-Run the journeys with `npm run test:desktop:container -- --grep 'workflow: Transmission'`.
-The runner retains desktop and narrow screenshots in Light and Dark under its
+Run the journeys with `npm run test:browser -- --grep 'workflow: Transmission' --output=test-results/workflow-browser`.
+The runner retains wide and narrow screenshots in Light and Dark under its
 reported artifact directory. Live-provider execution and packaged macOS behavior
 require separate validation.

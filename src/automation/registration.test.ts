@@ -194,64 +194,7 @@ describe("scheduler update recovery", () => {
     await restoreSchedulerUpdate(s.env);
     expect(fake.control).toHaveBeenCalledTimes(2);
   });
-  it.each(["file", "parent"])(
-    "rejects a replaceable AppImage %s before any update side effect",
-    async (kind) => {
-      const s = await setup();
-      const image = join(roots.at(-1)!, "Code60.AppImage");
-      await writeFile(image, "image", { mode: 0o700 });
-      await chmod(kind === "file" ? image : roots.at(-1)!, kind === "file" ? 0o722 : 0o777);
-      const env = { ...s.env, APPIMAGE: image };
-      fake.appVersion = "0.0.0";
-      const registrationPath = join(automationRoot(s.env), "registration.json");
-      const before = await readFile(registrationPath);
-      for (const run of [
-        () => prepareSchedulerUpdate(env),
-        () => restoreSchedulerUpdate(env, true),
-        () => schedulerControl(env, "repair", true),
-      ])
-        await expect(run()).rejects.toThrow("replaceable");
-      expect(fake.control).not.toHaveBeenCalled();
-      expect(fake.request.mock.calls.every(([r]) => r.action === "status")).toBe(true);
-      await expect(readFile(s.marker)).rejects.toMatchObject({ code: "ENOENT" });
-      expect(await readFile(registrationPath)).toEqual(before);
-      await expect(lstat(join(automationRoot(s.env), "update-recovery"))).rejects.toMatchObject({
-        code: "ENOENT",
-      });
-    },
-  );
-  it.each(["uninstalled", "newer", "standalone"])(
-    "retains intent without replacing a %s service during recovery",
-    async (kind) => {
-      const s = await setup();
-      await prepareSchedulerUpdate(s.env);
-      fake.control.mockClear();
-      if (kind === "uninstalled") {
-        const path = join(automationRoot(s.env), "registration.json");
-        await writePrivateJson(
-          path,
-          { installed: false },
-          await readPrivateJson(path, 16_384),
-          16_384,
-        );
-        fake.inspect.mockResolvedValue({ definitionPresent: false, state: "stopped" });
-      } else {
-        fake.running = true;
-        fake.appVersion = kind === "newer" ? "99.0.0" : "0.0.0";
-        if (kind === "standalone")
-          fake.inspect.mockResolvedValue({ definitionPresent: true, state: "stopped" });
-      }
-      await expect(restoreSchedulerUpdate(s.env)).rejects.toThrow(
-        kind === "uninstalled"
-          ? "no longer installed"
-          : kind === "newer"
-            ? "newer or unverifiable"
-            : "standalone",
-      );
-      expect(fake.control).not.toHaveBeenCalled();
-      expect(await readPrivateJson(s.marker, 4096)).toEqual({ version: 1, pausedAll: false });
-    },
-  );
+
   it("reconciles a manually installed app with an older active service exactly once", async () => {
     const s = await setup();
     fake.appVersion = "0.0.0";

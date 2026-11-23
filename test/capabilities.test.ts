@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  APPLICATION_CAPABILITIES,
   BUILTIN_COMMANDS,
   capabilityReference,
-  DESKTOP_CAPABILITIES,
   isKnowledgeTool,
   MCP_KNOWLEDGE_TOOL_DEFINITIONS,
   MCP_TOOL_DEFINITIONS,
@@ -14,53 +14,51 @@ import {
   TOOL_CAPABILITIES,
 } from "../src/contracts/index.js";
 
-const ids = new Set(DESKTOP_CAPABILITIES.map((capability) => capability.id));
+const ids = new Set(APPLICATION_CAPABILITIES.map((capability) => capability.id));
 
-describe("desktop capability catalog", () => {
+describe("browser capability catalog", () => {
   it("describes scheduler upgrade recovery without granting service authority", () => {
-    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "updates")).toMatchObject({
-      prerequisite: "runtime",
-      agentAccess: "human-only",
-      limitations: expect.stringContaining("verifies the matching app version"),
-      confirmation: "Human approval before installation and shutdown.",
-    });
+    const updates = APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates");
+    expect(updates).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });
+    expect(updates?.limitations).toContain("Stop the backend");
+    expect(updates?.limitations).toContain("No automatic downloads");
   });
   it("describes human-only sidebar/card navigation without a current-page menu", () => {
-    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "page-navigation")).toMatchObject({
+    expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "page-navigation")).toMatchObject({
       prerequisite: "none",
       agentAccess: "human-only",
       access: expect.stringContaining("Left navigation sidebar"),
       limitations: expect.stringContaining("no current-page dropdown"),
     });
-    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "page-navigation")?.limitations).toContain(
-      "navigation icon on its left",
-    );
+    expect(
+      APPLICATION_CAPABILITIES.find((cap) => cap.id === "page-navigation")?.limitations,
+    ).toContain("navigation icon on its left");
   });
   it("describes content-title commands while keeping navigation and availability human-only", () => {
-    const navigation = DESKTOP_CAPABILITIES.find((cap) => cap.id === "page-navigation");
+    const navigation = APPLICATION_CAPABILITIES.find((cap) => cap.id === "page-navigation");
     expect(navigation?.limitations).toContain("chevron-only title actions menu");
     expect(navigation?.limitations).toContain(
       "Table tools, scope selectors, creation cards and corner panel toggles remain visible",
     );
     expect(navigation?.prerequisite).toBe("none");
     expect(navigation?.agentAccess).toBe("human-only");
-    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "updates")?.access).toContain(
-      "title actions",
+    expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates")?.access).toContain(
+      "Update Manager",
     );
   });
   it("classifies bounded human-only navigation history without database prerequisites", () => {
-    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
+    expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
       access: "Workspace header card → Back / Forward",
       prerequisite: "none",
       agentAccess: "human-only",
       limitations: expect.stringContaining("100 destinations"),
     });
     expect(
-      DESKTOP_CAPABILITIES.find((cap) => cap.id === "navigation-history")?.limitations,
+      APPLICATION_CAPABILITIES.find((cap) => cap.id === "navigation-history")?.limitations,
     ).toContain("An empty circle replaces the arrow artwork");
   });
   it("exposes conversational browser modes only through the orchestrator gateway", () => {
-    expect(DESKTOP_CAPABILITIES.find((cap) => cap.id === "browser")).toMatchObject({
+    expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "browser")).toMatchObject({
       prerequisite: "provider",
       purpose: expect.stringContaining("Headless, Visible or Existing Browser"),
       limitations: expect.stringContaining("unavailable to workers"),
@@ -72,7 +70,7 @@ describe("desktop capability catalog", () => {
       });
   });
   it("describes all registered project Search with captured provenance and closed-source consent", () => {
-    const search = DESKTOP_CAPABILITIES.find((capability) => capability.id === "search");
+    const search = APPLICATION_CAPABILITIES.find((capability) => capability.id === "search");
     expect(search).toMatchObject({ prerequisite: "database", agentAccess: "human-only" });
     expect(search?.purpose).toContain("open or closed");
     expect(search?.limitations).toContain("no selected project");
@@ -80,7 +78,9 @@ describe("desktop capability catalog", () => {
     expect(search?.confirmation).toContain("Open Project");
   });
   it("describes Low density and line-free table defaults without replacing saved choices", () => {
-    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "settings")).toMatchObject({
+    expect(
+      APPLICATION_CAPABILITIES.find((capability) => capability.id === "settings"),
+    ).toMatchObject({
       prerequisite: "none",
       agentAccess: "human-only",
       purpose: expect.stringContaining(
@@ -89,7 +89,7 @@ describe("desktop capability catalog", () => {
     });
   });
   it("describes Scientifica in human-only text settings", () => {
-    const settings = DESKTOP_CAPABILITIES.find((capability) => capability.id === "settings");
+    const settings = APPLICATION_CAPABILITIES.find((capability) => capability.id === "settings");
     expect(settings?.purpose).toContain("locally bundled Scientifica");
     expect(settings?.agentAccess).toBe("human-only");
     expect(SETTINGS_CAPABILITIES.text).toBe("settings");
@@ -100,7 +100,7 @@ describe("desktop capability catalog", () => {
       database: false,
     });
     expect(
-      DESKTOP_CAPABILITIES.find((capability) => capability.id === "automations"),
+      APPLICATION_CAPABILITIES.find((capability) => capability.id === "automations"),
     ).toMatchObject({
       label: "Scheduled Jobs",
       access: "Apps → Scheduled Jobs",
@@ -110,16 +110,16 @@ describe("desktop capability catalog", () => {
     });
   });
   it("describes scheduled-job controls independently from recurring enablement", () => {
-    const jobs = DESKTOP_CAPABILITIES.find((capability) => capability.id === "automations");
+    const jobs = APPLICATION_CAPABILITIES.find((capability) => capability.id === "automations");
     expect(jobs?.purpose).toContain("Play starts one run");
     expect(jobs?.purpose).toContain("separate schedule enable/pause");
-    expect(jobs?.limitations).toContain("Delete requires native confirmation");
+    expect(jobs?.limitations).toContain("Delete requires browser confirmation");
   });
   it("uses the Custom Assistants name with the existing stable capability ID", () => {
-    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "relay")?.access).toContain(
+    expect(APPLICATION_CAPABILITIES.find((c) => c.id === "relay")?.access).toContain(
       "Sidebar → Assistants → Relay",
     );
-    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "custom-agents")).toMatchObject({
+    expect(APPLICATION_CAPABILITIES.find((c) => c.id === "custom-agents")).toMatchObject({
       label: "Custom Assistants",
       access: expect.stringContaining("Sidebar → Assistants → Custom Assistants → New Assistant"),
       prerequisite: "none",
@@ -127,34 +127,29 @@ describe("desktop capability catalog", () => {
     });
   });
   it("describes per-card custom assistant management", () => {
-    const access = DESKTOP_CAPABILITIES.find((c) => c.id === "custom-agents")?.access;
+    const access = APPLICATION_CAPABILITIES.find((c) => c.id === "custom-agents")?.access;
     expect(access).toContain("assistant card → More actions → Edit or Archive");
     expect(access).toContain("title actions → Archived → card → More actions → Restore");
   });
-  it("describes human-only window background controls and their transparency limits", () => {
-    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
-      prerequisite: "none",
-      agentAccess: "human-only",
-      access: expect.stringContaining("Appearance → Window background"),
-      limitations: expect.stringContaining("dedicated top-right chevron"),
-      purpose: expect.stringContaining("whole-window background opacity"),
-    });
+  it("describes human-only browser appearance without native window effects", () => {
+    const settings = APPLICATION_CAPABILITIES.find((cap) => cap.id === "settings");
+    expect(settings).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });
+    expect(settings?.purpose).not.toContain("whole-window background opacity");
+    expect(settings?.purpose).toContain("Browser-native window management is outside Code60");
   });
   it("describes Apps-owned preferences and Update Manager with unchanged human-only access", () => {
-    const updates = DESKTOP_CAPABILITIES.find((c) => c.id === "updates");
-    expect(updates).toMatchObject({
+    expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates")).toMatchObject({
       label: "Update Manager",
-      access: "Apps → Update Manager → title actions",
-      prerequisite: "runtime",
+      access: "Apps → Update Manager",
+      prerequisite: "none",
       agentAccess: "human-only",
     });
-    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "memory")?.access).toContain("Apps → Memory");
-    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")?.access).toContain(
-      "Apps → Appearance",
+    expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "memory")?.access).toContain(
+      "Apps → Memory",
     );
   });
   it("describes the global icon playback switch without changing authority", () => {
-    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
+    expect(APPLICATION_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
       prerequisite: "none",
       agentAccess: "human-only",
       access: expect.stringContaining("Color theme or Icon animations"),
@@ -162,7 +157,7 @@ describe("desktop capability catalog", () => {
     });
   });
   it("describes the human-only breadcrumb theme shortcut without changing availability", () => {
-    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
+    expect(APPLICATION_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
       prerequisite: "none",
       agentAccess: "human-only",
       access: expect.stringContaining("breadcrumb card → Color theme"),
@@ -170,7 +165,7 @@ describe("desktop capability catalog", () => {
     });
   });
   it("describes locally saved monochrome icons without database prerequisites", () => {
-    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
+    expect(APPLICATION_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
       prerequisite: "none",
       agentAccess: "human-only",
       purpose: expect.stringContaining("Monochrome icons with a color selector"),
@@ -179,7 +174,7 @@ describe("desktop capability catalog", () => {
     });
   });
   it("locates the file panel toggle in the main content card corner", () => {
-    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "files")).toMatchObject({
+    expect(APPLICATION_CAPABILITIES.find((c) => c.id === "files")).toMatchObject({
       access: "Chat → upper-right corner of main content card → Toggle files panel",
       purpose: expect.stringContaining("File Explorer, Changes and Memory Recall"),
       limitations: expect.stringContaining("Alt+Left/Right reorders"),
@@ -188,71 +183,65 @@ describe("desktop capability catalog", () => {
     });
   });
   it("keeps navigation disclosures human-only and independent from execution", () => {
-    const settings = DESKTOP_CAPABILITIES.find((capability) => capability.id === "settings");
+    const settings = APPLICATION_CAPABILITIES.find((capability) => capability.id === "settings");
     expect(settings).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });
     expect(settings?.limitations).toContain("Home/Search is also collapsible");
     expect(settings?.limitations).toContain("Header navigation never toggles expansion");
-    expect(settings?.limitations).toContain("Native desktop blur is macOS-only");
+    expect(settings?.limitations).not.toContain("Native desktop blur is macOS-only");
   });
-  it("describes desktop-only distribution and retained scheduler controls", () => {
-    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "updates")?.purpose).toContain(
-      "macOS arm64 and Linux x64",
+  it("describes browser-only distribution and retained scheduler controls", () => {
+    const browser = APPLICATION_CAPABILITIES.find((cap) => cap.id === "browser-runtime");
+    expect(browser?.limitations).toContain("macOS Apple Silicon and Linux x64 require Node 24");
+    expect(browser?.limitations).toContain("starts at login");
+    expect(browser?.limitations).toContain("Browsers connect without a code by default");
+    expect(browser?.limitations).toContain("code60 pairing on/off/status");
+    expect(browser?.limitations).toContain(
+      "Closing or refreshing a browser preserves approved work",
     );
-    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "system-manager")?.purpose).toContain(
-      "No public Code60 CLI",
-    );
-    const service = DESKTOP_CAPABILITIES.find((c) => c.id === "system-manager");
-    expect(service?.purpose).toContain("Scheduling Service");
-    expect(service?.purpose).toContain("Not installed, Stopped and Running");
-    expect(service?.purpose).toContain("Jobs paused is separate");
-    expect(service?.purpose).toContain("automatically every two seconds");
-    expect(service?.limitations).toContain("global Pause polling");
-    expect(service?.limitations).toContain("sixty seconds");
-    expect(service?.limitations).toContain("no native Stop action");
+    const service = APPLICATION_CAPABILITIES.find((cap) => cap.id === "system-manager");
+    expect(service?.limitations).toContain("local code60 service commands");
+    expect(service?.agentAccess).toBe("human-only");
   });
   it("describes the scheduler update ownership and executable prerequisites without agent authority", () => {
-    const update = DESKTOP_CAPABILITIES.find((c) => c.id === "updates");
-    expect(update?.limitations).toContain("native service PID");
-    expect(update?.limitations).toContain("newer or unknown version");
-    expect(update?.limitations).toContain("one exclusive owner");
-    expect(update?.limitations).toContain("parent locations protected");
-    expect(update?.prerequisite).toBe("runtime");
-    expect(update?.agentAccess).toBe("human-only");
+    const updates = APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates");
+    expect(updates?.limitations).toContain("Node 24 and npm");
+    expect(updates?.limitations).toContain("repair the service registration");
+    expect(updates?.agentAccess).toBe("human-only");
   });
   it("classifies Providers navigation and human management without retaining an Agents settings route", () => {
     expect(PAGE_CAPABILITIES.providers).toBe("providers");
     expect(PAGE_CAPABILITIES.provider).toBe("providers");
     expect(SETTINGS_CAPABILITIES).not.toHaveProperty("agents");
-    const providers = DESKTOP_CAPABILITIES.find((capability) => capability.id === "providers");
+    const providers = APPLICATION_CAPABILITIES.find((capability) => capability.id === "providers");
     expect(providers).toMatchObject({
       label: "Providers",
       access: "Providers → provider details → title actions for Disconnect or Set as Primary",
       prerequisite: "none",
     });
-    expect(providers?.limitations).toContain("stopped desktop agent work");
+    expect(providers?.limitations).toContain("stopped interactive agent work");
     expect(providers?.limitations).toContain("No automatic installation or management MCP tools");
   });
   it("classifies model switching as provider-dependent and human-only with role-scoped defaults", () => {
-    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "model-settings")).toMatchObject({
+    expect(APPLICATION_CAPABILITIES.find((c) => c.id === "model-settings")).toMatchObject({
       prerequisite: "provider",
       agentAccess: "human-only",
       limitations: expect.stringContaining("Workers do not follow parent changes"),
       confirmation: expect.stringContaining("Main derives saved values"),
     });
-    expect(DESKTOP_CAPABILITIES.find((c) => c.id === "providers")?.purpose).toContain(
+    expect(APPLICATION_CAPABILITIES.find((c) => c.id === "providers")?.purpose).toContain(
       "clear saved",
     );
   });
   it("describes the database-independent Assistants navigation home", () => {
-    const assistants = DESKTOP_CAPABILITIES.find((c) => c.id === "assistants");
+    const assistants = APPLICATION_CAPABILITIES.find((c) => c.id === "assistants");
     expect(assistants?.purpose).toContain("Relay or Custom Assistants");
     expect(assistants?.prerequisite).toBe("none");
     expect(assistants?.limitations).toContain("does not connect a provider or start work");
     expect(PAGE_CAPABILITIES.assistants).toBe("assistants");
   });
   it("has unique, fully classified descriptors", () => {
-    expect(ids.size).toBe(DESKTOP_CAPABILITIES.length);
-    for (const capability of DESKTOP_CAPABILITIES) {
+    expect(ids.size).toBe(APPLICATION_CAPABILITIES.length);
+    for (const capability of APPLICATION_CAPABILITIES) {
       expect(capability.id).toMatch(/^[a-z][a-z-]*$/);
       for (const field of ["label", "purpose", "access", "confirmation", "limitations"] as const)
         expect(capability[field].trim(), `${capability.id}.${field}`).not.toBe("");
@@ -294,7 +283,7 @@ describe("desktop capability catalog", () => {
 
   it("describes human-opened live automation transcripts without database prerequisites", () => {
     expect(
-      DESKTOP_CAPABILITIES.find((capability) => capability.id === "automations"),
+      APPLICATION_CAPABILITIES.find((capability) => capability.id === "automations"),
     ).toMatchObject({
       prerequisite: "none",
       purpose: expect.stringContaining("live, assembled execution transcripts"),
@@ -303,7 +292,7 @@ describe("desktop capability catalog", () => {
   });
 
   it("describes the current creation cards, folder confirmation and dollar commands", () => {
-    const projects = DESKTOP_CAPABILITIES.find((capability) => capability.id === "projects");
+    const projects = APPLICATION_CAPABILITIES.find((capability) => capability.id === "projects");
     expect(projects).toMatchObject({
       prerequisite: "database",
       access: expect.stringContaining("project row → + (New Session)"),
@@ -319,7 +308,7 @@ describe("desktop capability catalog", () => {
     expect(projects?.confirmation).toContain("Stop folder confirmation");
     expect(projects?.limitations).toContain("only the project chevron");
     expect(projects?.limitations).toContain("Project chat auto-names are limited to 19 characters");
-    const commands = DESKTOP_CAPABILITIES.find((capability) => capability.id === "commands");
+    const commands = APPLICATION_CAPABILITIES.find((capability) => capability.id === "commands");
     expect(commands).toMatchObject({
       label: "Commands",
       prerequisite: "database",
@@ -339,7 +328,7 @@ describe("desktop capability catalog", () => {
   });
 
   it("describes session-owned file tabs without changing their runtime prerequisite", () => {
-    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "files")).toMatchObject({
+    expect(APPLICATION_CAPABILITIES.find((capability) => capability.id === "files")).toMatchObject({
       prerequisite: "runtime",
       purpose: expect.stringContaining("individual chat or worker session"),
       limitations: expect.stringContaining(
@@ -349,14 +338,16 @@ describe("desktop capability catalog", () => {
   });
 
   it("describes bounded active file subscriptions and reachable archived review evidence", () => {
-    const files = DESKTOP_CAPABILITIES.find((capability) => capability.id === "files");
+    const files = APPLICATION_CAPABILITIES.find((capability) => capability.id === "files");
     expect(files?.limitations).toContain("Inactive panels release file subscriptions");
     expect(files?.limitations).toContain("exact active file subscription");
     expect(files?.limitations).toContain("Archived reviews remain read-only");
   });
 
   it("describes sidebar activity as runtime-dependent presentation", () => {
-    expect(DESKTOP_CAPABILITIES.find((capability) => capability.id === "activity")).toMatchObject({
+    expect(
+      APPLICATION_CAPABILITIES.find((capability) => capability.id === "activity"),
+    ).toMatchObject({
       prerequisite: "runtime",
       access: expect.stringContaining("left navigation names"),
       purpose: expect.stringContaining("custom assistants and Relay"),

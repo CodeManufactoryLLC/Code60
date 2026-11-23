@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
-import type { DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient } from "../bridge/index.js";
 import { ChatMarkdown } from "./chat-markdown.js";
 import { McpBadge } from "./mcp-badge.js";
 import { MessageCopy } from "./message-controls.js";
@@ -28,7 +28,7 @@ export function ChatMessage({
   className?: string;
   eventIndex?: string;
   tabIndex?: number;
-  openLink: DesktopApi["openWebLink"];
+  openLink: ApplicationClient["openWebLink"];
   incoming?: boolean;
   visible?: boolean;
   onCopied?: (() => void) | undefined;

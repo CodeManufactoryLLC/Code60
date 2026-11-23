@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { DesktopApi, OrchestrationChat } from "../bridge/index.js";
+import type { ApplicationClient, OrchestrationChat } from "../bridge/index.js";
 import { useNavigationActions as renderNavigation } from "./navigation-actions.js";
 import { initialTabs } from "./tabs.js";
 
@@ -77,7 +77,7 @@ function fixture() {
     api: {
       customAgent,
       orchestrationChatAction: vi.fn(async () => undefined),
-    } as unknown as DesktopApi,
+    } as unknown as ApplicationClient,
     tabs: initialTabs,
     database: null,
     databaseEpoch: 1,

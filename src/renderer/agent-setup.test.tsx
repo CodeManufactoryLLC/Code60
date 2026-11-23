@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
-import type { AgentSetupSession, DesktopApi, Snapshot } from "../bridge/index.js";
+import type { AgentSetupSession, ApplicationClient, Snapshot } from "../bridge/index.js";
 import { AgentSetupWizard } from "./agent-setup.js";
 
 function snapshot(phase: AgentSetupSession["phase"], detected = false): Snapshot {
@@ -32,7 +32,7 @@ function render(phase: AgentSetupSession["phase"], detected = false) {
   return renderToStaticMarkup(
     <AgentSetupWizard
       snapshot={snapshot(phase, detected)}
-      api={{} as DesktopApi}
+      api={{} as ApplicationClient}
       mode="primary"
       onClose={() => {}}
     />,

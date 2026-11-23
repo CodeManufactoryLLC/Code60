@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
-import type { DesktopApi, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, Snapshot } from "../bridge/index.js";
 import { useFiles } from "./files.js";
 import { ProjectScope, useProjectScope } from "./project-scope.js";
 import { useProjectWorkspace } from "./project-workspace.js";
@@ -19,7 +19,7 @@ vi.mock("./transcripts.js", async (original) => ({
   useTranscripts: vi.fn(() => ({ events: {}, errors: {}, pending: 0 })),
 }));
 
-const api = {} as DesktopApi;
+const api = {} as ApplicationClient;
 const snapshot = {
   database: "/db",
   directory: "/project",
@@ -106,7 +106,7 @@ function ReviewProbe({
   capture,
   archived = false,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   archived?: boolean;
   capture(workspace: ReturnType<typeof useProjectWorkspace>): void;
 }) {
@@ -139,7 +139,7 @@ function ReviewProbe({
 }
 
 it("opens a review in its owning chat without changing the selected worker's tabs", () => {
-  const api = { orchestrationChatAction: vi.fn(async () => {}) } as unknown as DesktopApi;
+  const api = { orchestrationChatAction: vi.fn(async () => {}) } as unknown as ApplicationClient;
   const destination = scope.panel(sessionPanelId(undefined, "chat-a"));
   const worker = scope.panel(sessionPanelId("worker", undefined));
   const before = worker.snapshot();
@@ -163,7 +163,7 @@ it("opens a review in its owning chat without changing the selected worker's tab
 });
 
 it("opens archived-owner evidence in the reachable selected panel without selecting or unarchiving its owner", () => {
-  const api = { orchestrationChatAction: vi.fn(async () => {}) } as unknown as DesktopApi;
+  const api = { orchestrationChatAction: vi.fn(async () => {}) } as unknown as ApplicationClient;
   let workspace: ReturnType<typeof useProjectWorkspace> | undefined;
   renderToStaticMarkup(
     <ReviewProbe
@@ -191,7 +191,7 @@ it("discards delayed Browse Files when a different worker is selected in the sam
           release = resolve;
         }),
     ),
-  } as unknown as DesktopApi;
+  } as unknown as ApplicationClient;
   let workspace: ReturnType<typeof useProjectWorkspace> | undefined;
   renderToStaticMarkup(
     <ReviewProbe

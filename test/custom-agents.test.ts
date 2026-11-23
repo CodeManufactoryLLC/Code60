@@ -2,9 +2,9 @@ import { mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { ApplicationAgents } from "../src/application/application-agents.js";
 import type { CustomAgent } from "../src/bridge/index.js";
 import { DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
-import { ApplicationAgents } from "../src/desktop/application-agents.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
 
 // Each owner persists private Relay-style storage through the native ACL helper on Windows.
@@ -241,6 +241,7 @@ it("routes plans, worker transcripts, reviews and Undo to their owner while anot
 
 it("cancels a queued lazy Open when Stop all intervenes, without starting a new provider", async () => {
   const a = await define("A");
+  await vi.waitFor(() => expect(host.snapshot().run?.status).toBe("idle"));
   const stopped = expect(host.manage({ type: "open", id: a.id })).rejects.toThrow("cancelled");
   await host.stopAll();
   await stopped;

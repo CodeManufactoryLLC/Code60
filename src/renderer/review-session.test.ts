@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import type { DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient } from "../bridge/index.js";
 import type { ReviewScope } from "./review-actions.js";
 import { reviewSession } from "./review-session.js";
 
@@ -11,7 +11,7 @@ const scope: ReviewScope = {
   reviewId: "review",
 };
 it("shares pending recovery between controls without replay", async () => {
-  const api = {} as DesktopApi;
+  const api = {} as ApplicationClient;
   const chat = reviewSession(api, scope);
   const history = reviewSession(api, { ...scope });
   expect(chat).toBe(history);
@@ -33,11 +33,11 @@ it("shares pending recovery between controls without replay", async () => {
   expect(history.busy).toBe(false);
 });
 it("isolates targets, generations, database replacements and API owners", () => {
-  const api = {} as DesktopApi;
+  const api = {} as ApplicationClient;
   const first = reviewSession(api, scope);
   expect(reviewSession(api, { ...scope, targetId: "other" })).not.toBe(first);
   expect(reviewSession(api, { ...scope, generation: 2 })).not.toBe(first);
-  expect(reviewSession({} as DesktopApi, scope)).not.toBe(first);
+  expect(reviewSession({} as ApplicationClient, scope)).not.toBe(first);
   const project: ReviewScope = {
     kind: "project",
     project: "/same",
@@ -52,7 +52,7 @@ it("isolates targets, generations, database replacements and API owners", () => 
   expect(reviewSession(api, { ...project, projectId: "replacement" })).not.toBe(owner);
 });
 it("bounds idle cached sessions without evicting a pending owner", async () => {
-  const api = {} as DesktopApi;
+  const api = {} as ApplicationClient;
   const busyScope = { ...scope, reviewId: "busy" };
   const busy = reviewSession(api, busyScope);
   let finish = () => {};

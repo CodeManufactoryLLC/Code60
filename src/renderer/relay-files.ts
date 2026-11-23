@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
-  type DesktopApi,
+  type ApplicationClient,
   type DetailFrame,
   type DetailRequest,
   type DetailScope,
@@ -61,7 +61,7 @@ export function relayFileScope(
 
 /** Opening Files explicitly chooses a Relay root; project navigation never supplies it. */
 export function useRelayFiles(
-  api: DesktopApi,
+  api: ApplicationClient,
   snapshot: Snapshot | undefined,
   root: string,
   enabled: boolean,

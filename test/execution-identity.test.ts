@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { expect, it, vi } from "vitest";
+import { ExecutionHost } from "../src/application/execution-host.js";
 import { defaultDeps } from "../src/core/index.js";
-import { ExecutionHost } from "../src/desktop/execution-host.js";
 
 const identity = vi.hoisted(() => ({ inode: 9_007_199_254_740_992n }));
 vi.mock("node:fs/promises", async (original) => ({

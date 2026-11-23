@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  type DesktopApi,
+  type ApplicationClient,
   type WorkflowDraft,
   type WorkflowDraftReply,
   type WorkflowRecord,
@@ -20,7 +20,7 @@ export function WorkflowForm({
   onCreated,
   onClose,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   providerReady: boolean;
   active: boolean;
   onProvider(): void;

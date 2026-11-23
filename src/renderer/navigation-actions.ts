@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type {
-  DesktopApi,
+  ApplicationClient,
   DesktopRun,
   OpenProject,
   OrchestrationChat,
@@ -21,7 +21,7 @@ export type NavigationIntent = NavigationTarget | { kind: "new-conversation" };
 
 interface Context {
   onNavigate?(target: NavigationIntent): [Settle, Current] | undefined;
-  api: DesktopApi;
+  api: ApplicationClient;
   tabs: PageTabs;
   database: string | null;
   databaseEpoch: number | undefined;

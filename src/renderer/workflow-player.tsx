@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
-  type DesktopApi,
+  type ApplicationClient,
   TRANSMISSION_VERSION,
   type WorkflowEvent,
   type WorkflowRecord,
@@ -311,7 +311,7 @@ function AcceptedDiff({
   record,
   connected,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   record: WorkflowRecord;
   connected: boolean;
 }) {
@@ -379,7 +379,7 @@ export function WorkflowPlayer({
   busy,
   act,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   record: WorkflowRecord;
   active: boolean;
   polling: boolean;

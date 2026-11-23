@@ -1,12 +1,18 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import type { DesktopApi, Review, TaskView } from "../bridge/index.js";
+import type { ApplicationClient, Review, TaskView } from "../bridge/index.js";
 import { type ReviewPreview, reviewRequest } from "./review-actions.js";
 import { ReviewPanel } from "./review-panel.js";
 
 const MonacoDiff = lazy(() => import("./monaco-diff.js"));
 
 /** Reads only the pinned capture/proposal. Opening a tab never prepares or applies it. */
-export function ReviewPreviewPanel({ api, preview }: { api: DesktopApi; preview: ReviewPreview }) {
+export function ReviewPreviewPanel({
+  api,
+  preview,
+}: {
+  api: ApplicationClient;
+  preview: ReviewPreview;
+}) {
   const [selected, select] = useState(0);
   const choice = preview.related?.[selected] ?? preview;
   return (
@@ -29,7 +35,7 @@ export function ReviewPreviewPanel({ api, preview }: { api: DesktopApi; preview:
     </>
   );
 }
-function PinnedReviewPreview({ api, preview }: { api: DesktopApi; preview: ReviewPreview }) {
+function PinnedReviewPreview({ api, preview }: { api: ApplicationClient; preview: ReviewPreview }) {
   const [attempt, retry] = useState(0);
   const [result, setResult] = useState<{
     key: string;

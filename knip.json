@@ -1,10 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip/schema.json",
   "entry": [
-    "src/desktop/main.ts",
-    "src/desktop/preload.cts",
-    "src/desktop/mcp-server.ts",
-    "src/desktop/rag-worker.ts",
     "src/automation/main.ts",
     "scripts/generate-icon.mjs",
     "src/**/*.test.{ts,tsx}",
@@ -18,6 +14,12 @@
     "test/fixtures/system-manager.tsx",
     "test/fixtures/automation-transcript.tsx",
     "test/fixtures/navigation-icons.tsx",
+    "src/gateway/main.ts",
+    "src/management/main.ts",
+    "src/application/mcp-server.ts",
+    "src/application/rag-worker.ts",
+    "src/application/memory-worker.ts",
+    "scripts/dev-backend.mjs",
     "test/fixtures/fake-transmission.mjs"
   ],
   "project": [
@@ -26,6 +28,6 @@
     "test/**/*.{ts,tsx,mjs}",
     "*config*.ts"
   ],
-  "ignoreDependencies": ["@wyw-in-js/shared", "app-builder-lib"],
-  "ignoreBinaries": ["mkfifo", "openbox"]
+  "ignoreDependencies": ["@wyw-in-js/shared"],
+  "ignoreBinaries": ["mkfifo"]
 }

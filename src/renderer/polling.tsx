@@ -1,7 +1,7 @@
 import type { Rectangle } from "@glideapps/glide-data-grid";
 import { useEffect, useId, useMemo, useState } from "react";
 import {
-  type DesktopApi,
+  type ApplicationClient,
   type Polling,
   type PollKey,
   type PollResult,
@@ -33,7 +33,7 @@ const triggerLabels: Record<PollResult["trigger"], string> = {
   change: "Change",
 };
 
-type PollApi = Pick<DesktopApi, "poll" | "setPollSettings" | "setPollingPaused">;
+type PollApi = Pick<ApplicationClient, "poll" | "setPollSettings" | "setPollingPaused">;
 export interface PollingProps {
   polling: Polling;
   api: PollApi;

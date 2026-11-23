@@ -14,7 +14,7 @@ if (process.argv.includes("--model")) {
     throw new Error("Network is forbidden in the offline RAG smoke");
   };
   const started = performance.now();
-  const { loadRagModel } = await import("../dist/desktop/rag-model.js");
+  const { loadRagModel } = await import("../dist/application/rag-model.js");
   const { topMatches, embedMessages, checkedVector, chunkText } = await import(
     "../dist/core/index.js"
   );
@@ -120,7 +120,7 @@ if (process.argv.includes("--model")) {
     },
   );
   console.log(stdout.trim());
-  const { RagService } = await import("../dist/desktop/rag-service.js");
+  const { RagService } = await import("../dist/application/rag-service.js");
   const directory = await mkdtemp(join(tmpdir(), "code60-rag-offline-"));
   const service = new RagService(models);
   service.select(join(directory, "database.sqlite"));

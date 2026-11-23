@@ -1,15 +1,17 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { build } from "vite";
-import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
+import { fixturePage } from "./fixtures/static-page.js";
 
-test("desktop: Relay file hooks survive StrictMode replay, stale frames and re-registration", async () => {
+test("browser: Relay file hooks survive StrictMode replay, stale frames and re-registration", async ({
+  browser,
+}) => {
   const directory = await mkdtemp(join(tmpdir(), "code60-renderer-replay-"));
   const output = join(directory, "fixture");
   const root = resolve(import.meta.dirname, "..");
-  let application: Awaited<ReturnType<typeof launchDesktop>> | undefined;
+  let application: Awaited<ReturnType<typeof fixturePage>> | undefined;
   try {
     await build({
       configFile: false,
@@ -30,16 +32,8 @@ test("desktop: Relay file hooks survive StrictMode replay, stale frames and re-r
       html,
       '<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'"><div id="root"></div><script type="module" src="./replay.js"></script>',
     );
-    application = await launchDesktop(directory, directory, join(directory, "unused.sqlite"));
-    const ready = application.waitForEvent("window");
-    await application.evaluate(({ BrowserWindow }, html) => {
-      const window = new BrowserWindow({
-        show: true,
-        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
-      });
-      void window.loadFile(html);
-    }, html);
-    const page = await ready;
+    application = await fixturePage(browser, output);
+    const page = application.page;
     const preview = page.getByLabel("Preview");
     const state = () =>
       page
@@ -90,6 +84,6 @@ test("desktop: Relay file hooks survive StrictMode replay, stale frames and re-r
     await expect(page.getByLabel("Error")).toBeEmpty();
   } finally {
     await application?.close().catch(() => {});
-    await removeDesktopFixture(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true });
   }
 });

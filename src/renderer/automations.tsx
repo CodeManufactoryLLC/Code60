@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type {
+  ApplicationClient,
   AutomationEditor,
   AutomationHistoryEntry,
   AutomationSummary,
   AutomationUiRequest,
-  DesktopApi,
   RendererAutomationDraft,
 } from "../bridge/index.js";
 import { AutomationForm } from "./automation-form.js";
@@ -51,7 +51,7 @@ export function AutomationsPage({
   agents,
   ...table
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   active: boolean;
   agents: string[];
 } & Pick<TableOptions, "lines" | "density" | "fit" | "textStyles">) {

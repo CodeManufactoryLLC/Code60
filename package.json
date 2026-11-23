@@ -2,20 +2,24 @@
   "name": "code60",
   "version": "0.4.1",
   "private": true,
-  "description": "Electron desktop app for orchestrating coding agents on macOS and Linux",
+  "description": "Local browser application for orchestrating coding agents on macOS and Linux",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
-    "node": ">=22.12"
+    "node": ">=24 <25"
   },
   "files": [
     "dist",
-    "mcp.default.json"
+    "models",
+    "mcp.default.json",
+    "LICENSE",
+    "NOTICE",
+    "TRADEMARKS.md"
   ],
   "scripts": {
     "prepare:models": "node scripts/prepare-models.mjs",
     "test:rag:model": "node scripts/prepare-models.mjs --verify && npm run build && node scripts/test-rag-model.mjs",
-    "build": "tsc -p tsconfig.build.json && vite build",
+    "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -35,15 +39,12 @@
     "format": "biome check --write .",
     "check": "npm run check:instructions && npm run typecheck && npm run lint && npm run check:unused && npm run test:coverage",
     "dev": "node scripts/dev.mjs",
-    "start": "electron .",
-    "test:desktop": "npm run build && playwright test",
-    "test:desktop:container": "node scripts/test-desktop-container.mjs",
-    "package:dir": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --dir --publish never",
-    "package:linux": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --linux --x64 --publish never",
-    "package:mac": "npm run build && node scripts/prepare-package.mjs && electron-builder --config scripts/packaging-config.cjs --mac --arm64 --publish never",
-    "test:packaged": "playwright test --config playwright.packaged.config.ts",
-    "test:installers": "node scripts/test-installers.mjs",
-    "test:memory:performance": "npm run build && node scripts/benchmark-memory.mjs"
+    "start": "node dist/management/main.js open",
+    "test:packaged": "node scripts/test-package.mjs",
+    "test:memory:performance": "npm run build && node scripts/benchmark-memory.mjs",
+    "service": "node dist/management/main.js service",
+    "test:browser": "npm run build && playwright test",
+    "package:app": "npm run build && node scripts/prepare-package.mjs && node scripts/package-app.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^2.4.0",
@@ -54,7 +55,6 @@
     "@headless-tree/core": "1.8.0",
     "@headless-tree/react": "1.8.0",
     "@huggingface/transformers": "4.3.2",
-    "electron-updater": "^6.8.11",
     "monaco-editor": "0.57.0",
     "react": "19.3.1",
     "react-dom": "^19.3.1",
@@ -69,12 +69,6 @@
     "@wyw-in-js/shared": {
       "minimatch@>=7 <11.0.1": "11.0.1"
     },
-    "@electron/universal": {
-      "minimatch@>=7 <11.0.1": "11.0.1"
-    },
-    "app-builder-lib": {
-      "minimatch@>=7 <11.0.1": "11.0.1"
-    },
     "monaco-editor": {
       "dompurify": "3.4.17"
     }
@@ -83,12 +77,11 @@
     "@biomejs/biome": "2.6.5",
     "@playwright/test": "^1.64.1",
     "@tailwindcss/vite": "4.3.5",
-    "@types/node": "^22.20.5",
+    "@types/node": "^24.0.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
     "@vitest/coverage-v8": "5.1.0",
-    "electron": "^45.2.3",
-    "electron-builder": "26.18.1",
     "knip": "6.44.2",
     "tailwindcss": "4.3.5",
     "typescript": "7.0.2",
@@ -96,7 +89,6 @@
     "vitest": "5.1.0",
     "yaml": "2.9.1"
   },
-  "main": "dist/desktop/main.js",
   "author": {
     "name": "Code Manufactory LLC"
   },
@@ -105,9 +97,11 @@
     "type": "git",
     "url": "https://github.com/CodeManufactoryLLC/code60.git"
   },
-  "desktopName": "code60-desktop.desktop",
   "os": [
     "darwin",
     "linux"
-  ]
+  ],
+  "bin": {
+    "code60": "dist/management/main.js"
+  }
 }

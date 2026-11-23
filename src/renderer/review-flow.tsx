@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import type { DesktopApi, Review, TaskView } from "../bridge/index.js";
+import type { ApplicationClient, Review, TaskView } from "../bridge/index.js";
 import { type ReviewScope, reviewRequest } from "./review-actions.js";
 import { ReviewPanel } from "./review-panel.js";
 import { reviewSession } from "./review-session.js";
 
 /** Changes is read-only history. Only interrupted legacy writes expose recovery. */
 export function ReviewFlow(props: {
-  api: DesktopApi;
+  api: ApplicationClient;
   scope: ReviewScope;
   active: boolean;
   hint: number;

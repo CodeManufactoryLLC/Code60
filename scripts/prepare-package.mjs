@@ -41,3 +41,6 @@ const dependencies = execFileSync(command.file, command.args, {
 for (const directory of new Set(dependencies.trim().split("\n").slice(1))) {
   await notices(directory, resolve("node_modules"), "dependencies");
 }
+
+await mkdir("release/build", { recursive: true });
+await cp(output, "dist/licenses", { recursive: true });

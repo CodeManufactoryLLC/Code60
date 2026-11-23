@@ -1,8 +1,8 @@
 import { fork } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryService } from "../src/application/memory-service.js";
 import { DEFAULT_MEMORY_SETTINGS } from "../src/bridge/index.js";
-import { MemoryService } from "../src/desktop/memory-service.js";
 import { FakeAgents, FakeClock, FakeGit, FakeProcesses } from "./fakes.js";
 
 vi.mock("node:child_process", async (original) => ({

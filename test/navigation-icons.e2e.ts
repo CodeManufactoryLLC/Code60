@@ -1,16 +1,18 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { build } from "vite";
 import viewBoxes from "../src/renderer/navigation-icon-viewboxes.json" with { type: "json" };
-import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
+import { fixturePage } from "./fixtures/static-page.js";
 
-test("desktop: all navigation SVGs tightly frame their artwork without distortion", async () => {
+test("browser: all navigation SVGs tightly frame their artwork without distortion", async ({
+  browser,
+}) => {
   test.setTimeout(60_000);
   const directory = await mkdtemp(join(tmpdir(), "code60-navigation-artwork-"));
   const output = join(directory, "fixture");
-  let application: Awaited<ReturnType<typeof launchDesktop>> | undefined;
+  let application: Awaited<ReturnType<typeof fixturePage>> | undefined;
   try {
     await build({
       configFile: false,
@@ -32,18 +34,8 @@ test("desktop: all navigation SVGs tightly frame their artwork without distortio
       html,
       '<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'; style-src \'self\'; style-src-attr \'unsafe-inline\'; img-src \'self\'"><link rel="stylesheet" href="./fixture.css"><div id="root"></div><script type="module" src="./fixture.js"></script>',
     );
-    application = await launchDesktop(directory, directory, join(directory, "unused.sqlite"));
-    const ready = application.waitForEvent("window");
-    await application.evaluate(({ BrowserWindow }, html) => {
-      const window = new BrowserWindow({
-        show: true,
-        width: 1280,
-        height: 1000,
-        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
-      });
-      void window.loadFile(html);
-    }, html);
-    const page = await ready;
+    application = await fixturePage(browser, output);
+    const page = application.page;
     await expect(page.locator(".navigation-icon")).toHaveCount(52);
     for (const image of await page.locator("img.navigation-icon").all()) {
       await expect(image).toHaveJSProperty("complete", true);
@@ -124,6 +116,6 @@ test("desktop: all navigation SVGs tightly frame their artwork without distortio
     });
   } finally {
     await application?.close().catch(() => {});
-    await removeDesktopFixture(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true });
   }
 });

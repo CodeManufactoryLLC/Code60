@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import type { DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient } from "../bridge/index.js";
 import { type ReviewScope, reviewRequest } from "./review-actions.js";
 
 const scope: ReviewScope = {
@@ -20,7 +20,7 @@ function setup() {
     cancelDiff: vi.fn().mockResolvedValue(undefined),
     relayReview: vi.fn().mockResolvedValue({ type: "done" }),
   };
-  return { methods, api: methods as unknown as DesktopApi };
+  return { methods, api: methods as unknown as ApplicationClient };
 }
 it("routes project reads, pinned revisions and cancellation with the original owner and request ID", async () => {
   const { methods, api } = setup();

@@ -55,66 +55,49 @@ support requires updating the architecture and adding validation.
 
 ## Setup and checks
 
-Use macOS or Linux with Node.js 22.12 or later and npm.
-
-Node.js 22.12 needs `NODE_OPTIONS=--experimental-sqlite` when running checks so
-database tests participate in coverage. CI and release validation enable this for Node 22.12;
-Node 24 exposes SQLite without the flag. Coverage floors remain the same.
-Memory tests additionally probe FTS5 in a private in-memory database; Node 22.12
-does not bundle FTS5, so those suites run on Node 24 and Electron instead.
-Project-database and controller coverage still runs on both CI versions.
-Disposable x64 CI desktop runners use Ubuntu's primary package mirror and
-bounded download timeouts to avoid stalled regional graphics-package downloads.
+Use Node 24 and npm on macOS Apple Silicon or Linux x64:
 
 ```sh
 npm ci
-npm run check
+npm run prepare:models
+npm run dev
 ```
 
-Useful scripts:
+Development serves React through Vite Fast Refresh and an isolated foreground
+backend. It prints the loopback URL and pairing code; no login service or native
+window is created. Backend changes restart that development backend; renderer
+changes preserve it.
 
-- `npm run check`: instruction validation, typecheck, Biome checks, Knip, and one coverage-enabled unit/integration suite.
-- `npm run check:instructions`: validate literal documented npm scripts, local Markdown references/heading anchors, module instructions and skill metadata. This static check never executes Markdown commands, fetches remote links or proves prose semantics.
-- `npm run test:coverage`: run Vitest once, write JSON summary/HTML to `coverage/`, and enforce all four coverage metrics.
-- `npm run check:unused`: check unused files, exports, types and dependencies with Knip.
-- `npm run test:logs:performance`: build, then measure production logging in a fresh process against an exact 20 MiB fixture, including first query, 24 saved plus 24 column conditions, 200-row pages, event-loop delay, memory and dirty shutdown. Run `node scripts/benchmark-logs.mjs --fragmented` afterward for a seven-day, 10,066-segment worst case.
-- `npm run format`: apply formatting and safe lint fixes.
-- `npm run scan:secrets`: scan full fetched Git history and current files with checksum-pinned Gitleaks; requires GitHub access and `tar`.
-- `npm run build`: compile the desktop main process and scheduler and build the renderer.
-- `npm run prepare:models`: download and verify the pinned Jina INT8 assets into
-  ignored `models/` (about 164.5 MB). Run once before using RAG or packaging.
-  `node scripts/prepare-models.mjs --verify` verifies existing assets without downloads.
-- `npm run test:rag:model`: build and exercise the actual model offline in fresh
-  processes, with fixed conversation/code relevance fixtures, upstream model-card
-  comparison, maximum-size batches, exact chunk coverage and persistence checks.
-  It prints load/index/query latency and peak RSS. Routine unit tests use fakes.
-- `npm run dev`: build and start the desktop app with rebuilds on changes.
-- `npm run test:desktop:container`: build and run the Electron Playwright tests in a Linux container with Xvfb, without opening windows on your machine. Use this for local desktop testing.
-- `npm run test:desktop`: build and run the same tests directly on the host. A display is required. Use it only in CI and for native-platform validation (macOS, packaged and installer tests).
+Run `npm run check` before every commit. It validates instructions, types, Biome,
+Knip and one coverage-enabled unit suite. Run `npm run test:browser` for behavior,
+bridge, fixture, configuration and packaging changes. Headless Chromium runs on
+the host without Electron or a display. Tests use isolated state and fake providers.
+They must never require live agents or credentials.
 
-Run `npm run check` before each commit. Run `npm run test:desktop:container` for
-desktop changes; if Docker is unavailable, report that instead of running the
-desktop tests on the host. Tests must not require live agents, credentials, or
-network services. Place unit tests beside the code as `*.test.ts`; cross-cutting tests live in `test/`.
+`npm run build` compiles the backend/management CLI and bundled renderer.
+`npm run package:app` creates the npm tarball after verifying prepared model assets.
+`npm run test:packaged` installs it in a temporary prefix and checks the CLI,
+assets, foreground backend and offline embedding model without service enrollment.
+`npm run test:rag:model` exercises the actual offline model and worker lifecycle.
 
 ### Workflow QA
 
-Use the [QA skill](.factory/skills/qa/SKILL.md) to choose complete user journeys
-from the changed behavior and actual regression starting state, including for
-configuration/bridge/fixture/packaging changes. The golden path is onboarding →
-database/project → request → accepted plan → worker → automatic edits →
-read-only diff → code reference → message Undo,
-with renderer reload and a declined Undo confirmation. It uses the existing
-fake-provider/Linux-container harness, not a new plugin or live provider.
+Use the [workflow QA skill](.factory/skills/qa/SKILL.md). The built-path golden
+journey is `test/browser-workflow.e2e.ts`: first use → plan → acceptance → automatic
+edits → diff → attachment → refresh → declined Undo → confirmed Undo. It checks
+independent files, index, HEAD and worker evidence. Supporting static renderer
+fixtures are labeled separately from complete backend journeys.
 
-Collect without launching Electron:
-`npx --no-install playwright test --list agent-workflow.e2e.ts`.
-Run via `npm run test:desktop:container -- --grep "workflow: first use through plan, automatic edits, code references and message Undo"`.
-Collection, unit/static checks and screenshots do not prove workflow success.
-Report PASS/FAIL/BLOCKED and exact gaps; disk pressure or unavailable Docker is
-BLOCKED, never permission for a host Electron fallback. Save sanitized evidence
-under ignored `test-results/`. Verify owned container **and** image cleanup;
-retain host artifacts and BuildKit caches.
+Run a focused journey with:
+
+```sh
+npm run test:browser -- --grep "browser: first use"
+```
+
+Write evidence and gaps under ignored `test-results/qa/`. Missing browsers/assets
+or native environments mean BLOCKED, not a unit-test substitute. Never install a
+real service during routine tests. Use injected native controls for ownership and
+handoff tests; actual login-service lifecycle validation remains a native release gate.
 
 ### Optional Git hooks
 
@@ -128,7 +111,7 @@ npm run hooks:install
 The checked-in pre-commit hook runs `npm run check:precommit`: instructions,
 typecheck, Biome and Knip, in that order. It never formats, stages or rewrites
 files. Keep running full `npm run check` before **every** commit; this quicker
-hook does not run coverage or desktop tests.
+hook does not run coverage or browser tests.
 
 Installation refuses existing hook-path policy or active default hooks rather
 than hiding them. Review any conflict manually; there is no force option.
@@ -155,11 +138,11 @@ provider exactly aligned with Vitest when changing either dependency.
 
 `npm test` and `npm run test:watch` remain available without coverage. `check`
 runs the suite only once. CI retains HTML and machine-readable summaries for
-seven days on Linux Node 22.12/24 and in native macOS Node 24 validation.
+seven days on Linux Node 24 and in native macOS Node 24 validation.
 Native runs remain required evidence for platform claims; local POSIX runs do not
-substitute for native installer validation.
+substitute for native login-service validation.
 
-Knip follows the desktop main/preload, renderer/Vite workers, MCP sidecar,
+Knip follows the gateway/management entries, renderer/Vite workers, MCP sidecar,
 tests, dynamically launched fake agents/Docker fixtures and manual icon generator.
 Vite's configured renderer root and HTML script provide its renderer entry and
 worker imports; the redundant global renderer entry is intentionally omitted.
@@ -195,7 +178,7 @@ because some failures appear only under the suite's own parallel load:
 
 ```sh
 for i in $(seq 1 20); do npm test >"/tmp/unit-$i.log" 2>&1 || echo "run $i failed"; done
-npm run test:desktop:container -- --grep "<test name>" --repeat-each=10 --retries=0
+npm run test:browser -- --grep "<test name>" --repeat-each=10 --retries=0
 ```
 
 If it still does not fail, add a temporary delay at the suspected race point to
@@ -208,72 +191,21 @@ state it depends on, not for time:
   workspace appearing, and fail as soon as the operation settles without reaching it.
 - Never add retries, and do not raise a timeout to hide a race. When a deadline
   under test must outlast fixture startup, raise only that test's deadline and
-  explain why in a comment, as in `src/desktop/environment.test.ts`.
+  explain why in a comment, as in `src/application/environment.test.ts`.
 
 Record the failure rate before and after the fix in the pull request.
 
-### Desktop tests in a Linux container
+### Browser tests
 
-Install and start Docker Desktop with a Linux engine, and make sure `docker info`
-responds in your selected Docker context. You need Node.js and npm on the host,
-but do not need host `node_modules` or a display server for this command:
+The registered headless Playwright suite runs the bundled React app against an
+isolated Node gateway. Install Chromium with `npx --no-install playwright install
+chromium` when needed. Browser close, explicit backend stop and backend restart
+are different lifecycle events and need separate assertions. Keep provider/process
+and filesystem outcomes independent of browser snapshots.
 
-```sh
-npm run test:desktop:container
-npm run test:desktop:container -- --grep "search"
-```
-
-The runner uses the engine's native architecture (Linux ARM64 on Apple Silicon,
-Linux x64 on Intel), even if `DOCKER_DEFAULT_PLATFORM` specifies an emulated
-architecture. It runs all tests selected by `playwright.config.ts`, including
-agent discovery. Packaged-app and DEB/AppImage installer tests remain separate.
-This checks Linux behavior, not macOS-specific integration.
-
-The first run downloads the Node.js 24 Bookworm image, Linux display dependencies,
-npm packages and Electron. Later runs reuse Docker build layers; changes to the
-package manifests reinstall dependencies with `npm ci`. Current working files,
-including uncommitted and untracked source, are copied into the image. Host
-dependencies, build output, Git metadata and local `.env`/`.npmrc` files are
-excluded. The Mac's `node_modules` and `dist` are never mounted or changed.
-
-Electron runs as a non-root user with its Chromium sandbox enabled, under Xvfb
-at 1280×1024. The container has a 1 GiB shared-memory limit and uses a vendored
-seccomp profile permitting Chromium's user namespaces. It needs no privileged
-mode, host display, credentials, or live agents. The Docker engine must allow
-user namespaces; if sandbox startup fails, repair that engine configuration
-rather than passing `--no-sandbox`.
-
-Output streams to your terminal. Each run prints a unique host directory under
-`test-results/container/` containing screenshots and any retained failure traces.
-It is the only host directory mounted into the container, and is made writable
-by the non-root container user. Use a local Docker Desktop context with repository
-file sharing enabled; a remote engine cannot mount your Mac's artifact path.
-To inspect a trace after installing host dependencies:
-
-```sh
-npx --no-install playwright show-trace test-results/container/<run>/<test>/trace.zip
-```
-
-Test/build failure returns a nonzero exit status. On success, failure, or Ctrl+C,
-the runner removes its container and exported test image, preserving host
-artifacts and BuildKit dependency/build caches. Each run owns a uniquely tagged
-and labelled image, so concurrent runs cannot delete one another's images.
-Docker checks time out after 10 seconds; image build and attached test execution
-each have a 20-minute outer limit, in addition to Playwright's existing timeouts. Cleanup is
-bounded and prints the exact removal command if the daemon cannot complete it.
-No containers belonging to other runs are stopped, and Docker settings are not
-changed automatically.
-
-After every Docker test session, including failures and interruptions, verify
-that both its containers and built images have been removed. The runner normally
-handles this automatically; if cleanup fails, use its printed removal command once the
-Docker engine is responsive. Also remove temporary images, volumes, and networks
-created solely for manual test or debugging runs. Do not retain built test images
-as "reusable" without an explicit user request. Dependency/build caches are
-separate Docker resources and remain cached; report that retention separately
-from image cleanup. Preserve host screenshots and traces. Scope cleanup to the
-resources created by your session; never use global Docker prune commands or
-remove resources belonging to other work. Report any cleanup left incomplete.
+Electron container/installer harnesses are removed. If separate Docker checks are
+added, clean up only their owned containers, temporary images, networks and
+volumes; preserve caches and other work's resources. Never globally prune Docker.
 
 ## Dependency updates
 
@@ -320,7 +252,7 @@ npm audit --package-lock-only --ignore-scripts --include=dev
 ```
 
 Then update or remove the matching compatibility tests and run `npm run check`
-and `npm run test:desktop:container`, because electron-builder and the renderer
+and `npm run test:browser`, because the package and renderer
 build use these packages. Commit the lockfile change.
 
 ## Security triage and ownership
@@ -363,7 +295,7 @@ live settings match.
 Read [ARCHITECTURE.md](ARCHITECTURE.md), [AGENTS.md](AGENTS.md), and the
 `src/<module>/AGENTS.md` instructions for the modules you change. Keep module
 boundaries intact and import other modules through their `index.ts` entry points.
-Add tests for changed behavior and update relevant desktop and scheduler documentation
+Add tests for changed behavior and update relevant application and scheduler documentation
 when the user-visible behavior changes.
 
 Keep pull requests focused. Explain what changed, why, and which checks you ran.
@@ -401,14 +333,10 @@ git commit -s
 The `Signed-off-by` trailer certifies that you have the right to submit the
 contribution under the project's license. Use your own name and email.
 
-## Installer CI
+## Browser and package CI
 
-Require the **CI passed** check for merges. Routine PRs and pushes to main use
-only Linux: Node 22.12/24 checks, three Electron UI test shards, and a separate
-DEB/AppImage packaging and installation job all start independently. Each desktop
-shard uses its own runner and one worker; together they run the full suite.
-**CI passed** requires both Node checks, all three desktop shards, and the
-installer job to succeed. Failed, cancelled, or skipped jobs prevent success.
-macOS runs only for manually requested release
-candidates. See [RELEASING.md](RELEASING.md) for local packaging, required GitHub
-settings, and the signed installer workflow.
+PRs and main pushes run Linux Node 24 unit/static/coverage checks, browser journeys
+and clean-prefix npm package/offline-model smoke tests. The aggregate required
+check remains **CI passed**. Manual native validation runs on macOS Apple Silicon
+with Node 24. No native installer or automatic publisher remains. Actual launchd
+and systemd login/update lifecycle checks are required before release claims.

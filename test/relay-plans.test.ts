@@ -3,10 +3,10 @@ import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { ExecutionHost, type ExecutionOwner } from "../src/application/execution-host.js";
+import { RelayPlans } from "../src/application/relay-plans.js";
 import type { PlanCreate } from "../src/bridge/index.js";
 import { DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
-import { ExecutionHost, type ExecutionOwner } from "../src/desktop/execution-host.js";
-import { RelayPlans } from "../src/desktop/relay-plans.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
 
 let root: string;

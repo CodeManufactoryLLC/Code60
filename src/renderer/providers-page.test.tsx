@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
-import type { DesktopApi, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, Snapshot } from "../bridge/index.js";
 import { type ProviderManagement, providerActionReasons } from "./provider-management.js";
 import { ProvidersPage } from "./providers-page.js";
 import { ProvidersSidebar } from "./providers-sidebar.js";
@@ -33,7 +33,7 @@ const management: ProviderManagement = {
   add: vi.fn(),
   closeSetup: vi.fn(),
 };
-const api = { modelDefault: async () => {} } as unknown as DesktopApi;
+const api = { modelDefault: async () => {} } as unknown as ApplicationClient;
 
 it("uses saved membership order, a first-position creation card, independent menus and one primary status", () => {
   const html = renderToStaticMarkup(

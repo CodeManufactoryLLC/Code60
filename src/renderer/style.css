@@ -28,3 +28,44 @@
 @import "./neobrutalism/combobox.css" layer(components);
 @import "./styles/utilities.css" layer(utilities);
 @import "./styles/accessibility.css" layer(accessibility);
+
+/* Browser bootstrap and backend controls are outside application-owned navigation. */
+.browser-pairing {
+  max-width: 40rem;
+  margin: 8vh auto;
+  padding: 2rem;
+}
+.browser-pairing label,
+.browser-pairing input {
+  display: block;
+  margin: 1rem 0;
+}
+.backend-controls {
+  position: fixed;
+  right: 8px;
+  bottom: 2px;
+  z-index: 30;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font: 12px sans-serif;
+  background: var(--bg, #fff);
+  color: var(--text, #111);
+  padding: 2px 8px;
+}
+.host-chooser {
+  max-height: 40vh;
+  overflow: auto;
+  list-style: none;
+  padding: 0;
+}
+.host-chooser button {
+  width: 100%;
+  text-align: left;
+  margin: 2px 0;
+}
+html,
+body,
+#root {
+  background-color: var(--bg, #fff);
+}

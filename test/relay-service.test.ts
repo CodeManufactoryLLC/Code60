@@ -15,12 +15,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { MemoryService } from "../src/application/memory-service.js";
+import { RelayService } from "../src/application/relay-service.js";
+import * as storage from "../src/application/relay-storage.js";
+import { RelayStore } from "../src/application/relay-store.js";
 import type { Plan } from "../src/bridge/index.js";
 import { DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
-import { MemoryService } from "../src/desktop/memory-service.js";
-import { RelayService } from "../src/desktop/relay-service.js";
-import * as storage from "../src/desktop/relay-storage.js";
-import { RelayStore } from "../src/desktop/relay-store.js";
 import { privateDirectory } from "../src/platform/index.js";
 import { FakeAgents, FakeGit, FakeProcesses, flush } from "./fakes.js";
 

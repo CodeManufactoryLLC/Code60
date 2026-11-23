@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DesktopApi, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, Snapshot } from "../bridge/index.js";
 import { SnapshotStore } from "./desktop-snapshot.js";
 
 const frame = (revision: number, directory = "/a"): Snapshot =>
@@ -32,7 +32,7 @@ function source() {
       return off;
     },
     snapshot: read,
-  } as Pick<DesktopApi, "subscribe" | "snapshot">;
+  } as Pick<ApplicationClient, "subscribe" | "snapshot">;
   return { initial, api, off, read, push: (snapshot: Snapshot) => receive(snapshot) };
 }
 const delta = (revision: number, previousRevision: number): Snapshot => ({

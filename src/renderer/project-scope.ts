@@ -1,6 +1,6 @@
 import type { Rectangle } from "@glideapps/glide-data-grid";
 import { useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react";
-import type { DesktopApi, RunConfiguration } from "../bridge/index.js";
+import type { ApplicationClient, RunConfiguration } from "../bridge/index.js";
 import type { OpenChat } from "./chats.js";
 import { ScopeLifetime } from "./scope-lifetime.js";
 import { SessionPanel } from "./session-panel.js";
@@ -38,7 +38,7 @@ export class ProjectScope extends ScopeLifetime {
     }
     return panel;
   }
-  transcripts(api: Pick<DesktopApi, "action">): TranscriptCache {
+  transcripts(api: Pick<ApplicationClient, "action">): TranscriptCache {
     this.transcriptCache ??= new TranscriptCache(api, this.viewKey);
     return this.transcriptCache;
   }

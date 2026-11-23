@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { DesktopApi, PlanSummary, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, PlanSummary, Snapshot } from "../bridge/index.js";
 import { FilePanel } from "./file-panel.js";
 import { emptyFileTabs, type FileTabAction, updateFileTabs } from "./file-tabs.js";
 import type { RecallSource } from "./memory-recall.js";
@@ -22,7 +22,7 @@ export function RelayPlansPanel({
   revisionPreview,
   planRequest,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   plans: PlanSummary[];
   conversationId: string | undefined;
   currentChat: string | undefined;

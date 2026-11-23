@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import type { DesktopApi, ProjectRequestIdentity, ReviewContent } from "../bridge/index.js";
+import type { ApplicationClient, ProjectRequestIdentity, ReviewContent } from "../bridge/index.js";
 import type { PreviewViewState } from "./monaco-preview.js";
 
 const MonacoPreview = lazy(() => import("./monaco-preview.js"));
@@ -11,7 +11,7 @@ export interface ReviewAddress extends ProjectRequestIdentity {
   relay?: { conversationId: string; generation: number; targetId: string };
 }
 export function useReviewFile(
-  api: DesktopApi,
+  api: ApplicationClient,
   project: string,
   address: ReviewAddress | undefined,
 ) {
@@ -98,7 +98,7 @@ export function ReviewFilePreview({
   address,
   viewState,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   project: string;
   address: ReviewAddress;
   viewState?: { current: PreviewViewState | null } | undefined;

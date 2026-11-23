@@ -11,9 +11,8 @@ describe("unused-code gate entry points", () => {
   it("models launched sidecars, preload, fixtures and manual assets tooling without including generated output", () => {
     for (const path of [
       "src/automation/main.ts",
-      "src/desktop/main.ts",
-      "src/desktop/preload.cts",
-      "src/desktop/mcp-server.ts",
+      "src/gateway/main.ts",
+      "src/application/mcp-server.ts",
       "scripts/generate-icon.mjs",
       "test/fixtures/fake-agent.mjs",
       "test/fixtures/packaged-agent.mjs",
@@ -52,7 +51,7 @@ describe("unused-code gate entry points", () => {
       for (const path of config.entry.filter((path) => !path.includes("*")))
         await put(path, "console.log('entry');");
       await put(
-        "src/desktop/main.ts",
+        "src/gateway/main.ts",
         'import {used} from "../core/shared.js"; console.log(used);',
       );
       await put("src/core/shared.ts", "export const used = 1; export const orphan = 2;");

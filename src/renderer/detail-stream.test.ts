@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
-  DesktopApi,
+  ApplicationClient,
   DetailFrame,
   DetailRequest,
   OrchestrationChat,
@@ -59,10 +59,10 @@ function source(hints = false) {
   const read = vi.fn(() => initial.promise);
   const unsubscribe = vi.fn(async () => {});
   const api: Pick<
-    DesktopApi,
+    ApplicationClient,
     "onDetails" | "subscribeDetails" | "readDetails" | "unsubscribeDetails"
   > &
-    Partial<Pick<DesktopApi, "subscribe">> = {
+    Partial<Pick<ApplicationClient, "subscribe">> = {
     ...(hints
       ? {
           subscribe: (listener: (snapshot: Snapshot) => void) => {

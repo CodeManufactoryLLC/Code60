@@ -1,8 +1,7 @@
 name: CI
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request: null
 permissions:
   contents: read
@@ -11,107 +10,64 @@ concurrency:
   cancel-in-progress: true
 jobs:
   check:
-    name: Linux / Node ${{ matrix.node }}
+    name: Linux / Node 24
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    strategy:
-      fail-fast: true
-      matrix:
-        node:
-          - "22.12"
-          - "24"
-    env:
-      # Node 22.12 gates SQLite behind this flag; run database tests instead of skipping them.
-      NODE_OPTIONS: ${{ matrix.node == '22.12' && '--experimental-sqlite' || '' }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
+        with: { persist-credentials: false }
       - uses: actions/setup-node@v7
-        with:
-          node-version: ${{ matrix.node }}
-          cache: npm
-          package-manager-cache: false
+        with: { node-version: "24", cache: npm, package-manager-cache: false }
       - run: npm ci
       - run: npm run check
-      - name: Retain coverage reports
-        uses: actions/upload-artifact@v7.0.2
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
-          name: coverage-linux-node-${{ matrix.node }}
-          path: coverage/
-          retention-days: 7
-          if-no-files-found: warn
-      - run: npm run build
+          {
+            name: coverage-linux-node-24,
+            path: coverage/,
+            retention-days: 7,
+            if-no-files-found: warn,
+          }
+  browser:
+    name: Linux browser journeys
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v7
+        with: { node-version: "24", cache: npm, package-manager-cache: false }
+      - run: npm ci
+      - run: npx --no-install playwright install --with-deps chromium
       - run: npm run prepare:models
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@v7.0.2
+        if: failure()
+        with:
+          {
+            name: browser-failure,
+            path: test-results/,
+            retention-days: 7,
+            if-no-files-found: ignore,
+          }
+  package:
+    name: Linux installed npm package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v7
+        with: { node-version: "24", cache: npm, package-manager-cache: false }
+      - run: npm ci
+      - run: npm run prepare:models
+      - run: npm run package:app
+      - run: npm run test:packaged
       - run: node scripts/test-rag-model.mjs
-  desktop:
-    name: Linux desktop ${{ matrix.shard }}/3
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        shard:
-          - 1
-          - 2
-          - 3
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-          cache: npm
-          package-manager-cache: false
-      - uses: ./.github/actions/setup-linux-desktop
-      - run: npm ci
-      - run: node scripts/install-electron.mjs
-      - run: npm run prepare:models
-      - name: Desktop tests
-        env:
-          SHARD: ${{ matrix.shard }}
-        run: xvfb-run -a npm run test:desktop -- --fully-parallel --workers=1 --shard="$SHARD/3"
-      - uses: actions/upload-artifact@v7.0.2
-        if: failure()
-        with:
-          name: linux-desktop-${{ matrix.shard }}-failure
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-  installers:
-    name: Linux installers
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-          cache: npm
-          package-manager-cache: false
-      - uses: ./.github/actions/setup-linux-desktop
-      - run: npm ci
-      - run: node scripts/install-electron.mjs
-      - run: npm run prepare:models
-      - run: npm run package:linux
-      - run: xvfb-run -a npm run test:installers
-      - uses: actions/upload-artifact@v7.0.2
-        if: failure()
-        with:
-          name: linux-installers-failure
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
   passed:
     name: CI passed
-    needs:
-      - check
-      - desktop
-      - installers
+    needs: [check, browser, package]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 1
@@ -119,6 +75,6 @@ jobs:
       - name: Require every validation job to succeed
         env:
           CHECK: ${{ needs.check.result }}
-          DESKTOP: ${{ needs.desktop.result }}
-          INSTALLERS: ${{ needs.installers.result }}
-        run: test "$CHECK" = success && test "$DESKTOP" = success && test "$INSTALLERS" = success
+          BROWSER: ${{ needs.browser.result }}
+          PACKAGE: ${{ needs.package.result }}
+        run: test "$CHECK" = success && test "$BROWSER" = success && test "$PACKAGE" = success

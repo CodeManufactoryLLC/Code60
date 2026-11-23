@@ -63,37 +63,6 @@ export function validateCandidate({ tag, sha, expectedSha, manifest, lock, onMai
     throw new Error("Existing draft belongs to a different commit");
   return version;
 }
-export function signingReady(env) {
-  const required = [
-    "HAS_CSC_LINK",
-    "HAS_CSC_KEY_PASSWORD",
-    "HAS_APPLE_API_KEY",
-    "HAS_APPLE_API_KEY_ID",
-    "HAS_APPLE_API_ISSUER",
-  ];
-  if (required.some((key) => env[key] !== "true"))
-    throw new Error("Missing signing configuration; see RELEASING.md");
-  if (!/^.+ <[^<>\s]+@[^<>\s]+>$/.test(env.RELEASE_MAINTAINER || ""))
-    throw new Error("Set RELEASE_MAINTAINER to Name <email>");
-}
-export function assetNames(version, platform) {
-  const channel = versionOf(`v${version}`).prerelease
-    ? version.split("-")[1].split(".")[0]
-    : "latest";
-  if (platform === "linux")
-    return [
-      `Code60-${version}-linux-x64.deb`,
-      `Code60-${version}-linux-x64.AppImage`,
-      `${channel}-linux.yml`,
-    ];
-  if (platform === "mac")
-    return [
-      `Code60-${version}-mac-arm64.dmg`,
-      `Code60-${version}-mac-arm64.zip`,
-      `${channel}-mac.yml`,
-    ];
-  throw new Error("Unknown installer platform");
-}
 export async function github(path, options = {}) {
   const response = await fetch(
     `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}${path}`,

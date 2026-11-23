@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type {
   AgentSetupSnapshot,
-  DesktopApi,
+  ApplicationClient,
   ModelDefaultAction,
   ProviderAction,
   Snapshot,
@@ -32,7 +32,7 @@ export function providerActionReasons(
   };
 }
 
-export function useProviderManagement(api: DesktopApi, snapshot: Snapshot | undefined) {
+export function useProviderManagement(api: ApplicationClient, snapshot: Snapshot | undefined) {
   const [mode, setMode] = useState<"primary" | "add" | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");

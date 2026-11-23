@@ -10,9 +10,10 @@ import { AutomationStore } from "./store.js";
 export const automationRoot = (env: Readonly<NodeJS.ProcessEnv>) =>
   join(stateHome(env), "code60", "automations");
 
-export async function startService(
+export async function startSchedulerRuntime(
   env: Readonly<NodeJS.ProcessEnv>,
   deps: CoreDeps = defaultDeps(),
+  listen = false,
 ) {
   assertSupportedPlatform();
   const root = automationRoot(env);
@@ -21,14 +22,16 @@ export async function startService(
   let timer: ReturnType<typeof setInterval> | undefined;
   try {
     await scheduler.initialize();
-    const server = await listenService(
-      root,
-      (request) =>
-        request.action === "transcript" || request.action === "diff"
-          ? executionEvidence(scheduler, deps, env, request.executionId, request.action)
-          : scheduler.request(request),
-      (listener) => scheduler.onChange(listener),
-    );
+    const server = listen
+      ? await listenService(
+          root,
+          (request) =>
+            request.action === "transcript" || request.action === "diff"
+              ? executionEvidence(scheduler, deps, env, request.executionId, request.action)
+              : scheduler.request(request),
+          (listener) => scheduler.onChange(listener),
+        )
+      : undefined;
     let ticking = false;
     timer = setInterval(() => {
       if (ticking) return;
@@ -43,10 +46,15 @@ export async function startService(
     let stopping: Promise<void> | undefined;
     return {
       scheduler,
+      request: (request: Parameters<typeof serviceRequest>[1]) =>
+        request.action === "transcript" || request.action === "diff"
+          ? executionEvidence(scheduler, deps, env, request.executionId, request.action)
+          : scheduler.request(request),
+      subscribe: (listener: (revision: number) => void) => scheduler.onChange(listener),
       stop() {
         stopping ??= (async () => {
           clearInterval(timer);
-          await server.close();
+          await server?.close();
           await scheduler.stop();
           await store.close();
         })();
@@ -65,3 +73,7 @@ export function automationClient(env: Readonly<NodeJS.ProcessEnv>) {
   return (request: Parameters<typeof serviceRequest>[1]) =>
     serviceRequest(automationRoot(env), request);
 }
+
+/** Legacy protocol adapter; the production gateway owns the runtime. */
+export const startService = (env: Readonly<NodeJS.ProcessEnv>, deps: CoreDeps = defaultDeps()) =>
+  startSchedulerRuntime(env, deps, true);

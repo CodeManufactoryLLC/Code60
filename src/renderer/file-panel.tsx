@@ -1,5 +1,10 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import type { DesktopApi, KnowledgeOwner, PlanSummary, ReviewSummary } from "../bridge/index.js";
+import type {
+  ApplicationClient,
+  KnowledgeOwner,
+  PlanSummary,
+  ReviewSummary,
+} from "../bridge/index.js";
 import { type FileTabAction, type FileTabs, fileMainViews, fileTabLabel } from "./file-tabs.js";
 import { type FileBrowser, FileInspector, FilesPage } from "./files.js";
 import { Icon } from "./icons.js";
@@ -108,7 +113,7 @@ export function FilePanel({
   onOpenProject(): void;
   onToggle(): void;
   disabled?: boolean;
-  api?: DesktopApi;
+  api?: ApplicationClient;
   reviews?: ReviewSummary[];
   plans?: PlanSummary[];
   project?: string;

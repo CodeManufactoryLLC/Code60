@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
+  type ApplicationClient,
   type AutomationEditor,
-  type DesktopApi,
   type RendererAutomationDraft,
   TOOL_KINDS,
 } from "../bridge/index.js";
@@ -18,7 +18,7 @@ export function AutomationForm({
   onClose,
   onSaved,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   editor: AutomationEditor;
   agents: string[];
   active?: boolean;

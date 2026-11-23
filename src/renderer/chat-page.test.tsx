@@ -1,7 +1,12 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { DesktopApi, DesktopRun, OrchestrationChat, ReviewSummary } from "../bridge/index.js";
+import type {
+  ApplicationClient,
+  DesktopRun,
+  OrchestrationChat,
+  ReviewSummary,
+} from "../bridge/index.js";
 import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import { ChatPage } from "./chat-page.js";
 import type { PageAction } from "./content-page-header.js";
@@ -46,7 +51,7 @@ function render(
 ) {
   return renderToStaticMarkup(
     <ChatPage
-      api={{} as DesktopApi}
+      api={{} as ApplicationClient}
       chat={
         {
           run: { ...run("orchestrator", status), turns, ...runChanges },
@@ -193,7 +198,7 @@ describe("orchestration activity presentation", () => {
   it("renders Relay as ordinary title text, not a doubly dimmed disabled rename control", () => {
     const html = renderToStaticMarkup(
       <ChatPage
-        api={{} as DesktopApi}
+        api={{} as ApplicationClient}
         chat={{
           kind: "relay",
           conversationId: "relay",
@@ -226,7 +231,7 @@ describe("orchestration activity presentation", () => {
   it("does not duplicate plan tabs with chat-header plan buttons", () => {
     const html = renderToStaticMarkup(
       <ChatPage
-        api={{} as DesktopApi}
+        api={{} as ApplicationClient}
         chat={{
           run: run("orchestrator", "idle"),
           directory: "/project",
@@ -285,7 +290,7 @@ describe("orchestration activity presentation", () => {
   it("does not flash the empty prompt before a connected chat snapshot arrives", () => {
     const html = renderToStaticMarkup(
       <ChatPage
-        api={{} as DesktopApi}
+        api={{} as ApplicationClient}
         chat={undefined}
         events={[]}
         database="/db"

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { testAgentConnection } from "../src/desktop/agent-connection.js";
+import { testAgentConnection } from "../src/application/agent-connection.js";
 import { FakeAgents } from "./fakes.js";
 
 const spec = { name: "fake", command: ["fake-acp"] as [string], cwd: "/db/.code60_workspace" };

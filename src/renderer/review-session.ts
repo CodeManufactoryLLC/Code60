@@ -1,4 +1,4 @@
-import type { DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient } from "../bridge/index.js";
 import type { ReviewScope } from "./review-actions.js";
 
 /** Presentation coordination only; the host still validates and authorizes every action. */
@@ -27,8 +27,8 @@ function createSession() {
     },
   };
 }
-const sessions = new WeakMap<DesktopApi, Map<string, ReturnType<typeof createSession>>>();
-export function reviewSession(api: DesktopApi, scope: ReviewScope) {
+const sessions = new WeakMap<ApplicationClient, Map<string, ReturnType<typeof createSession>>>();
+export function reviewSession(api: ApplicationClient, scope: ReviewScope) {
   let entries = sessions.get(api);
   if (!entries) {
     entries = new Map();

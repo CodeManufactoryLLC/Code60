@@ -16,8 +16,8 @@ if (mode === "worker") {
   const delay = monitorEventLoopDelay({ resolution: 1 });
   delay.enable();
   const { DEFAULT_CONFIG, defaultDeps } = await import("../dist/core/index.js");
-  const { RelayStore } = await import("../dist/desktop/relay-store.js");
-  const { RelayService } = await import("../dist/desktop/relay-service.js");
+  const { RelayStore } = await import("../dist/application/relay-store.js");
+  const { RelayService } = await import("../dist/application/relay-service.js");
   const read = RelayStore.prototype.history;
   let historyBytesRead = 0;
   let sourceMaxBytesRead = 0;
@@ -166,7 +166,7 @@ if (mode === "worker") {
     await relay.shutdown(true);
   }
 } else {
-  const { RelayStore } = await import("../dist/desktop/relay-store.js");
+  const { RelayStore } = await import("../dist/application/relay-store.js");
   const fixture = await realpath(await mkdtemp(join(tmpdir(), "code60-relay-benchmark-")));
   try {
     for (const { messages, oversized } of [

@@ -8,8 +8,8 @@ import {
   useState,
 } from "react";
 import type {
+  ApplicationClient,
   Command,
-  DesktopApi,
   DesktopRun,
   OrchestrationChat,
   ReviewSummary,
@@ -81,7 +81,7 @@ export function ChatPage({
   request,
   selectionPending = false,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   chat: OrchestrationChat | undefined;
   hidden?: boolean;
   selectionPending?: boolean;

@@ -3,8 +3,8 @@ import { copyFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, expect, it } from "vitest";
-import { createMcpGateway } from "../src/desktop/mcp-gateway.js";
-import { readMcpTool } from "../src/desktop/mcp-tables.js";
+import { createMcpGateway } from "../src/application/mcp-gateway.js";
+import { readMcpTool } from "../src/application/mcp-tables.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Inside node_modules so the compiled sidecar resolves the project's dependencies.
@@ -34,7 +34,7 @@ it("serves the Code60 MCP stdio protocol from a separate process", async () => {
   const gateway = await createMcpGateway((name, args) =>
     readMcpTool(name, args, async () => [{ id: "one", text: "Hello Code60" }]),
   );
-  const child = spawn(process.execPath, [join(OUT, "desktop", "mcp-server.js")], {
+  const child = spawn(process.execPath, [join(OUT, "application", "mcp-server.js")], {
     env: {
       ...process.env,
       CODE60_MCP_GATEWAY_URL: gateway.url,

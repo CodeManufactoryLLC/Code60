@@ -1,12 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
-import type { DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient } from "../bridge/index.js";
 import { AgentEditor, CustomAgentsPage } from "./custom-agents.js";
 
 it("keeps agent creation available without a database and renders user names as text", () => {
   const html = renderToStaticMarkup(
     <CustomAgentsPage
-      api={{} as DesktopApi}
+      api={{} as ApplicationClient}
       active
       agents={[{ id: "a", revision: 1, archived: false, name: "<script>name</script>" }]}
       onOpen={async () => true}
@@ -29,7 +29,7 @@ it("keeps agent creation available without a database and renders user names as 
 it("keeps editor field labels independent of saved instruction text", () => {
   const html = renderToStaticMarkup(
     <AgentEditor
-      api={{} as DesktopApi}
+      api={{} as ApplicationClient}
       agent={{
         id: "a",
         revision: 1,

@@ -12,7 +12,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const [mode, directory] = process.argv.slice(2);
 if (mode === "worker") {
   const startup = performance.now();
-  const { DesktopLogStore, LOG_QUOTA } = await import("../dist/desktop/log-store.js");
+  const { DesktopLogStore, LOG_QUOTA } = await import("../dist/application/log-store.js");
   const { parseLogQuery } = await import("../dist/bridge/index.js");
   const store = new DesktopLogStore(directory);
   const importMs = performance.now() - startup;
@@ -100,7 +100,7 @@ if (mode === "worker") {
     }),
   );
 } else {
-  const { DesktopLogStore, LOG_QUOTA } = await import("../dist/desktop/log-store.js");
+  const { DesktopLogStore, LOG_QUOTA } = await import("../dist/application/log-store.js");
   const { privateDirectory, writePrivateFile } = await import("../dist/platform/index.js");
   const fixture = await realpath(await mkdtemp(join(tmpdir(), "code60-log-benchmark-")));
   try {

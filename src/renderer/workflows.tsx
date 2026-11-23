@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type {
-  DesktopApi,
+  ApplicationClient,
   WorkflowEvent,
   WorkflowList,
   WorkflowRead,
@@ -24,7 +24,7 @@ export function WorkflowsPage({
   providerReady,
   onProvider,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   active: boolean;
   paused: boolean;
   providerReady: boolean;

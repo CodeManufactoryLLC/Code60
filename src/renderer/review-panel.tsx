@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import type { DesktopApi, Review, ReviewSummary } from "../bridge/index.js";
+import type { ApplicationClient, Review, ReviewSummary } from "../bridge/index.js";
 import { attachToChat } from "./chat-draft.js";
 import { useReviewFile } from "./review-content.js";
 
@@ -13,7 +13,7 @@ export function ReviewPanel({
   relay,
   onFile,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   review: Review;
   project: string;
   revisionId: string;

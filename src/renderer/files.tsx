@@ -12,7 +12,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import type {
-  DesktopApi,
+  ApplicationClient,
   FileContext,
   FileDirectory,
   FileEntry,
@@ -33,7 +33,7 @@ const emptyDirectories: FileDirectory[] = [];
 const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 
 export function useFiles(
-  api: DesktopApi,
+  api: ApplicationClient,
   snapshot: Snapshot | undefined,
   active: boolean,
   preview: string | null,

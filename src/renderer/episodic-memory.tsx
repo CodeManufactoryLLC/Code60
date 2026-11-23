@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import {
+  type ApplicationClient,
   DEFAULT_EPISODIC_MEMORY_PROMPT,
-  type DesktopApi,
   type DesktopRun,
   type MemoryExtractionResult,
 } from "../bridge/index.js";
@@ -42,7 +42,7 @@ export function EpisodicMemoryPage({
   data,
   provider,
 }: {
-  api: Pick<DesktopApi, "extractMemory" | "cancelMemoryExtraction">;
+  api: Pick<ApplicationClient, "extractMemory" | "cancelMemoryExtraction">;
   directory: string | null;
   runs: readonly DesktopRun[];
   data: Transcripts;

@@ -257,7 +257,7 @@ proof of complete work.
 
 ```sh
 npm run check
-npm run test:desktop:container
+npm run test:browser
 npm run test:relay:performance
 ```
 

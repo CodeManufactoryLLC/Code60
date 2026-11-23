@@ -1,6 +1,6 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
-import type { DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { MemoryRecall, RecallGroup } from "./memory-recall.js";
 import type { RecallTurn } from "./memory-recall-history.js";
@@ -46,7 +46,7 @@ const events = (count: number): RunEvent[] =>
       detail: JSON.stringify([id]),
     } as RunEvent,
   ]).flat();
-const api = {} as DesktopApi;
+const api = {} as ApplicationClient;
 function render(events: RunEvent[]) {
   hooks.index = 0;
   return MemoryRecall({ api, source: { owner: "owner", runId: "run", events } });

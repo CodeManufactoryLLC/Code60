@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DesktopApi, DesktopRun, OrchestrationChat } from "../bridge/index.js";
+import type { ApplicationClient, DesktopRun, OrchestrationChat } from "../bridge/index.js";
 import { createNavigationActions } from "./navigation-actions.js";
 import { initialTabs } from "./tabs.js";
 
@@ -8,7 +8,7 @@ function fixture() {
     api: {
       projectAction: vi.fn(async () => {}),
       orchestrationChatAction: vi.fn(async () => {}),
-    } as unknown as DesktopApi,
+    } as unknown as ApplicationClient,
     tabs: { ...initialTabs, active: "projects" },
     database: "/db",
     databaseEpoch: 1,

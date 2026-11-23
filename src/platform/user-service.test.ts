@@ -8,7 +8,7 @@ describe("per-user service supervisors", () => {
   const runtime = {
     executable: "/Applications/Code60 App/Code60",
     args: ["/app/agent's entry.js"],
-    env: { ELECTRON_RUN_AS_NODE: "1", PATH: "/usr/bin:/path with spaces" },
+    env: { PATH: "/usr/bin:/path with spaces" },
   };
   it("keeps launchd arguments separate, safely encodes XML and throttles restarts", () => {
     const definition = userServiceDefinition("darwin", "/Users/test", "/state", runtime);
@@ -190,3 +190,42 @@ describe("per-user service supervisors", () => {
     },
   );
 });
+
+it.each(["absent", "loaded", "unavailable"])(
+  "uninstalls an already stopped launchd backend only with positive absence (%s)",
+  async (state) => {
+    const root = await mkdtemp(join(tmpdir(), "c60-uninstall-stopped-"));
+    try {
+      const definition = userServiceDefinition(
+        "darwin",
+        root,
+        root,
+        {
+          executable: "/usr/bin/node",
+          args: ["/app/dist/gateway/main.js"],
+          env: {},
+        },
+        "backend",
+      );
+      await controlUserService(definition, "install", async () => true);
+      const inspect = vi.fn(async (argv: readonly string[]) => ({
+        ok: state !== "unavailable" && !argv[2]?.includes("/com."),
+        stdout:
+          state === "loaded"
+            ? "services = {\n  123 0 com.codemanufactory.code60.backend\n}\n"
+            : "services = {\n}\n",
+      }));
+      const result = controlUserService(definition, "uninstall", async () => false, inspect);
+      if (state === "absent") {
+        await result;
+        await expect(readFile(definition.path)).rejects.toMatchObject({ code: "ENOENT" });
+      } else {
+        await expect(result).rejects.toThrow("control failed");
+        expect(await readFile(definition.path, "utf8")).toBe(definition.contents);
+      }
+      expect(inspect.mock.calls[0]?.[0].at(-1)).toContain("code60.backend");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);

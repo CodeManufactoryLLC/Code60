@@ -18,7 +18,6 @@ export interface UserServiceDefinition {
   uninstall: readonly string[][];
   status: readonly string[];
 }
-const LABEL = "com.codemanufactory.code60.scheduler";
 const xml = (value: string) =>
   value
     .replaceAll("&", "&amp;")
@@ -38,7 +37,10 @@ export function userServiceDefinition(
   home: string,
   root: string,
   runtime: ServiceRuntime,
+  kind: "scheduler" | "backend" = "scheduler",
 ): UserServiceDefinition {
+  const LABEL = `com.codemanufactory.code60.${kind}`;
+  const unitName = `code60-${kind}.service`;
   if (
     !isAbsolute(runtime.executable) ||
     !isAbsolute(home) ||
@@ -77,10 +79,10 @@ export function userServiceDefinition(
     };
   }
   if (platform === "linux") {
-    const path = join(home, ".config", "systemd", "user", "code60-scheduler.service");
+    const path = join(home, ".config", "systemd", "user", unitName);
     return {
       path,
-      contents: `[Unit]\nDescription=Code60 scheduled agents\n
+      contents: `[Unit]\nDescription=Code60 ${kind}\n
 [Service]\nType=simple
 ExecStart=${[runtime.executable, ...runtime.args].map(unit).join(" ")}
 ${Object.entries(runtime.env)
@@ -90,12 +92,12 @@ Restart=on-failure\nRestartSec=30\nTimeoutStopSec=60\nKillMode=control-group
 \n[Install]\nWantedBy=default.target\n`,
       install: [
         ["systemctl", "--user", "daemon-reload"],
-        ["systemctl", "--user", "enable", "--now", "code60-scheduler.service"],
+        ["systemctl", "--user", "enable", "--now", unitName],
       ],
-      start: [["systemctl", "--user", "start", "code60-scheduler.service"]],
-      stop: [["systemctl", "--user", "stop", "code60-scheduler.service"]],
-      uninstall: [["systemctl", "--user", "disable", "--now", "code60-scheduler.service"]],
-      status: ["systemctl", "--user", "is-active", "code60-scheduler.service"],
+      start: [["systemctl", "--user", "start", unitName]],
+      stop: [["systemctl", "--user", "stop", unitName]],
+      uninstall: [["systemctl", "--user", "disable", "--now", unitName]],
+      status: ["systemctl", "--user", "is-active", unitName],
     };
   }
   throw new Error("Background scheduling is unsupported on this platform");
@@ -139,7 +141,7 @@ export async function inspectUserService(
       "systemctl",
       "--user",
       "show",
-      "code60-scheduler.service",
+      definition.status.at(-1) ?? "",
       "--property=LoadState",
       "--property=ActiveState",
       "--property=MainPID",
@@ -193,7 +195,10 @@ export async function inspectUserService(
   // must positively show that this job is absent, even after a failed bootout.
   const supervisor = await command(["launchctl", "print", `gui/${process.getuid?.() ?? -1}`]);
   const services = /^\s*services = \{\n([\s\S]*?)^\s*\}/m.exec(supervisor.stdout)?.[1];
-  const unloaded = supervisor.ok && services !== undefined && !services.includes(LABEL);
+  const unloaded =
+    supervisor.ok &&
+    services !== undefined &&
+    !services.includes((definition.status.at(-1) ?? "").split("/").at(-1) ?? "");
   return {
     definitionPresent,
     ...(unloaded ? { loaded: false } : {}),
@@ -252,6 +257,16 @@ export async function controlUserService(
       // Bootstrap fails for an already loaded job; only a successful kickstart
       // proves that start succeeded. All other failures remain fatal.
       if (action === "start" && argv[0] === "launchctl" && argv[1] === "bootstrap") continue;
+      // Stop may already have unloaded this exact job. Require positive native
+      // absence before treating a second bootout as successful (e.g. uninstall).
+      if (
+        (action === "stop" || action === "uninstall") &&
+        argv[0] === "launchctl" &&
+        argv[1] === "bootout"
+      ) {
+        const native = await inspectUserService(definition, inspectionCommand);
+        if (native.state === "stopped" && native.loaded === false) continue;
+      }
       throw new Error("Scheduling Service control failed. Check the native user supervisor.");
     }
   if (action === "uninstall") await unlink(definition.path);

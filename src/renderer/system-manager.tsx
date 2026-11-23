@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { AutomationUiRequest, DesktopApi, SchedulerStatus } from "../bridge/index.js";
+import type { ApplicationClient, AutomationUiRequest, SchedulerStatus } from "../bridge/index.js";
 import { Icon } from "./icons.js";
 import { PageTitle } from "./page-title.js";
 import { schedulingServiceLabels, schedulingServiceState } from "./scheduling-service.js";
@@ -15,7 +15,7 @@ export function SystemManagerPage({
   active,
   pollingPaused = false,
 }: {
-  api: Pick<DesktopApi, "automation" | "onAutomationChanged">;
+  api: Pick<ApplicationClient, "automation" | "onAutomationChanged">;
   active: boolean;
   pollingPaused?: boolean;
 }) {
@@ -87,7 +87,7 @@ export function SystemManagerPage({
               retry(true);
               setStatus(undefined);
               setError(
-                "Scheduling Service status is unavailable. Existing schedules and evidence are kept.",
+                "Backend Service status is unavailable. Existing schedules and evidence are kept.",
               );
             }
           } while (dirty && !disposed && !pending.current);
@@ -145,9 +145,7 @@ export function SystemManagerPage({
       pending.current = false;
       await refresh.current();
       if (owner === generation.current)
-        setActionError(
-          cause instanceof Error ? cause.message : "Scheduling Service action failed.",
-        );
+        setActionError(cause instanceof Error ? cause.message : "Backend Service action failed.");
     } finally {
       pending.current = false;
       setProgress("");
@@ -158,14 +156,6 @@ export function SystemManagerPage({
   const statusHint = pollingPaused
     ? "Status polling is paused. Resume polling or refresh to check again."
     : "Automatic checks will retry.";
-  const mainAction =
-    state === "not-installed" || (state === "running" && !status?.installed)
-      ? "install"
-      : state === "stopped"
-        ? "start"
-        : state === "running"
-          ? "stop"
-          : undefined;
   const stateIcon =
     state === "running"
       ? "play--filled"
@@ -185,7 +175,7 @@ export function SystemManagerPage({
           actions={[
             {
               id: "system-manager-0",
-              label: "Refresh Scheduling Service",
+              label: "Refresh Backend Service",
               run: () => void refresh.current(),
               disabled: busy || reading,
             },
@@ -200,7 +190,7 @@ export function SystemManagerPage({
       >
         <div className="automation-service-summary">
           <div className="automation-service-copy">
-            <h2 id="automation-service-title">Scheduling Service</h2>
+            <h2 id="automation-service-title">Backend Service</h2>
             <p className="automation-service-state" role="status">
               <span className="automation-service-badge" data-state={state}>
                 <Icon name={stateIcon} />
@@ -213,16 +203,6 @@ export function SystemManagerPage({
             </p>
           </div>
           <div className="automation-service-actions">
-            {mainAction && (
-              <button
-                type="button"
-                className="primary"
-                disabled={busy || reading}
-                onClick={() => void act({ action: "scheduler", control: mainAction })}
-              >
-                {mainAction.charAt(0).toUpperCase() + mainAction.slice(1)}
-              </button>
-            )}
             {live?.pausedAll && (
               <button
                 type="button"
@@ -236,7 +216,7 @@ export function SystemManagerPage({
         </div>
         {state === "unavailable" && !error && (
           <p className="automation-service-note">
-            The Scheduling Service could not be verified. {statusHint}
+            The Backend Service could not be verified. {statusHint}
           </p>
         )}
         {live?.block && (
@@ -256,26 +236,11 @@ export function SystemManagerPage({
             </button>
           </div>
         )}
-        {(status?.installed || state === "unavailable") && (
-          <details className="automation-service-options">
-            <summary>Service options</summary>
-            <div className="automation-service-tools">
-              {(["repair", ...(status?.installed ? ["uninstall" as const] : [])] as const).map(
-                (control) => (
-                  <button
-                    type="button"
-                    className={`small${control === "uninstall" ? " danger-text" : ""}`}
-                    key={control}
-                    disabled={busy || reading}
-                    onClick={() => void act({ action: "scheduler", control })}
-                  >
-                    {control.charAt(0).toUpperCase() + control.slice(1)}
-                  </button>
-                ),
-              )}
-            </div>
-          </details>
-        )}
+        <p>
+          Manage the login backend locally with <code>code60 service status</code>,{" "}
+          <code>code60 service repair</code> or <code>code60 service uninstall</code>. Closing this
+          browser keeps approved work running.
+        </p>
       </section>
       {error && (
         <p role="alert">

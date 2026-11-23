@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
-import type { DesktopApi, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, Snapshot } from "../bridge/index.js";
 import { AgentSetupWizard } from "./agent-setup.js";
 import type { Theme } from "./appearance.js";
 import { DatabaseNotice } from "./database-notice.js";
@@ -20,7 +20,7 @@ export function Splash({
   windowControls?: ReactNode;
   ready: boolean;
   snapshot: Snapshot | undefined;
-  api: DesktopApi;
+  api: ApplicationClient;
   busy: boolean;
   error: string;
   theme: Theme;

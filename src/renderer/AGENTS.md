@@ -1,23 +1,18 @@
+# Browser interface
+
+Use the browser ApplicationClient; no Node, Electron, preload or native window API.
+Pairing, host choosers and confirmations use real accessible UI, with page-bound server
+interactions. Closing the browser never stops approved work. Native window transparency,
+backdrop, caption controls, application menus and automatic update actions have been removed;
+corresponding historical guidance below is superseded. Preserve browser themes, typography,
+keyboard controls, drafts and domain ownership. Never put authentication in links or logs.
+
 # Renderer
 
-- System Manager labels the Scheduling Service and reads its typed native/live
-  status through the existing scheduler/status request. Distinguish Not installed,
-  Stopped and Running with dashed/solid/blue badges, icons and Install/Start/Stop.
-  Keep job pause and active-run annotations separate. Do not guess lifecycle
-  actions for checking/unavailable status; explicit Repair stays in Service options.
-  Standalone live schedulers offer Install, never native Stop. Keep the last verified
-  badge during actions, disable competing controls and refresh afterward. Preserve
-  hidden-read cleanup, coalescing and stale-response guards. Use square outlines,
-  hard panel shadows, saved role typography, dark reading fills and forced colors.
-  Stop is the main installed/running action; omit the separate pause-and-cancel
-  control. Keep Resume jobs for existing paused jobs after Start. Backend Stop
-  retains its pause, cancellation, ownership checks and confirmation behavior.
-  Poll status two seconds after completion while the page and document are visible,
-  respecting global Pause polling. Back off failures/unavailable status to sixty
-  seconds at most, resetting after recovery. Coalesce background reads without
-  dimming controls or clearing action failures; discard replies across visibility
-  changes. Dispose timers on pause, page hide and unmount. Initial/manual reads
-  still work while paused; no new polling key, setting or bridge method.
+- System Manager labels Backend Service and reads typed installation/live scheduler
+  status. Native lifecycle management stays in the local CLI. Keep live job pause,
+  recovery and cancel controls, refresh after actions, and preserve hidden-read,
+  coalescing and stale-response guards. Browser close preserves approved work.
 
 - Apps → Memory is application-wide and database-independent. Persist its
   controls through main, not local storage. Expose only the application-wide
@@ -42,7 +37,7 @@
   Render evidence/revisions as text. Use pushed notices and stale-response
   guards, never polling. Human edits, pinning, conflict resolution, promotion and
   forgetting must use revision-checked bridge actions; global sharing and
-  forgetting remain natively confirmed. Memory used notes belong to their turn.
+  forgetting remain confirmed in the browser. Memory used notes belong to their turn.
 - Memory Recall is a read-only shared sidebar tab for the displayed Relay,
   project or worker chat, including Relay workers without a database. Validate
   IDs from turn-associated Memory used notes only; never retrieve or browse.
@@ -96,7 +91,7 @@
   and circular disclosure chevron, in that order. Selecting a project never retargets Relay.
   Closing a project and stopping a folder remain distinct backend operations.
   Project rows expose only a red circular × with the tooltip “Close Project” and
-  a path-qualified accessible name. Invoke stop-folder with its existing native
+  a path-qualified accessible name. Invoke stop-folder with its existing browser
   confirmation; retain the project and its saved history. Remove the project
   More menu. Other folders continue; conversation context menus stay independent.
 - Show only Relay and project-bound conversations, not database-wide legacy chats.
@@ -368,8 +363,8 @@
 
 `src/renderer` is the React interface, built by Vite into `dist/renderer`.
 
-- Reach the main process only through `window.desktop`. Import only types from `core`, and nothing from Node.js or Electron.
-- Render prompts, activity, tool output, and diffs as text. Agent replies in both chats alone may use ChatMarkdown (react-markdown and remark-gfm) to render safe React elements, including semantic emphasis. Never use `dangerouslySetInnerHTML`, raw-HTML plugins, or remote images/embeds. Links allow only validated HTTP(S) destinations through openWebLink and native confirmation; never navigate Electron. Copy retains exact source. Preserve the CSP.
+- Reach the backend only through the fixed browser ApplicationClient. Import only types from `core`, and nothing from Node.js or Electron.
+- Render prompts, activity, tool output, and diffs as text. Agent replies in both chats alone may use ChatMarkdown (react-markdown and remark-gfm) to render safe React elements, including semantic emphasis. Never use `dangerouslySetInnerHTML`, raw-HTML plugins, or remote images/embeds. Links allow only validated HTTP(S) destinations through openWebLink and explicit browser confirmation; preserve opener isolation. Copy retains exact source. Preserve the CSP.
 - Merge updates by revision with `applyUpdate`, so reloads and startup never lose or duplicate events.
   Subscribe before the initial snapshot. Bound the pending frame buffer; overflow
   and a gap in previous-broadcast revisions require a single-flight full read.
@@ -454,7 +449,7 @@ worker artwork disclosure and independent Rename/Archive targets without clippin
 - Orchestrator rows use main-process titles with numbered fallbacks and open through their label and offer separate named circular Rename and Archive controls matching project-row controls, plus Open, Rename and Archive in keyboard-accessible context menus. Reveal the circles on row hover or keyboard focus; reuse the project controls’ theme, press, focus, reduced-motion and forced-color styles. The main header displays and edits the same name. Archive hides the orchestrator only, retaining session records and work. Worker rows remain accessible.
 
 - Group prompt templates beneath a collapsible System disclosure. Keep saved edits in this group, preserve drafts on collapse, omit per-prompt Built-in labels, and use borderless items with blue hover and neutral gray selection.
-- Nest Command Builder, Data Viewer and Prompt Builder under Apps, in alphabetical order. Command Builder and Prompt Builder remain disabled without a database. Data Viewer stays enabled and its Apps card opens Logs and reveals both groups. Apps uses the Phosphor app-window icon. Clicking Apps opens its database-independent home page, with a card for every nested app using shared Home card styles and each app's database gating. Clicking Apps toggles its children open and closed: opening also shows the Apps home page, while closing keeps the current page. Left/Right collapses/expands them without changing the active page. Start expanded, remember manual expansion using the existing code60.toolsExpanded key, and reveal it on external navigation to any child or Data Viewer page. Reuse the prompt-editor layout for a command list and labelled Name/Title/Description/Prompt fields, inline validation, Save/Discard and natively confirmed Delete. Preserve drafts across page and command switches, scoped to the database. The orchestrator composer alone offers a leading-dollar ARIA combobox filtered by name/title: Up/Down selects, Enter/Tab inserts and Escape dismisses without sending. Send only the recognized command name with the original text; main expands it. Mark recognized leading commands in user bubbles without changing Copy, and explain unknown dollar words as plain text. Slash-prefixed text is always plain text. Never expand commands in worker chats.
+- Nest Command Builder, Data Viewer and Prompt Builder under Apps, in alphabetical order. Command Builder and Prompt Builder remain disabled without a database. Data Viewer stays enabled and its Apps card opens Logs and reveals both groups. Apps uses the Phosphor app-window icon. Clicking Apps opens its database-independent home page, with a card for every nested app using shared Home card styles and each app's database gating. Clicking Apps toggles its children open and closed: opening also shows the Apps home page, while closing keeps the current page. Left/Right collapses/expands them without changing the active page. Start expanded, remember manual expansion using the existing code60.toolsExpanded key, and reveal it on external navigation to any child or Data Viewer page. Reuse the prompt-editor layout for a command list and labelled Name/Title/Description/Prompt fields, inline validation, Save/Discard and confirmed in the browser Delete. Preserve drafts across page and command switches, scoped to the database. The orchestrator composer alone offers a leading-dollar ARIA combobox filtered by name/title: Up/Down selects, Enter/Tab inserts and Escape dismisses without sending. Send only the recognized command name with the original text; main expands it. Mark recognized leading commands in user bubbles without changing Copy, and explain unknown dollar words as plain text. Slash-prefixed text is always plain text. Never expand commands in worker chats.
 - Files uses Headless Tree and the shared read-only Monaco inspector. Keep filesystem access scoped through `setFileContext` and refreshed by the main-process Files poll source. Bundle Monaco workers and languages locally; its generated style elements use the build nonce, with `style-src-attr` allowing its per-token positioning. Never permit inline scripts or remote assets. Keep renderer-only blank, Explorer and file tabs separate from page navigation; clear them on project/database changes and reloads. Hide the panel outside Chat while preserving tabs, order, drafts and editor scroll/selection state in memory. Request filesystem context and polling visibility only for the selected Explorer/file tab while the panel is visible; discard stale reads.
 
 - Files uses borderless page and inspector surfaces with `--chat-neutral` fill, neutral selection and blue hover. The + New Tab dropdown item creates blank tabs with a single centered, compact, left-aligned list of blank-tab choices, including Open Files and any Open Changes/saved-plan actions. Open Files replaces the blank with Explorer; multiple Explorers are allowed and share expansions and hidden-file preferences. Deduplicate file tabs by relative path. File/document views offer Close current tab below the header; main and blank views have no close symbol. Delete on the closed selector remains available for every stored tab. Use keyboard-only Alt+Left/Right reordering; arrow/Home/End/typeahead highlight options for explicit Enter/Space selection. Restore selector focus after add/close/reorder; closing the last tab keeps the empty panel open and focuses the enabled empty selector. Keep file names and code case-preserving; resolve Monaco preview colors from the app theme tokens, including System appearance.
@@ -632,40 +627,6 @@ all sidebar icons; let only the content header grow to fit enlarged artwork
 without shifting navigation or clipping content. This adds no new
 product capability.
 
-## Window background controls
-
-Apps → Appearance → Window background provides Background opacity (0–100%,
-default 100%), Background blur strength (0–100%, default 0), and Reset background.
-Both sliders apply live to one full-window decorative backdrop, including the
-native-control strip, margins and footer, regardless of sidebar width or collapse.
-Cards, fields, text, icons, menus and dialogs retain their own opaque/sharp surfaces.
-The splash remains opaque and never enables native blur. Forced colors uses an
-opaque Canvas backdrop with native blur off. Keep native drag/caption regions and
-all background areas interactive even at zero opacity; there is no click-through
-mode or separate Transparent background toggle.
-
-Retain bounded percentages in the existing `code60.sidebarAppearance` local storage
-record without resetting values or advancing appearance migrations. Internal
-SidebarAppearance/backdrop transport names remain compatibility adapters for the
-window-wide controls. Legacy desktop.json transparency values and validated IPC
-methods remain compatible records/interfaces, but cannot gate live alpha, repaint
-margins or enable mouse-event passthrough. Capability reads report native alpha
-available and clickThrough false. Show preference-write and native-blur failures
-separately and allow slider/Reset retries. Do not expose these values through agent
-write tools or awareness.
-
-The foreground native window always supports alpha. On macOS, an owned,
-non-focusable, mouse-transparent BaseWindow with no web contents or capture
-permission supplies native vibrancy behind the complete owner content bounds.
-Strength blends the OS-managed material, not a pixel blur radius. The legacy strict
-bounded width/strength/visibility request reports viewport width; positive width
-only gates visibility, while main derives all coordinates and full dimensions from
-its owner. Follow owner move/resize/show/hide/minimize/fullscreen; hide on splash,
-opaque tint, document hiding and forced colors. Reset on renderer navigation/loss
-and dispose all listeners/windows on owner close or shutdown. Native failure closes
-the backdrop and reports a fixed, payload-free error. Linux retains live background
-opacity, with the blur slider disabled; do not substitute CSS blur on foregrounds.
-
 ## Neo-brutalist presentation
 
 This section defines the current visual style and supersedes earlier visual-only
@@ -762,34 +723,11 @@ sidebar/breadcrumb and hover/focus-once navigation-card playback.
 Breadcrumb cards scroll within 40% of the viewport height when large saved title
 sizes wrap, preserving usable content below the header.
 
-Transparent Linux windows use three renderer caption buttons in the native drag
-strip because Electron hides its native caption controls for translucent windows.
-A strict minimize/maximize/close enum targets only the owned main window. Close
-must call the normal guarded close path, never destroy the window or kill work.
-macOS retains native window controls. No arbitrary window IDs cross the bridge.
-
 Breadcrumb right-edge measurement also follows the stacked transcript scrollbar
 gutter, keeping its card aligned with the conversation at narrow widths.
 
 Keep breadcrumb and conversation right edges aligned in stacked layouts too,
 accounting for the transcript scrollport gutter without raising the inspector.
-
-Native sidebar blur reports fixed application failures beside the Appearance
-sliders independently of persistence status, including failures during owner events.
-Send hidden visibility immediately; animation frames may stop in hidden documents.
-Track macOS owner show/hide events and renderer visibility rather than Electron
-45's inverted isVisible predicate. Keep the decorative backdrop out of Mission Control.
-Linux caption controls remain accessible inside the splash and first-use setup modals.
-At narrow sidebar widths and large text sizes, bound conversation indentation and
-artwork to preserve readable labels and independent action targets.
-
-Native sidebar backdrop visibility follows owner show/hide/minimize events and immediate
-renderer hidden reports, without Electron's macOS native visibility predicate. Hide the
-decorative window from Mission Control. A payload-free failure notice reports native
-event failures beside Appearance controls, separately from preference save errors; a
-successful adjustment clears the native error. Keep caption controls inside the active
-splash/setup dialog on Linux so modal top-layer and inert rules cannot block them.
-Conversation icon/label insets shrink at narrow sidebar widths to preserve readable names.
 
 ## Settings action icons and spacing
 
@@ -1150,24 +1088,10 @@ background opacity and introduces no setting or capability/catalog change.
 
 ## Apps-owned preferences and Update Manager
 
-Appearance, Memory, Polling controls and Update Manager are direct Apps children,
-alphabetical alongside existing Apps destinations. They appear in the Apps sidebar
-and Apps home Cards, with Home → Apps breadcrumbs and matching keyboard parents.
-They no longer appear on the Settings home/sidebar. Settings retains About,
-Advanced, Table defaults and Text. Existing Data Viewer → Polling remains the
-separate polling monitor; Apps → Polling retains its existing controls/monitor action.
-
-Update Manager is the visible name everywhere for the existing updates destination;
-retain check/download/cancel/install/automatic-check behavior and native consent.
-Stable settings section IDs, DOM IDs and navigation/history target kinds remain
-compatibility adapters inside the retained settings render owner. Shared descriptor
-parent metadata owns visible ancestry; do not duplicate preference state or views.
-Revealing a promoted page opens Apps without forcing Settings open. Collapsing an
-ancestor preserves selection/content and marks the correct collapsed parent; Left
-returns focus to the actual owner. Preserve cached content, page actions, focus,
-request ownership, saved values, bridge contracts and database availability.
-Capability labels/access paths and recovery advice use Apps/Update Manager; keep
-capability IDs, availability rules and all execution/agent-write authority unchanged.
+Appearance, Memory, Polling controls and Update Manager are direct Apps children.
+Update Manager presents manual npm installation and backend repair instructions;
+it never downloads or replaces code. Preserve their navigation artwork and saved
+non-native preferences. Native window appearance controls are removed.
 
 ## Simplified workspace header and title artwork
 

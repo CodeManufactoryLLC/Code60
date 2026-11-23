@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from "react";
-import type { Command, DesktopApi, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, Command, Snapshot } from "../bridge/index.js";
 import { COMMAND_LIMIT } from "../bridge/index.js";
 import {
   type CommandDraft,
@@ -19,7 +19,7 @@ export function CommandsPage({
   onSnapshot,
 }: {
   commands: readonly Command[];
-  api: DesktopApi;
+  api: ApplicationClient;
   onSnapshot(snapshot: Snapshot): void;
 }) {
   const id = useId();
