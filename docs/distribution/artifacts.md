@@ -98,3 +98,8 @@ CI scopes `COMPOSE_BAKE=false` to its disposable Linux payload job so the runner
 Compose 2.x uses its classic builder with the Dev Container CLI's temporary
 Dockerfile. This does not change the host Docker configuration or disable
 filesystem entitlement checks. See [Compose builder selection](https://docs.docker.com/compose/how-tos/dependent-images/).
+
+The PR payload job checks out the explicit PR head commit, matching the native
+workflow's selected source identity. Ordinary unit/browser/package jobs still
+validate GitHub's integrated PR merge snapshot. This keeps paired descriptors
+consistent without weakening those existing regression checks.
