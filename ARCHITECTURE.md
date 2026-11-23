@@ -2969,7 +2969,10 @@ Settings → Advanced → Web Server Beta is an explicit, human-only LAN excepti
 the loopback default. It is off by default and persists only its enabled preference
 in private gateway settings. Only the controlling localhost browser may change it
 or issue single-use 60-second LAN pairing codes. LAN always requires pairing,
-independently of local pairing policy. Sessions and codes belong to an exact ingress,
+independently of local pairing policy. Codes use six cryptographic digits displayed as `123-456`; entry accepts
+the hyphen optionally. Local codes keep their existing format. Generation avoids
+active collisions and immediate rotation reuse with bounded retries.
+Sessions and codes belong to an exact ingress,
 origin and activation generation; private management routes are never available on LAN.
 One browser controls the shared application/scheduler. Disabling or changing address
 revokes LAN views and pending interactions, not approved execution. Codes stay out

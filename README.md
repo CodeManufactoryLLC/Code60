@@ -44,7 +44,8 @@ on the start screen to open its settings directly. No database is required.
 
 Open **Settings → Advanced → Web Server Beta** from Code60's localhost browser
 and enable the switch. The page shows the current LAN URL, for example
-`http://192.168.0.16:47994`, and a single-use pairing code valid for sixty seconds.
+`http://192.168.0.16:47994`, and a single-use six-digit pairing code valid for sixty seconds.
+Codes appear as `123-456`; enter them with or without the hyphen.
 Open that URL on the other device and enter the code. **New code** replaces the
 previous code; **Take control** explicitly transfers control of the shared app.
 

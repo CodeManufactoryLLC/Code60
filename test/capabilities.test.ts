@@ -377,5 +377,6 @@ it("describes LAN beta as human-only and separate from local pairing policy", ()
     prerequisite: "none",
     access: "Settings → Advanced → Web Server Beta",
     limitations: expect.stringContaining("LAN always requires pairing"),
+    confirmation: expect.stringContaining("123-456"),
   });
 });

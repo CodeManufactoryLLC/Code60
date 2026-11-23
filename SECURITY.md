@@ -307,7 +307,11 @@ enabled preference in private gateway settings.
 LAN always requires a single-use 60-second pairing code, independently of local
 pairing policy. Codes belong to an exact LAN activation/origin; rotation, disable,
 address change and backend restart invalidate them. Ten pairing submissions per
-minute are permitted. Sessions are ingress/origin-bound, use the existing per-tab
+minute are permitted. Codes use six cryptographically random digits, displayed
+as `123-456`, and accept entry with or without the hyphen. Local pairing retains
+its existing hexadecimal format. Rotation excludes the immediately previous code
+and generation rejects active collisions with a finite retry limit.
+Sessions are ingress/origin-bound, use the existing per-tab
 session storage and require explicit control takeover. A local session cannot be
 replayed on LAN, nor a LAN session on localhost. Only the controlling localhost
 page can change LAN policy or generate a code; codes never enter shared snapshots,

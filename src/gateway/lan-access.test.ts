@@ -176,9 +176,13 @@ it("requires LAN-scoped pairing and denies local tokens, management and remote a
   ).toBe(200);
   const firstCode = (await f.operation("web-server-code")).value.code;
   const code = (await f.operation("web-server-code")).value.code;
+  expect(code).toMatch(/^[0-9]{3}-[0-9]{3}$/);
   expect((await f.post(origin, "/api/pair", { version: 1, code: firstCode })).status).toBe(400);
   expect((await f.post(f.gateway.origin, "/api/pair", { version: 1, code })).status).toBe(400);
-  const paired = await f.post(origin, "/api/pair", { version: 1, code });
+  const paired = await f.post(origin, "/api/pair", {
+    version: 1,
+    code: String(code).replace("-", ""),
+  });
   expect(paired.status).toBe(200);
   expect((await f.post(origin, "/api/pair", { version: 1, code })).status).toBe(400);
   const remote = {
@@ -217,9 +221,7 @@ it("persists only the preference, throttles pairing and restores listeners witho
   const origin = String((await f.operation("web-server-enabled", { enabled: true })).value.url);
   const code = (await f.operation("web-server-code")).value.code;
   for (let index = 0; index < 10; index++)
-    expect(
-      (await f.post(origin, "/api/pair", { version: 1, code: "0000000000000000" })).status,
-    ).toBe(400);
+    expect((await f.post(origin, "/api/pair", { version: 1, code: "invalid" })).status).toBe(400);
   expect((await f.post(origin, "/api/pair", { version: 1, code })).status).toBe(429);
   const text = await readFile(join(f.directory, "state/code60/gateway/settings.json"), "utf8");
   expect(JSON.parse(text)).toEqual({ webServerEnabled: true });

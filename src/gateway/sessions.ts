@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { type BrowserSession, GATEWAY_LIMITS, GATEWAY_VERSION } from "../bridge/index.js";
 
 export const sameSecret = (a: string, b: string) => {
@@ -13,8 +13,12 @@ export class Sessions {
   private readonly proofs = new Map<string, { expires: number; scope: string }>();
   private readonly sessions = new Map<string, Session>();
   private controller: string | undefined;
+  private lastLanProof: string | undefined;
   generation = 0;
-  constructor(private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly now: () => number = Date.now,
+    private readonly randomNumber: (maximum: number) => number = randomInt,
+  ) {}
   private prune() {
     for (const [code, proof] of this.proofs)
       if (proof.expires <= this.now()) this.proofs.delete(code);
@@ -31,16 +35,28 @@ export class Sessions {
     this.prune();
     if (this.proofs.size >= GATEWAY_LIMITS.sessions)
       throw new Error("Too many pairing requests. Try again later.");
-    const proof = randomBytes(8).toString("hex");
+    const proof = scope.startsWith("lan:") ? this.lanProof() : randomBytes(8).toString("hex");
     this.proofs.set(proof, { expires: this.now() + GATEWAY_LIMITS.pairingMs, scope });
     return proof;
   }
   pair(proof: string, scope = "local"): BrowserSession {
     this.prune();
+    if (/^\d{6}$/.test(proof)) proof = `${proof.slice(0, 3)}-${proof.slice(3)}`;
     if (this.proofs.get(proof)?.scope !== scope || this.sessions.size >= GATEWAY_LIMITS.sessions)
       throw new Error("Pairing code is invalid or expired.");
     this.proofs.delete(proof);
     return this.connect(scope);
+  }
+  private lanProof(): string {
+    // Keep leading zeroes and reject collisions without an unbounded retry loop.
+    for (let attempt = 0; attempt < 32; attempt++) {
+      const digits = this.randomNumber(1_000_000).toString().padStart(6, "0");
+      const proof = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+      if (proof === this.lastLanProof || this.proofs.has(proof)) continue;
+      this.lastLanProof = proof;
+      return proof;
+    }
+    throw new Error("Could not create a pairing code. Try again.");
   }
   connect(scope = "local"): BrowserSession {
     this.prune();

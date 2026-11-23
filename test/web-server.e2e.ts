@@ -53,8 +53,13 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     expect(url).toMatch(/^http:\/\/(?:10\.|172\.|192\.168\.)/);
     if (!url) throw new Error("Missing LAN URL");
     const code = settings.getByLabel("LAN pairing code", { exact: true });
-    await expect(code).toHaveText(/^[a-f0-9]{16}$/);
+    await expect(code).toHaveText(/^[0-9]{3}-[0-9]{3}$/);
     const previous = await code.textContent();
+    await local.context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await settings.getByRole("button", { name: "Copy code", exact: true }).click();
+    await expect
+      .poll(() => local.page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(previous);
     await settings.getByRole("button", { name: "New code", exact: true }).click();
     await expect(code).not.toHaveText(previous ?? "");
     const activeCode = await code.textContent();
@@ -74,10 +79,14 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     expect(await page.evaluate(() => window.isSecureContext)).toBe(false);
     expect(await page.evaluate(() => typeof crypto.randomUUID)).toBe("undefined");
     await expect(page.getByLabel("Pairing code", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Pairing code", { exact: true })).toHaveAttribute(
+      "inputmode",
+      "numeric",
+    );
     await page.getByLabel("Pairing code", { exact: true }).fill(previous ?? "");
     await page.getByRole("button", { name: "Connect to Code60", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("invalid or expired");
-    await page.getByLabel("Pairing code", { exact: true }).fill(activeCode ?? "");
+    await page.getByLabel("Pairing code", { exact: true }).fill(activeCode?.replace("-", "") ?? "");
     await page.getByRole("button", { name: "Connect to Code60", exact: true }).click();
     await page.getByRole("button", { name: "Take control", exact: true }).click();
     await page.getByRole("button", { name: "Start", exact: true }).click();
@@ -103,7 +112,6 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     const directory = (await page.evaluate(() => window.code60.snapshot())).chat.directory;
     if (!directory) throw new Error("Missing owned conversation directory");
     const launches = await readdir(fixture.processLog);
-    await local.context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await chat.getByRole("button", { name: "Copy message", exact: true }).last().click();
     await expect
       .poll(() => local.page.evaluate(() => navigator.clipboard.readText()))

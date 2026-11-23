@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { pairingRequestSchema } from "../bridge/index.js";
 import { Sessions } from "./sessions.js";
 
 describe("browser session authority", () => {
@@ -61,4 +62,52 @@ it("binds LAN proofs and tokens to their exact activation/origin and leaves loca
   sessions.revoke("lan:");
   expect(() => sessions.authenticate(remote.token, scope)).toThrow();
   expect(sessions.authenticate(local.token)).toBe(local.token);
+});
+it("issues grouped six-digit LAN codes with leading zeroes and accepts either entry format once", () => {
+  let time = 0;
+  const scope = "lan:1:http://192.168.0.16:43160";
+  const sessions = new Sessions(
+    () => time,
+    () => 7,
+  );
+  expect(sessions.proof()).toMatch(/^[a-f0-9]{16}$/);
+  const code = sessions.proof(scope);
+  expect(code).toBe("000-007");
+  for (const value of [code, "000007", "a".repeat(16)])
+    expect(pairingRequestSchema.parse({ code: value, version: 1 }).code).toBe(value);
+  for (const value of ["12345", "1234567", "12-3456", "123-45x", "123--456"])
+    expect(pairingRequestSchema.safeParse({ code: value, version: 1 }).success).toBe(false);
+  expect(() => sessions.pair("000007")).toThrow("invalid or expired");
+  const remote = sessions.pair("000007", scope);
+  expect(sessions.authenticate(remote.token, scope)).toBe(remote.token);
+  expect(() => sessions.pair(code, scope)).toThrow("invalid or expired");
+  const expiring = new Sessions(
+    () => time,
+    () => 123456,
+  );
+  expect(expiring.proof(scope)).toBe("123-456");
+  time = 60_000;
+  expect(() => expiring.pair("123-456", scope)).toThrow("invalid or expired");
+});
+it("avoids active-code collisions and never immediately repeats a rotated LAN code", () => {
+  const values = [0, 7, 0, 7, 999999, 999999, 123456];
+  const random = vi.fn(() => values.shift() ?? 0);
+  const sessions = new Sessions(Date.now, random);
+  const scope = "lan:1:http://192.168.0.16:43160";
+  expect(sessions.proof(scope)).toBe("000-000");
+  expect(sessions.proof(scope)).toBe("000-007");
+  expect(sessions.proof(scope)).toBe("999-999");
+  sessions.clearProofs("lan:");
+  expect(sessions.proof(scope)).toBe("123-456");
+  expect(() => sessions.pair("999-999", scope)).toThrow("invalid or expired");
+  expect(random).toHaveBeenCalledTimes(7);
+  expect(random).toHaveBeenCalledWith(1_000_000);
+});
+it("bounds code generation when the entropy source repeatedly collides", () => {
+  const random = vi.fn(() => 0);
+  const sessions = new Sessions(Date.now, random);
+  sessions.proof("lan:1");
+  sessions.clearProofs("lan:");
+  expect(() => sessions.proof("lan:1")).toThrow("Could not create a pairing code");
+  expect(random).toHaveBeenCalledTimes(33);
 });

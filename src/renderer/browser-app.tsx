@@ -79,6 +79,7 @@ function BrowserInteraction({
 }
 
 export function BrowserApp() {
+  const lanPairing = window.location.hostname !== "127.0.0.1";
   const [session, setSession] = useState<BrowserSession | null>(null);
   const [ready, setReady] = useState(false);
   const [requirePairing, setRequirePairing] = useState(true);
@@ -208,12 +209,22 @@ export function BrowserApp() {
             }}
           >
             <p>
-              Run <code>code60 open</code> on this computer and enter its pairing code.
+              {lanPairing ? (
+                "Enter the pairing code from Web Server Beta on the computer running Code60."
+              ) : (
+                <>
+                  Run <code>code60 open</code> on this computer and enter its pairing code.
+                </>
+              )}
             </p>
             <label>
               Pairing code
               <input
                 autoComplete="off"
+                inputMode={lanPairing ? "numeric" : "text"}
+                placeholder={lanPairing ? "123-456" : undefined}
+                pattern={lanPairing ? "[0-9]{3}-?[0-9]{3}" : undefined}
+                maxLength={lanPairing ? 7 : undefined}
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
               />
