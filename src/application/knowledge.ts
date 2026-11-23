@@ -260,6 +260,17 @@ export class DesktopKnowledge {
       reason =
         "Project homes remain available without an open chat; closing the last chat creates no replacement.";
       action = "Use New Session on the project home to explicitly create a chat.";
+    } else if (cap.id === "web-server") {
+      status = "unknown";
+      reason =
+        "The page is available without a database or provider. Listener availability depends on the host LAN and, in a container, the owned start launcher; awareness does not probe or enable it.";
+      action =
+        "Open Settings → Advanced → Web Server Beta from the controlling localhost browser. Before provider setup, close the setup dialog and choose Web Server Beta on the start screen. Enable access and pair the remote browser with a short-lived code.";
+    } else if (cap.id === "providers") {
+      reason =
+        "Provider setup is available without a database or verified provider; Codex installation and device-code login require an explicit action in the controlling setup dialog.";
+      action =
+        "Providers → Add Provider → Codex. Install if missing, sign in on the official page, and wait for connection verification. Custom commands require manual setup.";
     } else if (cap.prerequisite === "provider" && !state.providers.length) {
       status = "blocked";
       reason = "No verified enabled provider.";

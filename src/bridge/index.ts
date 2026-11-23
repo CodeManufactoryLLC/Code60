@@ -379,6 +379,12 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface ApplicationClient {
+  webServerStatus?(): Promise<import("./web-server.js").WebServerStatus>;
+  setWebServerEnabled?(request: {
+    enabled: boolean;
+  }): Promise<import("./web-server.js").WebServerStatus>;
+  createWebServerCode?(): Promise<import("./web-server.js").WebServerCode>;
+
   workflow(request: import("./workflows.js").WorkflowRequest): Promise<unknown>;
   modelDefault?(request: import("./model-defaults.js").ModelDefaultAction): Promise<void>;
   customAgent?(
@@ -453,6 +459,16 @@ export interface ApplicationClient {
   providerAction(request: import("./agent-setup.js").ProviderAction): Promise<void>;
   beginAgentSetup(request: SetupBegin): Promise<void>;
   attemptAgentSetup(request: SetupAttempt): Promise<void>;
+  installCodexForSetup?(
+    request: SetupIdentity,
+  ): Promise<import("./agent-setup.js").CodexSetupStarted>;
+  loginCodexForSetup?(
+    request: SetupIdentity,
+  ): Promise<import("./agent-setup.js").CodexSetupStarted>;
+  readCodexSetup?(
+    request: import("./agent-setup.js").CodexSetupIdentity,
+  ): Promise<import("./agent-setup.js").CodexSetupProgress>;
+  cancelCodexSetup?(request: import("./agent-setup.js").CodexSetupIdentity): Promise<void>;
   cancelAgentSetup(request: SetupIdentity): Promise<void>;
   finishAgentSetup(request: SetupIdentity): Promise<void>;
   abandonAgentSetup(request: SetupIdentity): Promise<void>;
@@ -1025,5 +1041,5 @@ export const parseSearchSummaryRequestId = (value: unknown): string =>
 export * from "./gateway.js";
 export * from "./reviews.js";
 export { parseTaskAction, type TaskAction, type TaskView } from "./tasks.js";
-
+export * from "./web-server.js";
 export * from "./workflows.js";

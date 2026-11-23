@@ -42,7 +42,7 @@ export const interactionAnswerSchema = z.strictObject({
   filename: z.string().min(1).max(200).optional(),
 });
 export const pairingRequestSchema = z.strictObject({
-  code: z.string().regex(/^[a-f0-9]{16}$/),
+  code: z.string().regex(/^(?:[a-f0-9]{16}|[0-9]{3}-?[0-9]{3})$/),
   version: z.literal(GATEWAY_VERSION),
 });
 export const connectionRequestSchema = z.strictObject({ version: z.literal(GATEWAY_VERSION) });
@@ -54,6 +54,7 @@ export const pairingPolicySchema = z.strictObject({ requirePairing: z.boolean() 
 export const gatewaySettingsSchema = z.strictObject({
   roots: z.array(z.string().min(1).max(4096)).min(1).max(32).optional(),
   requirePairing: z.boolean().optional(),
+  webServerEnabled: z.boolean().optional(),
 });
 export type GatewaySettings = z.infer<typeof gatewaySettingsSchema>;
 export const chooserRequestSchema = z.strictObject({

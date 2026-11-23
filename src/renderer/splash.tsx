@@ -16,6 +16,7 @@ export function Splash({
   onThemeChange,
   onEnter,
   onConnectDatabase,
+  onOpenWebServer,
 }: {
   windowControls?: ReactNode;
   ready: boolean;
@@ -27,6 +28,7 @@ export function Splash({
   onThemeChange(theme: Theme): void;
   onEnter(): void;
   onConnectDatabase(): void;
+  onOpenWebServer?(): void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const setupButton = useRef<HTMLButtonElement>(null);
@@ -91,6 +93,11 @@ export function Splash({
                     <p className="error-banner" role="alert">
                       {error}
                     </p>
+                  )}
+                  {!configured && onOpenWebServer && (
+                    <button type="button" disabled={busy} onClick={onOpenWebServer}>
+                      Web Server Beta
+                    </button>
                   )}
                   {configured ? (
                     <button type="button" className="splash-enter" disabled={busy} onClick={enter}>

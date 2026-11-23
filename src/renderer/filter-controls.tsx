@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { randomId } from "./browser-platform.js";
 import { Icon } from "./icons.js";
 import { DialogContent } from "./neobrutalism/dialog.js";
 import {
@@ -45,13 +46,13 @@ export function FilterControls({
   const problem = draft ? filterProblem(draft, fields) : "";
   const fresh = (): SavedFilter => ({
     version: 1,
-    id: crypto.randomUUID(),
+    id: randomId(),
     name: "",
     mode: "all",
     conditions: fields[0]
       ? [
           {
-            id: crypto.randomUUID(),
+            id: randomId(),
             column: fields[0].key,
             kind: fields[0].kind,
             op: fields[0].kind === "text" ? "contains" : "eq",

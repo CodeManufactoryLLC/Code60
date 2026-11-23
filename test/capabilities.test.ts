@@ -235,7 +235,12 @@ describe("browser capability catalog", () => {
       prerequisite: "none",
     });
     expect(providers?.limitations).toContain("stopped interactive agent work");
-    expect(providers?.limitations).toContain("No automatic installation or management MCP tools");
+    expect(providers?.limitations).toContain(
+      "explicit installation of pinned @openai/codex@0.171.0",
+    );
+    expect(providers?.limitations).toContain(
+      "Custom Codex commands and other providers use manual setup",
+    );
   });
   it("classifies model switching as provider-dependent and human-only with role-scoped defaults", () => {
     expect(APPLICATION_CAPABILITIES.find((c) => c.id === "model-settings")).toMatchObject({
@@ -369,5 +374,15 @@ describe("browser capability catalog", () => {
       purpose: expect.stringContaining("custom assistants and Relay"),
       limitations: expect.stringContaining("reduced motion and forced colors"),
     });
+  });
+});
+it("describes LAN beta as human-only and separate from local pairing policy", () => {
+  expect(PAGE_CAPABILITIES["web-server"]).toBe("web-server");
+  expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "web-server")).toMatchObject({
+    agentAccess: "human-only",
+    prerequisite: "none",
+    access: "Settings → Advanced → Web Server Beta",
+    limitations: expect.stringContaining("LAN always requires pairing"),
+    confirmation: expect.stringContaining("123-456"),
   });
 });

@@ -6,6 +6,7 @@ import {
   type GatewayFrame,
   parseWebLink,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 
 declare global {
   interface Window {
@@ -81,7 +82,7 @@ export function createBrowserClient(
   session: BrowserSession,
   onFrame: (frame: GatewayFrame) => void,
 ) {
-  session.clientId = crypto.randomUUID();
+  session.clientId = randomId();
   let ready!: () => void;
   const connected = new Promise<void>((resolve) => {
     ready = resolve;
@@ -89,8 +90,11 @@ export function createBrowserClient(
   const events = new BrowserEvents();
   const abort = new AbortController();
   const rpc = <T>(operation: string, value?: unknown): Promise<T> =>
-    browserRequest<T>("/api/operation", session, { id: crypto.randomUUID(), operation, value });
+    browserRequest<T>("/api/operation", session, { id: randomId(), operation, value });
   const api: ApplicationClient = {
+    webServerStatus: () => rpc("web-server-status"),
+    setWebServerEnabled: (request) => rpc("web-server-enabled", request),
+    createWebServerCode: () => rpc("web-server-code"),
     modelDefault: (request: unknown) => rpc("model-default", request),
     customAgent: (request: unknown) => rpc("custom-agent", request),
     workflow: (request) => rpc("workflow", request),
@@ -153,6 +157,10 @@ ${url}`)
     providerAction: (request: unknown) => rpc("provider-action", request),
     beginAgentSetup: (request: unknown) => rpc("setup-begin", request),
     attemptAgentSetup: (request: unknown) => rpc("setup-attempt", request),
+    installCodexForSetup: (request) => rpc("setup-codex-install", request),
+    loginCodexForSetup: (request) => rpc("setup-codex-login", request),
+    readCodexSetup: (request) => rpc("setup-codex-read", request),
+    cancelCodexSetup: (request) => rpc("setup-codex-cancel", request),
     cancelAgentSetup: (request: unknown) => rpc("setup-cancel", request),
     finishAgentSetup: (request: unknown) => rpc("setup-finish", request),
     abandonAgentSetup: (request: unknown) => rpc("setup-abandon", request),

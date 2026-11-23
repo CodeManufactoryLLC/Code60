@@ -256,6 +256,20 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
+## Web Server Beta
+
+- ID: `web-server`
+- Status: shipped
+- Purpose: Enable paired access to Code60 from another device on the same trusted LAN.
+- Access: Settings → Advanced → Web Server Beta
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Turning the switch on explicitly enables trusted-LAN access. Pair each remote browser using six digits displayed as 123-456 (the hyphen is optional when entering it); take control explicitly. Server administration is localhost-only. Before provider setup, close the setup dialog and choose Web Server Beta on the start screen.
+- Limits: Off by default; remembers the enabled preference. Uses the current primary private IPv4 address and existing application port. Only the controlling localhost browser can toggle access or create single-use 60-second pairing codes; LAN always requires pairing, with ten attempts per minute. Paired devices use the full app with explicit single-browser control takeover. Disabling, address changes and backend restart revoke LAN sessions; approved work continues. HTTP is not encrypted. Native execution and the dev-container start launcher are supported; ordinary containers without the host controller report unavailable. LAN serves bundled assets without Vite/HMR or source maps. No custom ports, TLS, public hosting, router/firewall changes, passwords or separate service. Codes are private responses, never snapshots, diagnostics or saved storage.
+- Pages: `web-server`
+- Settings sections: none
+- Tools: none
+
 ## Providers
 
 - ID: `providers`
@@ -264,8 +278,8 @@ Schema version: 1
 - Access: Providers → provider details → title actions for Disconnect or Set as Primary
 - Prerequisite: none
 - Agent access: read
-- Confirmation: Existing permissions apply.
-- Limits: Database-independent. Add Provider verifies catalog connectors. Set as Primary preserves other memberships and uses saved command verification; Disconnect removes only Code60 membership and retains model defaults, history and external login. Both actions require stopped interactive agent work and no setup transaction. The primary cannot disconnect until another provider is primary. Verified membership is not live connection health. No automatic installation or management MCP tools.
+- Confirmation: Installation and login are explicit human-only setup actions. Install Codex and sign in authorizes the fixed package installation and continuation into device-code login; authorization happens on the official provider website.
+- Limits: Database-independent. Add Provider verifies catalog connectors. Standard Codex setup offers explicit installation of pinned @openai/codex@0.171.0 and device-code sign-in; npm and a non-root backend user are required. The controlling setup dialog alone receives the temporary code and official HTTPS sign-in link. Login requires enabled ChatGPT device-code authentication, then a fresh ACP probe and automatic save. Closing, reload, takeover or shutdown cancels setup without logout. Custom Codex commands and other providers use manual setup. Credentials and managed tools persist in the backend user's home, including the container home volume. No account switching, logout, API-key entry or management MCP tools. Set as Primary preserves other memberships and uses saved command verification; Disconnect removes only Code60 membership and retains model defaults, history and external login. Both actions require stopped interactive agent work and no setup transaction. The primary cannot disconnect until another provider is primary. Verified membership is not live connection health.
 - Pages: `providers`, `provider`
 - Settings sections: none
 - Tools: none
@@ -405,7 +419,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Take control explicitly replaces another browser's control; stale page confirmations are rejected. Stopping the backend confirms cancellation of all interactive and scheduled work. Restart never replays uncertain tasks.
-- Limits: macOS Apple Silicon and Linux x64 setup requires Node >=24.22.0 <25, npm and Git; Linux needs a working user systemd session for service enrollment. The private distribution candidate supports code60 setup [--yes] [--no-open] and read-only code60 status. Setup installs a durable launcher, separately requests shell-profile approval and default-no service consent, creates the first default database under XDG_DATA_HOME/code60/databases/default.sqlite (default ~/.local/share), preserves valid custom selections and opens the browser for provider verification. No provider authority or agent work is seeded. Without a TTY, service changes require Code60’s trailing --yes; no profiles are edited. Declined service consent returns files-only success with explicit incomplete status and a continuation command. --no-open skips the opener; opener failure retains a usable URL. Repeated setup reuses healthy files and selections without implicit updates. Status never repairs or starts services/engines. Packages remain unpublished until release preparation. The opt-in per-user backend starts at login. Browsers connect without a code by default, with per-tab sessions and one controlling browser. Local code60 pairing on/off/status makes the code requirement optional; setting changes require consent and revoke browser sessions without cancelling approved work. When enabled, the code is single-use and expires after sixty seconds. Closing or refreshing a browser preserves approved work. Workspace chooser roots default to the user's home and require local configuration to expand. No Electron, remote hosting or general agent execution CLI.
+- Limits: macOS Apple Silicon and Linux x64 setup requires Node >=24.22.0 <25, npm and Git; Linux needs a working user systemd session for service enrollment. The private distribution candidate supports code60 setup [--yes] [--no-open] and read-only code60 status. Setup installs a durable launcher, separately requests shell-profile approval and default-no service consent, creates the first default database under XDG_DATA_HOME/code60/databases/default.sqlite (default ~/.local/share), preserves valid custom selections and opens the browser for provider verification. No provider authority or agent work is seeded. Without a TTY, service changes require Code60’s trailing --yes; no profiles are edited. Declined service consent returns files-only success with explicit incomplete status and a continuation command. --no-open skips the opener; opener failure retains a usable URL. Repeated setup reuses healthy files and selections without implicit updates. Status never repairs or starts services/engines. Packages remain unpublished until release preparation. The opt-in per-user backend starts at login. Browsers connect without a code by default, with per-tab sessions and one controlling browser. Local code60 pairing on/off/status makes the code requirement optional; setting changes require consent and revoke browser sessions without cancelling approved work. When enabled, the code is single-use and expires after sixty seconds. Closing or refreshing a browser preserves approved work. Workspace chooser roots default to the user's home and require local configuration to expand. No Electron, public hosting or general agent execution CLI.
 - Pages: none
 - Settings sections: none
 - Tools: none

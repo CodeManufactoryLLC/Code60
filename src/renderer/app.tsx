@@ -337,6 +337,10 @@ export function App({ api: transport }: { api: ApplicationClient }) {
           theme={theme}
           onThemeChange={setTheme}
           onConnectDatabase={() => showPicker("database")}
+          onOpenWebServer={() => {
+            selectPage("web-server");
+            enterApp();
+          }}
           onEnter={() => {
             if (!orchestratorConfigured) return;
             enterApp();

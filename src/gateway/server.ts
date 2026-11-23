@@ -5,11 +5,13 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ApplicationHost,
+  codexProviderAgents,
   DesktopAutomations,
   DesktopLogStore,
   DesktopWorkflows,
   filePreferences,
   openProjectDatabase,
+  prepareCodexEnvironment,
   type TransmissionClient,
 } from "../application/index.js";
 import { startSchedulerRuntime } from "../automation/index.js";
@@ -23,10 +25,13 @@ import {
   operationRequestSchema,
   pairingPolicySchema,
   pairingRequestSchema,
+  webServerEnabledSchema,
 } from "../bridge/index.js";
 import { type CoreDeps, defaultDeps, stateHome } from "../core/index.js";
 import {
   diagnosticMessage,
+  fileCode,
+  isPrivateIPv4,
   lockPrivateState,
   privateDirectory,
   readPrivateJson,
@@ -34,9 +39,11 @@ import {
   writePrivateJson,
 } from "../platform/index.js";
 import { Interactions } from "./interactions.js";
+import { createLanPublisher } from "./lan-publisher.js";
 import { applicationOperations } from "./operations.js";
 import { Sessions, sameSecret } from "./sessions.js";
 import { readGatewaySettings, writeGatewaySettings } from "./settings.js";
+import { type LanPublisher, WebServerBeta } from "./web-server.js";
 
 export const gatewayRoot = (env: Readonly<NodeJS.ProcessEnv>) =>
   join(stateHome(env), "code60", "gateway");
@@ -55,6 +62,9 @@ export interface GatewayOptions {
   developmentAssets?: string;
   developmentPort?: number;
   onStop?: () => Promise<void>;
+  lanPublisher?: LanPublisher;
+  lanAddress?: () => Promise<string | null>;
+  lanIntervalMs?: number;
   workflowClients?: { current: TransmissionClient; legacy: TransmissionClient };
 }
 const json = (value: unknown) => JSON.stringify(value ?? null);
@@ -92,11 +102,21 @@ export async function startGateway(options: GatewayOptions = {}) {
       options.developmentPort > 65535)
   )
     throw new Error("A development port between 1 and 65535 requires development assets.");
-  const env = options.env ?? process.env;
+  const env = await prepareCodexEnvironment(options.env ?? process.env);
+  const lanPublisher =
+    options.lanPublisher ??
+    (env.CODE60_DEV_LAN_SOCKET ? createLanPublisher(env.CODE60_DEV_LAN_SOCKET) : undefined);
   const assetsRoot = options.assets ?? fileURLToPath(new URL("../renderer/", import.meta.url));
   const assets = new Map<string, string>();
-  if (!options.developmentAssets) {
-    for (const item of await readdir(assetsRoot, { recursive: true, withFileTypes: true })) {
+  {
+    const entries = await readdir(assetsRoot, { recursive: true, withFileTypes: true }).catch(
+      (error) => {
+        if (options.developmentAssets && (error as NodeJS.ErrnoException).code === "ENOENT")
+          return [];
+        throw error;
+      },
+    );
+    for (const item of entries) {
       if (!item.isFile() || item.name.endsWith(".map")) continue;
       const path = join(item.parentPath, item.name);
       const relative = path.slice(assetsRoot.replace(/\/$/, "").length).split("\\").join("/");
@@ -118,6 +138,10 @@ export async function startGateway(options: GatewayOptions = {}) {
   >();
   let sequence = 0;
   let origin = "";
+  let webServer: WebServerBeta | undefined;
+  let lanGeneration = 0;
+  const pairAttempts: number[] = [];
+  let settingWrites: Promise<unknown> = Promise.resolve();
   let closing = false;
   let quiescing = false;
   let stopped: Promise<void> | undefined;
@@ -177,7 +201,11 @@ export async function startGateway(options: GatewayOptions = {}) {
   let scheduler: Awaited<ReturnType<typeof startSchedulerRuntime>> | undefined;
   let schedulerError: string | null = null;
   try {
-    scheduler = await startSchedulerRuntime(env, options.deps ?? defaultDeps());
+    const schedulerDeps = options.deps ?? defaultDeps();
+    scheduler = await startSchedulerRuntime(env, {
+      ...schedulerDeps,
+      agents: codexProviderAgents(schedulerDeps.agents, env),
+    });
   } catch {
     schedulerError = "Scheduled jobs are unavailable. Check scheduler storage and ownership.";
   }
@@ -274,6 +302,26 @@ export async function startGateway(options: GatewayOptions = {}) {
       application.clearSearch(),
     ]);
   };
+  const saveSettings = (patch: { requirePairing?: boolean; webServerEnabled?: boolean }) => {
+    const task = settingWrites.then(async () => {
+      const updated = { ...settings, ...patch };
+      await writeGatewaySettings(root, updated, settings);
+      settings = updated;
+    });
+    settingWrites = task.catch(() => {});
+    return task;
+  };
+  const revokeLan = async () => {
+    for (const session of sessions.tokens("lan:")) {
+      await detach(session);
+      send(session, "session-reset");
+      streams.get(session)?.end();
+      streams.delete(session);
+    }
+    sessions.revoke("lan:");
+    lanGeneration++;
+    pairAttempts.length = 0;
+  };
   const respond = (response: ServerResponse, value: unknown, status = 200) => {
     const text = json(value);
     if (Buffer.byteLength(text) > GATEWAY_LIMITS.responseBytes)
@@ -281,326 +329,398 @@ export async function startGateway(options: GatewayOptions = {}) {
     response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
     response.end(text);
   };
-  const server = createServer((request, response) => {
-    response.setHeader("Cache-Control", "no-store");
-    response.setHeader("X-Content-Type-Options", "nosniff");
-    response.setHeader("Referrer-Policy", "no-referrer");
-    response.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
-    void (async () => {
-      if (closing) {
-        respond(response, { error: "Backend is stopping." }, 503);
-        return;
-      }
-      if (
-        request.headers.host !== new URL(origin).host ||
-        (request.headers.origin && request.headers.origin !== origin) ||
-        request.headers["sec-fetch-site"] === "cross-site"
-      ) {
-        respond(response, { error: "Untrusted origin." }, 403);
-        return;
-      }
-      const url = new URL(request.url ?? "/", origin);
-      if (
-        url.hash ||
-        (url.search &&
-          (!options.developmentAssets ||
-            url.pathname.startsWith("/api/") ||
-            url.pathname.startsWith("/management/")))
-      ) {
-        respond(response, { error: "Unexpected URL parameters." }, 400);
-        return;
-      }
-      const path = url.pathname;
-      if (path.startsWith("/management/")) {
-        const secret = request.headers["x-code60-management"];
+  const handle =
+    (remote: boolean, expectedOrigin: () => string) =>
+    (request: IncomingMessage, response: ServerResponse) => {
+      const origin = expectedOrigin();
+      const scope = remote ? `lan:${lanGeneration}:${origin}` : "local";
+      response.setHeader("Cache-Control", "no-store");
+      response.setHeader("X-Content-Type-Options", "nosniff");
+      response.setHeader("Referrer-Policy", "no-referrer");
+      response.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
+      void (async () => {
         if (
-          request.method !== "POST" ||
-          request.headers.origin ||
-          typeof secret !== "string" ||
-          !sameSecret(secret, token)
+          remote &&
+          (webServer?.status().state !== "listening" ||
+            (!lanPublisher && !isPrivateIPv4(request.socket.remoteAddress ?? "")))
         ) {
-          respond(response, { error: "Unauthorized." }, 403);
+          respond(response, { error: "LAN access is unavailable." }, 503);
           return;
         }
-        if (path === "/management/pair")
-          respond(response, {
-            ...(requirePairing ? { code: sessions.proof() } : {}),
-            requirePairing,
-            origin,
-            version: GATEWAY_VERSION,
-          });
-        else if (path === "/management/pairing") {
-          const value = await body(request);
-          if (value !== null) {
-            if (changingPairing || transferring || quiescing)
-              throw new Error("Backend is busy. Try again.");
-            const next = pairingPolicySchema.parse(value).requirePairing;
-            if (next !== requirePairing || settings?.requirePairing !== next) {
-              changingPairing = true;
-              pairingChange = (async () => {
-                const changed = next !== requirePairing;
-                const updated = { ...settings, requirePairing: next };
-                await writeGatewaySettings(root, updated, settings);
-                settings = updated;
-                if (!changed) return;
-                for (const session of streams.keys()) await detach(session);
-                sessions.reset();
-                requirePairing = next;
-                // Revoke view authorization only; approved execution continues.
-                for (const [session, stream] of streams) {
-                  send(session, "session-reset");
-                  stream.end();
-                }
-                streams.clear();
-                owners.clear();
-                clients.clear();
-              })().finally(() => {
-                changingPairing = false;
-                pairingChange = undefined;
-              });
-              await pairingChange;
-            }
-          }
-          respond(response, { requirePairing });
-        } else if (path === "/management/prepare-database") {
-          for await (const chunk of request)
-            if (chunk.length) throw new Error("Database preparation accepts no payload");
-          respond(response, await application.prepareInitialDatabase());
-        } else if (path === "/management/status")
-          respond(response, {
-            pid: process.pid,
-            version: GATEWAY_VERSION,
-            requirePairing,
-            scheduler: scheduler?.scheduler.status() ?? null,
-            schedulerError,
-            database: await application.initialDatabaseStatus(),
-            engines: {
-              bundled: false,
-              platform: process.platform === "darwin" ? "supported" : "unsupported",
-            },
-          });
-        else if (path === "/management/shutdown") {
-          await quiesce();
-          respond(response, { stopped: true });
-        } else respond(response, { error: "Unknown management operation." }, 404);
-        return;
-      }
-      if (path.startsWith("/api/")) {
-        if (quiescing || changingPairing) {
+        if (closing) {
           respond(response, { error: "Backend is stopping." }, 503);
           return;
         }
         if (
-          request.method === "POST" &&
-          (request.headers.origin !== origin ||
-            !request.headers["content-type"]?.startsWith("application/json"))
+          request.headers.host !== new URL(origin).host ||
+          (request.headers.origin && request.headers.origin !== origin) ||
+          (request.headers["sec-fetch-site"] === "cross-site" &&
+            !(
+              remote &&
+              request.method === "GET" &&
+              request.headers["sec-fetch-mode"] === "navigate" &&
+              request.headers["sec-fetch-dest"] === "document" &&
+              request.url === "/"
+            ))
         ) {
-          respond(response, { error: "Untrusted request." }, 403);
+          respond(response, { error: "Untrusted origin." }, 403);
           return;
         }
-        if (path === "/api/connection" && request.method === "GET") {
-          respond(response, { version: GATEWAY_VERSION, requirePairing });
+        const url = new URL(request.url ?? "/", origin);
+        if (
+          url.hash ||
+          (url.search &&
+            (remote ||
+              !options.developmentAssets ||
+              url.pathname.startsWith("/api/") ||
+              url.pathname.startsWith("/management/")))
+        ) {
+          respond(response, { error: "Unexpected URL parameters." }, 400);
           return;
         }
-        if (path === "/api/connect" && request.method === "POST") {
-          connectionRequestSchema.parse(await body(request));
-          if (requirePairing) {
-            respond(response, { error: "A pairing code is required." }, 403);
+        const path = url.pathname;
+        if (path.startsWith("/management/")) {
+          if (remote) {
+            respond(response, { error: "Unauthorized." }, 403);
             return;
           }
-          respond(response, sessions.connect());
-          return;
-        }
-        if (path === "/api/pair" && request.method === "POST") {
-          const value = pairingRequestSchema.parse(await body(request));
-          respond(response, sessions.pair(value.code));
-          return;
-        }
-        const header = request.headers["x-code60-session"];
-        const session = sessions.authenticate(typeof header === "string" ? header : undefined);
-        const generation = request.headers["x-code60-generation"];
-        const client = request.headers["x-code60-client"];
-        const owner = `${session}:${sessions.generation}:${client}`;
-        if (path === "/api/session" && request.method === "GET") {
-          respond(response, sessions.describe(session));
-          return;
-        }
-        if (path === "/api/control" && request.method === "POST") {
-          if (transferring) throw new Error("Control is being transferred. Try again.");
-          transferring = true;
-          try {
-            const previous = sessions.controlling;
-            if (previous && previous !== session) await detach(previous);
-            const next = sessions.takeControl(session);
-            if (previous && previous !== session) {
-              send(previous, "control-lost");
-              streams.get(previous)?.end();
-            }
-            respond(response, next.session);
-          } finally {
-            transferring = false;
-          }
-          return;
-        }
-        sessions.assertController(session, generation);
-        if (path === "/api/events" && request.method === "GET") {
-          if (typeof client !== "string" || !/^[a-f0-9-]{36}$/.test(client))
-            throw new Error("Invalid browser page identity.");
-          if (clients.get(session) !== client) {
-            await detach(session);
-            clients.set(session, client);
-          }
-          owners.set(session, owner);
-          interactions.attach(owner);
-          streams.get(session)?.end();
-          response.writeHead(200, {
-            "Content-Type": "text/event-stream",
-            "X-Accel-Buffering": "no",
-          });
-          streams.set(session, response);
-          send(session, "resync");
-          for (const pending of interactions.list(owner)) send(session, "interaction", pending);
-          const heartbeat = setInterval(() => {
-            try {
-              sessions.assertController(session, generation);
-              if (response.writableLength > GATEWAY_LIMITS.streamBytes) response.destroy();
-              else response.write(": heartbeat\n\n");
-            } catch {
-              response.end();
-            }
-          }, 15_000);
-          response.on("close", () => {
-            clearInterval(heartbeat);
-            if (streams.get(session) !== response) return;
-            streams.delete(session);
-            const timer = setTimeout(() => {
-              if (!streams.has(session)) void detach(session).catch(() => {});
-            }, 1500);
-            timer.unref();
-          });
-          return;
-        }
-        const assertPage = () => {
-          sessions.assertController(session, generation);
+          const secret = request.headers["x-code60-management"];
           if (
-            changingPairing ||
-            transferring ||
-            quiescing ||
-            typeof client !== "string" ||
-            clients.get(session) !== client
-          )
-            throw new Error("This browser connection changed. Reconnect before continuing.");
-        };
-        assertPage();
-        if (request.method !== "POST") {
-          respond(response, { error: "Unknown operation." }, 404);
+            request.method !== "POST" ||
+            request.headers.origin ||
+            typeof secret !== "string" ||
+            !sameSecret(secret, token)
+          ) {
+            respond(response, { error: "Unauthorized." }, 403);
+            return;
+          }
+          if (path === "/management/pair")
+            respond(response, {
+              ...(requirePairing ? { code: sessions.proof() } : {}),
+              requirePairing,
+              origin,
+              version: GATEWAY_VERSION,
+            });
+          else if (path === "/management/pairing") {
+            const value = await body(request);
+            if (value !== null) {
+              if (changingPairing || transferring || quiescing)
+                throw new Error("Backend is busy. Try again.");
+              const next = pairingPolicySchema.parse(value).requirePairing;
+              if (next !== requirePairing || settings?.requirePairing !== next) {
+                changingPairing = true;
+                pairingChange = (async () => {
+                  const changed = next !== requirePairing;
+                  await saveSettings({ requirePairing: next });
+                  if (!changed) return;
+                  for (const session of streams.keys()) await detach(session);
+                  sessions.reset();
+                  requirePairing = next;
+                  // Revoke view authorization only; approved execution continues.
+                  for (const [session, stream] of streams) {
+                    send(session, "session-reset");
+                    stream.end();
+                  }
+                  streams.clear();
+                  owners.clear();
+                  clients.clear();
+                })().finally(() => {
+                  changingPairing = false;
+                  pairingChange = undefined;
+                });
+                await pairingChange;
+              }
+            }
+            respond(response, { requirePairing });
+          } else if (path === "/management/prepare-database") {
+            for await (const chunk of request)
+              if (chunk.length) throw new Error("Database preparation accepts no payload");
+            respond(response, await application.prepareInitialDatabase());
+          } else if (path === "/management/status")
+            respond(response, {
+              pid: process.pid,
+              version: GATEWAY_VERSION,
+              requirePairing,
+              scheduler: scheduler?.scheduler.status() ?? null,
+              schedulerError,
+              database: await application.initialDatabaseStatus(),
+              engines: {
+                bundled: false,
+                platform: process.platform === "darwin" ? "supported" : "unsupported",
+              },
+            });
+          else if (path === "/management/shutdown") {
+            await quiesce();
+            respond(response, { stopped: true });
+          } else respond(response, { error: "Unknown management operation." }, 404);
           return;
         }
-        if (path === "/api/interaction") {
-          await interactions.answer(owner, interactionAnswerSchema.parse(await body(request)));
-          respond(response, null);
-          return;
-        }
-        if (path === "/api/chooser") {
-          respond(
-            response,
-            await interactions.choices(owner, chooserRequestSchema.parse(await body(request))),
+        if (path.startsWith("/api/")) {
+          if (quiescing || changingPairing) {
+            respond(response, { error: "Backend is stopping." }, 503);
+            return;
+          }
+          if (
+            request.method === "POST" &&
+            (request.headers.origin !== origin ||
+              !request.headers["content-type"]?.startsWith("application/json"))
+          ) {
+            respond(response, { error: "Untrusted request." }, 403);
+            return;
+          }
+          if (path === "/api/connection" && request.method === "GET") {
+            respond(response, {
+              version: GATEWAY_VERSION,
+              requirePairing: remote || requirePairing,
+            });
+            return;
+          }
+          if (path === "/api/connect" && request.method === "POST") {
+            connectionRequestSchema.parse(await body(request));
+            if (remote || requirePairing) {
+              respond(response, { error: "A pairing code is required." }, 403);
+              return;
+            }
+            respond(response, sessions.connect(scope));
+            return;
+          }
+          if (path === "/api/pair" && request.method === "POST") {
+            if (remote) {
+              const now = Date.now();
+              while (pairAttempts.length && (pairAttempts[0] ?? 0) <= now - 60_000)
+                pairAttempts.shift();
+              if (pairAttempts.length >= 10) {
+                respond(response, { error: "Too many pairing attempts. Wait one minute." }, 429);
+                return;
+              }
+              pairAttempts.push(now);
+            }
+            const value = pairingRequestSchema.parse(await body(request));
+            respond(response, sessions.pair(value.code, scope));
+            return;
+          }
+          const header = request.headers["x-code60-session"];
+          const session = sessions.authenticate(
+            typeof header === "string" ? header : undefined,
+            scope,
           );
+          const generation = request.headers["x-code60-generation"];
+          const client = request.headers["x-code60-client"];
+          const owner = `${session}:${sessions.generation}:${client}`;
+          if (path === "/api/session" && request.method === "GET") {
+            respond(response, sessions.describe(session, scope));
+            return;
+          }
+          if (path === "/api/control" && request.method === "POST") {
+            if (transferring) throw new Error("Control is being transferred. Try again.");
+            transferring = true;
+            try {
+              const previous = sessions.controlling;
+              if (previous && previous !== session) await detach(previous);
+              const next = sessions.takeControl(session, scope);
+              if (previous && previous !== session) {
+                send(previous, "control-lost");
+                streams.get(previous)?.end();
+              }
+              respond(response, next.session);
+            } finally {
+              transferring = false;
+            }
+            return;
+          }
+          sessions.assertController(session, generation, scope);
+          if (path === "/api/events" && request.method === "GET") {
+            if (typeof client !== "string" || !/^[a-f0-9-]{36}$/.test(client))
+              throw new Error("Invalid browser page identity.");
+            if (clients.get(session) !== client) {
+              await detach(session);
+              clients.set(session, client);
+            }
+            owners.set(session, owner);
+            interactions.attach(owner);
+            streams.get(session)?.end();
+            response.writeHead(200, {
+              "Content-Type": "text/event-stream",
+              "X-Accel-Buffering": "no",
+            });
+            streams.set(session, response);
+            send(session, "resync");
+            for (const pending of interactions.list(owner)) send(session, "interaction", pending);
+            const heartbeat = setInterval(() => {
+              try {
+                sessions.assertController(session, generation, scope);
+                if (response.writableLength > GATEWAY_LIMITS.streamBytes) response.destroy();
+                else response.write(": heartbeat\n\n");
+              } catch {
+                response.end();
+              }
+            }, 15_000);
+            response.on("close", () => {
+              clearInterval(heartbeat);
+              if (streams.get(session) !== response) return;
+              streams.delete(session);
+              const timer = setTimeout(() => {
+                if (!streams.has(session)) void detach(session).catch(() => {});
+              }, 1500);
+              timer.unref();
+            });
+            return;
+          }
+          const assertPage = () => {
+            sessions.assertController(session, generation, scope);
+            if (
+              (remote &&
+                (webServer?.status().state !== "listening" ||
+                  scope !== `lan:${lanGeneration}:${origin}`)) ||
+              changingPairing ||
+              transferring ||
+              quiescing ||
+              typeof client !== "string" ||
+              clients.get(session) !== client
+            )
+              throw new Error("This browser connection changed. Reconnect before continuing.");
+          };
+          assertPage();
+          if (request.method !== "POST") {
+            respond(response, { error: "Unknown operation." }, 404);
+            return;
+          }
+          if (path === "/api/interaction") {
+            await interactions.answer(owner, interactionAnswerSchema.parse(await body(request)));
+            respond(response, null);
+            return;
+          }
+          if (path === "/api/chooser") {
+            respond(
+              response,
+              await interactions.choices(owner, chooserRequestSchema.parse(await body(request))),
+            );
+            return;
+          }
+          if (path !== "/api/operation") {
+            respond(response, { error: "Unknown operation." }, 404);
+            return;
+          }
+          const value = operationRequestSchema.parse(await body(request));
+          assertPage();
+          const networkOperation =
+            value.operation === "web-server-status" ||
+            value.operation === "web-server-enabled" ||
+            value.operation === "web-server-code";
+          const operation = networkOperation
+            ? async (input: unknown) => {
+                if (!webServer) throw new Error("Web Server Beta is unavailable.");
+                if (value.operation === "web-server-status") {
+                  if (input != null) throw new Error("Unexpected server status arguments.");
+                  return webServer.status(!remote);
+                }
+                if (remote) throw new Error("Manage Web Server Beta from the localhost browser.");
+                if (value.operation === "web-server-enabled") {
+                  const next = webServerEnabledSchema.parse(input);
+                  await webServer.set(next.enabled);
+                  assertPage();
+                  return webServer.status(true);
+                }
+                if (input != null) throw new Error("Unexpected pairing arguments.");
+                const state = webServer.status();
+                if (!state.enabled || state.state !== "listening" || !state.url)
+                  throw new Error("Enable Web Server Beta before creating a code.");
+                sessions.clearProofs("lan:");
+                return {
+                  code: sessions.proof(`lan:${lanGeneration}:${state.url}`),
+                  expiresAt: Date.now() + GATEWAY_LIMITS.pairingMs,
+                };
+              }
+            : operations.get(value.operation);
+          if (!operation) throw new Error("Unknown application operation.");
+          const receiptKey = `${owner}:${value.id}`;
+          const fingerprint = createHash("sha256").update(json(value)).digest("hex");
+          const existing = receipts.get(receiptKey);
+          if (existing) {
+            if (existing.fingerprint !== fingerprint)
+              throw new Error("Request ID was reused with different arguments.");
+            respond(response, await existing.result);
+            return;
+          }
+          if (receipts.size >= 256) {
+            const disposable = [...receipts].find(([, entry]) => entry.settled);
+            if (!disposable)
+              throw new Error("Request history is busy. Wait for pending operations.");
+            receipts.delete(disposable[0]);
+          }
+          if ((calls.get(session) ?? 0) >= GATEWAY_LIMITS.requests)
+            throw new Error("Too many pending operations.");
+          calls.set(session, (calls.get(session) ?? 0) + 1);
+          const task = Promise.resolve()
+            .then(() => {
+              assertPage();
+              return interactions.run(owner, () => operation(value.value));
+            })
+            .finally(() => {
+              const remaining = (calls.get(session) ?? 1) - 1;
+              if (remaining > 0) calls.set(session, remaining);
+              else calls.delete(session);
+            });
+          const receipt = { fingerprint, result: task, settled: false };
+          receipts.set(receiptKey, receipt);
+          void task
+            .finally(() => {
+              receipt.settled = true;
+            })
+            .catch(() => {});
+          void task.catch(() => {});
+          respond(response, await task);
+          if (shutdownRequested) {
+            shutdownRequested = false;
+            response.once(
+              "finish",
+              () => void (options.onStop ? options.onStop() : stop()).catch(() => {}),
+            );
+          }
           return;
         }
-        if (path !== "/api/operation") {
-          respond(response, { error: "Unknown operation." }, 404);
+        if (request.method !== "GET") {
+          respond(response, { error: "Method not allowed." }, 405);
           return;
         }
-        const value = operationRequestSchema.parse(await body(request));
-        assertPage();
-        const operation = operations.get(value.operation);
-        if (!operation) throw new Error("Unknown application operation.");
-        const receiptKey = `${owner}:${value.id}`;
-        const fingerprint = createHash("sha256").update(json(value)).digest("hex");
-        const existing = receipts.get(receiptKey);
-        if (existing) {
-          if (existing.fingerprint !== fingerprint)
-            throw new Error("Request ID was reused with different arguments.");
-          respond(response, await existing.result);
-          return;
-        }
-        if (receipts.size >= 256) {
-          const disposable = [...receipts].find(([, entry]) => entry.settled);
-          if (!disposable) throw new Error("Request history is busy. Wait for pending operations.");
-          receipts.delete(disposable[0]);
-        }
-        if ((calls.get(session) ?? 0) >= GATEWAY_LIMITS.requests)
-          throw new Error("Too many pending operations.");
-        calls.set(session, (calls.get(session) ?? 0) + 1);
-        const task = Promise.resolve()
-          .then(() => {
-            assertPage();
-            return interactions.run(owner, () => operation(value.value));
-          })
-          .finally(() => {
-            const remaining = (calls.get(session) ?? 1) - 1;
-            if (remaining > 0) calls.set(session, remaining);
-            else calls.delete(session);
+        const asset = path === "/" ? "/index.html" : path;
+        if (options.developmentAssets && !remote) {
+          const upstreamUrl = new URL(options.developmentAssets);
+          upstreamUrl.pathname = asset;
+          upstreamUrl.search = url.search;
+          if (upstreamUrl.protocol !== "http:" || upstreamUrl.hostname !== "127.0.0.1")
+            throw new Error("Development assets must use loopback HTTP.");
+          const upstream = await fetch(upstreamUrl, {
+            redirect: "error",
+            signal: AbortSignal.timeout(10_000),
           });
-        const receipt = { fingerprint, result: task, settled: false };
-        receipts.set(receiptKey, receipt);
-        void task
-          .finally(() => {
-            receipt.settled = true;
-          })
-          .catch(() => {});
-        void task.catch(() => {});
-        respond(response, await task);
-        if (shutdownRequested) {
-          shutdownRequested = false;
-          response.once(
-            "finish",
-            () => void (options.onStop ? options.onStop() : stop()).catch(() => {}),
-          );
+          response.writeHead(upstream.status, {
+            "Content-Type": upstream.headers.get("content-type") ?? "application/octet-stream",
+          });
+          response.end(Buffer.from(await upstream.arrayBuffer()));
+          return;
         }
-        return;
-      }
-      if (request.method !== "GET") {
-        respond(response, { error: "Method not allowed." }, 405);
-        return;
-      }
-      const asset = path === "/" ? "/index.html" : path;
-      if (options.developmentAssets) {
-        const upstreamUrl = new URL(options.developmentAssets);
-        upstreamUrl.pathname = asset;
-        upstreamUrl.search = url.search;
-        if (upstreamUrl.protocol !== "http:" || upstreamUrl.hostname !== "127.0.0.1")
-          throw new Error("Development assets must use loopback HTTP.");
-        const upstream = await fetch(upstreamUrl, {
-          redirect: "error",
-          signal: AbortSignal.timeout(10_000),
+        const file = assets.get(asset);
+        if (!file) {
+          respond(response, { error: "Not found." }, 404);
+          return;
+        }
+        response.writeHead(200, {
+          "Content-Type": mime[extname(file)] ?? "application/octet-stream",
         });
-        response.writeHead(upstream.status, {
-          "Content-Type": upstream.headers.get("content-type") ?? "application/octet-stream",
-        });
-        response.end(Buffer.from(await upstream.arrayBuffer()));
-        return;
-      }
-      const file = assets.get(asset);
-      if (!file) {
-        respond(response, { error: "Not found." }, 404);
-        return;
-      }
-      response.writeHead(200, {
-        "Content-Type": mime[extname(file)] ?? "application/octet-stream",
+        response.end(await readFile(file));
+      })().catch((error: unknown) => {
+        if (!response.headersSent) respond(response, { error: diagnosticMessage(error) }, 400);
+        else response.destroy();
       });
-      response.end(await readFile(file));
-    })().catch((error: unknown) => {
-      if (!response.headersSent) respond(response, { error: diagnosticMessage(error) }, 400);
-      else response.destroy();
-    });
-  });
+    };
+  const server = createServer(handle(false, () => origin));
   server.requestTimeout = 30_000;
   server.headersTimeout = 10_000;
   async function quiesce() {
     quiescing = true;
     await pairingChange?.catch(() => {});
+    await webServer?.close();
     interactions.close();
     const results = await Promise.allSettled([
       application.shutdown(),
@@ -642,13 +762,42 @@ export async function startGateway(options: GatewayOptions = {}) {
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("Could not bind the backend.");
     origin = `http://127.0.0.1:${address.port}`;
+    // The exclusive writer lock is held. Replace only verified dead-owner metadata,
+    // using the private storage CAS so an outside change cannot be overwritten.
+    const previousConnection = await readGatewayConnection(env).catch((error) => {
+      if (fileCode(error) === "ENOENT") return undefined;
+      throw error;
+    });
+    if (previousConnection) {
+      let dead = false;
+      try {
+        process.kill(previousConnection.pid, 0);
+      } catch (error) {
+        dead = fileCode(error) === "ESRCH";
+      }
+      if (!dead)
+        throw new Error(
+          "Backend connection ownership could not be verified. Existing state was preserved.",
+        );
+    }
     await writePrivateJson(
       join(root, "connection.json"),
       { version: GATEWAY_VERSION, origin, token, pid: process.pid },
-      undefined,
+      previousConnection,
       4096,
     );
+    webServer = new WebServerBeta({
+      port: address.port,
+      server: (origin) => createServer(handle(true, origin)),
+      save: (enabled) => saveSettings({ webServerEnabled: enabled }),
+      revoke: revokeLan,
+      ...(lanPublisher ? { publisher: lanPublisher } : {}),
+      ...(options.lanAddress ? { address: options.lanAddress } : {}),
+      ...(options.lanIntervalMs === undefined ? {} : { intervalMs: options.lanIntervalMs }),
+      unsupported: env.CODE60_DEV_CONTAINER === "1" && !lanPublisher,
+    });
     await application.restore();
+    await webServer.start(settings?.webServerEnabled ?? false);
     return {
       origin,
       application,
@@ -662,6 +811,7 @@ export async function startGateway(options: GatewayOptions = {}) {
   } catch (error) {
     for (const dispose of disposers) dispose();
     await Promise.allSettled([
+      webServer?.close(),
       application.shutdown(),
       scheduler?.stop(),
       workflows.close(),

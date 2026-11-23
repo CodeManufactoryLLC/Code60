@@ -1,5 +1,13 @@
 # Browser interface
 
+Web Server Beta is a database/provider-independent Settings → Advanced page, also
+reachable from the unconfigured splash. Use PageTitle, one grouped settings surface
+for the switch/status/URL/pairing controls and the requested short Help section about
+trusted-network HTTP and backend file choosers. Only the controlling localhost page
+may manage access; LAN shows read-only status. Keep codes in visible-page memory,
+clear them on owner/URL/visibility changes and use the shared cryptographic ID and
+clipboard helpers on HTTP origins. Never expose Vite or authentication in links.
+
 Use the browser ApplicationClient; no Node, Electron, preload or native window API.
 Pairing, host choosers and confirmations use real accessible UI, with page-bound server
 interactions. Closing the browser never stops approved work. Native window transparency,

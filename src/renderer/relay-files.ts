@@ -7,6 +7,7 @@ import {
   detailScopeKey,
   type Snapshot,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import { startDetailStream } from "./detail-stream.js";
 import { FileBrowserState } from "./file-browser-state.js";
 import type { FileBrowser } from "./files.js";
@@ -90,7 +91,7 @@ export function useRelayFiles(
   useEffect(() => {
     if (!subscribed || !scope || !api.setRelayFileContext || !api.subscribeDetails) return;
     setConnection(undefined);
-    const request = { scope, subscriptionId: crypto.randomUUID() };
+    const request = { scope, subscriptionId: randomId() };
     let alive = true;
     const stop = startDetailStream(
       api,

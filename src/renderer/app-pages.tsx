@@ -43,6 +43,7 @@ import { SettingsPage } from "./settings-page.js";
 import { SystemManagerPage } from "./system-manager.js";
 import { updateTabs } from "./tabs.js";
 import { UpdatesSection } from "./updates.js";
+import { WebServerPage } from "./web-server.js";
 import { WorkflowsPage } from "./workflows.js";
 import { WorktreesPage } from "./worktrees.js";
 
@@ -549,6 +550,7 @@ export function AppPages(props: AppPagesProps) {
         />
       </>
     ),
+    "web-server": <WebServerPage api={api} visible={tabs.active === "web-server"} />,
     "contributor-tools": (
       <>
         <main className="contributor-tools">

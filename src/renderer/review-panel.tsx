@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { ApplicationClient, Review, ReviewSummary } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import { attachToChat } from "./chat-draft.js";
 import { useReviewFile } from "./review-content.js";
 
@@ -150,7 +151,7 @@ export function ReviewPanelLoader({
         projectId: summary.projectId,
         databaseEpoch: summary.databaseEpoch,
         reviewId: summary.id,
-        requestId: crypto.randomUUID(),
+        requestId: randomId(),
       })
       .then(
         (review) => {

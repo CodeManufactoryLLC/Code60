@@ -5,6 +5,7 @@ import {
   type RagResults,
   type RagStatus,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
 export function RagPage({
@@ -55,7 +56,7 @@ export function RagPage({
       setError(`RAG queries support at most ${RAG_QUERY_LIMIT.toLocaleString()} characters.`);
       return;
     }
-    const requestId = crypto.randomUUID();
+    const requestId = randomId();
     current.current = requestId;
     setPending(true);
     setError("");

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ApplicationClient, Review, TaskView } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import { type ReviewScope, reviewRequest } from "./review-actions.js";
 import { ReviewPanel } from "./review-panel.js";
 import { reviewSession } from "./review-session.js";
@@ -24,7 +25,7 @@ function SavedChanges({ api, scope, active, hint }: Parameters<typeof ReviewFlow
   useEffect(() => {
     if (!active) return;
     let current = true;
-    const requestId = crypto.randomUUID();
+    const requestId = randomId();
     void (async () => {
       const review = await reviewRequest(api, scope, { type: "read", requestId });
       const task = await reviewRequest(api, scope, { type: "task", action: { type: "status" } });

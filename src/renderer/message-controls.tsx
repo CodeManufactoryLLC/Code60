@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { copyText } from "./browser-platform.js";
 import { durationText, messageAgeText, type TurnTiming, timingText } from "./chat-presentation.js";
 import { Icon } from "./icons.js";
 import { useTicker } from "./ticker.js";
@@ -59,7 +60,7 @@ export function MessageCopy({
     setState("copying");
     try {
       const source = readSource ? await readSource() : text;
-      await copyMessage(source, (source) => navigator.clipboard.writeText(source));
+      await copyMessage(source, (source) => copyText(source));
     } catch {
       if (mounted.current) setState("failed");
       return;

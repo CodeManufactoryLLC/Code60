@@ -603,6 +603,31 @@ button.settings-group-reset {
   accent-color: var(--accent);
 }
 
+.codex-device-login {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.codex-device-login output {
+  font-family: monospace;
+  font-size: 16px;
+  font-weight: 700;
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+.codex-device-login > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.codex-device-login p {
+  margin: 0;
+}
+
 .agent-review {
   padding: 0;
   margin: 0;
@@ -675,4 +700,38 @@ button.settings-group-reset {
 .icon-contrast-heading output {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+.web-server-page {
+  box-sizing: border-box;
+  max-width: 808px;
+  width: 100%;
+  padding: 0 var(--page-padding) var(--page-padding);
+}
+.web-server-controls {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+.web-server-controls .settings-row {
+  padding: 0;
+}
+.web-server-controls p {
+  margin: 0;
+}
+.web-server-controls > a {
+  overflow-wrap: anywhere;
+}
+.web-server-pairing {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.web-server-pairing output {
+  font-family: monospace;
+  user-select: all;
+}
+.web-server-help {
+  margin-top: 24px;
 }

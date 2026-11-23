@@ -6,6 +6,7 @@ import {
   type KnowledgeOwner,
   type KnowledgeReport,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import type { FileTab, FileTabs } from "./file-tabs.js";
 import type { PageId, SettingsSectionId } from "./navigation.js";
 
@@ -89,7 +90,7 @@ export function useKnowledgePanel(
   owner: KnowledgeOwner | undefined,
   panel: { tabs: FileTabs; open: boolean; active: boolean; fileSubscription?: string | undefined },
 ): void {
-  const [id] = useState(() => crypto.randomUUID());
+  const [id] = useState(() => randomId());
   const { tabs, open, active, fileSubscription } = panel;
   const ownerKey = owner && JSON.stringify(owner);
   // biome-ignore lint/correctness/useExhaustiveDependencies: ownerKey canonically identifies owner.
