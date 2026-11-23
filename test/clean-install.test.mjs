@@ -173,6 +173,7 @@ it("runs isolated stages, detects known faults and removes only labelled resourc
   const driver = args.find((argv) =>
     argv.includes(`container:code60-acceptance-${result.id}-runtime`),
   );
+  expect(driver).toContain("HOME=/work/driver-home");
   expect(driver.some((arg) => arg.includes("target=/installation"))).toBe(false);
   expect(
     args

@@ -70,5 +70,8 @@ caches and other agents' resources are untouched.
 
 CI downloads the exact tarball tested by the existing package job. The additional
 acceptance job is required by `CI passed`; existing browser/package/model checks
-remain independent. Future setup, update, shell integration and native-service
+remain independent. CI explicitly prepares Docker on its disposable runner before
+calling the harness; the host command never starts or restarts an engine. The driver
+uses an owned writable HOME rather than relying on the image's default user ID.
+Future setup, update, shell integration and native-service
 scenarios are not counted as passing tests in this baseline.

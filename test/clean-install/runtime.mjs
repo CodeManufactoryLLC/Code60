@@ -15,6 +15,7 @@ architecture();
 const env = await fresh("/work/home");
 await mkdir("/work/control", { recursive: true });
 await mkdir("/work/processes");
+await mkdir("/work/driver-home", { mode: 0o700 });
 await mkdir(`${env.XDG_CONFIG_HOME}/code60`, { recursive: true });
 await writeFile(
   `${env.XDG_CONFIG_HOME}/code60/config.json`,

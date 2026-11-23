@@ -73,6 +73,12 @@ describe("browser and package validation", () => {
     expect(ci.jobs["clean-install"].needs).toBe("package");
     expect(ci.jobs["clean-install"]["timeout-minutes"]).toBe(30);
     expect(
+      ci.jobs["clean-install"].steps.some(
+        (step) =>
+          step.name === "Prepare isolated runner Docker engine" && step["timeout-minutes"] === 2,
+      ),
+    ).toBe(true);
+    expect(
       ci.jobs["clean-install"].steps.some((step) => step.run === "npm run test:packaged:clean"),
     ).toBe(true);
     expect(ci.jobs.passed.steps[0].env.CLEAN_INSTALL).toContain("needs.clean-install.result");
