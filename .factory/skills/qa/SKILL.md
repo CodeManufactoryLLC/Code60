@@ -70,6 +70,12 @@ Use the existing harness, not a new QA plugin or a live agent.
   after packaging. Follow the [harness guide](../../../test/clean-install/README.md).
   Its separate driver reuses the golden scenario against an installed, offline
   customer runtime; preserve run-specific traces and verified Docker cleanup.
+- Platform payload changes additionally follow the [artifact workflow](../../../docs/distribution/artifacts.md):
+  run `npm run test:payload` on each supported target and the explicit Linux
+  payload mode of the clean-install harness. Preserve the existing tarball journey.
+  Verify extraction needs no npm/compiler/scripts and record both targets' exact
+  descriptors, model results and owned staging/process cleanup. Bootstrap help and
+  unavailable setup are acceptance checks, not evidence of a working installer.
 - If a required runtime, browser, model or platform is unavailable, mark that
   journey BLOCKED. Do not substitute static checks for runtime evidence.
 - Close test browser contexts, isolated gateways and provider processes on every

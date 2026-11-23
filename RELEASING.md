@@ -17,3 +17,14 @@ Tag the merged release commit on main with its exact package version. Push the t
 ## Updating an installation
 
 Stop the backend, install the replacement tarball, repair its service registration, start the backend and pair the browser again. Preserve the old package for rollback. Never downgrade application data or erase locks/history to make an older package start.
+
+## Platform payload and bootstrap candidates
+
+The [artifact workflow](docs/distribution/artifacts.md) adds private platform
+payloads and a builtins-only bootstrap alongside the legacy tarball. Build and
+validate both Linux x64 and native macOS arm64 outputs at the exact selected
+commit. The manual release workflow collects both targets, rejects dirty or
+mismatched provenance, verifies archive hashes and assembles the bootstrap.
+It retains workflow artifacts only; it does not publish npm packages or release
+assets. The bootstrap's public setup and persistent installation are not yet
+implemented. Version bumps remain explicit release-preparation work.

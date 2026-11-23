@@ -80,6 +80,11 @@ environments.
   the tarball. It isolates the installed customer from the checkout and browser driver;
   preserve its run-specific evidence and verify owned Docker cleanup. Never mount
   the Docker socket into a development or customer container to run it.
+- For platform artifact changes, follow the [artifact workflow](docs/distribution/artifacts.md).
+  Preserve legacy tarball acceptance and run the payload mode separately. Build
+  native dependencies on their actual target, keep scripts disabled during fresh
+  staging, and never substitute emulation for native macOS evidence. Private
+  bootstrap candidates expose help/version only until installation phases land.
 - Put unit tests next to the code as `*.test.ts`. Cross-cutting tests live in
   `test/`. `test/boundaries.test.ts` enforces the module dependency rules from
   `ARCHITECTURE.md`; update it only together with that document.

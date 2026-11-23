@@ -24,7 +24,7 @@ await writeFile(
       claude: {
         command: [
           process.execPath,
-          "/installation/product/fixtures/fake-agent.mjs",
+          `${application}/fixtures/fake-agent.mjs`,
           "--relay",
           "--session-info",
           "--process-log",
