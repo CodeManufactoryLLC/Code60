@@ -549,7 +549,12 @@ export async function startGateway(options: GatewayOptions = {}) {
       }
       const asset = path === "/" ? "/index.html" : path;
       if (options.developmentAssets) {
-        const upstream = await fetch(new URL(`${asset}${url.search}`, options.developmentAssets), {
+        const upstreamUrl = new URL(options.developmentAssets);
+        upstreamUrl.pathname = asset;
+        upstreamUrl.search = url.search;
+        if (upstreamUrl.protocol !== "http:" || upstreamUrl.hostname !== "127.0.0.1")
+          throw new Error("Development assets must use loopback HTTP.");
+        const upstream = await fetch(upstreamUrl, {
           redirect: "error",
           signal: AbortSignal.timeout(10_000),
         });

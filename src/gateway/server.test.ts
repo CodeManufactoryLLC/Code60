@@ -189,7 +189,10 @@ it("persists local pairing changes, revokes old sessions and never grants a brow
 });
 
 it("proxies Vite asset query strings only in development and rejects API query strings", async () => {
-  const upstream = createServer((request, response) => response.end(request.url));
+  const upstream = createServer((request, response) => {
+    response.setHeader("Content-Type", "text/plain; charset=utf-8");
+    response.end(request.url);
+  });
   await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
   try {
     const address = upstream.address();
@@ -198,6 +201,32 @@ it("proxies Vite asset query strings only in development and rejects API query s
     const asset = await fetch(`${gateway.origin}/main.tsx?v=fixture`);
     expect(asset.status).toBe(200);
     expect(await asset.text()).toBe("/main.tsx?v=fixture");
+    // Absolute-form HTTP requests can preserve a pathname beginning with //.
+    // It must remain a path on Vite, never become a different upstream host.
+    const response = await new Promise<{ status: number | undefined; body: string }>(
+      (resolve, reject) => {
+        const request = httpRequest(
+          gateway.origin,
+          { path: `${gateway.origin}//127.0.0.1:1/escape?v=fixture` },
+          (response) => {
+            const chunks: Buffer[] = [];
+            response.on("data", (chunk) => chunks.push(chunk));
+            response.on("end", () =>
+              resolve({ status: response.statusCode, body: Buffer.concat(chunks).toString() }),
+            );
+            response.on("error", reject);
+          },
+        );
+        request.on("error", reject);
+        request.setTimeout(5_000, () => request.destroy(new Error("Fixture timeout")));
+        request.end();
+      },
+    );
+    expect(response).toEqual({ status: 200, body: "//127.0.0.1:1/escape?v=fixture" });
+    for (const origin of ["http://untrusted.invalid:1234", "https://127.0.0.1:1234"]) {
+      const invalid = await fixture(origin);
+      expect((await fetch(`${invalid.gateway.origin}/main.tsx`)).status).toBe(400);
+    }
     expect((await fetch(`${gateway.origin}/api/session?v=fixture`)).status).toBe(400);
     const production = await fixture();
     expect((await fetch(`${production.gateway.origin}/index.html?v=fixture`)).status).toBe(400);
