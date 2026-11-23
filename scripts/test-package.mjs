@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -65,6 +65,13 @@ try {
     roots: [prefix],
   });
   assert.equal((await fetch(gateway.origin)).status, 200);
+  const assets = await readdir(join(root, "dist/renderer/assets"));
+  const jsonWorker = assets.find((asset) => /^json\.worker-.*\.js$/.test(asset));
+  assert.ok(jsonWorker, "Installed package includes its local Monaco JSON worker");
+  const worker = await fetch(`${gateway.origin}/assets/${jsonWorker}`);
+  assert.equal(worker.status, 200);
+  assert.match(worker.headers.get("content-type"), /javascript/);
+  assert.ok((await worker.text()).length > 1000);
   assert.equal(gateway.requirePairing, false);
   const connection = await fetch(`${gateway.origin}/api/connect`, {
     method: "POST",
@@ -87,7 +94,7 @@ try {
     globalThis.fetch = network;
   }
   process.stdout.write(
-    "Installed npm package: CLI, assets, backend and offline model passed. No service was installed.\n",
+    "Installed npm package: CLI, assets including local JSON worker, backend and offline model passed. No service was installed.\n",
   );
 } finally {
   await gateway?.stop();

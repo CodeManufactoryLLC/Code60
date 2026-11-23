@@ -266,6 +266,7 @@ export async function publishGuardedFile(
   stage: GuardedStage | null,
   maximumBytes: number,
   io: GuardedFileIo = fs,
+  signal?: AbortSignal,
 ): Promise<GuardedSnapshot> {
   const before = await readGuardedFile(target, maximumBytes, io);
   if (before.revision !== expectedRevision) throw new GuardedFileError("changed");
@@ -318,8 +319,12 @@ export async function publishGuardedFile(
       JSON.stringify(stage.identity)
     )
       throw new GuardedFileError("changed");
+    signal?.throwIfAborted();
     await io.rename(temporary, path);
-  } else if (before.data !== null) await io.unlink(path);
+  } else if (before.data !== null) {
+    signal?.throwIfAborted();
+    await io.unlink(path);
+  }
   await syncGuardedDirectory(target, io);
   const after = await readGuardedFile(target, maximumBytes, io);
   if (

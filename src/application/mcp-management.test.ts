@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { McpConnectorDocument, McpTargetAddress } from "../bridge/index.js";
+import { decodeMcpText, encodeMcpText } from "../bridge/index.js";
 import { McpManagement } from "./mcp-management.js";
 
 let root: string;
@@ -209,4 +210,46 @@ it("does not overwrite malformed files through guided saves and isolates failed 
   };
   await expect(service.save(request)).rejects.toThrow("invalid");
   expect(await readFile(join(root, "config/code60/mcp.json"), "utf8")).toBe("malformed");
+});
+
+it("repairs exact text without normalizing it, previews only valid backups and resets selected/project+User with inheritance guards", async () => {
+  const service = create();
+  const [user, project] = (await service.targets()).targets.map((t) => t.address);
+  if (!user || !project) throw new Error("missing targets");
+  await save(service, user, {
+    version: 1,
+    servers: { docs: { ...doc.servers.docs, enabled: true } },
+  } as McpConnectorDocument);
+  await save(service, project);
+  const malformed = "{broken private data";
+  await writeFile(join(root, "project/.code60/mcp.json"), malformed);
+  const read = await service.readText(project);
+  expect(decodeMcpText(read.contentBase64 ?? "")).toBe(malformed);
+  const text = '{ "version": 1, "servers": {} }  \n';
+  const request = {
+    target: project,
+    requestId: randomUUID(),
+    expectedRevision: read.revision,
+    contentBase64: encodeMcpText(text),
+  };
+  const saved = await service.saveText(request);
+  expect(await service.saveText(request)).toEqual(saved);
+  expect(await readFile(join(root, "project/.code60/mcp.json"), "utf8")).toBe(text);
+  const backups = await service.backups(project);
+  const invalid = backups.find((b) => !b.valid);
+  if (!invalid) throw new Error("missing malformed preimage");
+  await expect(
+    service.previewBackup({ target: project, backupId: invalid.backupId }),
+  ).rejects.toThrow("invalid");
+  const preview = await service.previewReset({ target: project, includeUser: false });
+  expect(preview).toMatchObject({ remainingEnabled: 1, inheritedLabels: ["Docs"] });
+  await service.reset({ ...preview.request, requestId: randomUUID() });
+  expect((await service.read(user)).document?.servers.docs?.enabled).toBe(true);
+  const combined = await service.previewReset({ target: project, includeUser: true });
+  expect(combined.remainingEnabled).toBe(0);
+  const reset = { ...combined.request, requestId: randomUUID() };
+  const result = await service.reset(reset);
+  expect(await service.reset(reset)).toEqual(result);
+  expect((await service.read(user)).document?.servers).toEqual({});
+  expect((await service.read(project)).document?.servers).toEqual({});
 });

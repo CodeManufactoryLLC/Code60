@@ -2,11 +2,14 @@ import * as monaco from "monaco-editor/editor/editor.api.js";
 import "monaco-editor/basic-languages/monaco.contribution.js";
 import "monaco-editor/editor/contrib/find/browser/findController.js";
 import EditorWorker from "monaco-editor/editor/editor.worker.js?worker";
+import JsonWorker from "monaco-editor/language/json/json.worker.js?worker";
 import { useEffect } from "react";
 import { useCssColors } from "./table-appearance.js";
 
 // Vite emits a local worker: previews never depend on a CDN or language server.
-self.MonacoEnvironment = { getWorker: () => new EditorWorker() };
+self.MonacoEnvironment = {
+  getWorker: (_moduleId, label) => (label === "json" ? new JsonWorker() : new EditorWorker()),
+};
 
 export { monaco };
 export function useMonacoTheme() {

@@ -9,7 +9,11 @@ export default function MonacoDiff({
   path,
   address,
   onAddToChat,
+  originalLabel = "Original review version",
+  modifiedLabel = "Modified review version",
 }: {
+  originalLabel?: string;
+  modifiedLabel?: string;
   original: string;
   modified: string;
   path: string;
@@ -46,8 +50,8 @@ export default function MonacoDiff({
       links: false,
       contextmenu: false,
       stickyScroll: { enabled: false },
-      originalAriaLabel: "Original review version",
-      modifiedAriaLabel: "Modified review version",
+      originalAriaLabel: originalLabel,
+      modifiedAriaLabel: modifiedLabel,
     });
     editor.current = instance;
     const selections = (["original", "modified"] as const).map((side) => {
@@ -70,8 +74,8 @@ export default function MonacoDiff({
         );
       });
     });
-    instance.getOriginalEditor().updateOptions({ ariaLabel: "Original review version" });
-    instance.getModifiedEditor().updateOptions({ ariaLabel: "Modified review version" });
+    instance.getOriginalEditor().updateOptions({ ariaLabel: originalLabel });
+    instance.getModifiedEditor().updateOptions({ ariaLabel: modifiedLabel });
     const size = instance
       .getModifiedEditor()
       .onDidContentSizeChange((event) =>
@@ -85,7 +89,7 @@ export default function MonacoDiff({
       instance.dispose();
       editor.current = null;
     };
-  }, []);
+  }, [originalLabel, modifiedLabel]);
   useEffect(() => {
     const instance = editor.current;
     if (!instance) return;

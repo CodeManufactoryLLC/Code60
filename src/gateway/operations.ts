@@ -6,9 +6,14 @@ import type {
 } from "../application/index.js";
 import { logProjectId } from "../application/index.js";
 import {
+  mcpBackupSchema,
   mcpMovePreviewSchema,
   mcpMoveSchema,
+  mcpResetPreviewSchema,
+  mcpResetSchema,
+  mcpRestoreSchema,
   mcpSaveSchema,
+  mcpSaveTextSchema,
   mcpTargetSchema,
   parseAction,
   parseBoolean,
@@ -79,6 +84,25 @@ export function applicationOperations(
   const handle = (name: string, action: (value: unknown) => unknown) => {
     operations.set(name, action);
   };
+  handle("mcp-read-text", (value) =>
+    controller.mcpReadText(parseMcpManagement(mcpTargetSchema, value)),
+  );
+  handle("mcp-save-text", (value) =>
+    controller.mcpSaveText(parseMcpManagement(mcpSaveTextSchema, value)),
+  );
+  handle("mcp-backups", (value) =>
+    controller.mcpBackups(parseMcpManagement(mcpTargetSchema, value)),
+  );
+  handle("mcp-preview-backup", (value) =>
+    controller.mcpPreviewBackup(parseMcpManagement(mcpBackupSchema, value)),
+  );
+  handle("mcp-restore", (value) =>
+    controller.mcpRestore(parseMcpManagement(mcpRestoreSchema, value)),
+  );
+  handle("mcp-preview-reset", (value) =>
+    controller.mcpPreviewReset(parseMcpManagement(mcpResetPreviewSchema, value)),
+  );
+  handle("mcp-reset", (value) => controller.mcpReset(parseMcpManagement(mcpResetSchema, value)));
   handle("mcp-targets", (value) => {
     if (value !== undefined) throw new Error("Invalid MCP management request.");
     return controller.mcpTargets();

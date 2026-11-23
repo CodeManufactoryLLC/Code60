@@ -67,14 +67,24 @@ import {
   isMcpControlTool,
   type KnowledgeOwner,
   MCP_PROTOCOL_VERSION,
+  type McpBackupRequest,
   type McpControlTool,
   type McpMovePreviewRequest,
   type McpMoveRequest,
+  type McpResetRequest,
+  type McpResetSelection,
+  type McpRestore,
   type McpSaveRequest,
+  type McpSaveText,
   type McpTargetAddress,
+  mcpBackupSchema,
   mcpMovePreviewSchema,
   mcpMoveSchema,
+  mcpResetPreviewSchema,
+  mcpResetSchema,
+  mcpRestoreSchema,
   mcpSaveSchema,
+  mcpSaveTextSchema,
   mcpTargetSchema,
   type Plan,
   type PlanAction,
@@ -331,6 +341,34 @@ interface Batch {
 /** Owns one workspace and independent batches. All history mutations are serialized. */
 export class ApplicationHost {
   readonly mcp: McpManagement;
+  mcpReadText(value: McpTargetAddress) {
+    const request = parseMcpManagement(mcpTargetSchema, value);
+    return this.mcpOperation(() => this.mcp.readText(request));
+  }
+  mcpSaveText(value: McpSaveText) {
+    const request = parseMcpManagement(mcpSaveTextSchema, value);
+    return this.mcpOperation(() => this.mcp.saveText(request));
+  }
+  mcpBackups(value: McpTargetAddress) {
+    const request = parseMcpManagement(mcpTargetSchema, value);
+    return this.mcpOperation(() => this.mcp.backups(request));
+  }
+  mcpPreviewBackup(value: McpBackupRequest) {
+    const request = parseMcpManagement(mcpBackupSchema, value);
+    return this.mcpOperation(() => this.mcp.previewBackup(request));
+  }
+  mcpRestore(value: McpRestore) {
+    const request = parseMcpManagement(mcpRestoreSchema, value);
+    return this.mcpOperation(() => this.mcp.restore(request));
+  }
+  mcpPreviewReset(value: McpResetSelection) {
+    const request = parseMcpManagement(mcpResetPreviewSchema, value);
+    return this.mcpOperation(() => this.mcp.previewReset(request));
+  }
+  mcpReset(value: McpResetRequest) {
+    const request = parseMcpManagement(mcpResetSchema, value);
+    return this.mcpOperation(() => this.mcp.reset(request));
+  }
   mcpTargets() {
     return this.mcpOperation(() => this.mcp.targets());
   }

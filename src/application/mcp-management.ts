@@ -1,14 +1,24 @@
 import { basename } from "node:path";
 import {
+  decodeMcpText,
+  encodeMcpText,
   MCP_CONNECTOR_TEMPLATES,
+  type McpBackupPreview,
+  type McpBackupRequest,
   type McpManagementRead,
   type McpManagementResult,
   type McpManagementTargets,
   type McpMovePreview,
   type McpMovePreviewRequest,
   type McpMoveRequest,
+  type McpResetPreview,
+  type McpResetRequest,
+  type McpResetSelection,
+  type McpRestore,
   type McpSaveRequest,
+  type McpSaveText,
   type McpTargetAddress,
+  type McpTextRead,
 } from "../bridge/index.js";
 import { resolveMcpConnectors } from "./mcp-configuration.js";
 import { McpConfigurationStore, McpStorageError } from "./mcp-configuration-store.js";
@@ -151,6 +161,126 @@ export class McpManagement {
         transport: definition.type,
       })),
     };
+  }
+  async readText(address: McpTargetAddress): Promise<McpTextRead> {
+    await this.target(address);
+    const value = await (await this.storage()).read(address.targetId);
+    await this.target(address);
+    return {
+      target: address,
+      exists: value.exists,
+      revision: value.revision,
+      contentBase64: value.text === null ? null : encodeMcpText(value.text),
+      issues: value.issues,
+      pendingRecovery: value.pendingRecovery,
+    };
+  }
+  async saveText(request: McpSaveText): Promise<McpManagementResult> {
+    await this.target(request.target);
+    const result = await (await this.storage()).save({
+      targetId: request.target.targetId,
+      expectedRevision: request.expectedRevision,
+      requestId: request.requestId,
+      text: decodeMcpText(request.contentBase64),
+      requireDecodableOriginal: true,
+    });
+    this.changed();
+    return result;
+  }
+  async backups(target: McpTargetAddress) {
+    await this.target(target);
+    return (await this.storage()).listBackups(target.targetId);
+  }
+  async previewBackup(request: McpBackupRequest): Promise<McpBackupPreview> {
+    await this.target(request.target);
+    const value = await (await this.storage()).previewBackup(
+      request.target.targetId,
+      request.backupId,
+    );
+    await this.target(request.target);
+    return {
+      backupId: value.backupId,
+      backupRevision: value.backupRevision,
+      missing: value.missing,
+      contentBase64: value.text === null ? null : encodeMcpText(value.text),
+    };
+  }
+  async restore(request: McpRestore): Promise<McpManagementResult> {
+    await this.target(request.target);
+    const result = await (await this.storage()).restore({
+      targetId: request.target.targetId,
+      expectedRevision: request.expectedRevision,
+      expectedBackupRevision: request.expectedBackupRevision,
+      backupId: request.backupId,
+      requestId: request.requestId,
+    });
+    this.changed();
+    return result;
+  }
+  async previewReset(selection: McpResetSelection): Promise<McpResetPreview> {
+    const selected = await this.target(selection.target);
+    const store = await this.storage();
+    const local = await store.read(selection.target.targetId);
+    const list = await this.targets();
+    const userTarget = list.targets.find((t) => t.address.scope === "user");
+    if (!userTarget) throw new McpStorageError("unavailable");
+    const user =
+      selection.target.scope === "user" ? local : await store.read(userTarget.address.targetId);
+    const inherited =
+      selection.target.scope === "project" && !selection.includeUser ? user.document : undefined;
+    return {
+      configurationLabels: selection.includeUser ? ["User", selected.label] : [selected.label],
+      request: {
+        ...selection,
+        expectedRevision: local.revision,
+        ...(selection.target.scope === "project" ? { expectedUserRevision: user.revision } : {}),
+      },
+      removedLabels: [
+        ...Object.values(local.document?.servers ?? {}),
+        ...(selection.includeUser ? Object.values(user.document?.servers ?? {}) : []),
+      ].map((s) => s.label),
+      inheritedLabels: Object.values(inherited?.servers ?? {}).map((s) => s.label),
+      remainingEnabled:
+        selection.target.scope === "project" && !selection.includeUser && !user.document
+          ? null
+          : Object.values(inherited?.servers ?? {}).filter((s) => s.enabled).length,
+      affectedProjects: list.targets
+        .filter(
+          (t) =>
+            t.address.scope === "project" &&
+            (selection.includeUser ||
+              selection.target.scope === "user" ||
+              t.address.targetId === selection.target.targetId),
+        )
+        .map((t) => t.label),
+      malformed: !local.document || (selection.includeUser && !user.document),
+      blocked: Boolean(
+        local.pendingRecovery.length ||
+          (selection.target.scope === "project" && user.pendingRecovery.length),
+      ),
+    };
+  }
+  async reset(request: McpResetRequest): Promise<McpManagementResult> {
+    await this.target(request.target);
+    const targets = [
+      {
+        targetId: request.target.targetId,
+        expectedRevision: request.expectedRevision,
+        reset: true,
+      },
+    ];
+    if (request.target.scope === "project") {
+      const user = (await this.targets()).targets.find((t) => t.address.scope === "user");
+      if (!user || !request.expectedUserRevision) throw new McpStorageError("invalid");
+      targets.push({
+        targetId: user.address.targetId,
+        expectedRevision: request.expectedUserRevision,
+        reset: request.includeUser,
+      });
+    }
+    const result = await (await this.storage()).reset({ targets, requestId: request.requestId });
+    this.changed();
+    return result;
   }
   async save(request: McpSaveRequest): Promise<McpManagementResult> {
     await this.target(request.target);

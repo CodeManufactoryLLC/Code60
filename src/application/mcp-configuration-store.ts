@@ -64,6 +64,7 @@ const resultSchema = z.strictObject({
     "saved",
     "moved",
     "restored",
+    "reset",
     "unchanged",
     "completed",
     "rolled-back",
@@ -74,6 +75,7 @@ const resultSchema = z.strictObject({
 });
 const changeSchema = z.strictObject({
   targetId: z.string(),
+  write: z.boolean().default(true),
   guard: guardSchema,
   projectRoot: rootSchema.optional(),
   before: imageSchema,
@@ -84,7 +86,7 @@ const journalSchema = z.strictObject({
   version: z.literal(1),
   id,
   fingerprint: z.string(),
-  kind: z.enum(["saved", "moved", "restored"]),
+  kind: z.enum(["saved", "moved", "restored", "reset"]),
   createdAt: z.number(),
   changes: z.array(changeSchema).min(1).max(2),
   recovery: z
@@ -293,7 +295,13 @@ export class McpConfigurationStore {
       );
       if (kind === "journal") {
         const journal = journalSchema.parse(raw);
-        for (const change of journal.changes)
+        for (const change of journal.changes) {
+          if (
+            !change.write &&
+            (JSON.stringify(change.before) !== JSON.stringify(change.after) ||
+              Object.keys(change.stages).length)
+          )
+            throw new McpStorageError("unsafe");
           for (const side of ["before", "after"] as const) {
             const value = change[side];
             const data = bytes(value);
@@ -317,6 +325,7 @@ export class McpConfigurationStore {
             )
               throw new McpStorageError("unsafe");
           }
+        }
         journals.push(journal);
       } else if (kind === "backup") {
         const backup = backupSchema.parse(raw);
@@ -506,6 +515,7 @@ export class McpConfigurationStore {
   private async ensureBackups(journal: Journal) {
     const records = await this.records();
     for (const [index, change] of journal.changes.entries()) {
+      if (!change.write) continue;
       const backupId = `${journal.id}-${index}`;
       const existing = records.backups.find((backup) => backup.id === backupId);
       if (existing) {
@@ -610,12 +620,14 @@ export class McpConfigurationStore {
             throw error;
           }
         }
+        await this.checkRecovery(journal);
         const updated = await publishGuardedFile(
           target.guard,
           current.revision,
           data === null ? null : (change.stages[selected] ?? null),
           MCP_TEXT_LIMITS.bytes,
           this.options.io,
+          signal,
         );
         change[selected] = image(updated);
         await this.writeRecord(
@@ -629,7 +641,7 @@ export class McpConfigurationStore {
       const revisions: Record<string, string> = {};
       for (const change of journal.changes) {
         const target = this.bound(change);
-        await syncGuardedDirectory(target.guard, this.options.io);
+        if (change.write) await syncGuardedDirectory(target.guard, this.options.io);
         const current = await this.raw(target);
         if (!this.matches(current, change[selected], change.stages[selected]))
           throw new McpStorageError("conflict");
@@ -660,7 +672,13 @@ export class McpConfigurationStore {
     requestId: string,
     fingerprint: string,
     kind: Journal["kind"],
-    values: { target: Target; current: GuardedSnapshot; text: string | null; mode?: number }[],
+    values: {
+      target: Target;
+      current: GuardedSnapshot;
+      text: string | null;
+      mode?: number;
+      write?: boolean;
+    }[],
     signal?: AbortSignal,
   ) {
     if (signal?.aborted) throw new McpStorageError("cancelled");
@@ -673,17 +691,20 @@ export class McpConfigurationStore {
       )
     )
       throw new McpStorageError("recovery-required");
-    const changes: Change[] = values.map(({ target, current, text, mode }) => ({
+    const changes: Change[] = values.map(({ target, current, text, mode, write = true }) => ({
       targetId: target.id,
+      write,
       guard: target.guard,
       ...(target.projectRoot ? { projectRoot: target.projectRoot } : {}),
       before: image(current),
-      after: {
-        data: text === null ? null : Buffer.from(text).toString("base64"),
-        mode: mode ?? current.mode,
-        revision: "unpublished",
-        identity: null,
-      },
+      after: !write
+        ? image(current)
+        : {
+            data: text === null ? null : Buffer.from(text).toString("base64"),
+            mode: mode ?? current.mode,
+            revision: "unpublished",
+            identity: null,
+          },
       stages: {},
     }));
     const journal: Journal = {
@@ -698,7 +719,7 @@ export class McpConfigurationStore {
     if (size > JOURNAL_LIMIT) throw new McpStorageError("storage-limit");
     await this.reserve(
       size * 3 + 32_768,
-      changes.map((change) => change.targetId),
+      changes.filter((change) => change.write).map((change) => change.targetId),
     );
     // Recheck every target after queue/quota work and before durable preparation.
     for (const value of values)
@@ -727,6 +748,7 @@ export class McpConfigurationStore {
       text: string;
       requestId: string;
       requireValidOriginal?: boolean;
+      requireDecodableOriginal?: boolean;
     },
     signal?: AbortSignal,
   ): Promise<Result> {
@@ -739,12 +761,19 @@ export class McpConfigurationStore {
           request.expectedRevision,
           request.text,
           ...(request.requireValidOriginal ? ["valid-original"] : []),
+          ...(request.requireDecodableOriginal ? ["decodable-original"] : []),
         ]),
       );
       const replay = await this.replay(request.requestId, fingerprint);
       if (replay) return replay;
       const { target, current } = await this.expected(request.targetId, request.expectedRevision);
       if (request.requireValidOriginal && !this.inspect(current).document)
+        throw new McpStorageError("invalid");
+      if (
+        request.requireDecodableOriginal &&
+        current.data !== null &&
+        this.inspect(current).text === null
+      )
         throw new McpStorageError("invalid");
       if (current.data !== null && Buffer.from(current.data).equals(Buffer.from(request.text))) {
         const result: Result = {
@@ -839,20 +868,129 @@ export class McpConfigurationStore {
         }));
     });
   }
+  private async reviewedBackup(targetId: string, backupId: string) {
+    await this.raw(this.target(targetId));
+    const records = await this.records();
+    const backup = records.backups.find(
+      (entry) => entry.id === backupId && entry.targetId === targetId,
+    );
+    if (!backup?.valid || records.journals.some((j) => j.id === backup.transactionId))
+      throw new McpStorageError("invalid");
+    const path = this.path(`${backupId}.backup`);
+    const before = await verifyPrivatePath(path, false);
+    const current = backupSchema.parse(await readPrivateJson(path, BACKUP_LIMIT));
+    const after = await verifyPrivatePath(path, false);
+    const stamp = (info: typeof before) =>
+      [info.dev, info.ino, info.size, info.mtimeNs, info.ctimeNs, info.mode].map(String);
+    if (
+      JSON.stringify(stamp(before)) !== JSON.stringify(stamp(after)) ||
+      JSON.stringify(current) !== JSON.stringify(backup)
+    )
+      throw new McpStorageError("conflict");
+    return { backup, backupRevision: hash(JSON.stringify([stamp(after), current])) };
+  }
+  previewBackup(targetId: string, backupId: string) {
+    return this.run(async () => {
+      const { backup, backupRevision } = await this.reviewedBackup(targetId, backupId);
+      const data = bytes(backup.image);
+      return {
+        backupId,
+        backupRevision,
+        missing: data === null,
+        text:
+          data === null
+            ? null
+            : new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(data),
+      };
+    });
+  }
+  reset(
+    request: {
+      targets: { targetId: string; expectedRevision: string; reset: boolean }[];
+      requestId: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<Result> {
+    return this.run(async () => {
+      if (
+        !request.targets.length ||
+        request.targets.length > 2 ||
+        new Set(request.targets.map((t) => t.targetId)).size !== request.targets.length ||
+        !request.targets.some((t) => t.reset)
+      )
+        throw new McpStorageError("invalid");
+      const ordered = [...request.targets].sort(
+        (a, b) =>
+          Number(Boolean(this.target(a.targetId).projectRoot)) -
+            Number(Boolean(this.target(b.targetId).projectRoot)) ||
+          a.targetId.localeCompare(b.targetId),
+      );
+      const fingerprint = hash(
+        JSON.stringify(["reset", ordered.map((t) => [t.targetId, t.expectedRevision, t.reset])]),
+      );
+      const replay = await this.replay(request.requestId, fingerprint);
+      if (replay) return replay;
+      if (signal?.aborted) throw new McpStorageError("cancelled");
+      const values = [];
+      for (const entry of ordered) {
+        const expected = await this.expected(entry.targetId, entry.expectedRevision);
+        const document = this.inspect(expected.current).document;
+        const write =
+          entry.reset &&
+          expected.current.data !== null &&
+          (!document || Object.keys(document.servers).length > 0);
+        values.push({
+          ...expected,
+          text: write ? canonical({ version: 1, servers: {} }) : null,
+          write,
+        });
+      }
+      if (!values.some((v) => v.write)) {
+        const result: Result = {
+          status: "unchanged",
+          transactionId: request.requestId,
+          revisions: Object.fromEntries(values.map((v) => [v.target.id, v.current.revision])),
+        };
+        await this.reserve(16384);
+        for (const v of values)
+          if ((await this.raw(v.target)).revision !== v.current.revision)
+            throw new McpStorageError("conflict");
+        if (signal?.aborted) throw new McpStorageError("cancelled");
+        await this.receipt(request.requestId, fingerprint, result);
+        return result;
+      }
+      return this.begin(request.requestId, fingerprint, "reset", values, signal);
+    });
+  }
   restore(
-    request: { targetId: string; expectedRevision: string; backupId: string; requestId: string },
+    request: {
+      targetId: string;
+      expectedRevision: string;
+      backupId: string;
+      requestId: string;
+      expectedBackupRevision?: string;
+    },
     signal?: AbortSignal,
   ): Promise<Result> {
     return this.run(async () => {
       const fingerprint = hash(
-        JSON.stringify(["restore", request.targetId, request.expectedRevision, request.backupId]),
+        JSON.stringify([
+          "restore",
+          request.targetId,
+          request.expectedRevision,
+          request.backupId,
+          ...(request.expectedBackupRevision ? [request.expectedBackupRevision] : []),
+        ]),
       );
       const replay = await this.replay(request.requestId, fingerprint);
       if (replay) return replay;
-      const backup = (await this.records()).backups.find(
-        (entry) => entry.id === request.backupId && entry.targetId === request.targetId,
-      );
-      if (!backup?.valid) throw new McpStorageError("invalid");
+      const reviewed = await this.reviewedBackup(request.targetId, request.backupId);
+      if (
+        request.expectedBackupRevision &&
+        reviewed.backupRevision !== request.expectedBackupRevision
+      )
+        throw new McpStorageError("conflict");
+      const backup = reviewed.backup;
       const data = bytes(backup.image);
       const text =
         data === null

@@ -18,7 +18,7 @@
 - Phase 2 text validation shares that schema, rejects decoded duplicate keys and
   bounds bytes/depth/nodes/issues. Report fixed errors, scrubbed paths and UTF-16
   locations; never parser excerpts or arbitrary keys. Do not rewrite valid text or
-  silently replace malformed encoding. No new browser operation is introduced.
+  silently replace malformed encoding. The phase 2 scanner remains authoritative for phase 4 editor operations.
 - Preserve input limits and strict IPC field rejection. Do not coerce untrusted values.
 - Keep bundled tactics versioned, browser-safe and side-effect-free. Compose shared
   instructions once for both preview and trusted main-process delivery. Roles and
@@ -66,4 +66,13 @@ ordinary snapshots, awareness and diagnostics must not. Publish payload-free
 notices only. Preserve malformed files, pending evidence and failed drafts. New
 entries are disabled; edits preserve enabled state. Templates/paste are reviewed
 definitions, never launch requests. Authentication and connections are unchecked;
-no secret entry, approval persistence, activation, editor/reset or recovery GUI yet.
+no secret entry, approval persistence, activation or transaction recovery GUI yet.
+Phase 4 adds exact-text JSON reads/saves over strict bounded UTF-8 base64,
+valid unpinned backup preview/restore bound to reviewed identity, and confirmed
+single/combined reset. Keep renderer drafts in memory with captured ownership;
+never overwrite dirty JSON from guided forms or stale replies. Safe malformed
+originals may be repaired/reset with private preimages. Reset journals include
+unchanged inheritance guards; User publishes before project. Missing/empty targets
+are not rewritten. Use local Zod-derived Monaco completion and JSON workers with
+fixed shared-validator markers, no remote schemas or widened CSP. No recovery
+replay, path capability, resolved credentials or new runtime authority.

@@ -50,3 +50,28 @@
   flex: 1;
   min-width: 120px;
 }
+
+.mcp-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.mcp-workspace-controls,
+.mcp-json-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.mcp-json-editor {
+  min-height: 360px;
+  flex: 1;
+}
+.mcp-backup-preview {
+  max-height: 40vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

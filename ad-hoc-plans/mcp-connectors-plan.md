@@ -345,6 +345,79 @@ explicitly disconnected.
 **Completion:** tests cover invalid and conflicting saves, draft synchronization,
 scope-specific reset, inherited definitions and preservation of unrelated data.
 
+### Phase 4 implementation record
+
+**Phase 4 is complete (2026-11-23).** Required validation and owned-resource
+cleanup passed; activation and authentication remain later work.
+
+- Added Servers/JSON views with local Monaco completion, a bundled JSON worker,
+  fixed scanner markers and explicit formatting. No external schema fetch or CSP
+  expansion. One captured renderer-memory session retains exact text, revision,
+  cursor/scroll and incomplete forms across navigation. Guided saves remain immediate;
+  dirty JSON requires Save/Discard/Cancel before guided edits or scope changes.
+- Added seven fixed human operations for bounded base64 editor reads/saves, backup
+  listing/preview/restore and reset preview/commit. Strict target/runtime/database
+  fences, stable UUID replay and the application lifecycle queue remain in force.
+  Safe malformed originals may be repaired or reset with exact private preimages;
+  unsafe/oversized originals remain blocked. Invalid UTF-8 originals reject exact-text
+  saves in the backend as well as the editor; confirmed reset/valid restoration
+  remains available. Definitions/references stay out of
+  ordinary snapshots, awareness, diagnostics and agent APIs.
+- Backup confirmation binds the target revision and reviewed native backup identity
+  plus content. Only valid unpinned backups are offered; absence is explicit removal.
+  Discard reads without writing. Conflicts/uncertainty preserve drafts and offer a
+  read-only Saved versus Draft comparison. Replaced owners require explicit reload.
+- Reset journals include all selected states and unchanged inheritance guards.
+  Combined reset publishes User before this project. Native rename/unlink checks
+  cancellation immediately before publication; started steps finish verification
+  and sync before retaining a recoverable outcome. Missing/empty targets remain
+  unchanged without config creation/backups. Failures retain journals for backend
+  Complete/Roll back; third states stop recovery and startup never replays.
+- Capability descriptors/availability tests and the generated catalog now describe
+  editing/restoration/reset. Architecture, module instructions, MCP documentation
+  and the recovery runbook distinguish these operations from the deferred runtime.
+- Activation/connections, approval persistence, secure-store/OAuth, transaction
+  recovery GUI and later release validation remain phases 5–7. Dedicated integrations,
+  Code60-owned registrations/client IDs/secrets, hosted auth, migrations and legacy
+  SSE remain excluded. Pre-bundled definitions stay optional templates; tools only.
+
+### Phase 4 validation and delivery
+
+- Final containerized `npm run check` passed: **303 files / 2,956 tests**, 557.80
+  seconds, with instruction validation, typecheck, Biome, Knip and all four coverage
+  gates. One worker respected the known emulated real-Git timing constraint;
+  no floors, exclusions, existing assertions or timeouts were relaxed.
+- Focused contracts/service/form/draft/gateway/knowledge/boundary/ACP checks passed
+  (121 tests across nine files); additional publication integration passed 66
+  tests across three files, followed by seven platform cancellation tests. These
+  overlapping supporting runs are recorded separately from browser evidence.
+- Final real-browser run passed **nine MCP journeys** (six new and three existing,
+  1.4 minutes): completion/local worker/CSP, exact saves and explicit formatting,
+  invalid Save, guided/scope guards, navigation/cursor retention, cancelled close,
+  conflicts/comparison/discard, reviewed/absent backups, malformed repair/reset,
+  inheritance, combined reset, pending restart inspection and owner invalidation.
+  Independent bytes, modes, inodes, backups/journals and unrelated settings/files
+  were checked. Final editor/reset screenshots were visually inspected.
+- Separate first-use golden regression passed (15.5-second test / 17.4-second
+  suite): provider setup, acceptance before worker creation, automatic edits,
+  diff/attachment, reload and declined/confirmed Undo with filesystem/Git oracles.
+- Packaging and clean-prefix installed smoke passed: CLI, loopback backend, local
+  JSON-worker asset serving and an offline 768-dimensional model query. The pinned
+  assets were prepared/verified explicitly; no service was installed.
+- Earlier failures and traces remain in `test-results/qa/mcp-connectors-phase-4/`.
+  Covered repetition exposed a test client dropping its unread event stream;
+  consuming notices as a real browser does fixed eight independent reproductions.
+  Production authorization, retry policy and detach deadlines were unchanged.
+- The worktree helper removed the owned code60/cache-init containers and exported
+  images. Independent stopped/running container, labelled/named-image and network
+  inventories are empty; only idle init/sleep remained before teardown. Retained
+  documented dependency/build/npm/browser/model volumes, BuildKit cache, ports,
+  package artifact and QA evidence. No foreign resources or real user services,
+  providers, credentials or hook policies were changed.
+- Native macOS storage/login-service, secure-store/OAuth and production connector
+  execution are not certified by these Linux amd64 container checks. Transaction
+  recovery GUI, activation/connections and authentication remain phases 5–7.
+
 ## Phase 5: Implement connection lifecycle and activation
 
 Add Enable, Disable, Test connection, Reconnect and Disconnect controls. Separate

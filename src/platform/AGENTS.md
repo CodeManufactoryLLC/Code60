@@ -17,6 +17,8 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
   directory. Recovery may sync an already-published file without repeating rename.
   Never discard a replaced temporary or claim compare-and-swap against external
   editors. Checkpoint injection is a test I/O port, not diagnostic capture.
+  Check cancellation immediately before rename/unlink; once publication starts,
+  finish verification/sync so application can retain a safely recordable outcome.
 - Native service inspection uses bounded fixed launchd/systemd commands and reports
   running/stopped/unavailable separately. Never treat supervisor failure as stopped,
   follow service-definition symlinks or mutate registration during status reads.

@@ -17,6 +17,18 @@ import {
 const ids = new Set(APPLICATION_CAPABILITIES.map((capability) => capability.id));
 
 describe("browser capability catalog", () => {
+  it("describes bounded human-only JSON editing and recovery choices without runtime authority", () => {
+    const mcp = APPLICATION_CAPABILITIES.find((cap) => cap.id === "mcp-servers");
+    expect(mcp).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });
+    expect(PAGE_CAPABILITIES["mcp-servers"]).toBe("mcp-servers");
+    expect(pages.find((page) => page.id === "mcp-servers")?.database).toBe(false);
+    expect(mcp?.limitations).toContain("open project and captured runtime/database identity");
+    expect(mcp?.limitations).toContain("valid unpinned backup");
+    expect(mcp?.limitations).toContain("Pending recovery blocks affected writes");
+    expect(mcp?.limitations).toContain("User and this project");
+    expect(mcp?.confirmation).toContain("Save, Discard or Cancel");
+    expect(mcp?.purpose).toContain("without activating connections");
+  });
   it("describes scheduler upgrade recovery without granting service authority", () => {
     const updates = APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates");
     expect(updates).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });

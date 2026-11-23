@@ -4,8 +4,8 @@ The [MCP connectors plan](ad-hoc-plans/mcp-connectors-plan.md) introduces dedica
 user/project files and backend-owned connections in stages. Phase 1 adds schema
 and resolution contracts plus protocol fixtures; phase 2 adds the backend storage
 library, strict text validation, backups and explicit transaction recovery. The
-new files/editor/runtime are not active yet; the instructions below describe the
-current behavior. See the [storage recovery runbook](docs/runbooks/mcp-configuration.md) and
+dedicated files have guided and JSON management in phases 3–4, but do not feed
+agent execution yet. The legacy instructions below describe active runtime behavior. See the [storage recovery runbook](docs/runbooks/mcp-configuration.md) and
 [the target architecture](ARCHITECTURE.md#mcp-connector-foundation-and-target-runtime).
 
 Code60 passes configured [Model Context Protocol](https://modelcontextprotocol.io/)
@@ -288,4 +288,38 @@ no credentials or approvals. Closed repositories are not scanned.
 Conflicts retain the draft; reload explicitly before saving against the new
 revision. Invalid files and pending recovery block guided changes. Preserve evidence
 and follow [configuration recovery](docs/runbooks/mcp-configuration.md). The direct
-JSON editor, backup restore, factory reset and in-app recovery controls remain planned.
+JSON editor, backup restore and reset are described below; transaction recovery
+controls remain backend-only.
+
+
+## JSON editing, backups and reset
+
+In Apps → MCP Servers, choose **Servers** for immediate guided saves or **JSON**
+for the dedicated file. JSON Save preserves valid text exactly; **Format JSON**
+explicitly produces two-space indentation and a final newline. Invalid syntax,
+duplicate keys and schema issues disable Save, including its keyboard shortcut.
+Completion and validation run locally. Never paste secrets; use credential references.
+
+Before guided edits or scope changes, choose Save, Discard or Cancel for dirty JSON.
+Ordinary page navigation retains the draft and editor position in memory; browser
+reload/close can lose it and shows a warning. Project close/replacement disables
+submission until explicit reload/discard. External changes retain dirty text: use
+**Compare saved and draft** to inspect the latest file, then explicitly discard
+or revise your draft. Discard reads the latest file without writing or backing up.
+
+**Restore backup** lists private preimages. Preview a valid, unpinned configuration
+and confirm against both its reviewed identity and the current file revision. An
+absent-file backup removes the dedicated file, revealing inheritance where applicable.
+Malformed/pinned preimages remain recovery evidence. Failed operations retain drafts.
+
+**Reset this configuration** clears only this configuration; project scope also offers
+**Reset User and this project**. Review removed definitions, inherited User entries,
+open-project effects and unsaved-draft loss before confirmation. Clearing User affects
+other projects using User entries, without scanning closed repositories. Safe bounded
+malformed originals can be reset or repaired in JSON; their exact bytes are backed up.
+Unsafe/oversized originals remain blocked. Missing/empty targets are not rewritten.
+
+Reset preserves other project files, unrelated settings, built-ins, credentials and
+running agents/connections. Interrupted changes require explicit backend Complete or
+Roll back; preserve evidence and follow the recovery runbook. No activation, sign-in
+or transaction recovery GUI is introduced.

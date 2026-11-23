@@ -1130,8 +1130,8 @@ Remove/move require confirmation and use captured revisions. Moves preview
 collisions, affected open-project context and unverifiable references; no closed
 repositories are scanned. Guided saves produce two-space JSON with a final newline.
 Forms retain drafts on recoverable failures and reject changed owner/revision;
-malformed files require external correction until the phase 4 editor. In-app
-recovery, reset, secure authentication and activation are not present yet.
+phase 4 adds validated exact-text repair, backup restoration and confirmed reset.
+In-app transaction recovery, secure authentication and activation remain deferred.
 
 #### Configuration storage service
 
@@ -1148,8 +1148,8 @@ The application-owned store registers backend-controlled user configuration
 directories and canonical source-project roots, returning opaque target IDs.
 Mutation requests accept only target IDs, expected revisions, request IDs and
 operation-specific content. Read/save/move/list-backups/restore/list-pending/
-recover/close remain backend library operations. Phase 3 exposes only the five
-human wrappers described above; backup and recovery controls remain deferred.
+recover/close remain backend library operations. Phase 4 adds seven strict human
+editing/backup/reset wrappers; explicit transaction recovery remains backend-only.
 Missing files return empty defaults without creating config files or directories.
 Malformed files retain bounded text when UTF-8 permits it; oversized/unsafe files
 are refused rather than exposed as editable truncations.
@@ -1196,18 +1196,19 @@ revisions and known before/after states. Newer edits, changed roots and corrupt
 evidence block recovery. Ordinary restores validate backups; only explicit rollback
 may restore a malformed original. Post-rename sync uncertainty returns
 recovery-required with preserved evidence; completion syncs without repeating the
-rename. Cancellation before preparation changes no configuration; afterward it
-retains a recoverable record. Close drains the queue and releases ownership without
+rename. Cancellation is rechecked at native rename/unlink publication boundaries;
+before publication it changes no configuration. After preparation, cancellation
+retains a recoverable record; a started publication finishes verification/sync. Close drains the queue and releases ownership without
 completing pending effects. No lock-deletion repair or automatic tool/task replay
 is introduced. See [the recovery runbook](docs/runbooks/mcp-configuration.md).
 
-The phase 3 human-facing page and availability limitations are represented in the
+The phases 3–4 human-facing page and availability limitations are represented in the
 self-knowledge catalog; definition contents remain excluded from agent awareness.
 
 #### Foundation status
 
 Phase 1 implements browser-safe document/status contracts and pure scope resolution,
-with a supporting ACP/stdio protocol proof. Phase 3 adds guided management UI/APIs;
+with a supporting ACP/stdio protocol proof. Phases 3–4 add guided and JSON management UI/APIs;
 execution still does not load the new files, store credentials or start a production
 connector runtime.
 The existing user MCP behavior in the next section remains active until the later
@@ -3151,3 +3152,28 @@ crash may lose the last five-second interval (or more if storage writes failed).
 Undo restores checkpoint timing, clears anchors and freezes discarded plans.
 Owner teardown cancels timers; failed timing writes do not authorize or dispatch
 work. This adds no preference, agent-write field, IPC endpoint or dependency.
+
+
+### MCP configuration editor and reset (phase 4)
+
+Phase 4 extends the staged human management surface with exact-text JSON editing,
+backup preview/restore and confirmed single/combined resets. The new files remain
+unwired to execution. One renderer-memory editing session binds raw/form state to
+its registered target, runtime/database identity and saved revision. Guided saves
+remain immediate; dirty raw text must be saved or discarded before guided edits.
+Only explicit editor reads expose bounded decodable original text. Strict shared
+validation controls Save and fixed Monaco markers; completion uses local schema
+metadata and a bundled JSON worker without remote schema requests or new CSP grants.
+Raw text crosses the bounded browser wire as UTF-8 base64. Exact saves can repair
+malformed originals while preserving private preimages; unsafe/oversized files stay
+blocked. No resolved credentials enter editor text or ordinary awareness/diagnostics.
+
+Restore binds both target revision and reviewed backup identity/content revision.
+Malformed/pinned preimages stay recovery evidence. Reset clears only selected
+configuration definitions; combined reset clears User before the selected project,
+with both states and relevant inheritance guards in a recoverable journal. Missing
+and already-empty targets are guarded without writes/backups. Interrupted reset
+blocks affected targets and requires explicit backend recovery; no recovery GUI or
+automatic replay. Reset never changes unrelated settings, built-ins, credentials or
+running work. Activation, secure authentication and dedicated integrations remain
+later work. Implementation/validation status is recorded in the MCP plan.

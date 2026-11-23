@@ -82,3 +82,28 @@ it("blocks a document exceeding the UTF-8 byte budget even when every argument m
   expect(() => mcpFormDocument(fields, base)).toThrow("1 MiB UTF-8 limit");
   expect(Object.keys(base.servers)).toEqual(["docs"]);
 });
+it("restores incomplete guided fields and paste errors from renderer memory without creating a definition", () => {
+  const fields = mcpFormFields("unfinished");
+  fields.label = "Incomplete draft";
+  fields.command = "";
+  fields.args = ["", "partial argument"];
+  fields.argIds = ["empty-row", "partial-row"];
+  const html = renderToStaticMarkup(
+    <McpForm
+      initial={mcpFormFields("blank")}
+      base={base}
+      templates={MCP_CONNECTOR_TEMPLATES}
+      draft={{ fields, paste: "{incomplete", pasteOpen: true, error: "Invalid server definition." }}
+      busy={false}
+      stale={false}
+      onSave={() => {}}
+      onCancel={() => {}}
+      onReload={() => {}}
+    />,
+  );
+  expect(html).toContain("Incomplete draft");
+  expect(html).toContain("partial argument");
+  expect(html).toContain("{incomplete");
+  expect(html).toContain("Invalid server definition.");
+  expect(base.servers.unfinished).toBeUndefined();
+});

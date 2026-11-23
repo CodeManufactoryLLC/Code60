@@ -14,7 +14,7 @@ import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
 import { HomePage } from "./home-page.js";
 import { LogsPage } from "./logs.js";
-import { McpServersPage } from "./mcp-servers.js";
+import { McpWorkspace } from "./mcp-workspace.js";
 import { MemoriesPage } from "./memories.js";
 import { MemoryPage } from "./memory.js";
 import { MessagesPage } from "./messages.js";
@@ -196,7 +196,7 @@ export function AppPages(props: AppPagesProps) {
   ]);
   const views = {
     "mcp-servers": (
-      <McpServersPage
+      <McpWorkspace
         api={api}
         active={!splash && tabs.active === "mcp-servers"}
         contextKey={JSON.stringify([

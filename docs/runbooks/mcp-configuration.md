@@ -1,8 +1,8 @@
 # MCP configuration storage recovery
 
-The phase 2 backend library is wrapped by phase 3's Apps → MCP Servers guided
-management page and narrow browser APIs. No direct JSON editor, recovery screen
-or CLI recovery command exists yet. The active configuration path remains the one described in [MCP configuration](../../MCP.md).
+The backend library is wrapped by Apps → MCP Servers guided/JSON editing,
+backup restoration and confirmed reset. Transaction Complete/Roll back remains
+backend-only; no recovery screen or CLI recovery command exists yet. The active configuration path remains the one described in [MCP configuration](../../MCP.md).
 Do not invent a product command or change live files to exercise this library.
 
 ## Symptoms
@@ -71,10 +71,28 @@ approvals.
 
 ## Guided management status
 
-Phase 3 exposes Apps → MCP Servers for valid guided saves/removals/moves only.
+Phases 3–4 expose guided saves/removals/moves, exact-text repair, reviewed backup
+restore and confirmed reset in Apps → MCP Servers.
 Invalid files and pending recovery display safe issues and block affected writes.
-There is no in-app Complete/Roll back or backup restore control yet. Preserve all
+There is no in-app transaction Complete/Roll back control. Backup preview/restore
+accepts only valid unpinned records and binds reviewed file identity/content. An
+absent-file backup explicitly removes the dedicated configuration file. Preserve all
 private evidence and use the backend recovery procedure above with verified
 ownership. Never clear a writer lock as a repair. After an external edit, reload
 the configuration explicitly; failed drafts do not grant authority to a reopened
 project or replacement root. Authentication/connection status is not checked.
+
+
+## Interrupted reset
+
+Reset journals use the same explicit recovery procedure as moves. Combined reset
+publishes User first, then the selected project. Unchanged/missing targets and
+User inheritance guards are recorded without writes or backups; changes to these
+guards also block recovery. Inspect every recorded target before either Complete
+or Roll back. A third state, replaced root or unverifiable identity stops recovery.
+Rollback can restore the exact malformed original recorded in the journal, while
+ordinary backup restoration refuses malformed/pinned evidence. Startup never replays.
+
+Do not discard the browser draft after a conflict or recovery-required result.
+Compare saved versus draft, retain evidence and resolve the underlying ownership
+or transaction condition. Reset does not disconnect running work or remove credentials.

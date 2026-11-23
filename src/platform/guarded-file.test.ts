@@ -38,6 +38,25 @@ describe("guarded configuration files", () => {
     inode = 9007199254740992n;
     await expect(readGuardedFile(target, 1024, io)).rejects.toMatchObject({ code: "changed" });
   });
+  it("cancels replacement or removal before publication while retaining the original and owned stage", async () => {
+    const path = join(root, "mcp.json");
+    await fs.writeFile(path, "original", { mode: 0o600 });
+    const target = await bindGuardedTarget(root, true);
+    const before = await readGuardedFile(target, 1024);
+    const stage = await stageGuardedFile(target, Buffer.from("replacement"), 0o600);
+    const controller = new AbortController();
+    controller.abort();
+    for (const selected of [stage, null]) {
+      await expect(
+        publishGuardedFile(target, before.revision, selected, 1024, fs, controller.signal),
+      ).rejects.toMatchObject({ name: "AbortError" });
+      expect(await fs.readFile(path, "utf8")).toBe("original");
+      expect((await readGuardedFile(target, 1024)).revision).toBe(before.revision);
+    }
+    expect(await fs.readFile(join(root, stage.name), "utf8")).toBe("replacement");
+    await discardGuardedStage(target, stage);
+    expect(await fs.readdir(root)).toEqual(["mcp.json"]);
+  });
 
   it("detects pathname replacement during a same-handle read", async () => {
     const path = join(root, "mcp.json");

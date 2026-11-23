@@ -11,7 +11,7 @@ import type {
 } from "../bridge/index.js";
 import { AnchoredMenu } from "./anchored-menu.js";
 import { DataTable, type TableOptions } from "./data-table.js";
-import { McpForm, mcpFormFields } from "./mcp-form.js";
+import { McpForm, type McpFormDraft, mcpFormFields } from "./mcp-form.js";
 import { Modal } from "./modal.js";
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -45,6 +45,7 @@ interface Editor {
   originalId?: string;
   initial?: McpConnectorDefinition | undefined;
   key: string;
+  draft?: McpFormDraft | undefined;
 }
 interface Move {
   source: McpManagementRead;
@@ -57,17 +58,25 @@ export function McpServersPage({
   api,
   active,
   contextKey,
+  configuration,
+  onFormDirty,
+  readOnly = false,
   ...table
 }: Pick<TableOptions, "lines" | "density" | "fit" | "textStyles"> & {
   api: ApplicationClient;
   active: boolean;
   contextKey: string;
+  configuration?: { scope: string; select(scope: string): void } | undefined;
+  onFormDirty?(dirty: boolean): void;
+  readOnly?: boolean | undefined;
 }) {
   const [visible, setVisible] = useState(
     typeof document === "undefined" || document.visibilityState !== "hidden",
   );
   const [targets, setTargets] = useState<McpManagementTargets>();
-  const [scope, setScope] = useState("user");
+  const [ownScope, setOwnScope] = useState("user");
+  const scope = configuration?.scope ?? ownScope;
+  const setScope = configuration?.select ?? setOwnScope;
   const [read, setRead] = useState<McpManagementRead>();
   const [selected, setSelected] = useState<string>();
   const [editor, setEditor] = useState<Editor>();
@@ -76,6 +85,13 @@ export function McpServersPage({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [menu, setMenu] = useState<{ id: string; x: number; y: number }>();
+  const dirtyNotice = useRef(onFormDirty);
+  dirtyNotice.current = onFormDirty;
+  const formKey = editor?.key;
+  useEffect(() => {
+    dirtyNotice.current?.(Boolean(formKey));
+    return () => dirtyNotice.current?.(false);
+  }, [formKey]);
   const editing = useRef(editor?.key);
   editing.current = editor?.key;
   const ownerContext = useRef(contextKey);
@@ -154,7 +170,7 @@ export function McpServersPage({
   const local = Boolean(
     selectedId && read?.document && Object.hasOwn(read.document.servers, selectedId),
   );
-  const blocked = !read?.document || Boolean(read.pendingRecovery.length) || busy;
+  const blocked = readOnly || !read?.document || Boolean(read.pendingRecovery.length) || busy;
   const captured = (id?: string): Editor | undefined =>
     read?.document && target
       ? {
@@ -165,6 +181,7 @@ export function McpServersPage({
         }
       : undefined;
   const stale = (value: Editor) =>
+    readOnly ||
     !read ||
     read.revision !== value.base.revision ||
     !same(value.target.address, read.target) ||
@@ -419,6 +436,10 @@ export function McpServersPage({
           <McpForm
             key={editor.key}
             initial={mcpFormFields(editor.originalId ?? "", editor.initial)}
+            draft={editor.draft}
+            onDraft={(draft) =>
+              setEditor((value) => (value?.key === editor.key ? { ...value, draft } : value))
+            }
             base={editor.base.document}
             originalId={editor.originalId}
             templates={targets?.templates ?? []}

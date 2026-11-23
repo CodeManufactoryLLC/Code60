@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   MCP_TEXT_LIMITS,
   type McpConnectorDefinition,
@@ -218,8 +218,16 @@ function BindingFields({
     </fieldset>
   );
 }
+export interface McpFormDraft {
+  fields: McpFormFields;
+  paste: string;
+  pasteOpen: boolean;
+  error: string;
+}
 export function McpForm({
   initial,
+  draft,
+  onDraft,
   base,
   originalId,
   templates,
@@ -230,6 +238,8 @@ export function McpForm({
   onReload,
 }: {
   initial: McpFormFields;
+  draft?: McpFormDraft | undefined;
+  onDraft?(draft: McpFormDraft): void;
   base: McpConnectorDocument;
   originalId?: string | undefined;
   templates: readonly { id: string; definition: McpConnectorDefinition }[];
@@ -239,10 +249,15 @@ export function McpForm({
   onCancel(): void;
   onReload(): void;
 }) {
-  const [fields, setFields] = useState(initial);
-  const [paste, setPaste] = useState("");
-  const [pasteOpen, setPasteOpen] = useState(false);
-  const [error, setError] = useState("");
+  const [fields, setFields] = useState(draft?.fields ?? initial);
+  const [paste, setPaste] = useState(draft?.paste ?? "");
+  const [pasteOpen, setPasteOpen] = useState(draft?.pasteOpen ?? false);
+  const [error, setError] = useState(draft?.error ?? "");
+  const persist = useRef(onDraft);
+  persist.current = onDraft;
+  useEffect(() => {
+    persist.current?.({ fields, paste, pasteOpen, error });
+  }, [fields, paste, pasteOpen, error]);
   const change = <K extends keyof McpFormFields>(key: K, value: McpFormFields[K]) =>
     setFields((f) => ({
       ...f,

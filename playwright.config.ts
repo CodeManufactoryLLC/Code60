@@ -5,6 +5,7 @@ export default defineConfig({
   testMatch: [
     "browser-workflow.e2e.ts",
     "mcp-management.e2e.ts",
+    "mcp-editing.e2e.ts",
     "development.e2e.ts",
     "browser-features.e2e.ts",
     "file-browser.e2e.ts",

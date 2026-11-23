@@ -274,6 +274,19 @@ describe("MCP configuration store (supporting filesystem integration)", () => {
       expect((await store.read(project)).document?.servers.docs).toBeDefined();
       await expect(save(store, user, empty)).rejects.toMatchObject({ code: "recovery-required" });
       expect((await store.listBackups(user)).some((backup) => backup.pinned)).toBe(true);
+      const pinned = (await store.listBackups(user)).find(
+        (backup) => backup.pinned && backup.valid,
+      );
+      if (!pinned) throw new Error("missing pinned preimage");
+      await expect(store.previewBackup(user, pinned.backupId)).rejects.toThrow("invalid");
+      await expect(
+        store.restore({
+          targetId: user,
+          backupId: pinned.backupId,
+          expectedRevision: (await store.read(user)).revision,
+          requestId: randomUUID(),
+        }),
+      ).rejects.toThrow("invalid");
       await store.close();
       fail = false;
       const reopened = await open({ io });
@@ -570,4 +583,312 @@ describe("MCP configuration store (supporting filesystem integration)", () => {
     expect(await fs.readFile(path, "utf8")).toBe(evidence);
     expect(await fs.readFile(join(options.userDirectory, "mcp.json"), "utf8")).toBe(content());
   });
+  it("resets malformed originals privately, preserves empty/absent targets and replays the exact outcome", async () => {
+    const { store, user, project } = await open();
+    const missing = await store.read(project);
+    await fs.mkdir(options.userDirectory, { recursive: true });
+    await fs.writeFile(join(options.userDirectory, "mcp.json"), "malformed token", { mode: 0o600 });
+    const original = await store.read(user);
+    const request = {
+      targets: [
+        { targetId: user, expectedRevision: original.revision, reset: true },
+        { targetId: project, expectedRevision: missing.revision, reset: true },
+      ],
+      requestId: randomUUID(),
+    };
+    const result = await store.reset(request);
+    expect(result.status).toBe("reset");
+    expect(await store.reset(request)).toEqual(result);
+    expect((await store.read(user)).document).toEqual({ version: 1, servers: {} });
+    await expect(fs.stat(join(root, "project/.code60"))).rejects.toThrow();
+    expect(await store.listBackups(project)).toEqual([]);
+    expect((await store.listBackups(user))[0]).toMatchObject({ valid: false });
+    const before = await store.read(user);
+    const count = (await store.listBackups(user)).length;
+    expect(
+      (
+        await store.reset({
+          targets: [{ targetId: user, expectedRevision: before.revision, reset: true }],
+          requestId: randomUUID(),
+        })
+      ).status,
+    ).toBe("unchanged");
+    expect((await store.read(user)).revision).toBe(before.revision);
+    expect(await store.listBackups(user)).toHaveLength(count);
+  });
+  it.each(["complete", "rollback"] as const)(
+    "retains destination-independent combined reset evidence for explicit %s after interruption",
+    async (action) => {
+      let armed = false;
+      let publications = 0;
+      const io: GuardedFileIo = {
+        ...fs,
+        checkpoint: async (step) => {
+          if (armed && step === "rename" && ++publications === 2)
+            throw new Error("synthetic second publication failure");
+        },
+      };
+      const { store, user, project } = await open({ io });
+      await save(store, user, content("User"));
+      await save(store, project, content("Project"));
+      const before = {
+        [user]: (await store.read(user)).text,
+        [project]: (await store.read(project)).text,
+      };
+      armed = true;
+      const result = await store.reset({
+        targets: [
+          {
+            targetId: project,
+            expectedRevision: (await store.read(project)).revision,
+            reset: true,
+          },
+          { targetId: user, expectedRevision: (await store.read(user)).revision, reset: true },
+        ],
+        requestId: randomUUID(),
+      });
+      expect(result.status).toBe("recovery-required");
+      expect((await store.read(user)).document?.servers).toEqual({});
+      expect((await store.read(project)).document?.servers.docs?.label).toBe("Project");
+      await store.close();
+      const restarted = (await open()).store;
+      expect(await restarted.listPendingRecovery()).toHaveLength(1);
+      const expectedRevisions = {
+        [user]: (await restarted.read(user)).revision,
+        [project]: (await restarted.read(project)).revision,
+      };
+      const recovered = await restarted.recover({
+        transactionId: result.transactionId,
+        action,
+        expectedRevisions,
+        requestId: randomUUID(),
+      });
+      expect(recovered.status).toBe(action === "complete" ? "completed" : "rolled-back");
+      for (const targetId of [user, project]) {
+        if (action === "rollback")
+          expect((await restarted.read(targetId)).text).toBe(before[targetId]);
+        else expect((await restarted.read(targetId)).document?.servers).toEqual({});
+      }
+    },
+  );
+  it("refuses reset when a read-only inheritance guard changes, preserves evidence and leaves unrelated targets usable", async () => {
+    let armed = false;
+    const { store, user, project } = await open({
+      io: {
+        ...fs,
+        checkpoint: async (step) => {
+          if (armed && step === "stage") {
+            armed = false;
+            await fs.writeFile(
+              join(options.userDirectory, "mcp.json"),
+              content("New external User"),
+            );
+          }
+        },
+      },
+    });
+    await save(store, user);
+    await save(store, project);
+    armed = true;
+    const result = await store.reset({
+      targets: [
+        { targetId: project, expectedRevision: (await store.read(project)).revision, reset: true },
+        { targetId: user, expectedRevision: (await store.read(user)).revision, reset: false },
+      ],
+      requestId: randomUUID(),
+    });
+    expect(result.status).toBe("recovery-required");
+    expect((await store.read(user)).document?.servers.docs?.label).toBe("New external User");
+    await expect(
+      store.recover({
+        transactionId: result.transactionId,
+        action: "complete",
+        expectedRevisions: {
+          [user]: (await store.read(user)).revision,
+          [project]: (await store.read(project)).revision,
+        },
+        requestId: randomUUID(),
+      }),
+    ).rejects.toThrow("conflict");
+    expect(await store.listPendingRecovery()).toHaveLength(1);
+    const otherRoot = join(root, "unrelated");
+    await fs.mkdir(otherRoot);
+    const unrelated = await store.registerProject(otherRoot);
+    expect((await save(store, unrelated)).status).toBe("saved");
+  });
+  it("binds backup preview to bytes and native replacement and restores absence only on explicit request", async () => {
+    const { store, user } = await open();
+    await save(store, user);
+    const emptyBackup = (await store.listBackups(user))[0];
+    if (!emptyBackup) throw new Error("No backup");
+    const preview = await store.previewBackup(user, emptyBackup.backupId);
+    expect(preview.missing).toBe(true);
+    const path = join(options.stateRoot, `${emptyBackup.backupId}.backup`);
+    const data = await fs.readFile(path);
+    await fs.rename(path, path + ".old");
+    await fs.writeFile(path, data, { mode: 0o600 });
+    await fs.unlink(path + ".old");
+    await expect(
+      store.restore({
+        targetId: user,
+        expectedRevision: (await store.read(user)).revision,
+        backupId: emptyBackup.backupId,
+        expectedBackupRevision: preview.backupRevision,
+        requestId: randomUUID(),
+      }),
+    ).rejects.toThrow("conflict");
+    const fresh = await store.previewBackup(user, emptyBackup.backupId);
+    const request = {
+      targetId: user,
+      expectedRevision: (await store.read(user)).revision,
+      backupId: emptyBackup.backupId,
+      expectedBackupRevision: fresh.backupRevision,
+      requestId: randomUUID(),
+    };
+    const result = await store.restore(request);
+    expect(result.status).toBe("restored");
+    expect((await store.read(user)).exists).toBe(false);
+    expect(await store.restore(request)).toEqual(result);
+  });
+  it.each(["backup", "journal", "stage", "rename", "directory-sync", "receipt"] as const)(
+    "retains reset evidence and independently verifies original/publication bytes at the %s failure boundary",
+    async (boundary) => {
+      let armed = false;
+      const fail = async (step: string) => {
+        if (armed && step === boundary) throw new Error("synthetic reset failure");
+      };
+      const { store, user, project } = await open({
+        checkpoint: (step) => fail(step),
+        io: { ...fs, checkpoint: (step) => fail(step) },
+      });
+      await save(store, user, content("User original"));
+      await save(store, project, content("Project original"));
+      const before = [
+        await fs.readFile(join(options.userDirectory, "mcp.json")),
+        await fs.readFile(join(root, "project/.code60/mcp.json")),
+      ];
+      const request = {
+        requestId: randomUUID(),
+        targets: [
+          { targetId: user, expectedRevision: (await store.read(user)).revision, reset: true },
+          {
+            targetId: project,
+            expectedRevision: (await store.read(project)).revision,
+            reset: true,
+          },
+        ],
+      };
+      armed = true;
+      if (boundary === "journal") await expect(store.reset(request)).rejects.toThrow("unavailable");
+      else expect((await store.reset(request)).status).toBe("recovery-required");
+      const files = [
+        join(options.userDirectory, "mcp.json"),
+        join(root, "project/.code60/mcp.json"),
+      ];
+      for (const [index, path] of files.entries()) {
+        const actual = await fs.readFile(path);
+        if (["journal", "backup", "stage", "rename"].includes(boundary))
+          expect(actual).toEqual(before[index]);
+        else
+          expect(JSON.parse(actual.toString()).servers).toEqual(
+            index === 1 && boundary === "directory-sync"
+              ? JSON.parse(before[1]?.toString() ?? "{}").servers
+              : {},
+          );
+        expect((await fs.stat(path)).mode & 0o777).toBe(index === 0 ? 0o600 : 0o644);
+      }
+      expect((await store.listPendingRecovery()).length).toBe(boundary === "journal" ? 0 : 1);
+    },
+  );
+  it("cancels reset before preparation and refuses insufficient capacity without touching either file", async () => {
+    const { store, user, project } = await open({ budgetBytes: 5000 });
+    await fs.mkdir(options.userDirectory, { recursive: true });
+    await fs.mkdir(join(root, "project/.code60"));
+    await fs.writeFile(join(options.userDirectory, "mcp.json"), content(), { mode: 0o600 });
+    await fs.writeFile(join(root, "project/.code60/mcp.json"), content(), { mode: 0o644 });
+    const request = {
+      requestId: randomUUID(),
+      targets: [
+        { targetId: user, expectedRevision: (await store.read(user)).revision, reset: true },
+        { targetId: project, expectedRevision: (await store.read(project)).revision, reset: true },
+      ],
+    };
+    await expect(store.reset(request)).rejects.toThrow("storage-limit");
+    expect((await store.read(user)).document?.servers.docs).toBeDefined();
+    expect((await store.read(project)).document?.servers.docs).toBeDefined();
+    expect(await store.listPendingRecovery()).toEqual([]);
+    expect((await fs.readdir(options.stateRoot)).filter((p) => p !== ".writer")).toEqual([]);
+    const controller = new AbortController();
+    controller.abort();
+    // An already-empty/missing operation also respects cancellation without issuing a receipt.
+    const missing = await store.registerProject(await fs.mkdtemp(join(root, "new-project-")));
+    await expect(
+      store.reset(
+        {
+          requestId: randomUUID(),
+          targets: [
+            {
+              targetId: missing,
+              expectedRevision: (await store.read(missing)).revision,
+              reset: true,
+            },
+          ],
+        },
+        controller.signal,
+      ),
+    ).rejects.toThrow("cancelled");
+  });
+  it.each(["stage", "rename", "directory-sync"] as const)(
+    "records reset cancellation at %s without publishing a later target",
+    async (boundary) => {
+      const controller = new AbortController();
+      let armed = true;
+      const { store, user, project } = await open({
+        io: {
+          ...fs,
+          checkpoint: async (step) => {
+            if (armed && step === boundary) {
+              armed = false;
+              controller.abort();
+            }
+          },
+        },
+      });
+      await fs.mkdir(options.userDirectory, { recursive: true });
+      await fs.mkdir(join(root, "project/.code60"));
+      const userPath = join(options.userDirectory, "mcp.json");
+      const projectPath = join(root, "project/.code60/mcp.json");
+      await fs.writeFile(userPath, content(), { mode: 0o600 });
+      await fs.writeFile(projectPath, content(), { mode: 0o644 });
+      const requestId = randomUUID();
+      expect(
+        await store.reset(
+          {
+            requestId,
+            targets: [
+              { targetId: user, expectedRevision: (await store.read(user)).revision, reset: true },
+              {
+                targetId: project,
+                expectedRevision: (await store.read(project)).revision,
+                reset: true,
+              },
+            ],
+          },
+          controller.signal,
+        ),
+      ).toMatchObject({ status: "recovery-required" });
+      expect(await fs.readFile(projectPath, "utf8")).toBe(content());
+      expect(JSON.parse(await fs.readFile(userPath, "utf8")).servers).toEqual(
+        boundary === "directory-sync" ? {} : JSON.parse(content()).servers,
+      );
+      expect((await fs.stat(userPath)).mode & 0o777).toBe(0o600);
+      expect((await fs.stat(projectPath)).mode & 0o777).toBe(0o644);
+      expect(await store.listPendingRecovery()).toHaveLength(1);
+      expect(await recover(store, requestId, [user, project], "complete")).toMatchObject({
+        status: "completed",
+      });
+      expect((await store.read(user)).document?.servers).toEqual({});
+      expect((await store.read(project)).document?.servers).toEqual({});
+    },
+  );
 });

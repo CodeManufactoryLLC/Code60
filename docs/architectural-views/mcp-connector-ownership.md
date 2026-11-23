@@ -39,7 +39,9 @@ explicitly unsupported.
 
 Phase 1 supplies schemas, pure resolution and protocol fixtures; phase 2 supplies
 validated recoverable storage. Phase 3 adds guided human configuration management
-with stable canonical targets and transient runtime/database fences. Active config
+with stable canonical targets and transient runtime/database fences. Phase 4 adds
+exact-text editing and reviewed backup/reset operations using the same ownership
+and recoverable journals, including unchanged inheritance guards. Active config
 loading, production transport/adapter composition, secure storage, OAuth and
 activation remain later work. The proof does not certify real provider behavior.
 Detailed contracts and lifecycle rules live in

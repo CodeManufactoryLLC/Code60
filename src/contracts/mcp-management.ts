@@ -64,6 +64,7 @@ export interface McpManagementResult {
     | "saved"
     | "moved"
     | "restored"
+    | "reset"
     | "unchanged"
     | "completed"
     | "rolled-back"

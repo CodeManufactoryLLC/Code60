@@ -4,6 +4,7 @@ import { createServer, request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
+import { encodeMcpText } from "../contracts/index.js";
 import { pairingControl } from "./pairing.js";
 import { managementRequest, startGateway } from "./server.js";
 
@@ -48,6 +49,121 @@ async function fixture(
   owned.push({ directory, gateway });
   return { directory, gateway, env };
 }
+it("fences exact-text MCP management, keeps definitions out of snapshots and fits a one-MiB file on the wire", async () => {
+  const { directory, gateway } = await fixture();
+  const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
+    fetch(`${gateway.origin}${path}`, {
+      method: "POST",
+      headers: { Origin: gateway.origin, "Content-Type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    });
+  const session = await (await post("/api/connect", { version: 1 })).json();
+  const auth = {
+    "X-Code60-Session": session.token,
+    "X-Code60-Generation": String(session.generation),
+    "X-Code60-Client": crypto.randomUUID(),
+  };
+  const operation = (operation: string, value?: unknown) =>
+    post(
+      "/api/operation",
+      { id: crypto.randomUUID(), operation, ...(value === undefined ? {} : { value }) },
+      auth,
+    );
+  const events = new AbortController();
+  let draining: Promise<void> | undefined;
+  try {
+    const stream = await fetch(`${gateway.origin}/api/events`, {
+      headers: auth,
+      signal: events.signal,
+    });
+    const reader = stream.body?.getReader();
+    if (!reader) throw new Error("Missing browser event stream");
+    // A real page consumes its stream. Dropping an unread fetch body lets GC detach the page.
+    draining = (async () => {
+      try {
+        while (!(await reader.read()).done) {
+          /* consume authenticated notices */
+        }
+      } catch {
+        if (!events.signal.aborted) throw new Error("Browser event stream ended unexpectedly");
+      } finally {
+        reader.releaseLock();
+      }
+    })();
+    const list = await (await operation("mcp-targets")).json();
+    const target = list.targets[0].address;
+    const read = await (await operation("mcp-read-text", target)).json();
+    const request = {
+      target,
+      expectedRevision: read.revision,
+      requestId: crypto.randomUUID(),
+      contentBase64: encodeMcpText("\n".repeat(1_048_530) + '{"version":1,"servers":{}}'),
+    };
+    expect((await operation("mcp-save-text", { ...request, path: "/private" })).status).toBe(400);
+    expect((await operation("mcp-save-text", { ...request, contentBase64: "/w==" })).status).toBe(
+      400,
+    );
+    expect((await operation("mcp-save-text", request)).status).toBe(200);
+    expect((await operation("mcp-save-text", request)).status).toBe(200);
+    expect((await readFile(join(directory, "config/code60/mcp.json"))).length).toBeGreaterThan(
+      1_000_000,
+    );
+    const saved = await (await operation("mcp-read-text", target)).json();
+    const secretFree =
+      '{"version":1,"servers":{"docs":{"label":"Explicit management only","enabled":false,"type":"stdio","command":"never-run","env":{"TOKEN":{"credentialRef":"synthetic-private-ref"}}}}}';
+    expect(
+      (
+        await operation("mcp-save-text", {
+          ...request,
+          expectedRevision: saved.revision,
+          requestId: crypto.randomUUID(),
+          contentBase64: encodeMcpText(secretFree),
+        })
+      ).status,
+    ).toBe(200);
+    const snapshot = await (await operation("snapshot-summary")).text();
+    expect(snapshot).not.toContain("synthetic-private-ref");
+    expect(snapshot).not.toContain("Explicit management only");
+    const preview = await (
+      await operation("mcp-preview-reset", { target, includeUser: false })
+    ).json();
+    expect(preview.removedLabels).toEqual(["Explicit management only"]);
+    expect(
+      (await operation("mcp-reset", { ...preview.request, requestId: crypto.randomUUID() })).status,
+    ).toBe(200);
+    expect(
+      JSON.parse(await readFile(join(directory, "config/code60/mcp.json"), "utf8")).servers,
+    ).toEqual({});
+    const binary = Buffer.from([0xff, 0xfe]);
+    await writeFile(join(directory, "config/code60/mcp.json"), binary);
+    const undecodable = await (await operation("mcp-read-text", target)).json();
+    expect(undecodable.contentBase64).toBeNull();
+    expect(
+      (
+        await operation("mcp-save-text", {
+          ...request,
+          expectedRevision: undecodable.revision,
+          requestId: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(400);
+    // Durable replay still returns the accepted outcome, without rewriting a later binary edit.
+    expect((await operation("mcp-save-text", request)).status).toBe(200);
+    expect(await readFile(join(directory, "config/code60/mcp.json"))).toEqual(binary);
+    const binaryReset = await (
+      await operation("mcp-preview-reset", { target, includeUser: false })
+    ).json();
+    expect(binaryReset.malformed, JSON.stringify(binaryReset)).toBe(true);
+    const resetBinary = await operation("mcp-reset", {
+      ...binaryReset.request,
+      requestId: crypto.randomUUID(),
+    });
+    expect(resetBinary.status, JSON.stringify(await resetBinary.json())).toBe(200);
+  } finally {
+    events.abort();
+    await draining;
+  }
+});
 it("restricts explicit ports to valid development asset sessions", async () => {
   await expect(startGateway({ developmentPort: 43160 })).rejects.toThrow(
     "requires development assets",

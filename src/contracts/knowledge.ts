@@ -232,12 +232,12 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
     "mcp-servers",
     "MCP Servers",
-    "Add, edit, remove and move MCP server definitions without activating connections.",
+    "Manage MCP server definitions with guided forms or validated JSON; preview/restore backups and reset selected configurations without activating connections.",
     "Apps → MCP Servers",
     "none",
     "human-only",
-    "User configuration is database-independent. Project configuration requires an open project and captured runtime/database identity. Project definitions shadow user IDs, including disabled/unapproved entries. New definitions are disabled. Authentication is Not checked and connection is Not tested. Credential references remain unverified; no credentials or approvals move. Playwright/Context7 templates are opt-in. Invalid files and pending recovery block writes. Runtime activation, sign-in, direct JSON editing, reset and in-app recovery remain planned. Definitions and references are excluded from awareness and agent tools.",
-    "Review forms before saving; confirm removal and moves.",
+    "User configuration is database-independent. Project configuration requires an open project and captured runtime/database identity. Project definitions shadow user IDs, including disabled/unapproved entries. New definitions are disabled. Authentication is Not checked and connection is Not tested. Credential references remain unverified; no credentials or approvals move. Playwright/Context7 templates are opt-in. Invalid files block guided saves; bounded safe malformed files can be repaired in JSON or reset with private preimages. Pending recovery blocks affected writes. JSON drafts stay in renderer memory across navigation; reload/close can lose them. Save preserves exact valid text; formatting is explicit. Restore requires a reviewed valid unpinned backup and fresh revisions; absent-file backups remove the dedicated file. Reset clears this configuration, or User and this project, preserving other project files, credentials, built-ins and running work. Clearing a project may reveal User definitions; clearing User affects other projects. Runtime activation, sign-in and in-app transaction recovery remain planned. Definitions and references are excluded from awareness and agent tools.",
+    "Review forms before immediate saves; Save, Discard or Cancel dirty JSON before guided edits or scope changes. Confirm removal, moves, draft discard, backup restoration and reset after scope/inheritance review.",
   ),
   feature(
     "page-navigation",

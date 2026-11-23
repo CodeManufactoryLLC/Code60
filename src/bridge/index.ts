@@ -387,6 +387,27 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface ApplicationClient {
+  mcpReadText(
+    target: import("./index.js").McpTargetAddress,
+  ): Promise<import("./index.js").McpTextRead>;
+  mcpSaveText(
+    request: import("./index.js").McpSaveText,
+  ): Promise<import("./index.js").McpManagementResult>;
+  mcpBackups(
+    target: import("./index.js").McpTargetAddress,
+  ): Promise<import("./index.js").McpBackupEntry[]>;
+  mcpPreviewBackup(
+    request: import("./index.js").McpBackupRequest,
+  ): Promise<import("./index.js").McpBackupPreview>;
+  mcpRestore(
+    request: import("./index.js").McpRestore,
+  ): Promise<import("./index.js").McpManagementResult>;
+  mcpPreviewReset(
+    request: import("./index.js").McpResetSelection,
+  ): Promise<import("./index.js").McpResetPreview>;
+  mcpReset(
+    request: import("./index.js").McpResetRequest,
+  ): Promise<import("./index.js").McpManagementResult>;
   mcpTargets(): Promise<import("./index.js").McpManagementTargets>;
   mcpRead(
     target: import("./index.js").McpTargetAddress,
@@ -1045,7 +1066,14 @@ export const parseSearchSummaryRequestId = (value: unknown): string =>
   parseValue(memoryRequestIdSchema, value);
 
 export {
+  decodeMcpText,
+  encodeMcpText,
+  MCP_COMPLETION_SCHEMA,
   MCP_CONNECTOR_TEMPLATES,
+  MCP_EMPTY_TEXT,
+  type McpBackupEntry,
+  type McpBackupPreview,
+  type McpBackupRequest,
   type McpManagementRead,
   type McpManagementResult,
   type McpManagementTarget,
@@ -1053,11 +1081,22 @@ export {
   type McpMovePreview,
   type McpMovePreviewRequest,
   type McpMoveRequest,
+  type McpResetPreview,
+  type McpResetRequest,
+  type McpResetSelection,
+  type McpRestore,
   type McpSaveRequest,
+  type McpSaveText,
   type McpTargetAddress,
+  type McpTextRead,
+  mcpBackupSchema,
   mcpMovePreviewSchema,
   mcpMoveSchema,
+  mcpResetPreviewSchema,
+  mcpResetSchema,
+  mcpRestoreSchema,
   mcpSaveSchema,
+  mcpSaveTextSchema,
   mcpTargetSchema,
   parseMcpDefinitionText,
   parseMcpManagement,
