@@ -2,6 +2,8 @@
 
 - Revision / local diff:
 - Environment (headless browser/native CI, runtime, fixture providers):
+- Assigned checkout / task branch / revision; host versus container commands:
+- Owned container labels / process identities / ports; shared-host coordination:
 - Scope selected from behavior and reported starting state:
 - Overall: PASS / FAIL / BLOCKED (any required blocked/failed journey prevents PASS)
 

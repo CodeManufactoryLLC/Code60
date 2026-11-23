@@ -71,7 +71,8 @@ npm run dev
 Preparation prints this worktree's gateway and Vite/HMR URLs. The editor forwards
 its assigned pair, preserving the same local port numbers. Open the printed gateway
 URL using `127.0.0.1` rather than `localhost`. Approve no remapping to different
-ports: free an occupied port and retry. Both servers retain their loopback bindings and existing
+ports: identify an occupied port's owner and stop only your own listener/forwarding,
+or coordinate with its owner before retrying. Both servers retain their loopback bindings and existing
 Host/Origin checks. No Docker ports are published to the LAN.
 
 React Fast Refresh preserves the backend; compiled backend changes restart only
@@ -107,6 +108,12 @@ synthetic identity locally in test repositories or perform commits on the host.
 
 ## Concurrent agents
 
+Read the [shared-host agent rules](../AGENTS.md#concurrent-work-on-a-shared-host)
+and [host/container command guide](../CONTRIBUTING.md#shared-host-development).
+Confirm your assigned checkout/branch and record its labels, ports, owned processes
+and evidence paths. An idle worktree or stopped container may still belong to
+another task; availability is not proof of ownership.
+
 Give each agent a separate Git worktree and run the same host preparation/startup
 commands from each worktree. Containers, images, dependency/build/model/browser
 caches, development state and test evidence are separate. Agents can remain on
@@ -119,7 +126,9 @@ Pairs are drawn from 40000–59999 and persist across `down`/`up`; preparation p
 both URLs and writes matching container and editor ports. Unrelated listeners are
 skipped for a new reservation. An occupied saved port produces an error instead
 of silently changing the origin. Close existing forwarding before rerunning
-preparation/startup. The editor also requires the exact local ports, covering
+preparation/startup only when you own that forwarding session. If an unrelated
+listener owns a saved port, coordinate with its owner/user instead of killing it
+or changing the saved pair. The editor also requires the exact local ports, covering
 listeners that appear after preparation. Independent repositories have separate
 registries; occupied host ports are still checked, but reservations between
 unrelated repositories are not coordinated.
@@ -128,10 +137,16 @@ Both worktrees can run development servers, headless browser journeys and editor
 forwarding concurrently. Stop a foreground development server before running its
 development browser journey, which tests that worktree's selected port pair.
 Docker CPU/memory remains shared; each container limits Vitest to two workers.
+Avoid competing full host checks during emulated container checks. Preserve
+resource-related failures, then coordinate load before rerunning; keep existing
+timeouts, retry policy and coverage gates.
 
 `down` or a cancelled `exec` removes only that worktree's containers/images and
 leaves another worktree running. Multiple agents sharing one worktree also share
-its files and container lifecycle. Port reservations are retained with caches;
+its files and container lifecycle: a worktree label does not establish session
+ownership. Coordinate an explicit handoff before reusing or stopping its container.
+Do not restart Docker, switch its shared context or kill processes by executable name as
+task cleanup. Port reservations are retained with caches;
 never delete a preparation lock while another preparation process owns it.
 
 ## Cleanup and failures

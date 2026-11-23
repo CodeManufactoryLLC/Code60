@@ -45,6 +45,13 @@ Use the existing harness, not a new QA plugin or a live agent.
 
 ## Run safely
 
+- Follow the [shared-host rules](../../../AGENTS.md#concurrent-work-on-a-shared-host).
+  Record the assigned checkout/branch, selected host/container environment, owned
+  process/container identities, ports and evidence paths before execution. Do not
+  stop another task's listener or container, change shared Docker/Git settings,
+  or treat a worktree label as ownership of every process in that container.
+  Keep worker caps and coordinate heavy jobs; preserve failures and investigate
+  resource contention before rerunning without weakening test thresholds.
 - Run focused unit/static checks first, then `npm run check`. This command does
   **not** run the browser E2E suite.
 - Build and exercise the production path with `npm run test:browser`. Use
