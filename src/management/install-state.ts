@@ -70,6 +70,13 @@ export async function readInstallation(
   const value = JSON.parse(file.text) as InstallationRecord;
   if (
     value.schema !== 1 ||
+    typeof value.id !== "string" ||
+    typeof value.home !== "string" ||
+    typeof value.bin !== "string" ||
+    typeof value.launcher !== "string" ||
+    absoluteInstallationPath(value.home) !== value.home ||
+    value.bin !== join(value.home, ".local/bin") ||
+    value.launcher !== join(value.bin, "code60") ||
     !/^[a-f0-9-]{36}$/.test(value.id) ||
     value.root !== paths.root ||
     value.home !== paths.home ||

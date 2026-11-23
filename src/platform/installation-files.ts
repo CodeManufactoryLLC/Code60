@@ -83,32 +83,26 @@ export async function installationSnapshot(
   privateMode = false,
 ): Promise<{ text: string; identity: FileIdentity } | null> {
   await installationDirectory(dirname(path));
-  const before = await lstat(path, { bigint: true }).catch((error: unknown) => {
-    if (installationFileCode(error) !== "ENOENT") throw error;
-    return null;
+  const file = await open(
+    path,
+    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+  ).catch((error: unknown) => {
+    if (installationFileCode(error) === "ENOENT") return null;
+    if (installationFileCode(error) === "ELOOP") throw new Error("Unsafe installation file link");
+    throw error;
   });
-  if (!before) return null;
-  if (
-    !before.isFile() ||
-    before.isSymbolicLink() ||
-    before.nlink !== 1n ||
-    before.uid !== BigInt(uid()) ||
-    before.size > BigInt(maximum) ||
-    before.mode & 0o7022n ||
-    (privateMode && before.mode & 0o077n)
-  )
-    throw new Error("Unsafe installation file ownership, size or permissions");
-  const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  if (!file) return null;
   try {
     const start = await file.stat({ bigint: true });
     if (
-      start.dev !== before.dev ||
-      start.ino !== before.ino ||
+      !start.isFile() ||
+      start.nlink !== 1n ||
+      start.uid !== BigInt(uid()) ||
       start.size > BigInt(maximum) ||
-      start.ctimeNs !== before.ctimeNs ||
-      start.mtimeNs !== before.mtimeNs
+      start.mode & 0o7022n ||
+      (privateMode && start.mode & 0o077n)
     )
-      throw new Error("Installation file changed or exceeded its limit");
+      throw new Error("Unsafe installation file ownership, size or permissions");
     const bytes = Buffer.alloc(Number(start.size) + 1);
     let size = 0;
     while (size < bytes.length) {

@@ -26,6 +26,7 @@ import {
   installationSnapshot,
   lockInstallation,
   publishInstallationLink,
+  verifyInstallationNode,
   writeInstallationFile,
 } from "../src/platform/index.js";
 
@@ -36,6 +37,16 @@ afterEach(async () => {
     await chmod(root, 0o700).catch(() => {});
     await rm(root, { recursive: true, force: true });
   }
+});
+it("rejects writable Node runtime bindings without modifying them", async () => {
+  const home = await mkdtemp(join(tmpdir(), "code60 node identity "));
+  roots.push(home);
+  const node = join(home, "node");
+  await writeFile(node, "runtime fixture", { mode: 0o700 });
+  expect(await verifyInstallationNode(node)).toBe(await realpath(node));
+  await chmod(node, 0o770);
+  await expect(verifyInstallationNode(node)).rejects.toThrow("Unsafe Node executable");
+  expect((await lstat(node)).mode & 0o777).toBe(0o770);
 });
 async function fixture() {
   const home = await realpath(await mkdtemp(join(tmpdir(), "code60 install ' spaces ")));
@@ -456,4 +467,19 @@ it("preserves UTF-8 BOM, original mode and bytes under a restrictive umask", asy
   }
   expect((await readFile(path, "utf8")).startsWith(original)).toBe(true);
   expect((await lstat(path)).mode & 0o777).toBe(0o644);
+});
+
+it("the standalone launcher rejects incomplete receipts before importing the application", async () => {
+  const f = await fixture();
+  await installManagedRelease(f.options);
+  const path = join(f.root, "installation.json");
+  const original = JSON.parse(await readFile(path, "utf8"));
+  for (const field of ["home", "bin", "launcher"]) {
+    const record = { ...original };
+    delete record[field];
+    await writeFile(path, JSON.stringify(record), { mode: 0o600 });
+    await expect(execute(f.launcher, ["must-not-run"], { env: f.env })).rejects.toThrow(
+      "Invalid installation receipt",
+    );
+  }
 });

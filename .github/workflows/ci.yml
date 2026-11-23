@@ -19,6 +19,20 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: "24", cache: npm, package-manager-cache: false }
       - run: npm ci
+      - name: Prepare private Node runtime for installation checks
+        run: |
+          node --input-type=module <<'NODE'
+          import { copyFile, chmod, mkdir } from 'node:fs/promises';
+          import { join } from 'node:path';
+          import { appendFileSync } from 'node:fs';
+          // Hosted tool-cache executables can be group writable. Exercise the
+          // installation's strict runtime checks with a private disposable copy.
+          const bin = join(process.env.RUNNER_TEMP, 'code60-private-node', 'bin');
+          await mkdir(bin, { recursive: true, mode: 0o700 });
+          await copyFile(process.execPath, join(bin, 'node'));
+          await chmod(join(bin, 'node'), 0o700);
+          appendFileSync(process.env.GITHUB_PATH, `${bin}\n`);
+          NODE
       - run: npm run check
       - uses: actions/upload-artifact@v7.0.2
         if: always()
