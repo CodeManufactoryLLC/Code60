@@ -4,9 +4,9 @@ import { createReadStream } from "node:fs";
 import {
   chmod,
   cp,
-  lstat,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   realpath,
   rm,
@@ -82,7 +82,7 @@ try {
   assert.equal(await bootstrapMain(["setup", "--no-open"], options), 0);
   const launcher = join(home, ".local/bin/code60"),
     database = join(env.XDG_DATA_HOME, "code60/databases/default.sqlite");
-  await assert.rejects(lstat(database), { code: "ENOENT" });
+  await assert.rejects(readdir(dirname(database)), { code: "ENOENT" });
   assert.equal(supervisor.pid(), null);
   assert.equal(
     await bootstrapMain(["setup", "--yes", "--no-open"], {

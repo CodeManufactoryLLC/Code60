@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 const { backendSupervisor } = await import(
@@ -23,8 +23,8 @@ await mkdir("/work/processes");
 await mkdir("/work/driver-home", { mode: 0o700 });
 const selection = `${env.XDG_STATE_HOME}/code60/desktop.json`,
   database = "/installation/code60/databases/default.sqlite";
-await assert.rejects(stat(selection), { code: "ENOENT" });
-await assert.rejects(stat(database), { code: "ENOENT" });
+await assert.rejects(readdir(`${env.XDG_STATE_HOME}/code60`), { code: "ENOENT" });
+await assert.rejects(readdir("/installation/code60/databases"), { code: "ENOENT" });
 await mkdir(`${env.XDG_CONFIG_HOME}/code60`, { recursive: true });
 await writeFile(
   `${env.XDG_CONFIG_HOME}/code60/config.json`,

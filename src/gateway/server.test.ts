@@ -4,6 +4,7 @@ import { createServer, request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
+import { readPrivateJson } from "../platform/index.js";
 import { pairingControl } from "./pairing.js";
 import { managementRequest, startGateway } from "./server.js";
 
@@ -442,9 +443,10 @@ it("persists an explicit choice matching the default without disconnecting the b
 
 it("prepares a database only through authenticated payload-free private management", async () => {
   const { gateway, env, directory } = await fixture();
-  const saved = JSON.parse(
-    await readFile(join(directory, "state/code60/gateway/connection.json"), "utf8"),
-  ) as { token: string };
+  const saved = (await readPrivateJson(
+    join(directory, "state/code60/gateway/connection.json"),
+    4096,
+  )) as { token: string };
   const call = (headers: Record<string, string>, body?: string) =>
     fetch(`${gateway.origin}/management/prepare-database`, {
       method: "POST",

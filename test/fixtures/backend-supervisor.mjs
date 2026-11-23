@@ -29,7 +29,7 @@ export async function backendSupervisor({ directory, application, env, log }) {
     assert.deepEqual(saved.runtime.args, [join(application, "dist/gateway/main.js")]);
     for (const key of ["HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME"])
       assert.equal(saved.runtime.env[key], env[key]);
-    const { userServiceDefinition } = await import(
+    const { userServiceDefinition, installationSnapshot } = await import(
       pathToFileURL(join(application, "dist/platform/index.js")).href
     );
     const expected = userServiceDefinition(
@@ -40,11 +40,10 @@ export async function backendSupervisor({ directory, application, env, log }) {
       "backend",
     );
     assert.equal(expected.path, unit);
-    const info = await lstat(unit);
-    assert.ok(info.isFile() && !info.isSymbolicLink());
-    assert.equal(info.nlink, 1);
-    assert.equal(info.mode & 0o777, 0o600);
-    assert.equal(await readFile(unit, "utf8"), expected.contents);
+    const definition = await installationSnapshot(unit, 65536, true);
+    assert.ok(definition);
+    assert.equal(definition.identity.mode, 0o600);
+    assert.equal(definition.text, expected.contents);
     const file = await open(log, "a", 0o600);
     child = spawn(saved.runtime.executable, saved.runtime.args, {
       env: { ...env, ...saved.runtime.env, CODE60_TEST_BACKEND_SOCKET: socket },

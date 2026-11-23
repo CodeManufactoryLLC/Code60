@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { constants } from "node:fs";
 import { link, lstat, open } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
   absoluteInstallationPath,
   createInstallationParents,
-  createPrivateFileSync,
   installationDirectory,
   installationFileCode,
   removeOwnedInstallationFile,
@@ -80,22 +80,25 @@ export async function prepareSetupDatabase(
     });
     if (!exists) {
       const temporary = join(dirname(path), `.code60-database-${randomUUID()}.sqlite`);
-      createPrivateFileSync(temporary);
-      const owned = await lstat(temporary, { bigint: true });
+      const file = await open(
+        temporary,
+        constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+        0o600,
+      );
+      const owned = await file.stat({ bigint: true });
       try {
         openProjectDatabase(temporary, true).close();
-        const file = await open(temporary, "r");
-        try {
-          await file.sync();
-        } finally {
-          await file.close();
-        }
+        await file.sync();
         await inspectSetupDatabase(temporary);
         await link(temporary, path).catch((error: unknown) => {
           if (installationFileCode(error) !== "EEXIST") throw error;
         });
       } finally {
-        await removeOwnedInstallationFile(temporary, owned);
+        try {
+          await file.close();
+        } finally {
+          await removeOwnedInstallationFile(temporary, owned);
+        }
       }
       await syncInstallationDirectory(dirname(path));
     }
