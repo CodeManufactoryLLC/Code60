@@ -6,7 +6,7 @@ Code60 is distributed as a Node 24 npm tarball. Node and npm are prerequisites; 
 
 1. Create a release-preparation branch from current main.
 2. Run `npm version <major|minor|patch> --no-git-tag-version`. Commit package.json and package-lock.json together. This browser/runtime migration is a breaking supported-interface change; its first release requires a major bump.
-3. Run `npm run check`, `npm run prepare:models`, `npm run test:browser`, `npm run package:app` and `npm run test:packaged`.
+3. Run `npm run check`, `npm run prepare:models`, `npm run test:browser`, `npm run package:app` and `npm run test:packaged`. Run `npm run test:packaged:clean` on a host with a Linux Docker engine; this also gates CI using the package job's exact artifact.
 4. Validate the installed tarball and Node sidecars on macOS Apple Silicon and Linux x64. Test login-service behavior only in isolated, authorized environments. Container checks do not prove native macOS compatibility.
 5. Merge the release PR only after CI passed. Protected main/dev branches must never be bypassed.
 

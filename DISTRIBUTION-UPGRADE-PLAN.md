@@ -167,6 +167,13 @@ a linked worktree. No host service, provider credential or shell profile changes
 
 ## Phase 2 — Clean installation acceptance harness
 
+**Status:** implemented. Fresh non-root Linux x64 customer/driver runs pass the
+installed golden journey, offline model and negative probes. Concurrent runs and
+independent cleanup are validated; terminal cancellation exits 130 with verified
+owned cleanup. Installation may access public npm; runtime networking is disabled.
+Real native service validation remains outside this harness. Required PR CI must
+pass before delivery.
+
 **PR outcome:** packaged installation is tested independently of the configured
 development environment.
 

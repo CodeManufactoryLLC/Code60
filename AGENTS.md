@@ -75,6 +75,11 @@ environments.
   HOME/config/state. They exercise the built Node backend and real UI. Never install a
   real user service or use live providers during routine testing. Native service validation
   requires an explicitly isolated/authorized environment. Unit/static checks do not prove E2E success.
+- Run `npm run test:packaged:clean` on the host for the
+  [clean installation acceptance harness](test/clean-install/README.md), after building
+  the tarball. It isolates the installed customer from the checkout and browser driver;
+  preserve its run-specific evidence and verify owned Docker cleanup. Never mount
+  the Docker socket into a development or customer container to run it.
 - Put unit tests next to the code as `*.test.ts`. Cross-cutting tests live in
   `test/`. `test/boundaries.test.ts` enforces the module dependency rules from
   `ARCHITECTURE.md`; update it only together with that document.

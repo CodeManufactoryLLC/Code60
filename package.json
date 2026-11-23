@@ -42,6 +42,7 @@
     "devcontainer": "node scripts/devcontainer.mjs",
     "start": "node dist/management/main.js open",
     "test:packaged": "node scripts/test-package.mjs",
+    "test:packaged:clean": "node scripts/test-clean-install.mjs",
     "test:memory:performance": "npm run build && node scripts/benchmark-memory.mjs",
     "service": "node dist/management/main.js service",
     "test:browser": "npm run build && playwright test",
