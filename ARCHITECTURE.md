@@ -2022,6 +2022,12 @@ Native repair refuses to replace a registration after a failed stop unless nativ
 inspection proves the service stopped (launchd must show the job absent from a successful domain inventory). Native supervisor PID and socket responder PID must match before automatic stop or reactivation. Update recovery holds an exclusive private process-owned lock; concurrent launches cannot consume the same intent. Automatic reconciliation never replaces newer or unknown release versions. AppImage executable and canonical ancestor ownership/permissions must exclude replacement by other users before any pause, stop or registration rewrite. No app version is persisted in registration; the live process supplies it. Stop, upgrade and reactivation failures
 remain visible and retain recovery intent; definitions, occurrence history and
 worktrees are never removed or replayed by this sequence.
+Native inspection captures at most 1 MiB per output stream with a five-second
+command deadline, accommodating large launchd GUI-domain inventories while
+rejecting overflow or unsuccessful/incomplete reads as absence evidence.
+After a failed launchd bootout, Stop and Uninstall use the same positive unload
+verification as Repair; an already absent job permits completion, while a loaded
+job or unavailable supervisor preserves the registration and reports failure.
 Release staging verifies channel metadata against the exact final artifacts.
 The macOS ZIP and platform channel YAML files are published alongside installers.
 
