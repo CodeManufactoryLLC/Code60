@@ -76,6 +76,11 @@ Use the existing harness, not a new QA plugin or a live agent.
   Verify extraction needs no npm/compiler/scripts and record both targets' exact
   descriptors, model results and owned staging/process cleanup. Bootstrap help and
   unavailable setup are acceptance checks, not evidence of a working installer.
+- Managed installation changes follow the [installation internals](../../../docs/distribution/installation.md).
+  Exercise the managed clean-install mode after cache removal and real login/
+  interactive shells. Keep artifact-only and legacy journeys independent. Assert
+  owned receipts/current pointer, command identity, preserved profile contents,
+  cancellation and lock behavior. Never edit host profiles or install host fish.
 - If a required runtime, browser, model or platform is unavailable, mark that
   journey BLOCKED. Do not substitute static checks for runtime evidence.
 - Close test browser contexts, isolated gateways and provider processes on every

@@ -100,6 +100,18 @@ describe("browser and package validation", () => {
       ),
     ).toBe(true);
     expect(ci.jobs.passed.steps[0].env.PAYLOAD).toContain("needs.payload.result");
+    expect(
+      ci.jobs.payload.steps.some(
+        (step) =>
+          step.run === "npm run test:packaged:clean -- --managed release/payloads/linux-x64.json",
+      ),
+    ).toBe(true);
+    expect(
+      ci.jobs.payload.steps.some(
+        (step) =>
+          step.run === "npm run devcontainer -- exec npm run test:installation -- --require-fish",
+      ),
+    ).toBe(true);
     expect(JSON.stringify(ci)).not.toContain("electron");
   });
   it("runs native Apple Silicon validation without signing secrets or real service installation", () => {

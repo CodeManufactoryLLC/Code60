@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { bootstrapAdapter } from "./distribution/bootstrap-adapter.mjs";
 import { descriptor } from "./distribution/descriptor.mjs";
 
 const execute = promisify(execFile);
@@ -105,12 +106,52 @@ export async function cleanupAcceptance(run, id) {
   return inventory;
 }
 
-async function stage(context, input, harness, archive, version, payload) {
+async function stage(context, input, harness, archive, version, payload, managed) {
   await mkdir(join(context, "driver/test/fixtures"), { recursive: true });
   await mkdir(join(context, "driver/test/clean-install"), { recursive: true });
   await mkdir(input);
   await mkdir(join(harness, "bin"), { recursive: true });
   await cp(archive, join(input, "package.tgz"));
+  const application = managed
+    ? `/installation/customer-home/.local/share/code60/releases/${payload.archive.sha256}`
+    : "/installation/product/node_modules/code60";
+  await writeFile(
+    join(harness, "layout.json"),
+    JSON.stringify({
+      application,
+      fakeAgent: managed
+        ? "/installation/fixtures/fake-agent.mjs"
+        : `${application}/fixtures/fake-agent.mjs`,
+      launcher: managed ? "/installation/customer-home/.local/bin/code60" : null,
+    }),
+  );
+  if (managed) {
+    await mkdir(join(harness, "bootstrap/lib"), { recursive: true });
+    await mkdir(join(harness, "bootstrap/bin"));
+    await cp(
+      join(repository, "scripts/distribution/bootstrap.mjs"),
+      join(harness, "bootstrap/bin/code60.mjs"),
+    );
+    await cp(join(repository, "build/distribution"), join(harness, "bootstrap/lib/runtime"), {
+      recursive: true,
+    });
+    for (const name of ["acquire.mjs", "archive.mjs", "descriptor.mjs"])
+      await cp(
+        join(repository, "scripts/distribution", name),
+        join(harness, "bootstrap/lib", name),
+      );
+    await writeFile(join(harness, "bootstrap/package.json"), '{"type":"module","private":true}');
+    await writeFile(
+      join(harness, "bootstrap/platforms.json"),
+      JSON.stringify({ "linux-x64": payload }),
+    );
+    await writeFile(join(harness, "bootstrap/lib/index.mjs"), bootstrapAdapter);
+    await cp(
+      join(repository, "test/clean-install/install-managed.mjs"),
+      join(harness, "install-managed.mjs"),
+    );
+  }
+
   if (payload) {
     await writeFile(join(input, "descriptor.json"), JSON.stringify(payload));
     await mkdir(join(harness, "scripts/distribution"), { recursive: true });
@@ -162,7 +203,8 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
   const root = await realpath(directory);
   let payload;
   let archive;
-  if (args[0] === "--payload") {
+  const managed = args[0] === "--managed";
+  if (args[0] === "--payload" || managed) {
     if (args.length !== 2)
       throw new Error("Use npm run test:packaged:clean -- --payload <descriptor.json>");
     const path = resolve(root, args[1]);
@@ -260,7 +302,15 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
     dockerReady = true;
     const lock = JSON.parse(await readFile(join(root, "package-lock.json"), "utf8"));
     const version = lock.packages["node_modules/@playwright/test"].version;
-    summary.artifactSha256 = await stage(context, input, harness, archive, version, payload);
+    summary.artifactSha256 = await stage(
+      context,
+      input,
+      harness,
+      archive,
+      version,
+      payload,
+      managed,
+    );
     summary.playwright = version;
     const uid = process.platform === "linux" ? process.getuid() || 1000 : 1000;
     const gid = process.platform === "linux" ? process.getgid() : 1000;
@@ -352,7 +402,11 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
             ...mount("volume", state, "/work"),
             image,
             "node",
-            payload ? "/harness/test/clean-install/install-payload.mjs" : "/harness/install.mjs",
+            managed
+              ? "/harness/install-managed.mjs"
+              : payload
+                ? "/harness/test/clean-install/install-payload.mjs"
+                : "/harness/install.mjs",
           ],
           4 * 60_000,
         );
@@ -487,7 +541,12 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
         await start(
           container,
           work,
-          mount("volume", mask, `/installation/product/node_modules/code60${target}`, true),
+          mount(
+            "volume",
+            mask,
+            `${managed ? `/installation/customer-home/.local/share/code60/releases/${payload.archive.sha256}` : "/installation/product/node_modules/code60"}${target}`,
+            true,
+          ),
           kind === "model" ? ["sleep", "infinity"] : [],
           kind,
         );

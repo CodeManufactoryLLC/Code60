@@ -242,6 +242,16 @@ platforms, malformed archives and missing assets fail before activation.
 
 ## Phase 4 — Persistent installation, launcher and shell integration
 
+**Status:** implemented and locally validated. Managed installation, cache-independent
+launchers, explicit owned repair, atomic activation, non-reclaiming locks and
+previewed shell integration are covered by focused and full checks. Linux Bash,
+zsh and fish startup cases and concurrent managed golden journeys pass; native
+Bash/zsh and packed-bootstrap managed smoke pass on this Mac. Fish is unavailable
+on this host and is required on the disposable native CI runner. Required PR CI
+and exact-commit native validation must pass before delivery. This is the first
+supported layout, with no legacy recognition, migration or compatibility layer.
+Public setup remains Phase 5. See [installation internals](docs/distribution/installation.md).
+
 **PR outcome:** an installed release has a durable `code60` command independent
 of npm's cache.
 

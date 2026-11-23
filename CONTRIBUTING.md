@@ -412,3 +412,12 @@ See the [artifact workflow](docs/distribution/artifacts.md) for `npm run package
 acceptance. Build Linux in the pinned amd64 container and macOS on Apple Silicon.
 Retain per-run evidence and remove owned test resources; do not publish artifacts,
 install a login service or enable public setup during this contributor workflow.
+
+## Managed installation acceptance
+
+See [installation internals](docs/distribution/installation.md). Standard tests build
+the narrow Node-only distribution closure for real launcher subprocesses.
+`npm run test:installation` exercises isolated shell fixtures; require fish in the
+Linux container and disposable native runner. The managed clean-install mode adds
+the full installed production golden journey after removing bootstrap/npm caches.
+No contributor check edits your profiles or installs your login service.
