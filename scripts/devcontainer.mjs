@@ -1,9 +1,10 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { withDevelopmentPorts } from "./devcontainer-ports.mjs";
 
 const execute = promisify(execFile);
 const repository = fileURLToPath(new URL("..", import.meta.url));
@@ -16,8 +17,12 @@ const cacheTargets = {
   models: "models",
 };
 
-export function containerConfiguration(root, common, uid = 1000, gid = 1000) {
-  const id = createHash("sha256").update(root).digest("hex").slice(0, 16);
+function workspaceId(root) {
+  return createHash("sha256").update(root).digest("hex").slice(0, 16);
+}
+
+export function containerConfiguration(root, common, uid = 1000, gid = 1000, pair) {
+  const id = workspaceId(root);
   const project = `code60-dev-${id}`;
   const labels = { [label]: id };
   const caches = Object.keys(cacheTargets);
@@ -64,8 +69,8 @@ export function containerConfiguration(root, common, uid = 1000, gid = 1000) {
           environment: {
             HOME: "/home/node",
             SHELL: "/bin/bash",
-            CODE60_DEV_GATEWAY_PORT: "43160",
-            CODE60_VITE_PORT: "43161",
+            CODE60_DEV_GATEWAY_PORT: String(pair.gateway),
+            CODE60_VITE_PORT: String(pair.vite),
             PLAYWRIGHT_BROWSERS_PATH: cacheTargets.browsers,
             GIT_CONFIG_GLOBAL: "/dev/null",
             GIT_TERMINAL_PROMPT: "0",
@@ -170,7 +175,7 @@ export async function manageContainer(directory, action, args = [], ports = {}) 
   );
   const uid = process.platform === "linux" ? process.getuid() || 1000 : 1000;
   const gid = process.platform === "linux" ? process.getgid() : 1000;
-  const { id, compose } = containerConfiguration(root, common, uid, gid);
+  const id = workspaceId(root);
   const local = join(root, ".devcontainer/local");
   const cli = fileURLToPath(import.meta.resolve("@devcontainers/cli/devcontainer.js"));
   const cliArgs = [
@@ -182,7 +187,33 @@ export async function manageContainer(directory, action, args = [], ports = {}) 
   const write = ports.write ?? ((message) => process.stdout.write(message));
 
   if (action === "prepare") {
-    await save(join(local, "compose.json"), compose);
+    await withDevelopmentPorts(
+      root,
+      common,
+      id,
+      async (pair) => {
+        const { compose } = containerConfiguration(root, common, uid, gid, pair);
+        const template = JSON.parse(
+          await readFile(new URL("../.devcontainer/template.json", import.meta.url), "utf8"),
+        );
+        await save(join(local, "compose.json"), compose);
+        await save(join(root, ".devcontainer/devcontainer.json"), {
+          ...template,
+          forwardPorts: [pair.gateway, pair.vite],
+          portsAttributes: {
+            [pair.gateway]: { label: "Code60", protocol: "http", requireLocalPort: true },
+            [pair.vite]: {
+              label: "Vite / Fast Refresh",
+              protocol: "http",
+              requireLocalPort: true,
+              onAutoForward: "silent",
+            },
+          },
+        });
+        write(`Gateway: http://127.0.0.1:${pair.gateway}\nVite: http://127.0.0.1:${pair.vite}\n`);
+      },
+      ports,
+    );
     await save(join(local, "editor-profile/User/settings.json"), {
       "dev.containers.copyGitConfig": false,
       "dev.containers.gitCredentialHelperConfigLocation": "none",

@@ -128,6 +128,11 @@ restart journey and container packaged/offline-model smoke checks pass. Actual
 VS Code port forwarding remains an explicitly unverified manual acceptance item;
 no native login-service or macOS Transmission validation is claimed.
 
+The concurrency follow-up reserves stable gateway/Vite pairs per worktree and
+generates matching editor configuration. Two Linux containers passed the existing
+first-use and development journeys simultaneously; removing one preserved the
+other's backend, Vite and Git state. Actual editor forwarding remains unverified.
+
 **PR outcome:** contributors can develop and run existing checks in a reproducible
 Linux environment before distribution behavior changes.
 

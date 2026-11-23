@@ -5,6 +5,37 @@ React browser app with a unified login backend. Keep
 changes reliable in both the desktop app and automated, non-interactive
 environments.
 
+## Concurrent work on a shared host
+
+- Before editing, verify the canonical checkout, current branch, Git status and
+  registered worktrees. Reuse the task's assigned checkout; otherwise create a
+  separate task branch/worktree. Preserve existing changes. Never switch, reset,
+  clean or remove another task's checkout, or assume an idle worktree is available.
+- Record your worktree/branch and any container labels, ports, owned processes and
+  evidence paths in the task's QA report or handoff. A container label identifies
+  a worktree, not an agent session. One independent agent owns that worktree's
+  container lifecycle; `down` or cancelling `exec` can stop every process in it.
+- Linked worktrees share Git refs, stashes, repository configuration and hooks.
+  Do not manipulate another task's branch/stash or run repository-wide cleanup.
+  Identify your own temporary stash by its exact commit ID, not a moving stash
+  index. Keep temporary Git options command-local; never activate hooks implicitly.
+- Follow the [shared-host workflow](CONTRIBUTING.md#shared-host-development) for
+  host versus container commands. With the container workflow, run builds/tests
+  inside your own container and authenticated Git operations on the host. Native
+  host development remains supported with its own checkout/dependencies.
+- Diagnose occupied ports and process ownership before acting. Stop only your own
+  confirmed process or forwarding session. Do not use broad process kills, restart
+  Docker, switch its shared context or change engine resources to repair a local
+  task. Coordinate with the owner/user when another task is affected.
+- CPU, memory and disk remain shared. Keep the documented worker budget; avoid
+  overlapping a full host check with emulated container checks. Investigate
+  resource contention and coordinate heavy jobs before rerunning failed checks;
+  preserve failures and do not mask them by relaxing timeouts, retries or gates.
+- Clean up only resources you created and can identify. Use the helper from your
+  own checkout; verify owned containers/images are gone and retain caches/evidence.
+  Never prune Docker/Git globally, delete foreign locks or remove another task's
+  worktree. See the [container workflow](.devcontainer/README.md#concurrent-agents).
+
 ## Architecture and Module Rules
 
 - Read `ARCHITECTURE.md` before changing behavior. It defines the modules
@@ -37,6 +68,9 @@ environments.
   `npm run devcontainer` on the host with `prepare`, `up`, `exec` or `down`. Docker must already
   be running. Keep container dependencies separate from host files; clean up owned
   containers and exported images after tests, retaining documented caches.
+  Use one worktree/container per concurrent agent. Run preparation before editor
+  reopening; it generates matching unique ports. Never share a worktree's lifecycle
+  or bypass exact-origin forwarding with port remapping.
 - Run browser journeys with `npm run test:browser` using headless Playwright and isolated
   HOME/config/state. They exercise the built Node backend and real UI. Never install a
   real user service or use live providers during routine testing. Native service validation

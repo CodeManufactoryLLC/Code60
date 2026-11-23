@@ -89,9 +89,55 @@ use the documented editor or terminal workflow. Docker must already be running.
 Always finish a test session with `npm run devcontainer -- down`; it removes owned
 containers and exported images while preserving caches and test evidence.
 
-The editor workflow uses fixed loopback development ports 43160 (gateway) and
-43161 (Vite), forwarded without remapping. Ordinary host development keeps its
+Preparation reserves a stable gateway/Vite port pair for each worktree and generates
+matching editor forwarding without remapping. Agents in separate worktrees can
+develop and test concurrently; cleanup affects only its own worktree. Close existing
+forwarding before preparing again. Ordinary host development keeps its
 existing allocated ports. The container does not validate native login services.
+
+### Shared-host development
+
+Assume another agent may be using this host, even when no container is running.
+Follow the [agent ownership rules](AGENTS.md#concurrent-work-on-a-shared-host).
+Confirm your canonical checkout, branch, changes and registered worktrees before
+editing. Use the assigned worktree and a task-owned branch; create a separate
+worktree for an independent task instead of changing another checkout's branch.
+Record these identities and your resource/evidence paths in the QA report or handoff.
+
+For the container workflow, run these commands from your own checkout:
+
+| Location | Work |
+| --- | --- |
+| Host | Initial `npm ci` for the pinned CLI; `npm run devcontainer -- prepare`, `up`, `exec` and `down`; authenticated Git fetch/commit/push and PR operations. |
+| Container | Explicit dependency/Chromium/model preparation, development, builds and checks through `exec` or the isolated editor terminal. Use synthetic Git identities in test repositories. |
+
+For example, `npm run devcontainer -- exec npm run check` runs Linux checks with
+that worktree's dependencies. Plain `npm run check` on the host validates the
+native host environment. Record which environment you used; keep host/container
+dependencies and build output separate. Native host development is still supported.
+
+Linked worktrees share refs, stashes, repository configuration and hooks. Use
+command-local `git -c` options for temporary settings. If you temporarily stash
+your own changes, record the resulting commit ID and apply that exact stash;
+verify ownership again before dropping it. Another agent can move stash indices.
+Do not clear the stash list, alter another task's branch, change shared hook policy,
+or prune worktrees as routine task cleanup.
+
+Inspect a conflicting listener's identity before stopping it. If it belongs to
+another task or ownership is unclear, coordinate with its owner/user; do not kill
+it just to obtain a port. Do not restart Docker, change its context/resource
+allocation, or use broad process-killing/global cleanup commands to repair a
+single task. Worktree-scoped container labels do not prove that every process in
+that container belongs to your current session.
+
+Containers share the host's CPU, memory and disk. Keep their existing worker caps
+and schedule heavy jobs to fit available resources. In particular, avoid running
+the full native host suite alongside emulated container suites: existing
+five-second Git tests timed out when those overlapped during validation, while
+two concurrent container suites passed without the competing host suite. Preserve failure logs
+and diagnose contention before rerunning; do not raise timeouts or weaken gates
+to hide it. Remove only your task's confirmed resources, preserving caches/evidence
+and worktrees still owned by other tasks.
 
 ### Workflow QA
 

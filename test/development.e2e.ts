@@ -64,10 +64,15 @@ test("development: Fast Refresh preserves the backend and backend edits restart 
         },
       }),
     );
-    const gatewayPort = await freePort();
+    const gatewayPort = process.env.CODE60_DEV_GATEWAY_PORT
+      ? Number(process.env.CODE60_DEV_GATEWAY_PORT)
+      : await freePort();
     const origin = `http://127.0.0.1:${gatewayPort}`;
-    let vitePort = await freePort();
-    while (vitePort === gatewayPort) vitePort = await freePort();
+    let vitePort = process.env.CODE60_VITE_PORT
+      ? Number(process.env.CODE60_VITE_PORT)
+      : await freePort();
+    while (vitePort === gatewayPort && !process.env.CODE60_VITE_PORT) vitePort = await freePort();
+    if (vitePort === gatewayPort) throw new Error("Development test ports must differ");
     processHandle = await spawnOwnedProcess([process.execPath, "scripts/dev.mjs"], directory, {
       ...process.env,
       HOME: directory,

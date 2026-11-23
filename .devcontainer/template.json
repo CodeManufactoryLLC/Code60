@@ -15,16 +15,6 @@
     "GIT_ASKPASS": "/bin/false",
     "GIT_TERMINAL_PROMPT": "0"
   },
-  "forwardPorts": [43160, 43161],
-  "portsAttributes": {
-    "43160": { "label": "Code60", "protocol": "http", "requireLocalPort": true },
-    "43161": {
-      "label": "Vite / Fast Refresh",
-      "protocol": "http",
-      "requireLocalPort": true,
-      "onAutoForward": "silent"
-    }
-  },
   "customizations": {
     "vscode": {
       "settings": {
