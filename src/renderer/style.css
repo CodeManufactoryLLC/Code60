@@ -1,4 +1,3 @@
-@import "./styles/workflows.css";
 /* Ownership and precedence are explicit; feature sheets contain no global theme copies. */
 @layer vendor, tokens, base, neobrutalism, layout, components, utilities, accessibility;
 
@@ -17,6 +16,7 @@
 @import "./styles/memory-recall.css" layer(components);
 @import "./styles/automations.css" layer(components);
 @import "./styles/system-manager.css" layer(components);
+@import "./styles/workflows.css" layer(components);
 @import "./styles/tables.css" layer(components);
 @import "./styles/footer.css" layer(components);
 @import "./styles/chat.css" layer(components);

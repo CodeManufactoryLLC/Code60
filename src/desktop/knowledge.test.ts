@@ -732,7 +732,9 @@ it("describes workflow drafting and execution prerequisites without starting the
       id: "workflows",
       availability: expect.objectContaining({
         status: "available",
-        reason: expect.stringContaining("primary provider"),
+        reason: expect.stringContaining(
+          process.platform === "darwin" ? "staging.20" : "history is readable",
+        ),
       }),
     }),
   );

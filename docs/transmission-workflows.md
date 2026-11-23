@@ -4,7 +4,7 @@ Open **Apps → Workflows** to create and monitor ordered coding tasks. The page
 and retained history work without a project database. Execution currently requires
 macOS, external Node.js >=24.22.0 <25 with npm/npx, and a working Codex login.
 The first explicit start downloads/caches exactly
-`code60-transmission-server@0.1.0-staging.18` from npm. No login service is installed.
+`code60-transmission-server@0.1.0-staging.20` for new workflows from npm. No login service is installed.
 
 Choose **New workflow**, select the repository root and enter a workflow name and
 ordered tasks. Each task includes implementation instructions, independent
@@ -26,26 +26,27 @@ unstaged and eligible untracked files in an isolated worktree, preserving source
 files, HEAD and staging. Existing snapshot exclusions remain in effect. A worktree
 is not a sandbox. Transmission's Codex harness owns execution permissions.
 
-The status view distinguishes implementation, independent verification, repairs,
-questions and accepted tasks. Progress counts accepted tasks, not elapsed time.
-Select a task for its criteria and accepted verifier evidence; expand activity,
-repair feedback and accepted diff for additional evidence. Activity excerpts are
-labelled when incomplete; the display retains at most 1,000 events within one
-million characters. Reselect the workflow to page from the beginning again. Check results are
-verifier-reported evidence, not a guarantee of correctness. The accepted diff is
-cumulative from the initial saved-files baseline; it omits unfinished edits.
+Use the menu beside **Workflows** for New workflow, Refresh and Workflow history.
+The player shows accepted tasks, execution time and newest activity. Expand a
+numbered task for **View Configuration** and available verifier **View Results**.
+Reports include the verifier's verdict and check evidence. Expand **Workflow details**
+for checkout paths and approvals. **Accepted diff** contains changes through the
+last accepted revision. Activity retains up to 1,000 events within one million
+characters. Execution time is reconstructed from Transmission events and excludes
+confirmed paused intervals and waits for input. Incomplete timing shows Unavailable.
 
-Guidance is queued for a subsequent turn. Answer a pending question using its
-current offered choices. Cancellation waits for acknowledgement and preserves
-accepted work, partial edits and the worktree. A lost cancellation response leaves
-the outcome unconfirmed; refresh before deciding what to do next.
+**Pause workflow** stops the current sessions while preserving work. **Resume workflow**
+continues the same run with fresh sessions for the unfinished task. **Stop workflow**
+requires confirmation, waits for cleanup and permanently ends the run. Worktree
+files remain in place. **Steer** queues guidance for a subsequent turn. Answer a
+pending question using its offered choices. A lost response leaves the outcome
+unconfirmed. If stop acknowledgement is pending, use Stop workflow again to confirm cleanup for the same run.
 
-Work continues while Code60 is quit. Reopen Workflows and select its retained run
-to reconnect to the same engine. Opening pages and refreshing history never start
-the engine. **Start engine / reconnect** explicitly starts it if unavailable and
-can resume unfinished approved work. No automatic login/reboot startup is installed.
-Global Pause polling pauses observations only; desktop Stop all does not cancel
-Transmission work. Use **Cancel workflow** for that purpose.
+Work continues after Code60 quits. Opening history or refreshing never starts
+an engine. On disconnection, the player retains the last verified state.
+The header menu offers **Reconnect engine** for that workflow and explains that
+unfinished approved work may continue. Global Pause polling pauses observations.
+Desktop Stop all retains its desktop-owned scope.
 
 If a start is unconfirmed, preserve its worktree and use **Recover same start
 request**. This reuses the approved payload and idempotency key. Never create a
@@ -55,14 +56,32 @@ State is private beneath `$XDG_STATE_HOME/code60/workflows` (default
 `~/.local/state/code60/workflows`), separately from project databases and Relay.
 History is bounded to 200 workflows and 8 MiB; it is never deleted automatically.
 
-There is no automatic apply, merge, commit, push, message Undo integration,
-pause/resume or alternate execution provider. Retained worktrees can be reviewed
+There is no automatic apply, merge, commit, push, message Undo integration
+or alternate execution provider. Retained worktrees can be reviewed
 with normal Git tools. Source repositories and execution worktrees must not be
 replaced or redirected while a workflow owns them.
 
 ## Known server limitation
 
+Existing records without an engine version belong to staging.18. They retain their
+original engine, run ID and state directory. Pause and resume require staging.20.
 Transmission staging.18 can launch fresh worker sessions across engine restarts
 without consuming its documented retry allowance. This integration neither fixes
 nor hides that behavior. Automatic recovery does not establish exactly-once effects.
 Do not interpret a quiet/disconnected UI as evidence that execution stopped.
+
+## Prototype validation
+
+The Linux container journeys use a scripted Transmission HTTP engine, a fake
+drafting provider, the production desktop bridge and real Git repositories.
+They exercise manual and prompt-assisted starts, clarification and refinement,
+pause and same-run resume across reload, rejection and acceptance evidence,
+steering, permission choices, connection loss, and stop acknowledgment. A second
+journey opens an unversioned staging.18 registry and checks that actions reach
+its original engine. Independent assertions check the engine run ID, worker
+exit, retained worktree files, and unchanged source HEAD and index.
+
+Run the journeys with `npm run test:desktop:container -- --grep 'workflow: Transmission'`.
+The runner retains desktop and narrow screenshots in Light and Dark under its
+reported artifact directory. Live-provider execution and packaged macOS behavior
+require separate validation.

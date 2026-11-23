@@ -304,7 +304,7 @@ export class DesktopKnowledge {
       status = "available";
       reason =
         process.platform === "darwin"
-          ? "Workflow execution requires external Node >=24.22 <25 and Codex login; prompt drafting requires a verified primary provider."
+          ? "New staging.20 workflows support pause and resume; staging.18 history stays on its original engine. Workflow execution requires external Node >=24.22 <25 and Codex login; prompt drafting requires a verified primary provider."
           : "Workflow history is readable; Transmission execution requires macOS. Prompt drafting requires a verified primary provider.";
       action = "Open Apps → Workflows.";
     } else if (cap.id === "system-manager") {

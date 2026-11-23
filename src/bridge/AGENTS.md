@@ -176,3 +176,5 @@ work. This adds no preference, agent-write field, IPC endpoint or dependency.
 ## Transmission prototype
 
 Workflow requests accept opaque picker/form/workflow/request IDs, revisions and bounded definitions only. No paths, endpoints, executable/environment fields or generic execution authority. Draft output can change only name/tasks; workflow approval is a separate human action.
+
+Pause, resume and reconnect carry only the local workflow identity. The main process resolves the owning engine and run.

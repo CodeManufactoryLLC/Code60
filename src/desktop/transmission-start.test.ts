@@ -57,7 +57,7 @@ it("bootstraps only the pinned package in an isolated npm context and releases i
     string,
     NodeJS.ProcessEnv,
   ];
-  expect(command).toEqual(["npx", "-y", "code60-transmission-server@0.1.0-staging.18", "mcp"]);
+  expect(command).toEqual(["npx", "-y", "code60-transmission-server@0.1.0-staging.20", "mcp"]);
   expect(env.TRANSMISSION_STATE_DIR).toBe(join(f.root, "state"));
   expect(env.NPM_CONFIG_REGISTRY).toBe("https://registry.npmjs.org");
   expect(env.NPM_CONFIG_IGNORE_SCRIPTS).toBe("true");

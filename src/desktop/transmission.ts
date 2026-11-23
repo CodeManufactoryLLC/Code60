@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { z } from "zod";
-import { TRANSMISSION_VERSION } from "../bridge/index.js";
+import { TRANSMISSION_VERSION, type WorkflowRecord } from "../bridge/index.js";
 import { privateDirectory, readPrivateJson, spawnOwnedProcess } from "../platform/index.js";
 
 export interface TransmissionClient {
@@ -25,12 +25,15 @@ const operations = new Set([
   "answer_workflow_question",
   "send_workflow_message",
   "cancel_workflow",
+  "pause_workflow",
+  "resume_workflow",
 ]);
 export class LocalTransmission implements TransmissionClient {
   readonly supported = process.platform === "darwin";
   constructor(
     private readonly root: string,
     private readonly environment: Readonly<NodeJS.ProcessEnv>,
+    private readonly version: NonNullable<WorkflowRecord["engineVersion"]> = TRANSMISSION_VERSION,
   ) {}
   async call(
     operation: string,
@@ -50,7 +53,7 @@ export class LocalTransmission implements TransmissionClient {
         AbortSignal.timeout(
           operation === "health"
             ? 2_000
-            : operation === "cancel_workflow"
+            : operation === "cancel_workflow" || operation === "pause_workflow"
               ? 180_000
               : operation === "start_workflow"
                 ? 120_000
@@ -131,7 +134,7 @@ export class LocalTransmission implements TransmissionClient {
         NPM_CONFIG_SCRIPT_SHELL: "/bin/sh",
       });
       const child = await spawnOwnedProcess(
-        ["npx", "-y", `code60-transmission-server@${TRANSMISSION_VERSION}`, "mcp"],
+        ["npx", "-y", `code60-transmission-server@${this.version}`, "mcp"],
         temporary,
         environment,
       );

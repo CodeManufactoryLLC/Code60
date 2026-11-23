@@ -91,8 +91,15 @@ async function fixture() {
   );
   const env = { XDG_STATE_HOME: join(root, "state") };
   const deps = defaultDeps();
-  const open = () => {
-    const service = new DesktopWorkflows(env, deps, async () => repo, generate, client);
+  const open = (legacyClient?: TransmissionClient) => {
+    const service = new DesktopWorkflows(
+      env,
+      deps,
+      async () => repo,
+      generate,
+      client,
+      legacyClient,
+    );
     services.push(service);
     return service;
   };
@@ -380,4 +387,57 @@ it("refuses an outside registry replacement before worktree preparation or dispa
     "branch refs/heads/code60/transmission-",
   );
   expect(await readFile(path, "utf8")).toBe("outside replacement");
+});
+
+it("keeps unversioned history, control, reconnect and uncertain recovery on staging.18", async () => {
+  const f = await fixture();
+  const record = await f.start();
+  expect(record.engineVersion).toBe("0.1.0-staging.20");
+  await f.service.close();
+  services.splice(services.indexOf(f.service), 1);
+  const path = join(f.service.root, "registry.json");
+  const old = structuredClone(record);
+  delete old.engineVersion;
+  delete old.snapshot;
+  old.state = "uncertain";
+  await writeFile(path, JSON.stringify({ format: 1, version: "0.1.0-staging.18", entries: [old] }));
+  const legacy = {
+    supported: true,
+    call: vi.fn(f.call.getMockImplementation()!),
+    connect: vi.fn(async () => {}),
+  };
+  const reopened = f.open(legacy);
+  expect(await reopened.request({ action: "list" })).toMatchObject({
+    entries: [{ id: old.id, key: old.key }],
+  });
+  expect(legacy.connect).not.toHaveBeenCalled();
+  await reopened.request({ action: "reconnect", id: old.id });
+  await reopened.request({ action: "recover", id: old.id });
+  expect(legacy.call.mock.calls[0]?.slice(0, 2)).toEqual(f.call.mock.calls[0]?.slice(0, 2));
+  await reopened.request({ action: "read", id: old.id });
+  for (const action of ["pause", "resume"])
+    await expect(reopened.request({ action, id: old.id })).rejects.toThrow("staging.20");
+  await reopened.request({ action: "cancel", id: old.id });
+  expect(legacy.call.mock.calls.map(([op]) => op)).toEqual([
+    "start_workflow",
+    "get_workflow",
+    "cancel_workflow",
+  ]);
+  expect(f.call).toHaveBeenCalledTimes(1);
+});
+
+it("retains a pending stop after a lost acknowledgement until cleanup is confirmed", async () => {
+  const f = await fixture();
+  const { id } = await f.start();
+  f.offline();
+  await expect(f.service.request({ action: "cancel", id })).rejects.toThrow();
+  f.online();
+  f.snapshot.status = "cancelled";
+  f.snapshot.activeTaskIndex = null;
+  f.snapshot.eventCursor++;
+  expect(await f.service.request({ action: "read", id })).toMatchObject({
+    record: { stopPending: true, snapshot: { status: "cancelled" } },
+  });
+  await expect(f.service.request({ action: "resume", id })).rejects.toThrow("acknowledgement");
+  expect(await f.service.request({ action: "cancel", id })).not.toHaveProperty("stopPending");
 });

@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 z.config({ jitless: true });
-export const TRANSMISSION_VERSION = "0.1.0-staging.18";
+export const LEGACY_TRANSMISSION_VERSION = "0.1.0-staging.18";
+export const TRANSMISSION_VERSION = "0.1.0-staging.20";
+export const workflowEngineVersion = z.enum([LEGACY_TRANSMISSION_VERSION, TRANSMISSION_VERSION]);
 const text = z.string().trim().min(1).max(65_536);
 const id = z.uuid();
 const workflowTaskSchema = z.strictObject({
@@ -24,9 +26,25 @@ export const workflowDraftReplySchema = z.strictObject({
   message: z.string().trim().min(1).max(16_000),
   draft: workflowFieldsSchema.optional(),
 });
+export const workflowVerdictSchema = z.object({
+  decision: z.enum(["accept", "reject"]),
+  reason: z.string().max(65_536),
+  checks: z
+    .array(z.object({ command: text, passed: z.boolean(), evidence: text }))
+    .max(30)
+    .optional(),
+});
 export const workflowSnapshotSchema = z.object({
   runId: id,
-  status: z.enum(["running", "needs_input", "completed", "failed", "cancelled"]),
+  status: z.enum([
+    "running",
+    "pausing",
+    "paused",
+    "needs_input",
+    "completed",
+    "failed",
+    "cancelled",
+  ]),
   tasks: z
     .array(
       z.object({
@@ -34,6 +52,8 @@ export const workflowSnapshotSchema = z.object({
         name: text,
         state: z.enum([
           "pending",
+          "pausing",
+          "paused",
           "implementing",
           "verifying",
           "repairing",
@@ -70,14 +90,7 @@ export const workflowSnapshotSchema = z.object({
         revision: text,
         worker: text,
         verifier: text,
-        verdict: z.object({
-          decision: z.enum(["accept", "reject"]),
-          reason: z.string().max(65_536),
-          checks: z
-            .array(z.object({ command: text, passed: z.boolean(), evidence: text }))
-            .max(30)
-            .optional(),
-        }),
+        verdict: workflowVerdictSchema,
       }),
     )
     .max(100),
@@ -117,9 +130,11 @@ export const workflowRequestSchema = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("diff"), id, offset: z.number().int().nonnegative() }),
   z.strictObject({ action: z.literal("answer"), id, questionId: z.uuid(), answer: text }),
   z.strictObject({ action: z.literal("message"), id, message: text }),
+  z.strictObject({ action: z.literal("pause"), id }),
+  z.strictObject({ action: z.literal("resume"), id }),
   z.strictObject({ action: z.literal("cancel"), id }),
   z.strictObject({ action: z.literal("recover"), id }),
-  z.strictObject({ action: z.literal("reconnect") }),
+  z.strictObject({ action: z.literal("reconnect"), id }),
   z.strictObject({ action: z.literal("invalidate"), ...form }),
   z.strictObject({ action: z.literal("disposeForm"), formId: id }),
   z.strictObject({
@@ -162,6 +177,8 @@ export interface WorkflowRepository {
   label: string;
 }
 export interface WorkflowRecord {
+  stopPending?: boolean;
+  engineVersion?: z.infer<typeof workflowEngineVersion>;
   id: string;
   name: string;
   repository: string;

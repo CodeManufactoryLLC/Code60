@@ -31,7 +31,14 @@ function state(run) {
     : "implementing";
   if (mode !== run.mode && !["cancelled", "completed"].includes(run.status)) {
     run.mode = mode;
-    event(run, mode, { task: 0 });
+    if (!["next_task", "completed"].includes(mode))
+      event(run, mode, { task: run.plan.tasks[run.accepted.length]?.name });
+    if (mode === "repairing")
+      event(run, "verdict", {
+        decision: "reject",
+        reason: "Add the missing negative case",
+        checks: [],
+      });
     if (mode === "needs_input") {
       run.status = "needs_input";
       run.decision = {
@@ -43,25 +50,34 @@ function state(run) {
         ],
       };
     }
-    if (mode === "completed") {
-      run.status = "completed";
-      run.worker?.kill("SIGTERM");
-      run.accepted = run.plan.tasks.map((task, index) => ({
-        name: task.name,
-        result: "Synthetic verified result",
-        revision: "abc123",
-        worker: `worker-${index}`,
-        verifier: `verifier-${index}`,
-        verdict: {
-          decision: "accept",
-          reason: "Independent fixture checks passed",
-          checks: task.checks.map((command) => ({
-            command,
-            passed: true,
-            evidence: "fixture pass",
-          })),
-        },
-      }));
+    if (mode === "completed" || mode === "next_task") {
+      const target = mode === "completed" ? run.plan.tasks.length : 1;
+      while (run.accepted.length < target) {
+        const index = run.accepted.length;
+        const task = run.plan.tasks[index];
+        const accepted = {
+          name: task.name,
+          result: "Synthetic verified result",
+          revision: "abc123",
+          worker: `worker-${index}`,
+          verifier: `verifier-${index}`,
+          verdict: {
+            decision: "accept",
+            reason: "Independent fixture checks passed",
+            checks: task.checks.map((command) => ({
+              command,
+              passed: true,
+              evidence: "fixture pass",
+            })),
+          },
+        };
+        event(run, "task_accepted", accepted);
+        run.accepted.push(accepted);
+      }
+      if (target === run.plan.tasks.length) {
+        run.status = "completed";
+        run.worker?.kill("SIGTERM");
+      } else event(run, "turn_started", { role: "worker", task: run.plan.tasks[target].name });
     }
   }
   const terminal = ["cancelled", "completed", "failed"].includes(run.status);
@@ -72,19 +88,19 @@ function state(run) {
       index,
       name: task.name,
       state:
-        run.status === "completed"
+        index < run.accepted.length
           ? "accepted"
-          : index > 0
+          : index > run.accepted.length
             ? "pending"
             : run.status === "cancelled"
               ? "cancelled"
-              : run.status === "needs_input"
-                ? "needs_input"
+              : ["paused", "pausing", "needs_input"].includes(run.status)
+                ? run.status
                 : ["repairing", "verifying"].includes(run.mode)
                   ? run.mode
                   : "implementing",
     })),
-    activeTaskIndex: terminal ? null : 0,
+    activeTaskIndex: terminal ? null : run.accepted.length,
     eventCursor: run.events.at(-1)?.sequence ?? 0,
     ...(terminal ? {} : { phase: run.mode === "verifying" ? "verifier" : "worker" }),
     accepted: run.accepted,
@@ -142,6 +158,10 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (operation === "get_workflow_diff") {
+      if (!run.accepted.length) {
+        res.end(JSON.stringify({ content: "", nextOffset: null }));
+        return;
+      }
       res.end(
         JSON.stringify({
           content: Buffer.from(
@@ -153,15 +173,40 @@ const server = createServer(async (req, res) => {
       );
       return;
     }
+    if (operation === "pause_workflow" && run.status === "running") {
+      run.status = "pausing";
+      event(run, "pause_requested");
+      if (run.worker && run.worker.exitCode === null && run.worker.signalCode === null) {
+        await new Promise((resolve) => {
+          run.worker.once("exit", resolve);
+          run.worker.kill("SIGTERM");
+        });
+      }
+      run.status = "paused";
+      event(run, "paused");
+    }
+    if (operation === "resume_workflow" && run.status === "paused") {
+      run.status = "running";
+      event(run, "resumed");
+      run.worker = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+        stdio: "ignore",
+      });
+    }
     if (operation === "cancel_workflow") {
       run.status = "cancelled";
       delete run.decision;
-      if (run.worker && run.worker.exitCode === null)
+      if (run.worker && run.worker.exitCode === null && run.worker.signalCode === null)
         await new Promise((resolve) => {
           run.worker.once("exit", resolve);
           run.worker.kill("SIGTERM");
         });
       event(run, "cancelled");
+      if (existsSync(join(root, "lose-stop-response")) && !run.lostStopReply) {
+        run.lostStopReply = true;
+        save();
+        res.destroy();
+        return;
+      }
     }
     if (operation === "answer_workflow_question") {
       if (
@@ -177,8 +222,6 @@ const server = createServer(async (req, res) => {
     }
     if (operation === "send_workflow_message" && args.message === "reject guidance")
       throw new Error("Synthetic request rejection");
-    if (operation === "send_workflow_message" && args.message === "reject guidance")
-      throw new Error("Synthetic guidance failure");
     if (operation === "send_workflow_message") event(run, "message", { message: args.message });
     const snapshot = state(run);
     save();

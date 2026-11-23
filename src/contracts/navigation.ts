@@ -140,7 +140,7 @@ export const pages = [
   },
   {
     id: "workflows",
-    initialOrder: 25,
+    initialOrder: 27,
     label: "Workflows",
     group: "apps",
     order: 3,

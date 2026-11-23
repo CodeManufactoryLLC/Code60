@@ -3,6 +3,7 @@ import { mkdir, realpath } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import {
+  LEGACY_TRANSMISSION_VERSION,
   parseWorkflowRequest,
   TRANSMISSION_VERSION,
   type WorkflowDraft,
@@ -12,6 +13,7 @@ import {
   workflowDiffSchema,
   workflowDraftReplySchema,
   workflowDraftSchema,
+  workflowEngineVersion,
   workflowEventsSchema,
   workflowSnapshotSchema,
 } from "../bridge/index.js";
@@ -27,6 +29,8 @@ import { workflowContext, workflowDirectoryIdentity } from "./workflow-context.j
 
 const maximum = 8 * 1024 * 1024;
 const recordSchema = z.strictObject({
+  engineVersion: workflowEngineVersion.optional(),
+  stopPending: z.boolean().optional(),
   id: z.uuid(),
   name: z.string().max(160),
   repository: z.string().max(32_768),
@@ -45,12 +49,14 @@ const recordSchema = z.strictObject({
 });
 const registrySchema = z.strictObject({
   format: z.literal(1),
-  version: z.literal(TRANSMISSION_VERSION),
+  version: workflowEngineVersion,
   entries: z.array(recordSchema).max(200),
 });
 const ended = (record: WorkflowRecord) =>
   record.state === "preparation_failed" ||
-  (record.snapshot && ["completed", "failed", "cancelled"].includes(record.snapshot.status));
+  (!record.stopPending &&
+    record.snapshot &&
+    ["completed", "failed", "cancelled"].includes(record.snapshot.status));
 type Choice = {
   path: string;
   identity: string;
@@ -71,6 +77,7 @@ type Approval = {
 export class DesktopWorkflows {
   readonly root: string;
   private readonly client: TransmissionClient;
+  private readonly legacyClient: TransmissionClient;
   private choices = new Map<string, Choice>();
   private approvals = new Map<string, Approval>();
   private forms = new Map<string, number>();
@@ -93,10 +100,21 @@ export class DesktopWorkflows {
     private readonly pick: () => Promise<string | null>,
     private readonly generate: (input: string, signal: AbortSignal) => Promise<WorkflowDraftReply>,
     client?: TransmissionClient,
+    legacyClient?: TransmissionClient,
   ) {
     this.root = join(stateHome(env), "code60", "workflows");
     this.client =
       client ?? new LocalTransmission(join(this.root, `transmission-${TRANSMISSION_VERSION}`), env);
+    this.legacyClient =
+      legacyClient ??
+      new LocalTransmission(
+        join(this.root, `transmission-${LEGACY_TRANSMISSION_VERSION}`),
+        env,
+        LEGACY_TRANSMISSION_VERSION,
+      );
+  }
+  private engine(record: WorkflowRecord) {
+    return record.engineVersion === TRANSMISSION_VERSION ? this.client : this.legacyClient;
   }
   observeProvider(identity: string) {
     if (this.provider !== identity) {
@@ -234,7 +252,7 @@ export class DesktopWorkflows {
   private async submit(record: WorkflowRecord) {
     await this.target(record);
     try {
-      const result = await this.client.call(
+      const result = await this.engine(record).call(
         "start_workflow",
         {
           repository: record.worktree,
@@ -380,6 +398,7 @@ export class DesktopWorkflows {
       const record: WorkflowRecord = {
         id,
         name: definition.name,
+        engineVersion: TRANSMISSION_VERSION,
         repository: approval.choice.path,
         repositoryIdentity: approval.choice.identity,
         repositoryGitIdentity: approval.choice.gitIdentity,
@@ -424,13 +443,16 @@ export class DesktopWorkflows {
       await this.client.connect(this.startup.signal);
       return this.submit(record);
     }
+    const record = this.record(request.id);
+    const client = this.engine(record);
     if (request.action === "reconnect") {
-      await this.client.connect(this.startup.signal);
+      await client.connect(this.startup.signal);
       return { connected: true };
     }
-    const record = this.record(request.id);
     if (request.action === "recover") {
-      if (!this.client.supported) throw new Error("Transmission execution requires macOS");
+      if (!client.supported) throw new Error("Transmission execution requires macOS");
+      if (record.snapshot || !["starting", "uncertain"].includes(record.state))
+        throw new Error("Only an unconfirmed dispatch can be recovered");
       return this.submit(record);
     }
     if (request.action === "read") {
@@ -442,14 +464,11 @@ export class DesktopWorkflows {
             "Start is unconfirmed. Recover the same request after checking engine availability.",
         };
       try {
+        if (!client.supported) throw new Error("Transmission execution requires macOS");
         await this.target(record);
         this.snapshot(
           record,
-          await this.client.call(
-            "get_workflow",
-            { runId: record.snapshot.runId },
-            this.startup.signal,
-          ),
+          await client.call("get_workflow", { runId: record.snapshot.runId }, this.startup.signal),
         );
         await this.save();
         return { record: structuredClone(record), connected: true };
@@ -463,11 +482,12 @@ export class DesktopWorkflows {
       }
     }
     if (!record.snapshot) throw new Error("Recover the workflow start first");
+    if (!client.supported) throw new Error("Transmission execution requires macOS");
     await this.target(record);
     const runId = record.snapshot.runId;
     if (request.action === "events") {
       const page = workflowEventsSchema.parse(
-        await this.client.call(
+        await client.call(
           "get_workflow_events",
           { runId, after: request.after },
           this.startup.signal,
@@ -485,7 +505,7 @@ export class DesktopWorkflows {
     }
     if (request.action === "diff") {
       const page = workflowDiffSchema.parse(
-        await this.client.call(
+        await client.call(
           "get_workflow_diff",
           { runId, offset: request.offset },
           this.startup.signal,
@@ -498,19 +518,36 @@ export class DesktopWorkflows {
         throw new Error("Invalid accepted diff page");
       return page;
     }
-    const operation =
-      request.action === "cancel"
-        ? "cancel_workflow"
-        : request.action === "answer"
-          ? "answer_workflow_question"
-          : "send_workflow_message";
+    if (
+      (request.action === "pause" || request.action === "resume") &&
+      record.engineVersion !== TRANSMISSION_VERSION
+    )
+      throw new Error("Pause and resume require Transmission staging.20");
+    if (record.stopPending && request.action !== "cancel")
+      throw new Error("Stop acknowledgement is pending");
+    if (request.action === "cancel" && !record.stopPending) {
+      record.stopPending = true;
+      await this.save();
+    }
+    const operation = {
+      pause: "pause_workflow",
+      resume: "resume_workflow",
+      cancel: "cancel_workflow",
+      answer: "answer_workflow_question",
+      message: "send_workflow_message",
+    }[request.action];
     const args =
       request.action === "answer"
         ? { runId, questionId: request.questionId, answer: request.answer }
         : request.action === "message"
           ? { runId, message: request.message }
           : { runId };
-    this.snapshot(record, await this.client.call(operation, args, this.startup.signal));
+    this.snapshot(record, await client.call(operation, args, this.startup.signal));
+    if (
+      request.action === "cancel" &&
+      ["cancelled", "completed", "failed"].includes(record.snapshot.status)
+    )
+      delete record.stopPending;
     await this.save();
     return structuredClone(record);
   }

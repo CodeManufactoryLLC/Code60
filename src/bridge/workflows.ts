@@ -13,11 +13,14 @@ export type {
   WorkflowSnapshot,
 } from "../contracts/index.js";
 export {
+  LEGACY_TRANSMISSION_VERSION,
   TRANSMISSION_VERSION,
   workflowDiffSchema,
   workflowDraftReplySchema,
   workflowDraftSchema,
+  workflowEngineVersion,
   workflowEventsSchema,
   workflowSnapshotSchema,
+  workflowVerdictSchema,
 } from "../contracts/index.js";
 export const parseWorkflowRequest = (value: unknown) => parseValue(workflowRequestSchema, value);

@@ -314,3 +314,5 @@ work. This adds no preference, agent-write field, IPC endpoint or dependency.
 ## Transmission prototype
 
 Transmission workflows are owned by DesktopWorkflows, independently of databases, projects and Relay. Keep the private registry locked, identity checks and durable start keys intact. Quit disconnects readers without stopping the engine; never silently bootstrap on reads. Draft helpers have no gateway, denied permissions and generation-scoped cancellation. See ARCHITECTURE.md for the approved exception.
+
+Route each record to its saved engine version. Records lacking a version belong to staging.18. Reconnect and recovery require explicit actions tied to that record.

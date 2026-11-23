@@ -376,7 +376,7 @@ imports are permitted.
 ### Approved Transmission workflows
 
 Apps → Workflows is a database-independent, macOS-only execution prototype using
-exactly `code60-transmission-server@0.1.0-staging.18` and external Node >=24.22 <25.
+exactly `code60-transmission-server@0.1.0-staging.20` for new approvals and external Node >=24.22 <25.
 A human reviews and starts ordered tasks with independent verification. Automatic
 permission approvals default on and are shown before approval. A dedicated Git
 worktree starts from current saved files using existing private task snapshots;
@@ -391,7 +391,10 @@ Closing Code60 or a project does not cancel these workflows. Stop all retains it
 desktop-only scope. Explicit workflow cancellation retains partial files/evidence.
 A versioned TRANSMISSION_STATE_DIR suppresses login registration. Read-only UI
 operations never start/restart the engine; explicit reconnect can resume approved
-work. The staging.18 engine can exceed its fresh-session retry allowance across
+work. The player routes pause, resume, guidance and stop by saved run and engine identity.
+Unversioned records retain their staging.18 engine, state directory and original start key.
+Execution time is reconstructed from server events, including across desktop restarts.
+The staging.18 engine can exceed its fresh-session retry allowance across
 restarts; server fixes are outside this prototype and no exactly-once claim is made.
 
 Create with prompt opens a transient drafting chat, separate from Relay. A verified
