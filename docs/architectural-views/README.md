@@ -1,0 +1,11 @@
+# Architectural Views
+
+An architectural view briefly explains a significant architecture choice. Keep
+one view per file, with Motivation, Description and Tradeoffs as the three main
+sections. Use short subheadings for scanning and separate tradeoffs into Pros
+and Cons. Keep the explanation brief enough for a new contributor to read quickly.
+
+Use the [template](template.md) for new views. [ARCHITECTURE.md](../../ARCHITECTURE.md)
+remains the source of module rules and detailed runtime contracts.
+
+- [Browser-Based UI](browser-based-ui.md) — draft.

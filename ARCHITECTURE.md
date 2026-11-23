@@ -6,6 +6,8 @@ The following browser runtime rules supersede desktop transport, native presenta
 service ownership and distribution descriptions retained in the capability specifications below.
 The detailed checkpoint, authority, storage, provider and execution safeguards still apply.
 
+Short explanations of major choices live in [Architectural Views](docs/architectural-views/README.md).
+
 ## Browser runtime
 
 One per-user login backend owns ApplicationHost and a scheduler runtime. React connects
