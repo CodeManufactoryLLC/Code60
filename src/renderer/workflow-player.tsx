@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   type DesktopApi,
   TRANSMISSION_VERSION,
@@ -7,7 +7,11 @@ import {
   type WorkflowRequest,
 } from "../bridge/index.js";
 import { DialogContent } from "./neobrutalism/dialog.js";
-import { type emptyWorkflowClock, workflowTime } from "./workflow-activity.js";
+import {
+  type emptyWorkflowClock,
+  workflowActivityRows,
+  workflowTime,
+} from "./workflow-activity.js";
 
 export const statusLabel = (value: string) =>
   ({
@@ -44,6 +48,8 @@ function eventDescription(event: WorkflowEvent) {
 }
 
 function ActivityStream({ events, trimmed }: Activity) {
+  const [expanded, setExpanded] = useState(false);
+  const logId = useId();
   const log = useRef<HTMLDivElement>(null);
   const anchor = useRef<{ sequence: string; offset: number } | null>(null);
   function remember() {
@@ -76,9 +82,20 @@ function ActivityStream({ events, trimmed }: Activity) {
   }, [events]);
   return (
     <section className="workflow-activity-box">
-      <h3>Activity</h3>
+      <div className="workflow-activity-heading">
+        <h3>Activity</h3>
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={logId}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? "Collapse tool calls" : "Expand tool calls"}
+        </button>
+      </div>
       <div
         className="workflow-live-log"
+        id={logId}
         role="log"
         aria-label="Workflow activity"
         aria-live="polite"
@@ -89,20 +106,25 @@ function ActivityStream({ events, trimmed }: Activity) {
         onScroll={remember}
       >
         <ol>
-          {events
-            .slice()
-            .reverse()
-            .map((event) => (
-              <li key={event.sequence} data-sequence={event.sequence}>
-                <time dateTime={event.time}>
-                  {Number.isFinite(Date.parse(event.time))
-                    ? new Date(event.time).toLocaleTimeString()
-                    : event.time}
-                </time>
-                <strong>{statusLabel(event.kind)}</strong>
-                {Object.keys(event.detail).length > 0 && <pre>{eventDescription(event)}</pre>}
-              </li>
-            ))}
+          {workflowActivityRows(events, expanded).map(({ event, firstSequence, toolUpdates }) => (
+            <li key={firstSequence} data-sequence={firstSequence}>
+              <time dateTime={event.time}>
+                {Number.isFinite(Date.parse(event.time))
+                  ? new Date(event.time).toLocaleTimeString()
+                  : event.time}
+              </time>
+              <strong>
+                {toolUpdates
+                  ? toolUpdates === 1
+                    ? "Tool call"
+                    : `${toolUpdates} tool updates`
+                  : statusLabel(event.kind)}
+              </strong>
+              {!toolUpdates && Object.keys(event.detail).length > 0 && (
+                <pre>{eventDescription(event)}</pre>
+              )}
+            </li>
+          ))}
         </ol>
         {!events.length && <p>No recorded activity</p>}
         {trimmed && <p>Older events are outside the display limit.</p>}

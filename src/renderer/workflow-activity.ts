@@ -22,6 +22,22 @@ export function retainWorkflowActivity(current: WorkflowEvent[], incoming: Workf
   return { events: events.slice(first), trimmed: first > 0 };
 }
 
+/** Combine adjacent tool updates without collapsing intervening workflow decisions. */
+export function workflowActivityRows(events: WorkflowEvent[], expanded: boolean) {
+  const rows: { event: WorkflowEvent; firstSequence: number; toolUpdates: number }[] = [];
+  for (const event of events) {
+    const folded = !expanded && event.kind === "tool";
+    const previous = rows.at(-1);
+    if (folded && previous?.toolUpdates) {
+      previous.event = event;
+      previous.toolUpdates++;
+    } else {
+      rows.push({ event, firstSequence: event.sequence, toolUpdates: folded ? 1 : 0 });
+    }
+  }
+  return rows.reverse();
+}
+
 /** A compact fold of the entire event stream, independent of the visible log window. */
 export const emptyWorkflowClock = {
   cursor: 0,

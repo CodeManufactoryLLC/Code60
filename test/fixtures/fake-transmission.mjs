@@ -148,6 +148,8 @@ const server = createServer(async (req, res) => {
         writeFileSync(join(args.repository, "workflow-result.txt"), "isolated fixture result\n");
         runs.set(run.id, run);
         event(run, "started");
+        event(run, "tool", { session: "worker", detail: "Read fixture file: pending" });
+        event(run, "tool", { session: "worker", detail: "Read fixture file: completed" });
       }
     }
     if (!run) throw new Error("Unknown workflow");

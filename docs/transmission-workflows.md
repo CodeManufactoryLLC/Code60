@@ -27,7 +27,7 @@ files, HEAD and staging. Existing snapshot exclusions remain in effect. A worktr
 is not a sandbox. Transmission's Codex harness owns execution permissions.
 
 Use the menu beside **Workflows** for New workflow, Refresh and Workflow history.
-The player shows accepted tasks, execution time and newest activity. Expand a
+The player shows accepted tasks, execution time and newest activity. Consecutive tool updates are collapsed by default. Use **Expand tool calls** in the activity card to inspect each update. Expand a
 numbered task for **View Configuration** and available verifier **View Results**.
 Reports include the verifier's verdict and check evidence. Expand **Workflow details**
 for checkout paths and approvals. **Accepted diff** contains changes through the

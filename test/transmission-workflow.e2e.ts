@@ -164,6 +164,14 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     const runs = async () =>
       JSON.parse(await readFile(join(engineRoot, "fixture-runs.json"), "utf8"));
     const run = (await runs())[0];
+    const stream = workflows.getByRole("log");
+    await expect(stream.getByText("2 tool updates")).toBeVisible();
+    await expect(stream.getByText("Read fixture file: completed")).toHaveCount(0);
+    await workflows.getByRole("button", { name: "Expand tool calls" }).press("Enter");
+    await expect(stream.getByText("Read fixture file: completed")).toBeVisible();
+    await workflows.getByRole("button", { name: "Collapse tool calls" }).click();
+    await expect(stream.getByText("Read fixture file: completed")).toHaveCount(0);
+    await expect(stream.getByText("Started", { exact: true })).toBeVisible();
     const firstTask = workflows.locator(".workflow-task-list details").first();
     await expect(firstTask).not.toHaveAttribute("open", "");
     await firstTask.locator("summary").click();
@@ -322,6 +330,8 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
         )
           await theme.click();
         await expect(theme).toHaveAccessibleName(new RegExp(`Color theme: ${mode}`));
+        const player = await workflows.locator(".workflow-player").boundingBox();
+        expect(player?.width).toBeLessThanOrEqual(736);
         const controls = await workflows.locator(".workflow-player-left").boundingBox();
         const activity = await workflows.locator(".workflow-activity-box").boundingBox();
         expect(controls && activity && Math.abs(controls.height - activity.height) < 2).toBe(true);

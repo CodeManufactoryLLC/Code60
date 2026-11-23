@@ -3,6 +3,7 @@ import {
   advanceWorkflowClock,
   emptyWorkflowClock,
   retainWorkflowActivity,
+  workflowActivityRows,
   workflowTime,
 } from "./workflow-activity.js";
 
@@ -17,6 +18,21 @@ it("deduplicates overlapping pages without losing sequence gaps", () => {
     events: [event(1), event(5), event(9)],
     trimmed: false,
   });
+});
+it("folds only adjacent tool updates and expands the original events in newest-first order", () => {
+  const events = [event(1), event(3), { ...event(5), kind: "needs_input" }, event(7)];
+  expect(
+    workflowActivityRows(events, false).map((r) => [
+      r.event.sequence,
+      r.firstSequence,
+      r.toolUpdates,
+    ]),
+  ).toEqual([
+    [7, 7, 1],
+    [5, 5, 0],
+    [3, 1, 2],
+  ]);
+  expect(workflowActivityRows(events, true).map((r) => r.event)).toEqual([...events].reverse());
 });
 it("bounds large activity windows independently of event count and marks omissions", () => {
   const retained = retainWorkflowActivity(

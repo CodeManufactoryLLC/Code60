@@ -211,65 +211,67 @@ export function WorkflowsPage({
           </button>
         </DialogContent>
       )}
-      {list?.supported === false && (
-        <p role="status">
-          Transmission execution requires macOS and Node 24.22 or later in the 24.x series. Saved
-          history remains available.
-        </p>
-      )}
-      {error && <p role="alert">Refresh failed. The last verified state is retained. {error}</p>}
-      {actionError && !record && <p role="alert">{actionError}</p>}
-      {creating ? (
-        <WorkflowForm
-          api={api}
-          active={active}
-          providerReady={providerReady}
-          onProvider={onProvider}
-          onClose={showHistory}
-          onCreated={(entry) => {
-            setCreating(false);
-            setSelected(entry.id);
-          }}
-        />
-      ) : record && detail ? (
-        <WorkflowPlayer
-          key={record.id}
-          api={api}
-          record={record}
-          active={active}
-          polling={!paused}
-          connected={!!list?.supported && detail.connected && !error}
-          problem={detail.error}
-          actionError={actionError}
-          activity={activity}
-          busy={busy}
-          act={act}
-        />
-      ) : (
-        !selected && (
-          <nav className="workflow-history" aria-label="Workflow history">
-            <h2>Workflow history</h2>
-            {list && !list.entries.length && <p>No saved workflows</p>}
-            <ul>
-              {list?.entries
-                .slice()
-                .reverse()
-                .map((entry) => (
-                  <li key={entry.id}>
-                    <button type="button" onClick={() => setSelected(entry.id)}>
-                      {entry.name}{" "}
-                      <span>
-                        {entry.stopPending
-                          ? "Stop acknowledgement pending"
-                          : statusLabel(entry.snapshot?.status ?? entry.state)}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-            </ul>
-          </nav>
-        )
-      )}
+      <div className="workflow-content">
+        {list?.supported === false && (
+          <p role="status">
+            Transmission execution requires macOS and Node 24.22 or later in the 24.x series. Saved
+            history remains available.
+          </p>
+        )}
+        {error && <p role="alert">Refresh failed. The last verified state is retained. {error}</p>}
+        {actionError && !record && <p role="alert">{actionError}</p>}
+        {creating ? (
+          <WorkflowForm
+            api={api}
+            active={active}
+            providerReady={providerReady}
+            onProvider={onProvider}
+            onClose={showHistory}
+            onCreated={(entry) => {
+              setCreating(false);
+              setSelected(entry.id);
+            }}
+          />
+        ) : record && detail ? (
+          <WorkflowPlayer
+            key={record.id}
+            api={api}
+            record={record}
+            active={active}
+            polling={!paused}
+            connected={!!list?.supported && detail.connected && !error}
+            problem={detail.error}
+            actionError={actionError}
+            activity={activity}
+            busy={busy}
+            act={act}
+          />
+        ) : (
+          !selected && (
+            <nav className="workflow-history" aria-label="Workflow history">
+              <h2>Workflow history</h2>
+              {list && !list.entries.length && <p>No saved workflows</p>}
+              <ul>
+                {list?.entries
+                  .slice()
+                  .reverse()
+                  .map((entry) => (
+                    <li key={entry.id}>
+                      <button type="button" onClick={() => setSelected(entry.id)}>
+                        {entry.name}{" "}
+                        <span>
+                          {entry.stopPending
+                            ? "Stop acknowledgement pending"
+                            : statusLabel(entry.snapshot?.status ?? entry.state)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            </nav>
+          )
+        )}
+      </div>
     </section>
   );
 }
