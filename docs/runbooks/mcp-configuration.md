@@ -1,0 +1,69 @@
+# MCP configuration storage recovery
+
+The phase 2 backend library is available to isolated tests and later application
+callers. No MCP editor, recovery screen, browser API or CLI recovery command exists
+yet. The active configuration path remains the one described in [MCP configuration](../../MCP.md).
+Do not invent a product command or change live files to exercise this library.
+
+## Symptoms
+
+The library reports invalid input, conflict, unsafe storage, quota exhaustion,
+cancellation or recovery-required status. Reads may show malformed text or pending
+transaction IDs. A missing file represents empty defaults; a malformed or oversized
+file is not permission to replace it with defaults automatically.
+
+## Read-only diagnosis
+
+- Identify the backend-owned target and source project, not the sidebar selection
+  or a generated worker worktree. Check ownership, canonical root identity, revision
+  and pending recovery metadata using the store's read/list operations.
+- Treat syntax/schema issues separately from filesystem safety. Project files may
+  be 0644 but cannot be writable by others; user files and private evidence must be
+  private. Do not follow links or silently chmod an unsafe existing file.
+- Inspect only fixed error codes and safe field locations in shared diagnostics.
+  Configuration text, backups and journals may contain user-entered sensitive data;
+  keep them private and do not paste raw exceptions, unknown keys or payloads.
+- Check free space on both configuration and state volumes using the
+  [low disk runbook](low-disk.md). The store's 100 MiB ceiling includes receipts,
+  backups and journal evidence; free disk space alone does not resolve quota limits.
+
+## Supported recovery
+
+These are explicit backend operations for authorized callers, not currently
+available GUI instructions. Later human interfaces must preview their scope.
+
+- Re-read a conflicting file and retain the unsaved draft. A save must carry its
+  observed revision; same-byte inode replacement still invalidates an older save.
+- Repair malformed text by validating the replacement first. The original bytes
+  are retained privately. Ordinary Restore accepts only a valid backup and a fresh
+  expected revision; it does not silently restore a known malformed configuration.
+- For a pending transaction, obtain fresh revisions for every affected target.
+  Choose Complete or Roll back explicitly. Complete writes only missing postimages;
+  rollback restores exact preimages, including a recorded malformed original.
+- A move publishes destination first. A partially moved definition may exist in
+  both files; do not remove either entry manually to make the warning disappear.
+- If rename succeeded but directory sync failed, the file may already contain the
+  requested edit. Complete verifies and syncs it without repeating the rename.
+- Cancellation after preparation can leave a pending record. Startup and close
+  never complete that record automatically. Retry an accepted request with its same
+  ID only to inspect its recorded outcome; a new recovery choice uses a new ID.
+
+## Stop and escalate
+
+Stop when either target differs from all known before/after identities and bytes,
+the canonical project was replaced, writer ownership is unverifiable, or evidence
+is corrupt. Preserve the newer edits and all evidence. Do not delete foreign locks,
+journals, receipts, unknown artifacts or pinned backups as a repair.
+
+Only completed verified backups participate in automatic retention (latest 20 per
+configuration within the total ceiling). Pinned evidence is never evicted to make
+a write succeed. If no safe headroom remains, keep the draft and seek an explicit
+storage decision; do not erase recovery evidence or replay an uncertain operation.
+
+## Verify
+
+Re-read all affected files, compare their exact bytes/modes and fresh revisions,
+confirm pending metadata cleared, and verify owned staging files were removed.
+Configuration validity does not establish project approval, authentication or
+connection health. This phase starts no connectors and moves no credentials or
+approvals.

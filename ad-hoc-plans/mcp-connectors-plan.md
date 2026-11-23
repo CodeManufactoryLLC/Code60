@@ -1,0 +1,384 @@
+# MCP connectors implementation plan
+
+Implement an MCP Servers page for adding, editing, moving, enabling, testing,
+authenticating and recovering MCP servers. Provide guided forms and direct JSON
+editing backed by the same validation and storage services.
+
+Implementation is authorized for phases 1 and 2. Phases 3–7 remain planned. This record
+does not authorize installation of real user services.
+
+After each completed phase, run the required checks, create a DCO-signed commit,
+push the task branch and update the same draft PR. Phases 1–2 are published together
+as the starting change set; each remaining phase gets its own commit. Publishing
+this draft does not authorize merging it.
+
+## Scope and agreed decisions
+
+- Use dedicated user and project `mcp.json` files, separate from general settings.
+  The proposed locations are `$XDG_CONFIG_HOME/code60/mcp.json` (default
+  `~/.config/code60/mcp.json`) and `<project>/.code60/mcp.json`.
+- Moving means transferring a server between user and project configurations,
+  rather than reordering a list.
+- Factory defaults contain no user-added servers and enable none. Reset is
+  distinct from discarding a draft or restoring a backup.
+- Use a single new, versioned configuration schema. No users require backward
+  compatibility, so no migration of the existing `config.json` MCP entries or
+  legacy inline credentials is required.
+- Support stdio and Streamable HTTP initially. Each definition has explicit
+  enabled state and structured authentication settings with credential references.
+- Initial MCP support is tools only. Resources, prompts, sampling and elicitation
+  are explicitly unsupported.
+- Project definitions always shadow matching user IDs, including when disabled or
+  unapproved. Connections are isolated per ACP session and connector, not pooled.
+- Include generic authentication: secure credential storage and OAuth with
+  user-supplied registration details where required. Runtime discovery and
+  registration support belong to the generic protocol implementation.
+- Include optional pre-bundled MCP definitions, such as Playwright, as templates.
+  Adding one creates a normal reviewable definition managed through the same
+  forms, editor, activation controls and troubleshooting as any other server.
+  Templates do not activate or launch automatically.
+- Keep the existing built-in Code60 orchestration gateway and managed browser
+  capability distinct from optional pre-bundled definitions. Resetting user MCP
+  configuration does not remove those built-in capabilities.
+
+### Exclusions
+
+- First-class dedicated integrations, including a bespoke GitHub integration,
+  service-specific account flows, Code60-owned OAuth registrations, bundled client
+  IDs or client secrets, and a hosted authentication or token-exchange service.
+  These are separate future work, not another name for pre-bundled templates.
+- Compatibility readers, migrations, dual configuration formats and legacy
+  inline-credential migration.
+- Legacy SSE transport unless a specific requirement is added later.
+- Automatic installation of MCP packages, browsers or prerequisites. If a
+  user-approved launch command can download packages, explain that before launch.
+- Automatic activation of repository-provided definitions or replay of uncertain
+  tool calls after errors or restart.
+- Generic filesystem/shell APIs, agent-controlled connector administration, remote
+  hosting, and changes to scheduler execution policy or helper tool access.
+
+## Phase 1: Define configuration and runtime architecture
+
+Define the new schema, supported transports, server identities, enabled state,
+credential bindings, user/project applicability and duplicate-name precedence.
+The UI must explain the effective source and any shadowed definition rather than
+silently selecting a conflicting server.
+
+Establish backend ownership of connections, authentication and lifecycle, with
+scoped adapters for ACP providers. Check provider integration against protocol
+fixtures before committing to the connection design. Define session ownership,
+tool and permission forwarding, cancellation, teardown and which execution paths
+may receive configured connectors. Preserve scheduler and helper exclusions.
+
+Keep responsibilities within the existing modules: shared browser-safe schemas
+and DTOs in contracts, orchestration in application, narrow validation in bridge
+and gateway, protocol integration in agents, filesystem and secure-store access
+in platform, and presentation in renderer. Cross-module imports use public entry
+points. Expose no raw credentials or generic host capabilities to agents.
+
+Project definitions require human review before activation. Bind that approval to
+the reviewed configuration revision and canonical project identity. External
+changes to launch settings, endpoints or authentication invalidate the applicable
+approval. Opening or cloning a repository never launches its servers.
+
+Update [architecture](../ARCHITECTURE.md) before implementing behavior currently
+excluded there, particularly credential storage, project settings and config
+writes. Update module instructions and dependency boundary tests together where
+the approved design changes their rules.
+
+**Completion:** architecture, schema, precedence, trust and lifecycle decisions are
+documented, with protocol and schema fixtures covering the chosen boundaries.
+
+### Phase 1 implementation record
+
+Status: complete. Implementation, required checks and owned-resource cleanup verified.
+
+- Added the version-one browser-safe schema, fixed validation errors, typed
+  literal/credential bindings, OAuth registration metadata and separate
+  configuration/observation status types in `src/contracts/mcp-connectors.ts`.
+- Added pure, deterministic application-owned resolution. Canonical project and
+  revision metadata are backend inputs; no filesystem, credential resolution,
+  network calls or live configuration loading occur. Returned definitions are
+  detached from inputs. User/project source and shadowing are explicit.
+- Project chats require a captured project. Project-targeted workers use that
+  project; workers without a project use user definitions. Relay/custom assistants
+  use user definitions regardless of sidebar/project data. Scheduler, provider
+  verification, memory/search and other isolated helpers receive none.
+- Approval binds the canonical source-project identity and document revision in
+  private backend state. Changed identity/revision invalidates it. Disabled and
+  unapproved project overrides never fall back to user entries.
+- Documented one upstream connection per ACP session/connector, with provider-facing
+  stdio adapters and scoped ephemeral capabilities. Gateway owns composition and
+  private listeners; agents owns protocol; application receives injected ports.
+  Only gateway-to-agents module access was added to the boundary rules.
+- Added real ACP/stdio subprocess feasibility fixtures for new/load/resume,
+  discovery, allow/deny, inactive/revoked/cross-session rejection, cancellation and
+  backend-only upstream credentials. These are supporting integration tests, not
+  a production connector adapter or certification of real provider support.
+- Added the [ownership architectural view](../docs/architectural-views/mcp-connector-ownership.md)
+  and the [target runtime contract](../ARCHITECTURE.md#mcp-connector-foundation-and-target-runtime).
+  Updated module instructions and distinguished active MCP behavior from the
+  staged target design in `MCP.md`.
+- No new page, management request, snapshot, tool or availability was introduced.
+  No capability catalog entry or regeneration is needed in this phase. Later
+  user-visible slices must update the catalog and availability tests.
+
+Validation environment: assigned `mcp-connectors` worktree at PR #313's merge
+commit `e21fc8687e497f0b016b0ee8edc8b3cf2a3d9c2d`, with host Node 24 tooling and a
+dedicated Linux amd64 devcontainer. Worktree label: `9de795df015cc483`; reserved
+gateway/Vite ports: `40190`/`40191`. Evidence is retained under ignored
+`test-results/qa/mcp-connectors-phase-1/`.
+
+Validation results:
+
+- Focused schema/resolver/boundary/protocol run passed. The final full suite
+  includes 74 tests across those four files (one redundant type-only test was
+  removed after the first 75-test focused run).
+- `npm run check` passed inside the dedicated container: 295 test files and
+  2,853 tests, with all four coverage non-regression gates satisfied. Measured
+  statements/branches/functions/lines: 71.39% / 64.60% / 65.36% / 73.78%.
+- `npm run test:browser -- --grep "browser: first use"` passed after the full
+  check, through visible setup, acceptance, integration, diff, attachment, reload
+  and declined/confirmed Undo. This is full UI regression evidence, separate from
+  the connector protocol feasibility proof.
+- The initial full check stopped at three unused bridge re-exports. Those exports
+  were removed, then the complete check passed without changing exclusions,
+  coverage floors, test timeouts or retry policy. Original failure evidence is
+  retained beside the successful run.
+- Final instruction/reference validation passed after the implementation record
+  was added. Worktree-owned containers and exported images were removed with
+  the helper; independent container and image inventories were empty. Dependency,
+  build, npm, browser and model caches, port reservations and QA evidence were
+  intentionally retained. No user service was installed or live provider contacted.
+- Production MCP loading, UI, filesystem transactions, broker/adapters, OAuth and
+  secure-store/native-platform validation remain phases 2–7. No production
+  connector or real-provider compatibility is claimed by this phase.
+
+## Phase 2: Build validated configuration storage
+
+Use one schema for forms, the JSON editor, backend writes and runtime loading.
+Validate schema version, strict JSON syntax, duplicate keys, server identities,
+reserved names, transport-specific fields, URLs, argument arrays, enabled state
+and credential references. Reject unknown fields and unsupported versions.
+
+Return bounded structured issues with safe field paths and line/column locations.
+Do not echo secret values or raw parser errors. Both UI and backend reject invalid
+saves; a syntactically valid definition can still fail a connection test.
+
+Implement bounded reads, private backups, serialized mutations, atomic file
+replacement and revision checks against external edits. Reject unsafe file
+identities and symlinks. A failed or conflicting write preserves the previous
+configuration and the user's draft. Missing files represent empty defaults;
+malformed files remain available for explicit editing and recovery.
+
+Moves span two files and need a recoverable transaction record with verified
+preimages. Preflight collisions and ownership, then coordinate the writes without
+losing either definition. Interrupted moves require explicit completion or
+rollback; never delete locks or replay uncertain work to repair them.
+
+**Completion:** tests prove invalid saves leave files unchanged, concurrent edits
+are detected, backups restore correctly, and interrupted moves retain evidence.
+
+### Phase 2 implementation record
+
+Status: complete. Implementation, required checks and owned-resource cleanup verified.
+
+- Added bounded browser-safe strict text validation sharing the version-one schema:
+  decoded duplicate keys, source locations, safe issues and UTF-8 round-trip checks.
+  Limits are 1 MiB, 32 nesting levels, 32,768 nodes and 32 issues. Valid text is
+  preserved exactly; BOMs are not silently stripped. Source locations use a
+  prefix-sharing tree and scalar scanning uses sticky matching to avoid repeated
+  copies of long unknown keys or unconsumed input.
+- Added platform same-handle byte reads, root/native identity pins, guarded staging,
+  atomic rename, verified temporary cleanup and directory sync. Project files accept
+  owner-owned 0644; user files and recovery state remain private. Reads do not create
+  missing configuration directories.
+- Added the backend-only `McpConfigurationStore` for registered target IDs, revisions,
+  save/move/backup/restore/recovery and close. It has no ApplicationClient route or
+  active loader integration. No new module dependency edge is needed.
+- Private journals preserve exact before/after bytes and staged identities. Moves
+  publish destination before source removal; startup inspects without replay.
+  Explicit recovery refuses newer edits, root replacement and corrupt evidence.
+  Completing a post-rename uncertainty syncs without repeating the rename.
+- Automatic retention keeps up to 20 backups per target within the shared 100 MiB
+  backup/receipt/evidence ceiling. Only completed verified unpinned backups may be
+  pruned. Pinned or unknown evidence is preserved; quota pressure blocks mutation.
+- Added request fingerprints independent of property order and durable accepted
+  request receipts. Receipts count toward the ceiling and are not backup-pruned.
+  A private test-only ceiling can be lower, never higher, than 100 MiB.
+- Added supporting filesystem tests for missing/malformed/unsafe files, exact writes,
+  revisions and native precision, retention, failure boundaries, interrupted moves,
+  cancellation, replay and explicit recovery. Selected the existing full browser
+  first-use/acceptance/reload/Undo journey for independent regression coverage.
+- Added [the MCP storage recovery runbook](../docs/runbooks/mcp-configuration.md).
+  Dedicated integrations, migrations, GUI/browser operations, live loading,
+  connector processes, authentication and approval persistence remain outside
+  this phase. No capability catalog regeneration is needed for an unwired library.
+
+Validation and cleanup evidence will be retained in
+`test-results/qa/mcp-connectors-phase-2/`, using this worktree's dedicated Linux
+amd64 container, label `9de795df015cc483`, and reserved ports `40190`/`40191`.
+
+Verified checks:
+
+- Final focused parser/platform/store/boundary run: 66 tests across four files passed.
+- Final `npm run check` inside the dedicated container: 298 files and 2,913 tests
+  passed. All four coverage gates passed: statements 71.87%, branches 65.08%,
+  functions 65.84%, lines 74.27%. No coverage floors, unused-code exclusions,
+  existing timeouts or retry policies were relaxed.
+- Initial development checks caught an inspector return-type annotation, two
+  unnecessary helper exports and one wrong expected error category. Corrected
+  those findings and retained their logs. A full 2,907-test run passed before
+  the final long-key and invalid-budget boundary tests were added; the final
+  full check was rerun after those changes.
+- Browser first-use/acceptance/integration/diff/attachment/reload/declined-and-confirmed
+  Undo regression passed (one journey, 17.6 seconds; suite 21.5 seconds). This is
+  independent full UI regression evidence, not a claim of a new MCP management UI.
+- Final instruction/reference validation passed after the documentation update.
+  The worktree helper removed owned containers and exported images; independent
+  stopped/running container and image inventories were empty. Dependency/build/
+  npm/browser/model caches, port reservations and QA evidence were retained.
+  No native macOS service, credential store, real provider or live configuration
+  was used, and no foreign resource was modified.
+
+## Phase 3: Build guided server management
+
+Add an MCP Servers page with user/project selection and effective-source labels.
+Show name, transport, enabled state, authentication state and connection status.
+Provide Add, Edit, Remove and Move actions with keyboard-accessible forms.
+
+Use transport-specific fields and examples. Accept pasted definitions as drafts
+for review. Pre-bundled definitions use the same flow and are opt-in. Merely
+viewing a template, definition or form performs no network access or launch.
+
+Moving previews the source, destination, affected projects, duplicate conflicts
+and credential availability. Block unresolved collisions rather than overwriting
+another entry. Project files contain definitions and credential references;
+credentials remain in each user's local secure store and are not copied into Git.
+
+**Completion:** browser journeys add, edit, remove and move definitions, including
+cancelled actions, collisions, stale project ownership and unavailable credentials.
+
+## Phase 4: Add direct editing and factory reset
+
+Reuse bundled Monaco for the selected configuration with JSON highlighting,
+completion, formatting, validation markers and unsaved-change handling. The
+editor opens only approved MCP configuration targets through narrow backend APIs.
+Guided forms and raw editing share one draft and revision so they cannot overwrite
+each other's changes silently.
+
+Disable Save while invalid and enforce the same rule on direct backend requests.
+Preserve drafts through ordinary page navigation and offer reload/compare when
+the file changes externally. Keep credentials out of editor content; JSON stores
+references rather than secret values.
+
+Provide three distinct actions:
+
+- **Discard changes:** restore the currently saved configuration to the draft.
+- **Restore backup:** preview and restore a selected valid earlier configuration.
+- **Reset to defaults:** confirm and clear user-added definitions in the selected
+  scope, preserving unrelated application settings and built-in capabilities.
+
+Reset previews effective inheritance: clearing a project override may reveal a
+user definition. Offer an explicit reset of all applicable scopes when the intent
+is to leave no configured user servers enabled for that project. Credential
+deletion is a separate choice. Explain any connections that remain active until
+explicitly disconnected.
+
+**Completion:** tests cover invalid and conflicting saves, draft synchronization,
+scope-specific reset, inherited definitions and preservation of unrelated data.
+
+## Phase 5: Implement connection lifecycle and activation
+
+Add Enable, Disable, Test connection, Reconnect and Disconnect controls. Separate
+configured state from observed connection health. Health states include Not
+tested, Connecting, Connected, Authentication required, Failed and Unsupported by
+provider, with the observed session/provider and time where applicable.
+
+Enabling permits future connections after required trust and authentication
+checks; it is distinct from launching a connection test. Changes apply to new
+sessions. Show affected existing sessions and require an explicit reconnect or
+disconnect to interrupt their connections. Disabling prevents future connections
+and clearly reports any existing access that remains active.
+
+Connection tests may initialize and discover capabilities but do not invoke
+business tools. Explain that testing stdio runs the configured executable. Bound
+all operations with deadlines, concurrency limits, cancellation and output
+budgets. Clean up owned processes and subscriptions; retain uncertain cleanup
+ownership for verification. Never retry an uncertain tool call automatically.
+
+Browser reload or close cancels page-owned tests and pending interactions without
+terminating approved session work. Backend shutdown drains owned connections;
+restart never restores execution authority or replays calls.
+
+**Completion:** fixture-backed journeys verify activation, existing-session
+behavior, provider errors, cancellation, browser detach and process cleanup.
+
+## Phase 6: Implement secure authentication
+
+Support API keys, header credentials and stdio environment secrets using macOS
+Keychain or Linux Secret Service. Store only references and non-secret metadata
+in configuration files. If secure storage is unavailable or locked, explain the
+condition and offer session-only credentials without a plaintext fallback.
+
+Implement generic backend-owned OAuth discovery, supported client registration,
+authorization code flow with PKCE, state and issuer validation, protected loopback
+callbacks, token refresh, scope review, reauthorization and sign-out. Accept
+user-supplied registration details when a server requires pre-registration.
+Provider requirements must be validated; PKCE does not imply every provider accepts
+a client-ID-only exchange. No Code60-owned registrations are supplied in this work.
+
+Bind credentials to server identity, endpoint, account and approved scope. Moving
+a definition does not grant another user access to its credentials. Endpoint or
+identity changes require authentication review. Constrain discovery requests and
+redirects so untrusted metadata cannot steal credentials or access unintended
+network targets.
+
+Keep stored secrets out of ordinary snapshots, browser storage, diagnostics,
+transcripts and exported reports. Secret entry is a narrow transient request;
+secret resolution and token exchange remain backend-owned. Resolve stdio secrets
+only into the intended process environment, never command arguments. No background
+or non-interactive operation may wait indefinitely for sign-in.
+
+**Completion:** fake OAuth and secure-store tests verify cancellation, callback
+replay rejection, token refresh races, expiry, revoked access, locked stores and
+secret isolation. Validate platform secure-store behavior in isolated environments.
+
+## Phase 7: Complete troubleshooting, recovery and release validation
+
+Each error explains what failed, what remains usable and the next available
+action. Use fixed error codes and safe connection-stage metadata rather than raw
+server output. Include an optional safe troubleshooting report.
+
+| Failure | In-app guidance and recovery |
+| --- | --- |
+| Invalid configuration | Jump to the issue, edit it or restore a valid backup |
+| Missing executable or invalid arguments | Review launch settings and prerequisites, then test again |
+| Unsupported provider integration | Explain the limitation and supported alternatives |
+| Expired credentials or insufficient scope | Sign in again or review requested access |
+| Network, TLS, timeout or protocol failure | Identify the failed stage and offer an explicit bounded retry |
+| External edit or failed write | Reload, compare and preserve the unsaved draft |
+| Interrupted move or uncertain cleanup | Inspect retained evidence, then explicitly complete, roll back or verify cleanup |
+
+Follow the [workflow QA skill](../.factory/skills/qa/SKILL.md). Add meaningful tests
+within each phase, then validate complete journeys across the finished system with
+headless Playwright, the built backend, isolated HOME/config/state and fake
+MCP/OAuth servers. Assert intermediate UI states and independent file and process
+outcomes. Include project trust changes, malformed external edits, disk/permission
+failures, interrupted moves, reset, authentication cancellation and browser reload.
+Unit/static checks do not establish browser or native-platform success.
+
+Update [MCP configuration](../MCP.md), relevant user documentation, recovery
+runbooks, security guidance and module instructions. Update
+`src/contracts/knowledge.ts`, availability rules and tests as capabilities land,
+then run `npm run generate:capabilities`. Report configuration validity,
+authentication and observed connection health as distinct facts in self-knowledge.
+
+Run the narrowest relevant checks first, then `npm run check` before every commit.
+Run `npm run test:browser` and applicable packaging checks for the final change.
+Do not lower coverage gates or broaden unused-code exclusions. Report blocked
+native-platform validation and clean up session-owned test resources.
+
+**Completion:** all seven phases satisfy their acceptance checks, complete browser
+journeys pass, documentation reflects actual behavior, and any remaining platform
+validation is explicitly recorded before release.

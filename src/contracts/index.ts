@@ -24,6 +24,8 @@ export * from "./activity.js";
 export * from "./automation.js";
 export * from "./browser.js";
 export * from "./commands.js";
+export * from "./mcp-connector-text.js";
+export * from "./mcp-connectors.js";
 export * from "./mcp-tools.js";
 export * from "./product.js";
 export * from "./project-search.js";

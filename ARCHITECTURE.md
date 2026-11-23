@@ -64,6 +64,8 @@ to the controlling page. No browser capability installs services or replaces cod
   bridge, automation and platform and has no browser or Electron dependency.
 - gateway composes application and automation once, validates HTTP/session boundaries,
   serves assets, owns client interactions and private local service management.
+  It may also import agents through its index to compose MCP connector transports
+  and inject them into application. Application does not depend on agents.
 - management parses the narrow code60 open/service CLI and calls gateway/platform APIs.
   It offers no run, prompt or agent-command execution interface.
 - automation retains its separate scheduler policy/store and an internal legacy protocol
@@ -807,8 +809,8 @@ These are deliberately out of scope. Add one back only when a real user needs it
 - Merging, committing worker changes to a project branch, pushing, or deciding whether a task succeeded. Exceptions for explicit initial commits and internal desktop task snapshots are described here.
 - Retries, durable task queues, and exactly-once execution. A failed run is reported, and the user starts a new one.
 - Automatic crash recovery. After a crash, the tool lists what was left behind; recovery starts only when the user sends a new message to an ended session in the desktop app.
-- Storing credentials. Agents log in through their own CLIs. The scheduler passes the environment through unchanged; desktop startup enriches only PATH to discover installed tools.
-- Settings profiles, workspace trust, imported project settings, and settings export. The desktop app's saved run configurations (see [Desktop app](#desktop-app)) are the one exception: named batch settings stored in the project database, never applied to the CLI or the config file.
+- Storing provider credentials. Agents log in through their own CLIs. The scheduler passes the environment through unchanged; desktop startup enriches only PATH to discover installed tools. The staged MCP connector design below explicitly permits future per-user secure storage of upstream MCP credentials, not provider credentials. Phase 1 implements no credential store.
+- Settings profiles, general workspace trust, imported project settings, and settings export. Exceptions are named saved run configurations and the staged, explicitly reviewed MCP-only project configuration below. No general repository settings import or automatic trust is introduced.
 - CLI orchestration services, external ACP servers, and arbitrary agent-to-agent communication. Only the desktop Orchestration Chat may dispatch and control its own workers in the open project through the scoped MCP tools described below.
 - Agent-controlled session save and fork; steering (prompting an agent in the middle of a turn); and model changes during a turn. Between-turn model changes and follow-up prompts are supported in the desktop app only. Explicit ACP restoration of ended desktop runs is described in [Ended-run recovery](#ended-run-recovery).
 - Budgets, cost tracking, and usage totals. The desktop shows only the current context occupancy reported by the harness.
@@ -919,7 +921,7 @@ flowchart LR
 - `automation` depends only on `core`, `contracts` and `platform`. Pure recurrence lives in core; OS service primitives live in platform.
 - `desktop` depends on `core`, `bridge`, `automation` and `platform`. `bridge` and `renderer` may import only types from `core`; neither may import `platform`. The renderer reaches the main process only through the preload bridge. Only `desktop` imports Electron, and only `renderer` imports React.
 - `agents` and `git` never import each other or `core`. `core` receives them as injected interfaces, so tests can use fakes.
-- `core`, `bridge`, and `agents` may import `contracts` through its index. `contracts` imports only Zod, never application modules or Node.js. It owns shared IDs, tool kinds, stop reasons, duration rules, and the [prompt templates](#prompt-templates). Record schemas live in `core`, IPC schemas in `bridge`, and config schemas in `core`. Zod code generation is disabled before schema construction to preserve the renderer CSP. Colocated contracts unit tests may import Vitest; production imports remain restricted to Zod, and all other boundaries still apply to tests.
+- `core`, `bridge`, and `agents` may import `contracts` through its index. `contracts` imports only Zod, never application modules or Node.js. It owns shared IDs, tool kinds, stop reasons, duration rules, and the [prompt templates](#prompt-templates). Record schemas live in `core`, IPC schemas in `bridge`, and general config schemas in `core`. The versioned MCP connector schema lives in `contracts` for shared backend/editor validation; pure scope resolution belongs to application through bridge re-exports. Zod code generation is disabled before schema construction to preserve the renderer CSP. Colocated contracts unit tests may import Vitest; production imports remain restricted to Zod, and all other boundaries still apply to tests.
 - Domain logic lives in `core` and runs without the desktop app.
 - `core`, `agents`, `git`, and `desktop` may import `platform` only through its index. `platform` imports no application modules, Electron, React, or provider SDKs. Bridge, renderer, and contracts remain browser-safe.
 
@@ -1090,7 +1092,191 @@ Every key is optional. `permissions`, `agents`, and `prompts` are merged over th
 
 The model is part of an agent's command or of the agent's own configuration. The tool does not pick models; the desktop displays the model reported through ACP configuration.
 
-### User MCP servers
+### MCP connector foundation and target runtime
+
+Phase 2 adds a backend-only `McpConfigurationStore`, strict text validation and
+guarded filesystem operations. The service is not composed into ApplicationHost
+and does not replace current runtime loading. It adds no browser route, UI,
+connector process, credential resolution or approval persistence.
+
+#### Configuration storage service
+
+The text scanner shares the version-one document schema and rejects duplicate
+decoded keys, comments, trailing commas, invalid UTF-8 and malformed JSON. Limits
+are 1 MiB UTF-8, 32 nesting levels, 32,768 nodes and 32 issues. Issues have fixed
+codes/messages, redacted field paths and one-based UTF-16 line/column ranges, never
+snippets, arbitrary unknown keys or raw parser exceptions. BOMs are not stripped
+and unpaired raw surrogate input is rejected rather than silently rewritten.
+Source locations share a prefix tree rather than copying arbitrary key prefixes
+for every descendant; scalar matching does not copy the unconsumed input.
+
+The application-owned store registers backend-controlled user configuration
+directories and canonical source-project roots, returning opaque target IDs.
+Mutation requests accept only target IDs, expected revisions, request IDs and
+operation-specific content. Read/save/move/list-backups/restore/list-pending/
+recover/close are backend library operations; none are ApplicationClient methods.
+Missing files return empty defaults without creating config files or directories.
+Malformed files retain bounded text when UTF-8 permits it; oversized/unsafe files
+are refused rather than exposed as editable truncations.
+
+Platform owns bounded same-handle reads, full-precision native identities, guarded
+staging/replacement and directory sync. Symlinks, hard links, unexpected ownership,
+non-regular files, changed roots and writable-by-others managed paths are refused.
+Project definitions accept owner-owned Git modes such as 0644; new project files
+use 0644. User files, backups and journals use 0600, with private recovery
+directories 0700. Existing unsafe modes are not changed silently. Existing permitted
+file modes are preserved; read-only files cannot be overwritten.
+
+Revisions bind exact bytes and native change stamps. Absence has an explicit
+path-bound revision, with root identity checked separately. Missing managed
+directories are created only for a prepared mutation. Private store state uses the
+existing verified writer-ownership protocol and one serialized queue. Live or
+unverifiable ownership and replaced state roots block access. Guarded writes
+recheck before publication and verify afterward; they do not lock external editors
+or promise atomic compare-and-swap against non-cooperating writers.
+
+Valid saves preserve exact text. Identical-byte saves produce no backup or new
+file revision; moves serialize two-space JSON with a final newline. Validation
+and revision checks precede configuration writes. Exclusive sibling temporaries
+are synced before atomic rename; directories are synced afterward. Durable request
+receipts prevent replay and reject conflicting ID reuse independently of argument
+property order. Receipts count toward the storage budget and are not backup-pruned.
+
+Private versioned journals retain exact preimages/postimages and staged identities
+before publication, with an 8 MiB journal limit. Up to 20 backups per target share
+a 100 MiB total ceiling with receipts and transaction evidence. Internal tests may
+lower, never raise, the ceiling. Reservation covers journal rewrites. Only verified
+completed, unpinned backups are pruned oldest-first. Pending, unknown or corrupt
+evidence is preserved; insufficient headroom blocks mutation. Enumeration is bounded
+to 100,000 records and every record has a bounded private read.
+
+Moves require valid documents, fresh revisions, distinct targets, an existing
+source entry and no destination ID collision. Destination is published first,
+then the source entry is removed, retaining an empty source document. Credentials
+and approvals do not move. Partial publication blocks mutations of affected targets;
+unrelated targets remain usable and reads report pending transaction IDs.
+
+Startup inspects without replay. Explicit Complete/Roll back requires fresh
+revisions and known before/after states. Newer edits, changed roots and corrupt
+evidence block recovery. Ordinary restores validate backups; only explicit rollback
+may restore a malformed original. Post-rename sync uncertainty returns
+recovery-required with preserved evidence; completion syncs without repeating the
+rename. Cancellation before preparation changes no configuration; afterward it
+retains a recoverable record. Close drains the queue and releases ownership without
+completing pending effects. No lock-deletion repair or automatic tool/task replay
+is introduced. See [the recovery runbook](docs/runbooks/mcp-configuration.md).
+
+This internal foundation changes no product capability or availability, so catalog
+regeneration is deferred until the human-facing operations land.
+
+#### Foundation status
+
+Phase 1 implements browser-safe document/status contracts and pure scope resolution,
+with a supporting ACP/stdio protocol proof. It does not load the new files, expose
+management UI/APIs, store credentials or start a production connector runtime.
+The existing user MCP behavior in the next section remains active until the later
+storage and runtime phases replace it. This intermediate state is not a promise
+to support old configuration formats; no migration or compatibility reader is planned.
+See [the implementation plan](ad-hoc-plans/mcp-connectors-plan.md) and
+[the architectural view](docs/architectural-views/mcp-connector-ownership.md).
+
+#### Configuration and scope
+
+The target files are `$XDG_CONFIG_HOME/code60/mcp.json` (default
+`~/.config/code60/mcp.json`) and `<project>/.code60/mcp.json`. Missing files will
+mean empty `{ "version": 1, "servers": {} }` documents. Each server's map key is
+its stable lowercase alphanumeric/hyphen ID (1–64 characters, starting with an
+alphanumeric); `code60` is reserved. Identity is scope plus ID, not its editable
+label. Entries require label, enabled and transport-specific fields. Disabled is
+not missing. Objects reject unknown fields and versions; no coercion is allowed.
+
+Version 1 accepts stdio (`command`, default-empty `args` and `env`) and Streamable
+HTTP (`url`, default-empty `headers`, default `auth: { "type": "none" }`). Binding
+values are explicit `{ "value": "non-secret" }` or
+`{ "credentialRef": "local-binding" }` objects. Header credential bindings may
+also contain `prefix`, for example `Bearer `. OAuth auth contains `type: "oauth"`,
+default-empty `scopes`, optional `clientId` and optional `clientSecretRef`.
+No tokens, discovered OAuth endpoints or provider-owned app registrations belong
+in these documents. Literal Authorization/Proxy-Authorization headers are rejected;
+other literals are explicitly non-secret configuration, not automatic secret detection.
+Use credential references for every sensitive value, including custom API-key headers.
+
+Limits are 64 servers per document; 120-character labels; 4,096-character commands,
+URLs, arguments and client IDs; 128 arguments; 64 bindings per environment/header
+map with 128-character names; 8,192-character literal values/header prefixes;
+128-character credential references; and 64 OAuth scopes of 256 characters each.
+All strings reject NUL. HTTP URLs reject user information and fragments. Header
+names use HTTP token syntax, are unique ignoring case, and values/prefixes reject
+CR/LF. Environment names reject `=`. Text byte limits, duplicate JSON keys, private
+files, atomic saves, backups and move recovery are implemented by the phase 2
+backend library above and remain unwired to active loading.
+
+Project entries always shadow matching user IDs, including disabled or unapproved
+entries; no fallback occurs. Resolution reports source, revision, shadowed sources,
+enabled/approval state and eligibility separately. Status metadata contains no
+definitions, paths or credentials. Configuration eligibility is not connection
+health, authentication or authority to call a tool; observations are separate.
+Resolution returns detached definitions in backend memory only.
+
+Project chats and workers resolve the captured canonical execution target, never
+the selected sidebar project or a generated worktree's copied config. Relay and
+custom assistants resolve user definitions only; their target-bound workers resolve
+that target's project definitions. A worker without a project context uses user
+definitions; a project chat without its target fails closed. Scheduler, provider
+verification, memory/search helpers and other isolated helpers receive none.
+
+Approval is private backend-owned state binding an opaque project identity to the
+reviewed document revision. The project identity must bind the canonical source
+directory and its full native identity; revisions must derive from the captured
+file contents. An ID is not a browser path capability. Identity/revision changes
+invalidate approval, including moves into a project. Never trust approval embedded
+in a repository document. Opening/cloning a project does not activate its servers.
+The pure resolver accepts already validated snapshots and approval metadata; it
+does no filesystem, network or credential-store I/O.
+
+#### Connection ownership and authority
+
+The target design gives each ACP session a separate connection per effective
+connector. Application owns configuration, approvals, session generations and
+execution eligibility. Agents owns MCP protocol/transports and the provider-facing
+stdio adapter. Gateway composes these dependencies and owns private loopback
+listeners, injecting a narrow transport port into application. Platform owns native
+identity, process groups and future Keychain/Secret Service access. Only the
+gateway-to-agents dependency is added; application does not import agents.
+
+Both upstream transports are presented to ACP providers as fixed local stdio
+adapters. Providers receive only a session/connector-scoped ephemeral capability;
+upstream credentials remain backend-owned. The provider boundary needs no optional
+ACP HTTP capability. Adapters do not receive generic filesystem/shell authority or
+the built-in orchestration gateway's capability.
+
+Initialize and discover tools without granting call authority. Preserve existing
+ACP once-only permission handling and reject calls from inactive, revoked or
+cross-session capabilities independently of provider permission answers. Tool
+annotations are untrusted hints, never approvals. Version 1 advertises tools only;
+resources, prompts, sampling and elicitation are unsupported. Preserve tool content
+and errors; forward cancellation with bounded teardown and no automatic replay.
+
+Browser detach preserves approved session work; it cancels page-owned tests and
+pending decisions. Stop, session replacement and backend shutdown revoke owned
+capabilities and settle transport/process cleanup. Retain ownership if cleanup
+cannot be verified. Reconnect/explicit ACP restoration obtains fresh capabilities;
+records never restore authority and uncertain tool calls are never replayed.
+
+Optional pre-bundled definitions such as Playwright are ordinary opt-in templates,
+not dedicated integrations or the existing managed browser capability. Reset will
+clear selected user definitions without deleting built-in capabilities; inherited
+sources must be previewed. First-class dedicated integrations, Code60-owned client
+registrations/IDs/secrets, bespoke account flows, hosted authentication, legacy SSE
+and automatic package/prerequisite installation remain outside this change.
+
+Phase 1's fake provider/adapter/private-upstream fixtures demonstrate new/load/resume,
+tool discovery/results, once-only permission decisions, scoped authority, revocation,
+cancellation and secret isolation. They are supporting integration evidence, not a
+production broker or proof of a specific real provider's compatibility. No capability
+catalog change is needed until a new user-facing capability becomes available.
+
+### User MCP servers (current runtime)
 
 The optional top-level `mcpServers` map defaults to empty. See [MCP configuration](MCP.md)
 for stdio, HTTP and SSE examples. Each definition has an explicit `type`: stdio

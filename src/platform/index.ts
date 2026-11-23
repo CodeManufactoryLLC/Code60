@@ -1,6 +1,20 @@
 export { resolveCommand } from "./command.js";
 export { DiagnosticTail, diagnosticMessage, diagnosticText } from "./diagnostics.js";
 export { environmentValue, mergeSearchPath, setEnvironmentPath, userHome } from "./environment.js";
+export {
+  bindGuardedTarget,
+  captureGuardedRoot,
+  discardGuardedStage,
+  GuardedFileError,
+  type GuardedFileIo,
+  type GuardedSnapshot,
+  type GuardedTarget,
+  guardedFileRevision,
+  publishGuardedFile,
+  readGuardedFile,
+  stageGuardedFile,
+  syncGuardedDirectory,
+} from "./guarded-file.js";
 export { containedPath, samePath } from "./paths.js";
 export {
   fileCode,

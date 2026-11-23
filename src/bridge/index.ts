@@ -19,6 +19,12 @@ export {
   type KnowledgeReport,
   type KnowledgeTool,
   knowledgeReportSchema,
+  MCP_TEXT_LIMITS,
+  type McpConnectorConfigurationStatus,
+  type McpConnectorDefinition,
+  type McpConnectorDocument,
+  type McpConnectorSource,
+  type McpTextIssue,
   mcpToolsForRole,
   type PageDefinition,
   type ParentPageId,
@@ -26,7 +32,9 @@ export {
   parentPageIds,
   parseBrowserRequest,
   parseKnowledge,
+  parseMcpConnectorDocument,
   settingsSections,
+  validateMcpConnectorText,
 } from "../contracts/index.js";
 export * from "./automation.js";
 export type { ChatReference, ChatUndoResult } from "./chat-context.js";

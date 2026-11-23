@@ -3,6 +3,11 @@
 `src/agents` starts agent processes and talks to them over ACP with `@agentclientprotocol/sdk`. Read [ARCHITECTURE.md](../../ARCHITECTURE.md) before changing it.
 
 - Do not import `core` or `git`.
+- The MCP connectors target design uses one agents-owned stdio adapter per
+  session/connector; gateway composes transports and application owns authority.
+  Phase 1 supplies protocol feasibility fixtures only, not a live connector
+  entrypoint. Upstream credentials stay backend-owned; provider adapters receive
+  only scoped, ephemeral capabilities. Preserve existing ACP permission handling.
 - Spawn agents through `platform` with argument arrays, the run's worktree as the working directory, and their own POSIX process group.
 - Advertise no ACP file-system or terminal client capabilities.
 - Keep the agent process and session open after a turn ends. Stop the process only when the caller finishes the run or cancellation escalates.

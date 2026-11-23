@@ -8,6 +8,28 @@ Gateway interaction ports replace native dialogs and pickers. Scheduled jobs hav
 runtime/policy but share the owning gateway process. Backend shutdown stops all owners.
 Keep existing storage formats and domain/ownership safeguards. Import other modules through indexes.
 
+## MCP connector foundation
+
+Phase 2's backend-only configuration store uses registered targets/revisions,
+private backups and versioned journals. No active config loader or browser route
+is wired yet. Preserve raw preimages, block affected targets after partial writes,
+and require explicit known-state Complete/Roll back. Keep pending/unknown/corrupt
+evidence; prune only completed verified unpinned backups. Accepted request IDs
+never replay effects. Project files may use 0644; user files/evidence stay private.
+Close drains queued operations without replaying pending effects. Follow
+`docs/runbooks/mcp-configuration.md` before any recovery work.
+
+Phase 1's pure resolver consumes validated documents and trusted backend-owned
+identity/revision/approval metadata. Project definitions always shadow matching
+user IDs, even when disabled or unapproved; never fall back. Bind project reads
+to captured canonical execution targets, never sidebar selection or worktree
+copies. Relay/custom assistants use user definitions; target-bound workers use
+that target's project definitions. Excluded helper/scheduler roles receive none.
+Eligibility is not authentication, connection health or permission to execute.
+Do not wire the resolver into live loading until the later storage/runtime phases.
+Keep transport dependencies injected; application must not import agents or own
+new loopback listeners.
+
 # Application
 
 - Conversational browser automation is a lazy, per-chat `code60_browser` gateway

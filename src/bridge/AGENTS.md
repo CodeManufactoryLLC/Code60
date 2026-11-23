@@ -6,6 +6,11 @@ preserve captured owner identities. Native shell APIs are not browser capabiliti
 
 # Bridge
 
+- MCP connector schemas/status types are re-exported for the future editor. Phase 1
+  adds no ApplicationClient methods, snapshots or gateway operations. Definitions
+  and credential references must not enter ordinary awareness/snapshots; opaque
+  source/status metadata is separate from backend resolution.
+
 - `code60_browser` is an orchestrator gateway tool, not a renderer process API.
   Re-export its browser-safe strict requests only; modes are conversation-local
   and no mode preference or generic execution method crosses desktop IPC.

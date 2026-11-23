@@ -11,6 +11,14 @@
   Vitest; other module and browser-safety boundaries still apply to those tests.
   Do not import other application modules, Node.js, Electron, or React.
 - Keep side effects and I/O out of schemas. Use `parseValue` for concise errors and CSP-safe parsing.
+- MCP connector documents are versioned, bounded, browser-safe data, not browser
+  launch requests. Use `parseMcpConnectorDocument` for fixed credential-safe
+  errors. They are not wired to active config loading in phase 1. Credential
+  references are local bindings, never secret values or execution authority.
+- Phase 2 text validation shares that schema, rejects decoded duplicate keys and
+  bounds bytes/depth/nodes/issues. Report fixed errors, scrubbed paths and UTF-16
+  locations; never parser excerpts or arbitrary keys. Do not rewrite valid text or
+  silently replace malformed encoding. No new browser operation is introduced.
 - Preserve input limits and strict IPC field rejection. Do not coerce untrusted values.
 - Keep bundled tactics versioned, browser-safe and side-effect-free. Compose shared
   instructions once for both preview and trusted main-process delivery. Roles and

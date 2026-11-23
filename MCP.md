@@ -1,5 +1,13 @@
 # MCP configuration
 
+The [MCP connectors plan](ad-hoc-plans/mcp-connectors-plan.md) introduces dedicated
+user/project files and backend-owned connections in stages. Phase 1 adds schema
+and resolution contracts plus protocol fixtures; phase 2 adds the backend storage
+library, strict text validation, backups and explicit transaction recovery. The
+new files/editor/runtime are not active yet; the instructions below describe the
+current behavior. See the [storage recovery runbook](docs/runbooks/mcp-configuration.md) and
+[the target architecture](ARCHITECTURE.md#mcp-connector-foundation-and-target-runtime).
+
 Code60 passes configured [Model Context Protocol](https://modelcontextprotocol.io/)
 servers to your coding agent through ACP. Edit
 `$XDG_CONFIG_HOME/code60/config.json`, or `~/.config/code60/config.json` when
