@@ -1094,10 +1094,44 @@ The model is part of an agent's command or of the agent's own configuration. The
 
 ### MCP connector foundation and target runtime
 
-Phase 2 adds a backend-only `McpConfigurationStore`, strict text validation and
-guarded filesystem operations. The service is not composed into ApplicationHost
-and does not replace current runtime loading. It adds no browser route, UI,
-connector process, credential resolution or approval persistence.
+Phases 1–2 provide the contracts, resolver, strict text validation and guarded
+`McpConfigurationStore`. Phase 3 composes one lazy application-owned management
+service with Apps → MCP Servers. It reads/writes dedicated user/project mcp.json
+files but does not replace current runtime loading or launch configured servers.
+Credential resolution, approval persistence and connection controls remain deferred.
+
+#### Guided configuration management
+
+Five authenticated human operations list targets/templates, read one scoped
+configuration, save a validated document, preview a move and commit a move.
+Requests accept opaque registered targets, revisions and mutation UUIDs. Project
+addresses additionally bind the open runtime UUID and database epoch. Backend-only
+registration derives stable target identity from canonical path/device/inode,
+separately from transient runtime authority. Aliased canonical targets deduplicate;
+closed targets retain transaction evidence without remaining browser-addressable.
+Project lifecycle mutations and configuration writes share the application queue;
+ownership is checked after queue waits and a publishing transaction settles before
+project close/database replacement. Accepted writes settle on browser detach;
+reconnection reads their recorded state and never starts connectors.
+
+User scope needs no database. Project views show effective inherited definitions
+and shadowing; disabled/unapproved entries still override user IDs. Invalid local
+files and pending recovery block guided writes, while malformed user inheritance
+is explicitly incomplete. Definitions appear only in explicit management reads,
+never normal snapshots, awareness or agent gateways. Payload-free change notices
+refresh active views; inactive/hidden views defer reads and reject stale replies.
+
+Guided forms support stdio arguments/environment bindings and Streamable HTTP
+headers/OAuth registration metadata. Literals are explicitly non-secret; credential
+references remain unverified and are never resolved/copied. Add accepts blank,
+optional pinned Playwright/Context7 templates or one strictly parsed pasted server
+object for review. Add defaults disabled, Edit preserves enabled state and IDs.
+Remove/move require confirmation and use captured revisions. Moves preview
+collisions, affected open-project context and unverifiable references; no closed
+repositories are scanned. Guided saves produce two-space JSON with a final newline.
+Forms retain drafts on recoverable failures and reject changed owner/revision;
+malformed files require external correction until the phase 4 editor. In-app
+recovery, reset, secure authentication and activation are not present yet.
 
 #### Configuration storage service
 
@@ -1114,7 +1148,8 @@ The application-owned store registers backend-controlled user configuration
 directories and canonical source-project roots, returning opaque target IDs.
 Mutation requests accept only target IDs, expected revisions, request IDs and
 operation-specific content. Read/save/move/list-backups/restore/list-pending/
-recover/close are backend library operations; none are ApplicationClient methods.
+recover/close remain backend library operations. Phase 3 exposes only the five
+human wrappers described above; backup and recovery controls remain deferred.
 Missing files return empty defaults without creating config files or directories.
 Malformed files retain bounded text when UTF-8 permits it; oversized/unsafe files
 are refused rather than exposed as editable truncations.
@@ -1166,14 +1201,15 @@ retains a recoverable record. Close drains the queue and releases ownership with
 completing pending effects. No lock-deletion repair or automatic tool/task replay
 is introduced. See [the recovery runbook](docs/runbooks/mcp-configuration.md).
 
-This internal foundation changes no product capability or availability, so catalog
-regeneration is deferred until the human-facing operations land.
+The phase 3 human-facing page and availability limitations are represented in the
+self-knowledge catalog; definition contents remain excluded from agent awareness.
 
 #### Foundation status
 
 Phase 1 implements browser-safe document/status contracts and pure scope resolution,
-with a supporting ACP/stdio protocol proof. It does not load the new files, expose
-management UI/APIs, store credentials or start a production connector runtime.
+with a supporting ACP/stdio protocol proof. Phase 3 adds guided management UI/APIs;
+execution still does not load the new files, store credentials or start a production
+connector runtime.
 The existing user MCP behavior in the next section remains active until the later
 storage and runtime phases replace it. This intermediate state is not a promise
 to support old configuration formats; no migration or compatibility reader is planned.

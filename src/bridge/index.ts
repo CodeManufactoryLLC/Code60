@@ -387,6 +387,20 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface ApplicationClient {
+  mcpTargets(): Promise<import("./index.js").McpManagementTargets>;
+  mcpRead(
+    target: import("./index.js").McpTargetAddress,
+  ): Promise<import("./index.js").McpManagementRead>;
+  mcpSave(
+    request: import("./index.js").McpSaveRequest,
+  ): Promise<import("./index.js").McpManagementResult>;
+  mcpPreviewMove(
+    request: import("./index.js").McpMovePreviewRequest,
+  ): Promise<import("./index.js").McpMovePreview>;
+  mcpMove(
+    request: import("./index.js").McpMoveRequest,
+  ): Promise<import("./index.js").McpManagementResult>;
+  onMcpChanged(listener: () => void): () => void;
   workflow(request: import("./workflows.js").WorkflowRequest): Promise<unknown>;
   modelDefault?(request: import("./model-defaults.js").ModelDefaultAction): Promise<void>;
   customAgent?(
@@ -1030,8 +1044,25 @@ export const parseSearchSummary = (value: unknown): SearchSummaryRequest =>
 export const parseSearchSummaryRequestId = (value: unknown): string =>
   parseValue(memoryRequestIdSchema, value);
 
+export {
+  MCP_CONNECTOR_TEMPLATES,
+  type McpManagementRead,
+  type McpManagementResult,
+  type McpManagementTarget,
+  type McpManagementTargets,
+  type McpMovePreview,
+  type McpMovePreviewRequest,
+  type McpMoveRequest,
+  type McpSaveRequest,
+  type McpTargetAddress,
+  mcpMovePreviewSchema,
+  mcpMoveSchema,
+  mcpSaveSchema,
+  mcpTargetSchema,
+  parseMcpDefinitionText,
+  parseMcpManagement,
+} from "../contracts/index.js";
 export * from "./gateway.js";
 export * from "./reviews.js";
 export { parseTaskAction, type TaskAction, type TaskView } from "./tasks.js";
-
 export * from "./workflows.js";

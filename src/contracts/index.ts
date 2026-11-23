@@ -63,4 +63,5 @@ export function boundedString(label: string, max: number) {
     .refine((value) => value.length <= max, `Invalid ${label}`);
 }
 
+export * from "./mcp-management.js";
 export * from "./workflows.js";

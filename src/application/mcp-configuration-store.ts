@@ -226,6 +226,22 @@ export class McpConfigurationStore {
     }
   }
 
+  /** Trusted backend registration only; canonical identity survives runtime replacement. */
+  registerProject(root: string, expectedTargetId?: string): Promise<string> {
+    return this.run(async () => {
+      const projectRoot = await captureGuardedRoot(root, this.options.io);
+      const targetId = hash(`project:${JSON.stringify(projectRoot)}`);
+      if (expectedTargetId && expectedTargetId !== targetId) throw new McpStorageError("conflict");
+      if (!this.targets.has(targetId)) {
+        this.targets.set(targetId, {
+          id: targetId,
+          projectRoot,
+          guard: await bindGuardedTarget(join(projectRoot.path, ".code60"), false, this.options.io),
+        });
+      }
+      return targetId;
+    });
+  }
   targetIds() {
     return [...this.targets].map(([targetId, target]) => ({
       targetId,
@@ -705,17 +721,31 @@ export class McpConfigurationStore {
     return this.execute(journal, "complete", signal);
   }
   save(
-    request: { targetId: string; expectedRevision: string; text: string; requestId: string },
+    request: {
+      targetId: string;
+      expectedRevision: string;
+      text: string;
+      requestId: string;
+      requireValidOriginal?: boolean;
+    },
     signal?: AbortSignal,
   ): Promise<Result> {
     return this.run(async () => {
       this.validate(request.text);
       const fingerprint = hash(
-        JSON.stringify(["save", request.targetId, request.expectedRevision, request.text]),
+        JSON.stringify([
+          "save",
+          request.targetId,
+          request.expectedRevision,
+          request.text,
+          ...(request.requireValidOriginal ? ["valid-original"] : []),
+        ]),
       );
       const replay = await this.replay(request.requestId, fingerprint);
       if (replay) return replay;
       const { target, current } = await this.expected(request.targetId, request.expectedRevision);
+      if (request.requireValidOriginal && !this.inspect(current).document)
+        throw new McpStorageError("invalid");
       if (current.data !== null && Buffer.from(current.data).equals(Buffer.from(request.text))) {
         const result: Result = {
           status: "unchanged",

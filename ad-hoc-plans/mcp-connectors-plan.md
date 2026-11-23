@@ -4,7 +4,7 @@ Implement an MCP Servers page for adding, editing, moving, enabling, testing,
 authenticating and recovering MCP servers. Provide guided forms and direct JSON
 editing backed by the same validation and storage services.
 
-Implementation is authorized for phases 1 and 2. Phases 3–7 remain planned. This record
+Implementation is authorized for phases 1–3. Phases 4–7 remain planned. This record
 does not authorize installation of real user services.
 
 After each completed phase, run the required checks, create a DCO-signed commit,
@@ -258,6 +258,63 @@ credentials remain in each user's local secure store and are not copied into Git
 
 **Completion:** browser journeys add, edit, remove and move definitions, including
 cancelled actions, collisions, stale project ownership and unavailable credentials.
+
+### Phase 3 implementation record
+
+Status: complete. Implementation, required validation and owned-resource cleanup verified.
+
+- Apps → MCP Servers supports user/open-project configuration, guided stdio/HTTP
+  fields, optional pinned Playwright/Context7 templates and one pasted definition
+  for review. Add is disabled by default; Edit preserves ID and enabled state.
+- Five authenticated human operations wrap one lazy application-owned store.
+  Stable canonical storage identity is separate from runtime/database fences.
+  Moves retain references and evidence, with destination-first publication.
+- Effective source/shadowing, malformed inheritance, unverified credentials,
+  conflicts and recovery blocks are explicit. Definitions stay outside ordinary
+  snapshots, diagnostics and agent awareness. No runtime activation/authentication.
+- Updated architecture, module rules, MCP/recovery docs and capability catalog.
+  Evidence is recorded in `test-results/qa/mcp-connectors-phase-3/`.
+- Phase 3 is delivered as its own DCO-signed commit on `mcp-connectors`, updating
+  existing draft PR #317. Phases 4–7 remain planned; active runtime loading,
+  activation/testing, authentication, approval persistence, direct editing/reset
+  and in-app recovery remain deferred.
+
+Verified validation and cleanup:
+
+- Focused contracts/service/form/gateway/knowledge/navigation/boundary run: 114
+  tests across 11 files passed. Capability regeneration passed (34 tests).
+- Final full check in the assigned Linux amd64 container:
+  `npm run devcontainer -- exec env VITEST_MAX_WORKERS=1 npm run check` passed
+  301 files / 2,929 tests in 514.03 seconds. All four coverage gates passed:
+  statements 71.38%, branches 64.46%, functions 65.07%, lines 73.74%.
+- The initial full run found six navigation expectations that omitted the new
+  page; those exact expectations were updated. Two later two-worker runs hit
+  the unchanged real-Git Relay review case's five-second timeout. The complete
+  file passed under coverage alone (30 tests); the final single-worker full run
+  passed it at 4.129 seconds. Parallelism was lowered within the existing budget;
+  no timeouts, assertions, retries, coverage floors or exclusions were relaxed.
+- Final MCP browser run: three real UI journeys passed in 28.0 seconds. Covers
+  manual/template/pasted Add, stdio/HTTP Edit, keyboard Save/Escape, removal/move
+  cancellation and confirmation, collisions, inheritance, unverified references,
+  provider-process inventory, external revisions/root replacement, removed or
+  malformed content on Reload, and pending recovery. Independent bytes/modes,
+  backups/journals and unchanged legacy configuration were asserted.
+- Separate first-use golden regression passed (15.5-second test / 17.3-second
+  suite): provider setup, acceptance before worker creation, automatic edits,
+  diff/attachment, reload and declined/confirmed Undo with filesystem/Git oracles.
+- Initial browser failures exposed a missing mouse-accessible Add action and
+  fixture navigation to a stopped backend origin. Corrected both, preserving
+  logs/traces. The final feature stylesheet follows module ownership/import
+  ordering, and final forms enforce the UTF-8 byte budget before submission.
+- The worktree helper removed owned containers and exported images; independent
+  stopped/running container, labelled-image and owned-image-name inventories
+  are empty. Only tini/sleep remained before teardown. Retained documented
+  dependency/build/npm/browser/model caches, BuildKit cache, ports and QA evidence.
+  No live provider, real service, hook policy or foreign resource was changed.
+- Supporting protocol/storage tests and full browser journeys are reported
+  separately in `test-results/qa/mcp-connectors-phase-3/`. Native macOS storage,
+  secure-store/OAuth, login-service and packaged/model checks were not performed:
+  this phase adds no such production behavior, packaging or model changes.
 
 ## Phase 4: Add direct editing and factory reset
 

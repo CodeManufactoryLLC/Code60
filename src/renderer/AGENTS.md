@@ -1224,3 +1224,18 @@ work. This adds no preference, agent-write field, IPC endpoint or dependency.
 Workflows uses the existing Apps navigation and modal primitives. Create with prompt fills editable fields but never starts work. Preserve form revisions, transient chat, last-known state on errors and explicit cancel/reconnect semantics. Pause polling affects observation only.
 
 The workflow player uses the shared content header, owner-bound controls, bounded newest-first events and an event-derived clock. Legacy runs have no pause/resume controls enabled.
+
+
+## MCP connector guided management (phase 3)
+
+Apps → MCP Servers manages dedicated mcp.json files through five narrow human
+operations. Keep active legacy loading and connector execution untouched. User
+scope needs no database; project scope requires the captured runtime UUID/epoch
+and canonical storage identity. Serialize writes with lifecycle changes and pass
+stable request IDs/revisions into the store. Never accept paths or expose this
+surface to agents. Explicit management reads may contain definitions/references;
+ordinary snapshots, awareness and diagnostics must not. Publish payload-free
+notices only. Preserve malformed files, pending evidence and failed drafts. New
+entries are disabled; edits preserve enabled state. Templates/paste are reviewed
+definitions, never launch requests. Authentication and connections are unchecked;
+no secret entry, approval persistence, activation, editor/reset or recovery GUI yet.

@@ -91,6 +91,12 @@ export function createBrowserClient(
   const rpc = <T>(operation: string, value?: unknown): Promise<T> =>
     browserRequest<T>("/api/operation", session, { id: crypto.randomUUID(), operation, value });
   const api: ApplicationClient = {
+    mcpTargets: () => rpc("mcp-targets"),
+    mcpRead: (target) => rpc("mcp-read", target),
+    mcpSave: (request) => rpc("mcp-save", request),
+    mcpPreviewMove: (request) => rpc("mcp-preview-move", request),
+    mcpMove: (request) => rpc("mcp-move", request),
+    onMcpChanged: (listener) => events.on("mcp-changed", listener),
     modelDefault: (request: unknown) => rpc("model-default", request),
     customAgent: (request: unknown) => rpc("custom-agent", request),
     workflow: (request) => rpc("workflow", request),

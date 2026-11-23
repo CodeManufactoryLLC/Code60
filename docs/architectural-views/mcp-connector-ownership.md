@@ -37,9 +37,11 @@ The only new module dependency is gateway to agents. Browser modules receive no
 generic host capabilities. Tools are the initial MCP surface; other features are
 explicitly unsupported.
 
-Phase 1 supplies schemas, pure resolution and protocol fixtures only. Active config
-loading, production transport/adapter composition, secure storage, OAuth and GUI
-management remain later work. The proof does not certify real provider behavior.
+Phase 1 supplies schemas, pure resolution and protocol fixtures; phase 2 supplies
+validated recoverable storage. Phase 3 adds guided human configuration management
+with stable canonical targets and transient runtime/database fences. Active config
+loading, production transport/adapter composition, secure storage, OAuth and
+activation remain later work. The proof does not certify real provider behavior.
 Detailed contracts and lifecycle rules live in
 [MCP connector architecture](../../ARCHITECTURE.md#mcp-connector-foundation-and-target-runtime).
 

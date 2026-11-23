@@ -219,7 +219,10 @@ export class DesktopKnowledge {
     let status: "available" | "blocked" | "unsupported" | "unknown" = "available";
     let reason = "Shipped; existing permissions and confirmations still apply.";
     let action: string | null = null;
-    if (cap.id === "orchestration-permissions") {
+    if (cap.id === "mcp-servers") {
+      reason =
+        "Human-only configuration management. User scope needs no database; project scope requires a live open project. Storage validity/recovery may block writes. Authentication and connection health are not checked.";
+    } else if (cap.id === "orchestration-permissions") {
       reason =
         "One toggle controls new permission requests across orchestration chats and their workers, including during a turn.";
       action = `Open ${cap.access}.`;

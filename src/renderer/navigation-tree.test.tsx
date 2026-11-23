@@ -72,6 +72,7 @@ describe("navigation tree", () => {
       "appearance",
       "commands",
       "tables",
+      "mcp-servers",
       "memory",
       "polling-settings",
       "prompts",

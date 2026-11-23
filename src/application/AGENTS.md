@@ -10,9 +10,9 @@ Keep existing storage formats and domain/ownership safeguards. Import other modu
 
 ## MCP connector foundation
 
-Phase 2's backend-only configuration store uses registered targets/revisions,
-private backups and versioned journals. No active config loader or browser route
-is wired yet. Preserve raw preimages, block affected targets after partial writes,
+Phase 2's configuration store uses registered targets/revisions, private backups
+and versioned journals. Phase 3 composes its human management wrappers; the active
+execution loader remains unchanged. Preserve raw preimages, block affected targets after partial writes,
 and require explicit known-state Complete/Roll back. Keep pending/unknown/corrupt
 evidence; prune only completed verified unpinned backups. Accepted request IDs
 never replay effects. Project files may use 0644; user files/evidence stay private.
@@ -307,3 +307,18 @@ work. This adds no preference, agent-write field, IPC endpoint or dependency.
 Transmission workflows are owned by DesktopWorkflows, independently of databases, projects and Relay. Keep the private registry locked, identity checks and durable start keys intact. Quit disconnects readers without stopping the engine; never silently bootstrap on reads. Draft helpers have no gateway, denied permissions and generation-scoped cancellation. See ARCHITECTURE.md for the approved exception.
 
 Route each record to its saved engine version. Records lacking a version belong to staging.18. Reconnect and recovery require explicit actions tied to that record.
+
+
+## MCP connector guided management (phase 3)
+
+Apps → MCP Servers manages dedicated mcp.json files through five narrow human
+operations. Keep active legacy loading and connector execution untouched. User
+scope needs no database; project scope requires the captured runtime UUID/epoch
+and canonical storage identity. Serialize writes with lifecycle changes and pass
+stable request IDs/revisions into the store. Never accept paths or expose this
+surface to agents. Explicit management reads may contain definitions/references;
+ordinary snapshots, awareness and diagnostics must not. Publish payload-free
+notices only. Preserve malformed files, pending evidence and failed drafts. New
+entries are disabled; edits preserve enabled state. Templates/paste are reviewed
+definitions, never launch requests. Authentication and connections are unchecked;
+no secret entry, approval persistence, activation, editor/reset or recovery GUI yet.

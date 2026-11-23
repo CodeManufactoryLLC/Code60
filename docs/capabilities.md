@@ -4,6 +4,20 @@ Generated from `src/contracts/knowledge.ts`. Do not edit by hand; run `npm run g
 
 Schema version: 1
 
+## MCP Servers
+
+- ID: `mcp-servers`
+- Status: shipped
+- Purpose: Add, edit, remove and move MCP server definitions without activating connections.
+- Access: Apps → MCP Servers
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Review forms before saving; confirm removal and moves.
+- Limits: User configuration is database-independent. Project configuration requires an open project and captured runtime/database identity. Project definitions shadow user IDs, including disabled/unapproved entries. New definitions are disabled. Authentication is Not checked and connection is Not tested. Credential references remain unverified; no credentials or approvals move. Playwright/Context7 templates are opt-in. Invalid files and pending recovery block writes. Runtime activation, sign-in, direct JSON editing, reset and in-app recovery remain planned. Definitions and references are excluded from awareness and agent tools.
+- Pages: `mcp-servers`
+- Settings sections: none
+- Tools: none
+
 ## Page navigation
 
 - ID: `page-navigation`

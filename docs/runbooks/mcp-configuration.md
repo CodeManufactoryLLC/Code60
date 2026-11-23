@@ -1,8 +1,8 @@
 # MCP configuration storage recovery
 
-The phase 2 backend library is available to isolated tests and later application
-callers. No MCP editor, recovery screen, browser API or CLI recovery command exists
-yet. The active configuration path remains the one described in [MCP configuration](../../MCP.md).
+The phase 2 backend library is wrapped by phase 3's Apps → MCP Servers guided
+management page and narrow browser APIs. No direct JSON editor, recovery screen
+or CLI recovery command exists yet. The active configuration path remains the one described in [MCP configuration](../../MCP.md).
 Do not invent a product command or change live files to exercise this library.
 
 ## Symptoms
@@ -67,3 +67,14 @@ confirm pending metadata cleared, and verify owned staging files were removed.
 Configuration validity does not establish project approval, authentication or
 connection health. This phase starts no connectors and moves no credentials or
 approvals.
+
+
+## Guided management status
+
+Phase 3 exposes Apps → MCP Servers for valid guided saves/removals/moves only.
+Invalid files and pending recovery display safe issues and block affected writes.
+There is no in-app Complete/Roll back or backup restore control yet. Preserve all
+private evidence and use the backend recovery procedure above with verified
+ownership. Never clear a writer lock as a repair. After an external edit, reload
+the configuration explicitly; failed drafts do not grant authority to a reopened
+project or replacement root. Authentication/connection status is not checked.

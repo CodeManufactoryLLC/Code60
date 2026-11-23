@@ -438,3 +438,65 @@ it("persists an explicit choice matching the default without disconnecting the b
     ).status,
   ).toBe(200);
 });
+
+it("provides authenticated scoped MCP management without leaking definitions through snapshots or parser errors", async () => {
+  const { gateway, directory } = await fixture();
+  const post = (path: string, value: unknown, headers: Record<string, string> = {}) =>
+    fetch(`${gateway.origin}${path}`, {
+      method: "POST",
+      headers: { Origin: gateway.origin, "Content-Type": "application/json", ...headers },
+      body: JSON.stringify(value),
+    });
+  const session = await (await post("/api/connect", { version: 1 })).json();
+  const auth = {
+    "X-Code60-Session": session.token,
+    "X-Code60-Generation": String(session.generation),
+    "X-Code60-Client": crypto.randomUUID(),
+  };
+  const events = new AbortController();
+  try {
+    await fetch(`${gateway.origin}/api/events`, { headers: auth, signal: events.signal });
+    const rpc = (operation: string, value?: unknown) =>
+      post("/api/operation", { id: crypto.randomUUID(), operation, value }, auth);
+    const target = (await (await rpc("mcp-targets")).json()).targets[0].address;
+    const read = await (await rpc("mcp-read", target)).json();
+    const value = {
+      target,
+      expectedRevision: read.revision,
+      requestId: crypto.randomUUID(),
+      document: {
+        version: 1,
+        servers: {
+          docs: {
+            enabled: false,
+            label: "private-label",
+            type: "stdio",
+            command: "must-never-launch",
+            env: { TOKEN: { credentialRef: "private-reference" } },
+          },
+        },
+      },
+    };
+    const saved = await rpc("mcp-save", value);
+    expect(saved.status).toBe(200);
+    const result = await saved.json();
+    expect(await (await rpc("mcp-save", value)).json()).toEqual(result);
+    const invalid = await rpc("mcp-read", { ...target, path: "/private-value" });
+    expect(await invalid.json()).toEqual({ error: "Invalid MCP management request." });
+    const snapshot = JSON.stringify(await (await rpc("snapshot-summary")).json());
+    expect(snapshot).not.toContain("private-reference");
+    expect(snapshot).not.toContain("private-label");
+    const raw = await fetch(`${gateway.origin}/api/operation`, {
+      method: "POST",
+      headers: { Origin: gateway.origin, "Content-Type": "application/json", ...auth },
+      body: '{"secret":"never-echo", broken',
+    });
+    expect(await raw.json()).toEqual({ error: "Invalid JSON request." });
+    expect(await readFile(join(directory, "config/code60/mcp.json"), "utf8")).toContain(
+      "private-reference",
+    );
+    expect((await rpc("mcp-save", { ...value, requestId: crypto.randomUUID() })).status).toBe(400);
+  } finally {
+    events.abort();
+  }
+});

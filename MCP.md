@@ -259,3 +259,33 @@ task or failed worker leaves tasks unchecked and requires **Resume plan** after 
 previous work. Resuming a plan may continue existing work, so inspect any delivery error
 before retrying. Project changes pause accepted plans. Restarting or replacing a conversation
 retains its documents on disk but never restores execution authority or resumes work.
+
+
+## Guided configuration management
+
+Open **Apps → MCP Servers**. Choose User, or an open project, then Add server.
+Start blank, choose the optional pinned Playwright/Context7 template, or paste one
+version-one server definition and review its fields. Choose a stable lowercase
+server ID and an editable label. New definitions are saved disabled. Edit preserves
+the existing enabled state; activation controls are planned for a later phase.
+
+Use argument rows for stdio and explicit non-secret literals or credential
+references for environment/header bindings. References remain unverified; this
+page never stores or resolves credentials. OAuth fields are registration metadata,
+not a sign-in flow. Saving or viewing a template never launches its command or
+contacts its endpoint. A future approved npx launch may download its package.
+
+User configuration needs no database and writes to the dedicated configuration
+folder's mcp.json. Project configuration writes to .code60/mcp.json in the canonical
+open project. These files do not feed active agent sessions yet. The current
+config.json loader remains unchanged during this intermediate phase.
+
+Project entries shadow user IDs even while disabled or unapproved. Inherited
+entries link to their user configuration. Remove previews any inheritance revealed;
+Move previews source/destination, collisions and unverified references. It moves
+no credentials or approvals. Closed repositories are not scanned.
+
+Conflicts retain the draft; reload explicitly before saving against the new
+revision. Invalid files and pending recovery block guided changes. Preserve evidence
+and follow [configuration recovery](docs/runbooks/mcp-configuration.md). The direct
+JSON editor, backup restore, factory reset and in-app recovery controls remain planned.

@@ -68,6 +68,14 @@ import {
   type KnowledgeOwner,
   MCP_PROTOCOL_VERSION,
   type McpControlTool,
+  type McpMovePreviewRequest,
+  type McpMoveRequest,
+  type McpSaveRequest,
+  type McpTargetAddress,
+  mcpMovePreviewSchema,
+  mcpMoveSchema,
+  mcpSaveSchema,
+  mcpTargetSchema,
   type Plan,
   type PlanAction,
   type PlanRead,
@@ -84,6 +92,7 @@ import {
   parseGitSetupCommit,
   parseGitSetupFile,
   parseGitSetupIdentity,
+  parseMcpManagement,
   parseMemoryExtraction,
   parseMemoryRequestId,
   parseOrchestrationChatAction,
@@ -171,6 +180,7 @@ import {
   privateDirectory,
   samePath,
   setEnvironmentPath,
+  userHome,
 } from "../platform/index.js";
 import { probeAgent } from "./agent-connection.js";
 import { AgentSetup } from "./agent-setup.js";
@@ -205,6 +215,7 @@ import {
   workerTranscript,
 } from "./mcp-control.js";
 import { createMcpGateway } from "./mcp-gateway.js";
+import { McpManagement } from "./mcp-management.js";
 import { type McpTableRow, readMcpTool } from "./mcp-tables.js";
 import { MemoryService } from "./memory-service.js";
 import { ModelDefaults } from "./model-defaults.js";
@@ -319,6 +330,30 @@ interface Batch {
 
 /** Owns one workspace and independent batches. All history mutations are serialized. */
 export class ApplicationHost {
+  readonly mcp: McpManagement;
+  mcpTargets() {
+    return this.mcpOperation(() => this.mcp.targets());
+  }
+  mcpRead(value: McpTargetAddress) {
+    const target = parseMcpManagement(mcpTargetSchema, value);
+    return this.mcpOperation(() => this.mcp.read(target));
+  }
+  mcpSave(value: McpSaveRequest) {
+    const request = parseMcpManagement(mcpSaveSchema, value);
+    return this.mcpOperation(() => this.mcp.save(request));
+  }
+  mcpPreviewMove(value: McpMovePreviewRequest) {
+    const request = parseMcpManagement(mcpMovePreviewSchema, value);
+    return this.mcpOperation(() => this.mcp.preview(request));
+  }
+  mcpMove(value: McpMoveRequest) {
+    const request = parseMcpManagement(mcpMoveSchema, value);
+    return this.mcpOperation(() => this.mcp.move(request));
+  }
+  private mcpOperation<T>(operation: () => Promise<T>) {
+    // Scope is explicit in requests, never captured from the selected sidebar owner.
+    return this.projectHost.run(this.projectHost.fallback, () => this.exclusive(operation));
+  }
   private readonly projectHost = new ProjectHost(() => this.makeProjectState());
   private makeProjectState() {
     return {
@@ -1893,6 +1928,22 @@ export class ApplicationHost {
     private readonly dialogs: DesktopDialogs,
     private readonly storage: DesktopStorage,
   ) {
+    this.mcp = new McpManagement(
+      join(stateHome(env), "code60", "mcp-configuration"),
+      join(env.XDG_CONFIG_HOME || join(userHome(env), ".config"), "code60"),
+      () =>
+        this.projectHost.all().flatMap((owner) =>
+          !owner.closed && owner.state.workspace
+            ? [
+                {
+                  projectId: owner.id,
+                  databaseEpoch: owner.epoch,
+                  root: owner.state.workspace.dir,
+                },
+              ]
+            : [],
+        ),
+    );
     this.modelDefaults = new ModelDefaults(storage.preferences, () => this.changed(null));
     this.memory = new MemoryService(
       join(stateHome(env), "code60", "memory"),
@@ -6315,6 +6366,7 @@ export class ApplicationHost {
     this.details.clear();
     this.closing = true;
     const results = await Promise.allSettled([
+      this.queue.then(() => this.mcp.close()),
       this.memory.close(),
       this.clearSearch(),
       this.cancelRag(),

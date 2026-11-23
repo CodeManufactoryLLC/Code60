@@ -6,6 +6,10 @@ import type {
 } from "../application/index.js";
 import { logProjectId } from "../application/index.js";
 import {
+  mcpMovePreviewSchema,
+  mcpMoveSchema,
+  mcpSaveSchema,
+  mcpTargetSchema,
   parseAction,
   parseBoolean,
   parseConfigurationId,
@@ -24,6 +28,7 @@ import {
   parseLogClear,
   parseLogDetail,
   parseLogQuery,
+  parseMcpManagement,
   parseMemoryAction,
   parseMemoryBrowse,
   parseMemoryDetail,
@@ -74,6 +79,16 @@ export function applicationOperations(
   const handle = (name: string, action: (value: unknown) => unknown) => {
     operations.set(name, action);
   };
+  handle("mcp-targets", (value) => {
+    if (value !== undefined) throw new Error("Invalid MCP management request.");
+    return controller.mcpTargets();
+  });
+  handle("mcp-read", (value) => controller.mcpRead(parseMcpManagement(mcpTargetSchema, value)));
+  handle("mcp-save", (value) => controller.mcpSave(parseMcpManagement(mcpSaveSchema, value)));
+  handle("mcp-preview-move", (value) =>
+    controller.mcpPreviewMove(parseMcpManagement(mcpMovePreviewSchema, value)),
+  );
+  handle("mcp-move", (value) => controller.mcpMove(parseMcpManagement(mcpMoveSchema, value)));
   handle("workflow", (value) => workflows.request(value));
   handle("automation", (value) => automations.request(value));
   handle("model-default", (value) => controller.modelDefault(parseModelDefaultAction(value)));

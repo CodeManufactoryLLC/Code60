@@ -66,7 +66,11 @@ async function body(request: IncomingMessage): Promise<unknown> {
     if (size > GATEWAY_LIMITS.requestBytes) throw new Error("Request is too large.");
     chunks.push(chunk);
   }
-  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)));
+  try {
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)));
+  } catch {
+    throw new Error("Invalid JSON request.");
+  }
 }
 const mime: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -252,6 +256,7 @@ export async function startGateway(options: GatewayOptions = {}) {
       );
       emit("update", snapshot);
     }, true),
+    application.mcp.subscribe(() => emit("mcp-changed")),
     application.memory.subscribe(() => emit("memory-changed")),
     application.rag.subscribe((status) => emit("rag-status", status)),
     logs.subscribe(() => emit("logs-changed")),
