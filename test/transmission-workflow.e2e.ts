@@ -1,10 +1,12 @@
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { type ElectronApplication, expect, test } from "@playwright/test";
-import { launchDesktop, removeDesktopFixture } from "./electron-launcher.js";
+import { pathToFileURL } from "node:url";
+import { type Browser, expect, type Page, test } from "@playwright/test";
+import type { LocalTransmission as TransmissionFactory } from "../src/application/index.js";
+import type { startGateway as GatewayFactory } from "../src/gateway/index.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
 const root = resolve(import.meta.dirname, "..");
@@ -16,27 +18,91 @@ function alive(pid: number) {
     return false;
   }
 }
-// Only replace the external runtime's platform/bootstrap boundary. Requests still
-// traverse the production renderer/preload/bridge/registry/Git/HTTP implementation.
-async function attachTransmissionBoundary(application: ElectronApplication) {
-  await application.evaluate(
-    async (_electron, path) => {
-      const { createRequire } = process.getBuiltinModule(
-        "node:module",
-      ) as typeof import("node:module");
-      const { workflows } = createRequire(path)(path);
-      for (const client of [workflows.client, workflows.legacyClient]) {
-        Object.defineProperty(client, "supported", { value: true });
-        client.connect = async (signal: AbortSignal) => {
-          await client.call("health", {}, signal);
-        };
-      }
-    },
-    join(root, "dist/application/main.js"),
-  );
+// Replace only the external runtime's platform/bootstrap boundary. All requests
+// traverse the production renderer/gateway/bridge/registry/Git/HTTP implementation.
+const { startGateway } = (await import(
+  pathToFileURL(join(root, "dist/gateway/index.js")).href
+)) as {
+  startGateway: typeof GatewayFactory;
+};
+const { LocalTransmission } = (await import(
+  pathToFileURL(join(root, "dist/application/index.js")).href
+)) as {
+  LocalTransmission: typeof TransmissionFactory;
+};
+async function launchWorkflowBrowser(browser: Browser, directory: string) {
+  const shell = join(directory, "test-shell");
+  await writeFile(shell, '#!/bin/sh\nexec /bin/sh -c "$2"\n', { mode: 0o700 });
+  const env = {
+    ...process.env,
+    HOME: directory,
+    SHELL: shell,
+    XDG_CONFIG_HOME: join(directory, "config"),
+    XDG_STATE_HOME: join(directory, "state"),
+  };
+  let supported = process.platform === "darwin";
+  const client = (version: "0.1.0-staging.20" | "0.1.0-staging.18") => {
+    const transport = new LocalTransmission(
+      join(directory, "state/code60/workflows", `transmission-${version}`),
+      env,
+      version,
+    );
+    return {
+      get supported() {
+        return supported;
+      },
+      call: transport.call.bind(transport),
+      async connect(signal: AbortSignal) {
+        await transport.call("health", {}, signal);
+      },
+    };
+  };
+  const gateway = await startGateway({
+    env,
+    roots: [directory],
+    assets: join(root, "dist/renderer"),
+    workflowClients: { current: client("0.1.0-staging.20"), legacy: client("0.1.0-staging.18") },
+  });
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  try {
+    const page = await context.newPage();
+    page.setDefaultTimeout(15_000);
+    await page.goto(gateway.origin);
+    return {
+      origin: gateway.origin,
+      firstWindow: async () => page,
+      enableTransmission: () => {
+        supported = true;
+      },
+      async close() {
+        try {
+          await context.close();
+        } finally {
+          await gateway.stop();
+        }
+      },
+    };
+  } catch (error) {
+    await context.close();
+    await gateway.stop();
+    throw error;
+  }
+}
+type WorkflowBrowser = Awaited<ReturnType<typeof launchWorkflowBrowser>>;
+function attachTransmissionBoundary(app: WorkflowBrowser) {
+  app.enableTransmission();
+}
+async function chooseRepository(page: Page, directory: string, name: string) {
+  const chooser = page.getByRole("dialog", { name: "Choose folder", exact: true });
+  await chooser.getByRole("button", { name: `Open folder ${directory}`, exact: true }).click();
+  await chooser.getByRole("button", { name: `Open folder ${name}`, exact: true }).click();
+  await chooser.getByRole("button", { name: "Select this folder", exact: true }).click();
+  await expect(chooser).toHaveCount(0);
 }
 
-test("workflow: Transmission prompt creation, isolated execution, status, cancellation and background reconnect", async () => {
+test("workflow: Transmission prompt creation, isolated execution, status, cancellation and background reconnect", async ({
+  browser,
+}) => {
   test.setTimeout(180_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-transmission-ui-")));
   const repo = join(directory, "project");
@@ -72,13 +138,13 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     { stdio: "ignore" },
   );
   const engineExit = new Promise<void>((done) => engine.once("exit", () => done()));
-  let application: ElectronApplication | undefined;
+  let application: WorkflowBrowser | undefined;
   let workerPid: number | undefined;
   try {
     await expect
       .poll(() => readFile(join(engineRoot, "fixture-ready"), "utf8").catch(() => ""))
       .not.toBe("");
-    application = await launchDesktop(directory, repo, join(directory, "projects.sqlite"));
+    application = await launchWorkflowBrowser(browser, directory);
     let page = await application.firstWindow();
     const openWorkflows = async () => {
       await page.locator("#tab-apps").press("ArrowRight");
@@ -107,6 +173,7 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     await headerAction("New workflow");
     const form = workflows.getByRole("region", { name: "New workflow", exact: true });
     await form.getByRole("button", { name: "Choose repository", exact: true }).click();
+    await chooseRepository(page, directory, "project");
     await form.getByRole("button", { name: "Create with prompt", exact: true }).click();
     const chat = page.getByRole("dialog", { name: "Create with prompt", exact: true });
     await chat.getByRole("textbox", { name: "Describe the workflow" }).fill("ask a question");
@@ -317,11 +384,7 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     await expect(workflows.locator("pre").filter({ hasText: "workflow-result.txt" })).toBeVisible();
     const theme = page.getByRole("button", { name: /^Color theme:/ });
     for (const width of [1400, 640]) {
-      await application.evaluate(({ BrowserWindow }, w) => {
-        const win = BrowserWindow.getAllWindows()[0];
-        win?.setMinimumSize(600, 600);
-        win?.setSize(w, w === 1400 ? 1100 : 900);
-      }, width);
+      await page.setViewportSize({ width, height: width === 1400 ? 1100 : 900 });
       for (const mode of ["Dark", "Light"]) {
         for (
           let i = 0;
@@ -352,13 +415,24 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
         await page.screenshot({ path: test.info().outputPath(`workflow-${width}-${mode}.png`) });
       }
     }
-    const exited = new Promise<void>((done) => application?.process().once("exit", () => done()));
-    await application.evaluate(({ app }) => app.quit());
-    await exited;
+    await page.getByRole("button", { name: "Stop Code60 Backend", exact: true }).click();
+    const shutdown = page.getByRole("dialog", { name: "Stop Code60 Backend?", exact: true });
+    await expect(shutdown).toContainText("Approved Transmission workflows keep running");
+    await shutdown.getByRole("button", { name: "Confirm", exact: true }).click();
+    const previousOrigin = application.origin;
+    await expect
+      .poll(() =>
+        fetch(previousOrigin).then(
+          () => false,
+          () => true,
+        ),
+      )
+      .toBe(true);
+    await application.close();
     application = undefined;
     expect(engine.pid && alive(engine.pid)).toBeTruthy();
     expect(workerPid && alive(workerPid)).toBeTruthy();
-    application = await launchDesktop(directory, repo, join(directory, "projects.sqlite"));
+    application = await launchWorkflowBrowser(browser, directory);
     await attachTransmissionBoundary(application);
     page = await application.firstWindow();
     await page.getByRole("button", { name: "Start", exact: true }).click();
@@ -396,6 +470,7 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     const manual = reopened.getByRole("region", { name: "New workflow", exact: true });
     await manual.getByLabel("Workflow name", { exact: true }).fill("Manual workflow");
     await manual.getByRole("button", { name: "Choose repository", exact: true }).click();
+    await chooseRepository(page, directory, "project");
     await manual.getByLabel("Task name", { exact: true }).fill("Check behavior");
     await manual
       .getByLabel("Implementation instructions", { exact: true })
@@ -434,15 +509,18 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
       ),
     );
   } finally {
-    await application?.close();
+    const cleanup = await Promise.allSettled([application?.close()]);
     engine.kill("SIGTERM");
     await engineExit;
     if (workerPid) expect(alive(workerPid)).toBe(false);
-    await removeDesktopFixture(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true });
+    expect(cleanup).toEqual([{ status: "fulfilled", value: undefined }]);
   }
 });
 
-test("workflow: Transmission staging.18 retained history and controls use its original engine", async () => {
+test("workflow: Transmission staging.18 retained history and controls use its original engine", async ({
+  browser,
+}) => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-legacy-workflow-")));
   const repo = join(directory, "source");
   const registry = join(directory, "state/code60/workflows");
@@ -505,7 +583,7 @@ test("workflow: Transmission staging.18 retained history and controls use its or
     { stdio: "ignore" },
   );
   const exit = new Promise<void>((done) => engine.once("exit", () => done()));
-  let app: ElectronApplication | undefined;
+  let app: WorkflowBrowser | undefined;
   try {
     await expect
       .poll(() => readFile(join(engineRoot, "fixture-ready"), "utf8").catch(() => ""))
@@ -539,7 +617,7 @@ test("workflow: Transmission staging.18 retained history and controls use its or
       }),
       { mode: 0o600 },
     );
-    app = await launchDesktop(directory, repo, join(directory, "project.sqlite"));
+    app = await launchWorkflowBrowser(browser, directory);
     const page = await app.firstWindow();
     const wizard = page.locator(".agent-setup-dialog");
     await wizard.getByRole("button", { name: "Claude", exact: true }).click();
@@ -573,9 +651,10 @@ test("workflow: Transmission staging.18 retained history and controls use its or
     expect(alive(runs[0].workerPid)).toBe(false);
     expect(await readdir(registry)).not.toContain("transmission-0.1.0-staging.20");
   } finally {
-    await app?.close();
+    const cleanup = await Promise.allSettled([app?.close()]);
     engine.kill("SIGTERM");
     await exit;
-    await removeDesktopFixture(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true });
+    expect(cleanup).toEqual([{ status: "fulfilled", value: undefined }]);
   }
 });

@@ -93,6 +93,7 @@ export function createBrowserClient(
   const api: ApplicationClient = {
     modelDefault: (request: unknown) => rpc("model-default", request),
     customAgent: (request: unknown) => rpc("custom-agent", request),
+    workflow: (request) => rpc("workflow", request),
     automation: (request: unknown) => rpc("automation", request),
     onAutomationChanged: (listener: () => void) => {
       return events.on("automation-changed", listener);

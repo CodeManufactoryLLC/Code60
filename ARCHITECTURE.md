@@ -484,13 +484,13 @@ locked, bounded registry; uncertain starts never become replacement workflows.
 
 Transmission owns background execution, verification, repairs and recovery. These
 are explicit exceptions to the retry/recovery non-goals, not new Relay authority.
-Closing Code60 or a project does not cancel these workflows. Stop all retains its
-desktop-only scope. Explicit workflow cancellation retains partial files/evidence.
+Closing the browser, stopping the backend or closing a project does not cancel these workflows. Stop all retains its
+interactive application scope. Explicit workflow cancellation retains partial files/evidence.
 A versioned TRANSMISSION_STATE_DIR suppresses login registration. Read-only UI
 operations never start/restart the engine; explicit reconnect can resume approved
 work. The player routes pause, resume, guidance and stop by saved run and engine identity.
 Unversioned records retain their staging.18 engine, state directory and original start key.
-Execution time is reconstructed from server events, including across desktop restarts.
+Execution time is reconstructed from server events, including across backend restarts.
 The staging.18 engine can exceed its fresh-session retry allowance across
 restarts; server fixes are outside this prototype and no exactly-once claim is made.
 

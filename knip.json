@@ -28,10 +28,6 @@
     "test/**/*.{ts,tsx,mjs}",
     "*config*.ts"
   ],
-  "ignoreDependencies": [
-    "@wyw-in-js/shared"
-  ],
-  "ignoreBinaries": [
-    "mkfifo"
-  ]
+  "ignoreDependencies": ["@wyw-in-js/shared"],
+  "ignoreBinaries": ["mkfifo"]
 }

@@ -82,3 +82,12 @@ npm run test:packaged
 Browser tests run headlessly with fake providers and isolated state. Package checks install the npm tarball into a temporary prefix. Native service tests need an isolated, explicitly authorized supervisor environment; ordinary checks never register a real service.
 
 See [architecture](ARCHITECTURE.md), [capabilities](docs/capabilities.md), [MCP integration](MCP.md), [security](SECURITY.md), [contributing](CONTRIBUTING.md), [releases](RELEASING.md), [roadmap](ROADMAP.md) and [recovery runbooks](docs/runbooks/README.md).
+
+### Transmission workflow prototype
+
+Apps → Workflows creates ordered coding workflows manually or with **Create with
+prompt**, then shows implementation, verification, repair and decision status.
+Execution uses pinned Transmission staging.20 on macOS in dedicated saved-file
+worktrees and continues after closing the browser or stopping the backend. See the
+[workflow guide](docs/transmission-workflows.md) for prerequisites, approval defaults,
+background ownership and the known server recovery limitation.

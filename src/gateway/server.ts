@@ -7,8 +7,10 @@ import {
   ApplicationHost,
   DesktopAutomations,
   DesktopLogStore,
+  DesktopWorkflows,
   filePreferences,
   openProjectDatabase,
+  type TransmissionClient,
 } from "../application/index.js";
 import { startSchedulerRuntime } from "../automation/index.js";
 import {
@@ -52,6 +54,7 @@ export interface GatewayOptions {
   modelRoot?: string;
   developmentAssets?: string;
   onStop?: () => Promise<void>;
+  workflowClients?: { current: TransmissionClient; legacy: TransmissionClient };
 }
 const json = (value: unknown) => JSON.stringify(value ?? null);
 async function body(request: IncomingMessage): Promise<unknown> {
@@ -203,19 +206,43 @@ export async function startGateway(options: GatewayOptions = {}) {
       },
     },
   );
-  const operations = applicationOperations(application, logs, automations, interactions, emit);
+  const workflows = new DesktopWorkflows(
+    env,
+    options.deps ?? defaultDeps(),
+    () => interactions.pick("folder"),
+    (input, signal) => application.draftWorkflow(input, signal),
+    options.workflowClients?.current,
+    options.workflowClients?.legacy,
+  );
+  const operations = applicationOperations(
+    application,
+    logs,
+    automations,
+    interactions,
+    emit,
+    workflows,
+  );
   operations.set("backend-stop", async () => {
     if (
       await interactions.confirm(
         "Stop Code60 Backend?",
-        "All active agents and scheduled work will stop. History and worktrees are kept. Start Code60 again with code60 service start.",
+        "Interactive agents and scheduled jobs will stop. Approved Transmission workflows keep running; use Apps → Workflows to stop them. History and worktrees are kept. Start Code60 again with code60 service start.",
       )
     )
       shutdownRequested = true;
     return shutdownRequested;
   });
   const disposers = [
-    application.subscribe((snapshot) => emit("update", snapshot), true),
+    application.subscribe((snapshot) => {
+      workflows.observeProvider(
+        JSON.stringify([
+          snapshot.agentSetup?.primary,
+          snapshot.agentSetup?.complete,
+          snapshot.agentSetup?.enabled.includes(snapshot.agentSetup.primary ?? ""),
+        ]),
+      );
+      emit("update", snapshot);
+    }, true),
     application.memory.subscribe(() => emit("memory-changed")),
     application.rag.subscribe((status) => emit("rag-status", status)),
     logs.subscribe(() => emit("logs-changed")),
@@ -231,6 +258,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     application.setVisibility({ visible: false, worktrees: false });
     automations.reset();
     await Promise.allSettled([
+      workflows.reset(),
       application.cancelDiffReads(),
       application.cancelGitSetup(),
       application.cancelAgentSetup(),
@@ -551,7 +579,11 @@ export async function startGateway(options: GatewayOptions = {}) {
     quiescing = true;
     await pairingChange?.catch(() => {});
     interactions.close();
-    const results = await Promise.allSettled([application.shutdown(), scheduler?.stop()]);
+    const results = await Promise.allSettled([
+      application.shutdown(),
+      scheduler?.stop(),
+      workflows.close(),
+    ]);
     if (results.some((result) => result.status === "rejected")) {
       quiescing = false;
       throw new Error("Some work could not be stopped. Ownership and evidence were retained.");
@@ -606,7 +638,12 @@ export async function startGateway(options: GatewayOptions = {}) {
     };
   } catch (error) {
     for (const dispose of disposers) dispose();
-    await Promise.allSettled([application.shutdown(), scheduler?.stop(), logs.close()]);
+    await Promise.allSettled([
+      application.shutdown(),
+      scheduler?.stop(),
+      workflows.close(),
+      logs.close(),
+    ]);
     server.close();
     await release();
     throw error;

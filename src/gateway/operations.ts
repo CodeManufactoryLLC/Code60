@@ -1,4 +1,9 @@
-import type { ApplicationHost, DesktopAutomations, DesktopLogStore } from "../application/index.js";
+import type {
+  ApplicationHost,
+  DesktopAutomations,
+  DesktopLogStore,
+  DesktopWorkflows,
+} from "../application/index.js";
 import { logProjectId } from "../application/index.js";
 import {
   parseAction,
@@ -63,11 +68,13 @@ export function applicationOperations(
   automations: DesktopAutomations,
   interactions: Interactions,
   emit: (event: string, value?: unknown) => void,
+  workflows: DesktopWorkflows,
 ) {
   const operations = new Map<string, (value: unknown) => unknown>();
   const handle = (name: string, action: (value: unknown) => unknown) => {
     operations.set(name, action);
   };
+  handle("workflow", (value) => workflows.request(value));
   handle("automation", (value) => automations.request(value));
   handle("model-default", (value) => controller.modelDefault(parseModelDefaultAction(value)));
   handle("logs-query", (value) => {

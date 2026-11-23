@@ -58,7 +58,7 @@ it("routes every application method through an authenticated known gateway opera
     );
     for (const [, method] of methods) await (method as () => unknown)();
     const operations = applicationOperations(
-      ...([{}, {}, {}, {}, () => {}] as unknown as Parameters<typeof applicationOperations>),
+      ...([{}, {}, {}, {}, () => {}, {}] as unknown as Parameters<typeof applicationOperations>),
     );
     expect(writes.length).toBeGreaterThan(60);
     for (const request of writes) {

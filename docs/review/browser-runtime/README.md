@@ -83,3 +83,27 @@ For the operating contract see [architecture](../../../ARCHITECTURE.md),
 [release requirements](../../../RELEASING.md) and
 [workflow QA](../../../.factory/skills/qa/SKILL.md). Detailed local results and
 screenshots are retained under ignored `test-results/`.
+
+## Rebase onto the Transmission integration
+
+Rebased onto `e7a0f91` (PR #308). Workflows now has one gateway-owned host,
+a typed browser operation and the existing opaque repository chooser. Provider
+changes and page detach cancel only transient drafts/decisions. Backend shutdown
+releases the private registry while approved Transmission execution continues;
+the stop confirmation explains this independent ownership.
+
+The two workflow journeys now use the headless browser harness, real gateway,
+bridge, registry and Git, replacing only the external engine bootstrap/provider.
+They cover prompt/manual creation, review, pause/resume, navigation/reload,
+backend restart, uncertain stop acknowledgement and retained staging.18 history.
+Source HEAD/index/files, isolated output, same-run identity and worker lifetime
+are checked independently. No live Codex workload or published Transmission engine
+was invoked.
+
+Rebase validation: `npm run check` passed with 2,752 tests in 289 files and all
+four coverage gates; the complete registered browser suite passed all 13 journeys.
+After clarifying the backend-stop confirmation, both workflow journeys passed
+again, including confirmed backend shutdown while the engine/worker remain alive.
+`npm run package:app` and `npm run test:packaged` passed with installed CLI,
+browser assets, backend and offline inference. Linux CI and live-engine behavior
+remain separate checks. No native service or Docker resource was created.
