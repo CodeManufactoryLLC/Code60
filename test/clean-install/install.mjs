@@ -35,9 +35,9 @@ const install = (target, url) =>
 try {
   await assert.rejects(install("/work/corrupt-prefix", `${origin}/corrupt.tgz`));
   await install(prefix, `${origin}/package.tgz`);
-  await mkdir(`${prefix}/fixtures`, { recursive: true });
+  await mkdir(`${prefix}/node_modules/code60/fixtures`, { recursive: true });
   for (const name of ["fake-agent.mjs", "fake-agent-app.mjs"])
-    await cp(`/harness/${name}`, `${prefix}/fixtures/${name}`);
+    await cp(`/harness/${name}`, `${prefix}/node_modules/code60/fixtures/${name}`);
   const { stdout } = await execute(
     "/usr/local/bin/npm",
     ["ls", "--prefix", prefix, "--omit=dev", "--all", "--json"],

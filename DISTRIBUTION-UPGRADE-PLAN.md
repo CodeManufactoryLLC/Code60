@@ -35,7 +35,7 @@ service/shell changes still require clear instructions or consent.
 ### Existing implementation
 
 - Code60 is a browser-only Node application supporting macOS Apple Silicon and
-  Linux x64. There is no dev container or current Docker development harness.
+  Linux x64. Phases 1–2 add an isolated dev container and Docker acceptance harness.
 - The management CLI already implements open, service and pairing operations.
   The gateway owns the application and scheduler; native service controls have
   injectable test boundaries.
@@ -202,6 +202,15 @@ unproven when a fake supervisor is used.
 **Depends on:** Phase 1.
 
 ## Phase 3 — Platform payloads and bootstrap artifacts
+
+**Status:** implemented and locally validated. Fresh Linux x64 and native macOS
+arm64 payloads pass CLI/backend/assets and real offline CPU/model smoke checks.
+The Linux payload completes the shared first-use golden journey and fault probes;
+two concurrent runs verify independent cleanup. A private bootstrap containing both
+real descriptors passes packed CLI and staging/model acceptance. Required PR CI
+and exact-commit native workflow validation must pass before delivery. No artifact
+publication, real login service or public setup is included. See the
+[artifact workflow](docs/distribution/artifacts.md).
 
 **PR outcome:** release tooling produces verified, installable macOS arm64 and
 Linux x64 application payloads plus a small npm bootstrap.

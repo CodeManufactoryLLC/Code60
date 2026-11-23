@@ -15,7 +15,7 @@ The active policy:
 
 The aggregate check requires Linux Node 24 unit/static/coverage checks, browser
 journeys, installed npm package/offline-model smoke checks and clean installation
-acceptance to succeed. Clean installation downloads the exact tarball produced
+acceptance plus pinned Linux platform-payload acceptance to succeed. Clean installation downloads the exact tarball produced
 by the package job; the other jobs start independently. Failures, cancellations
 and skips block aggregate success.
 macOS validation runs separately. Do not require release-only checks or enable a merge queue

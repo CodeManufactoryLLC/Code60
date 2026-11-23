@@ -295,3 +295,46 @@ it("retains a foreign session when cleaning a selected run", async () => {
   for (const [kind, entries] of resources)
     expect([...entries]).toEqual([[`foreign-${kind}`, "foreign"]]);
 });
+
+it("uses the same isolation and cleanup for explicit payload mode without npm installation", async () => {
+  const root = await fixture();
+  const folder = join(root, "release/payloads");
+  await mkdir(folder);
+  const name = "code60-0.4.1-linux-x64.tar.gz";
+  await writeFile(join(folder, name), "synthetic payload for Docker orchestration");
+  await writeFile(
+    join(folder, "linux-x64.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      version: "0.4.1",
+      commit: "a".repeat(40),
+      dirty: false,
+      os: "linux",
+      arch: "x64",
+      runtime: { node: ">=24.22.0 <25", libc: "glibc" },
+      archive: {
+        name,
+        size: 100,
+        sha256: "1".repeat(64),
+        url: `https://github.com/CodeManufactoryLLC/Code60/releases/download/v0.4.1/${name}`,
+      },
+    }),
+  );
+  const ports = docker();
+  const result = await runCleanInstall(
+    root,
+    ["--payload", "release/payloads/linux-x64.json"],
+    ports,
+  );
+  expect(result.phases).toContain("verified payload extraction without npm");
+  const installer = ports.run.mock.calls
+    .map(([, args]) => args)
+    .find((args) => args.includes("/harness/test/clean-install/install-payload.mjs"));
+  expect(installer[installer.indexOf("--network") + 1]).toBe("none");
+  expect(result.cleanup).toEqual({ containers: [], images: [], volumes: [] });
+  await expect(runCleanInstall(root, ["--payload"], ports)).rejects.toThrow("<descriptor.json>");
+  await rm(join(folder, name));
+  await expect(
+    runCleanInstall(root, ["--payload", "release/payloads/linux-x64.json"], ports),
+  ).rejects.toThrow("Build the platform payload");
+});

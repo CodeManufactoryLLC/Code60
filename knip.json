@@ -26,7 +26,10 @@
     "test/clean-install/runtime.mjs",
     "test/clean-install/probe.mjs",
     "test/clean-install/supervisor.mjs",
-    "test/clean-install/installed.config.ts"
+    "test/clean-install/installed.config.ts",
+    "scripts/distribution/bootstrap.mjs",
+    "scripts/distribution/probe-native.mjs",
+    "test/clean-install/install-payload.mjs"
   ],
   "project": [
     "src/**/*.{ts,tsx,cts}",

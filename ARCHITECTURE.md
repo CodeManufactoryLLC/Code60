@@ -105,6 +105,15 @@ installed prefix is read-only at runtime, and the existing golden journey is sha
 between checkout and installed-package fixtures. This is test tooling, not a new
 installation command or native service validation.
 
+Phase 3 additionally builds unpublished platform payloads for macOS arm64 and
+Linux x64 from fresh locked production dependencies, with bundled native CPU
+libraries, assets, models, notices and provenance. A separate private npm bootstrap
+embeds both exact descriptors and uses only Node built-ins for bounded download,
+verification and safe extraction into private staging. Its executable provides
+help/version only; public setup, persistent installation and release activation
+remain later work. The legacy npm tarball stays available. See the
+[artifact workflow](docs/distribution/artifacts.md). No product capability changes.
+
 ## Current exclusions
 
 No Electron shell, native window effects, automatic updater, bundled Node, remote/LAN

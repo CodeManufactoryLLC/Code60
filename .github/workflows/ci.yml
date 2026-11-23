@@ -98,9 +98,48 @@ jobs:
           path: test-results/clean-install/
           retention-days: 7
           if-no-files-found: warn
+  payload:
+    name: Linux platform payload acceptance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v7
+        with: { node-version: "24", cache: npm, package-manager-cache: false }
+      - run: npm ci
+      - name: Prepare isolated runner Docker engine
+        timeout-minutes: 2
+        run: |
+          sudo systemctl start docker
+          docker info
+      - run: npm run devcontainer -- up
+      - run: npm run devcontainer -- exec npm ci
+      - run: npm run devcontainer -- exec npm run prepare:models
+      - run: npm run devcontainer -- exec npm run package:payload
+      - run: npm run devcontainer -- exec npm run test:payload
+      - run: npm run test:packaged:clean -- --payload release/payloads/linux-x64.json
+      - run: npm run devcontainer -- down
+        if: always()
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: code60-linux-payload
+          path: release/payloads/
+          retention-days: 7
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: payload-acceptance-evidence
+          path: |
+            test-results/clean-install/
+            test-results/payload/
+          retention-days: 7
+          if-no-files-found: warn
   passed:
     name: CI passed
-    needs: [check, browser, package, clean-install]
+    needs: [check, browser, package, clean-install, payload]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 1
@@ -110,5 +149,6 @@ jobs:
           CHECK: ${{ needs.check.result }}
           BROWSER: ${{ needs.browser.result }}
           PACKAGE: ${{ needs.package.result }}
+          PAYLOAD: ${{ needs.payload.result }}
           CLEAN_INSTALL: ${{ needs.clean-install.result }}
-        run: test "$CHECK" = success && test "$BROWSER" = success && test "$PACKAGE" = success && test "$CLEAN_INSTALL" = success
+        run: test "$CHECK" = success && test "$BROWSER" = success && test "$PACKAGE" = success && test "$CLEAN_INSTALL" = success && test "$PAYLOAD" = success

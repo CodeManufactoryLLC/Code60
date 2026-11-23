@@ -75,3 +75,13 @@ calling the harness; the host command never starts or restarts an engine. The dr
 uses an owned writable HOME rather than relying on the image's default user ID.
 Future setup, update, shell integration and native-service
 scenarios are not counted as passing tests in this baseline.
+
+## Platform payload mode
+
+After building a Linux candidate in the pinned amd64 container, run
+`npm run test:packaged:clean -- --payload release/payloads/linux-x64.json` on the
+host. See the [artifact workflow](../../docs/distribution/artifacts.md).
+This mode verifies descriptor/platform/hash/inventory before using the same
+installed golden journey and fault/process probes. Extraction uses the local
+artifact server with external networking disabled and performs no npm install,
+lifecycle scripts or compilation. The original npm tarball mode remains independent.

@@ -404,3 +404,11 @@ job tests that exact package in isolated customer/driver containers. The aggrega
 check remains **CI passed**. Manual native validation runs on macOS Apple Silicon
 with Node 24. No native installer or automatic publisher remains. Actual launchd
 and systemd login/update lifecycle checks are required before release claims.
+
+## Platform distribution candidates
+
+See the [artifact workflow](docs/distribution/artifacts.md) for `npm run package:payload`,
+`npm run test:payload`, `npm run package:bootstrap` and clean installed-payload
+acceptance. Build Linux in the pinned amd64 container and macOS on Apple Silicon.
+Retain per-run evidence and remove owned test resources; do not publish artifacts,
+install a login service or enable public setup during this contributor workflow.

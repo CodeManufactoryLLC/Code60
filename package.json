@@ -46,7 +46,11 @@
     "test:memory:performance": "npm run build && node scripts/benchmark-memory.mjs",
     "service": "node dist/management/main.js service",
     "test:browser": "npm run build && playwright test",
-    "package:app": "npm run build && node scripts/prepare-package.mjs && node scripts/package-app.mjs"
+    "package:app": "npm run build && node scripts/prepare-package.mjs && node scripts/package-app.mjs",
+    "package:payload": "npm run build && node scripts/prepare-package.mjs && node scripts/package-payload.mjs",
+    "package:bootstrap": "node scripts/package-bootstrap.mjs",
+    "test:payload": "node scripts/test-payload.mjs",
+    "test:bootstrap": "node scripts/test-bootstrap.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^2.4.0",

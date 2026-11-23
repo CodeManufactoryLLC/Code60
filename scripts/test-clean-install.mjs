@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { descriptor } from "./distribution/descriptor.mjs";
 
 const execute = promisify(execFile);
 const repository = fileURLToPath(new URL("..", import.meta.url));
@@ -104,12 +105,27 @@ export async function cleanupAcceptance(run, id) {
   return inventory;
 }
 
-async function stage(context, input, harness, archive, version) {
+async function stage(context, input, harness, archive, version, payload) {
   await mkdir(join(context, "driver/test/fixtures"), { recursive: true });
   await mkdir(join(context, "driver/test/clean-install"), { recursive: true });
   await mkdir(input);
   await mkdir(join(harness, "bin"), { recursive: true });
   await cp(archive, join(input, "package.tgz"));
+  if (payload) {
+    await writeFile(join(input, "descriptor.json"), JSON.stringify(payload));
+    await mkdir(join(harness, "scripts/distribution"), { recursive: true });
+    for (const name of ["acquire.mjs", "archive.mjs", "descriptor.mjs"])
+      await cp(
+        join(repository, "scripts/distribution", name),
+        join(harness, "scripts/distribution", name),
+      );
+    await mkdir(join(harness, "test/clean-install"), { recursive: true });
+    for (const name of ["install-payload.mjs", "support.mjs"])
+      await cp(
+        join(repository, "test/clean-install", name),
+        join(harness, "test/clean-install", name),
+      );
+  }
   for (const name of ["Customer.Dockerfile", "Driver.Dockerfile"])
     await cp(join(repository, "test/clean-install", name), join(context, name));
   for (const name of ["support.mjs", "install.mjs", "runtime.mjs", "probe.mjs", "supervisor.mjs"])
@@ -144,7 +160,17 @@ async function stage(context, input, harness, archive, version) {
 
 export async function runCleanInstall(directory, args = [], ports = {}) {
   const root = await realpath(directory);
-  const archive = await acceptanceInput(root, args);
+  let payload;
+  let archive;
+  if (args[0] === "--payload") {
+    if (args.length !== 2)
+      throw new Error("Use npm run test:packaged:clean -- --payload <descriptor.json>");
+    const path = resolve(root, args[1]);
+    payload = descriptor(JSON.parse(await readFile(path, "utf8")));
+    archive = join(dirname(path), payload.archive.name);
+    if (!(await stat(archive).catch(() => null))?.isFile())
+      throw new Error("Build the platform payload first with npm run package:payload");
+  } else archive = await acceptanceInput(root, args);
   const id = randomUUID();
   const name = `code60-acceptance-${id}`;
   const output = join(root, "test-results/clean-install", id);
@@ -234,7 +260,7 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
     dockerReady = true;
     const lock = JSON.parse(await readFile(join(root, "package-lock.json"), "utf8"));
     const version = lock.packages["node_modules/@playwright/test"].version;
-    summary.artifactSha256 = await stage(context, input, harness, archive, version);
+    summary.artifactSha256 = await stage(context, input, harness, archive, version, payload);
     summary.playwright = version;
     const uid = process.platform === "linux" ? process.getuid() || 1000 : 1000;
     const gid = process.platform === "linux" ? process.getgid() : 1000;
@@ -309,24 +335,29 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
       ...mount("volume", installation, "/installation"),
       ...mount("volume", state, "/work"),
     ]);
-    await checked("online installation from read-only local artifact", async () => {
-      await docker(
-        [
-          "run",
-          "--rm",
-          ...common,
-          "--network",
-          "bridge",
-          ...fixtures,
-          ...mount("volume", installation, "/installation"),
-          ...mount("volume", state, "/work"),
-          image,
-          "node",
-          "/harness/install.mjs",
-        ],
-        4 * 60_000,
-      );
-    });
+    await checked(
+      payload
+        ? "verified payload extraction without npm"
+        : "online installation from read-only local artifact",
+      async () => {
+        await docker(
+          [
+            "run",
+            "--rm",
+            ...common,
+            "--network",
+            payload ? "none" : "bridge",
+            ...fixtures,
+            ...mount("volume", installation, "/installation"),
+            ...mount("volume", state, "/work"),
+            image,
+            "node",
+            payload ? "/harness/test/clean-install/install-payload.mjs" : "/harness/install.mjs",
+          ],
+          4 * 60_000,
+        );
+      },
+    );
     const runtime = `${name}-runtime`;
     const start = async (container, work, extra = [], override = [], scenario = "baseline") => {
       return docker([
