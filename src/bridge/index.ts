@@ -381,6 +381,7 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface DesktopApi {
+  workflow(request: import("./workflows.js").WorkflowRequest): Promise<unknown>;
   modelDefault?(request: import("./model-defaults.js").ModelDefaultAction): Promise<void>;
   customAgent?(
     request: import("./custom-agents.js").CustomAgentRequest,
@@ -1045,3 +1046,5 @@ export const parseSearchSummaryRequestId = (value: unknown): string =>
 
 export * from "./reviews.js";
 export { parseTaskAction, type TaskAction, type TaskView } from "./tasks.js";
+
+export * from "./workflows.js";

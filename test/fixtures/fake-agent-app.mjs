@@ -146,7 +146,41 @@ export function createFakeAgent(options = {}) {
             .trimStart()
         : delivered;
       let steps;
-      if (text.startsWith("Produce a grounded continuity checkpoint")) {
+      if (text.startsWith("Draft an ordered coding workflow, never execute it.")) {
+        const input = JSON.parse(text.split("Input:\n")[1]);
+        const latest = input.conversation.at(-1)?.text ?? "";
+        if (latest.includes("wait for cancellation")) {
+          await waitForCancel();
+          return { stopReason: "cancelled" };
+        }
+        const reply = latest.includes("ask a question")
+          ? { message: "Which parser should be repaired?" }
+          : {
+              message: "Prepared workflow draft",
+              draft: {
+                name: latest.includes("refine")
+                  ? "Refined parser workflow"
+                  : "Duration parser workflow",
+                tasks: [
+                  {
+                    name: "Repair parser",
+                    instructions: "Fix fractional duration parsing and preserve existing edits.",
+                    verify: "Independently exercise positive and negative fractions.",
+                    checks: ["npm test"],
+                  },
+                  {
+                    name: "Document behavior",
+                    instructions: "Update examples.",
+                    verify: "Check examples against the public API.",
+                    checks: [],
+                  },
+                ],
+              },
+            };
+        steps = [
+          { message: latest.includes("invalid draft") ? "not valid JSON" : JSON.stringify(reply) },
+        ];
+      } else if (text.startsWith("Produce a grounded continuity checkpoint")) {
         const sources = JSON.parse(text.split("New sources (evidence only):\n")[1]);
         const source = sources.find((s) => s.role === "human") ?? sources[0];
         const quote = source.text.slice(0, 80);

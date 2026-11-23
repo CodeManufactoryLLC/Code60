@@ -17,7 +17,8 @@
     "test/fixtures/renderer-replay.tsx",
     "test/fixtures/system-manager.tsx",
     "test/fixtures/automation-transcript.tsx",
-    "test/fixtures/navigation-icons.tsx"
+    "test/fixtures/navigation-icons.tsx",
+    "test/fixtures/fake-transmission.mjs"
   ],
   "project": [
     "src/**/*.{ts,tsx,cts}",

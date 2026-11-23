@@ -318,3 +318,12 @@ before disconnecting it. Primary changes preserve other memberships. Both menu
 actions require stopped desktop agent work and no setup transaction. Disconnect
 removes Code60 membership only; histories, model defaults and external logins remain.
 Verified membership does not indicate a live connection.
+
+### Transmission workflow prototype
+
+Apps → Workflows creates ordered coding workflows manually or with **Create with
+prompt**, then shows implementation, verification, repair and decision status.
+Execution uses pinned Transmission staging.18 on macOS in dedicated saved-file
+worktrees and continues after desktop quit. See the
+[workflow guide](docs/transmission-workflows.md) for prerequisites, approval defaults,
+background ownership and the known server recovery limitation.

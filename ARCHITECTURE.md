@@ -373,6 +373,40 @@ imports are permitted.
 
 ## Non-goals
 
+### Approved Transmission workflows
+
+Apps → Workflows is a database-independent, macOS-only execution prototype using
+exactly `code60-transmission-server@0.1.0-staging.20` for new approvals and external Node >=24.22 <25.
+A human reviews and starts ordered tasks with independent verification. Automatic
+permission approvals default on and are shown before approval. A dedicated Git
+worktree starts from current saved files using existing private task snapshots;
+source HEAD, index and files remain unchanged. No automatic apply, merge, push,
+worktree deletion or message Undo is provided. One active workflow owns each source
+checkout. Approved intent and idempotency keys precede dispatch in a private,
+locked, bounded registry; uncertain starts never become replacement workflows.
+
+Transmission owns background execution, verification, repairs and recovery. These
+are explicit exceptions to the retry/recovery non-goals, not new Relay authority.
+Closing Code60 or a project does not cancel these workflows. Stop all retains its
+desktop-only scope. Explicit workflow cancellation retains partial files/evidence.
+A versioned TRANSMISSION_STATE_DIR suppresses login registration. Read-only UI
+operations never start/restart the engine; explicit reconnect can resume approved
+work. The player routes pause, resume, guidance and stop by saved run and engine identity.
+Unversioned records retain their staging.18 engine, state directory and original start key.
+Execution time is reconstructed from server events, including across desktop restarts.
+The staging.18 engine can exceed its fresh-session retry allowance across
+restarts; server fixes are outside this prototype and no exactly-once claim is made.
+
+Create with prompt opens a transient drafting chat, separate from Relay. A verified
+primary provider receives bounded conversation/current fields and optional root
+README/package-script evidence. An isolated helper has no MCP servers, denies
+permissions and has bounded runtime/output. Structured drafts can change only name
+and tasks. They never approve or start execution. Form/repository/provider revisions
+reject stale output. Helpers stop on cancellation, disposal, provider replacement,
+renderer loss and shutdown. No prompt/transcript is stored as execution history.
+Main owns repository picker tokens, identities, service credentials, all I/O and
+bounded typed HTTP requests. The renderer receives no execution configuration.
+
 ### Approved scheduled automations
 
 An Electron-independent `automation` module owns local scheduled execution, private

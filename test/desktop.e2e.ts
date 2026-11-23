@@ -3255,6 +3255,7 @@ test("desktop: Apps owns preferences and Update Manager without changing their s
       "Scheduled Jobs",
       "System Manager",
       "Update Manager",
+      "Workflows",
     ]);
     for (const [id, name] of [
       ["appearance", "Appearance"],
@@ -8146,6 +8147,7 @@ test("desktop: unread turns stay isolated and survive renderer reloads", async (
       ["tab-chat", "app-backlog"],
       ["tab-automations", "app-robotic-arm"],
       ["tab-system-manager", "app-system-manager"],
+      ["tab-workflows", "app-steering-wheel"],
       ["tab-prompts", "app-ai"],
       ["tab-commands", "app-megaphone"],
       ["tab-settings", "app-cogwheel"],
@@ -8851,7 +8853,7 @@ test("desktop: sidebar tabs, themes and live window background remain interactiv
     await expectSidebarItemCorners(sidebarHeader);
 
     const tabs = page.locator(".page-tabs [role='tab']");
-    await expect(tabs).toHaveCount(30);
+    await expect(tabs).toHaveCount(31);
     await expect(tabs.filter({ hasText: "System Manager" })).toHaveCount(1);
     const searchAction = page.locator("#tab-search");
     await expect(searchAction).toHaveAccessibleName("Search");
@@ -9390,7 +9392,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await expectTabAppearance(page);
     await selectSidebarPage(page, "Sessions");
     await expect(sessionsTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("tab")).toHaveCount(27);
+    await expect(page.getByRole("tab")).toHaveCount(28);
     await expectTabAppearance(page);
     await sessionsTab.click();
     await expect(sessionsTab).toBeFocused();
@@ -9836,7 +9838,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     ).toBeVisible();
     await expect(settingsTab).toBeFocused();
     await page.keyboard.press("ControlOrMeta+Comma");
-    await expect(page.getByRole("tab")).toHaveCount(27);
+    await expect(page.getByRole("tab")).toHaveCount(28);
     // Tab switching preserves Settings scroll, session selection, and the open chat draft.
     const settingsPage = page.locator(".settings-page");
     await selectSettingsPage(page, "Text");
@@ -9887,6 +9889,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
       "Scheduled Jobs",
       "System Manager",
       "Update Manager",
+      "Workflows",
       "Settings",
       "About",
       "Advanced",
@@ -9984,7 +9987,7 @@ test("desktop: workspace, streaming, approvals, follow-up, review, themes, shutd
     await page.keyboard.press("ArrowDown");
     await expect(page.locator("#tab-chat")).toBeFocused();
     await settingsTab.click();
-    await expect(page.getByRole("tab")).toHaveCount(30);
+    await expect(page.getByRole("tab")).toHaveCount(31);
     await selectSettingsPage(page, "Appearance");
     await settingsPage.evaluate((element) => {
       element.scrollTop = 0;
@@ -10949,6 +10952,7 @@ test("desktop: Apps cards open nested pages and preserve drafts, disclosure and 
       "Scheduled Jobs",
       "System Manager",
       "Update Manager",
+      "Workflows",
     ]);
     for (const [id, label] of [
       ["automations", "Scheduled Jobs"],
@@ -13389,6 +13393,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       "Scheduled Jobs",
       "System Manager",
       "Update Manager",
+      "Workflows",
       "Settings",
       "About",
       "Table defaults",
@@ -13420,6 +13425,7 @@ test("desktop: Chat landing, automatic ACP conversation, navigation, cancellatio
       "Scheduled Jobs",
       "System Manager",
       "Update Manager",
+      "Workflows",
       "Settings",
       "About",
       "Table defaults",

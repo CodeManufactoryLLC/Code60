@@ -78,6 +78,7 @@ describe("navigation tree", () => {
       "automations",
       "system-manager",
       "updates",
+      "workflows",
     ]);
     expect(staticChildren("tables", null).map(({ id }) => id)).toEqual([
       "configurations",

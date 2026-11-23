@@ -461,3 +461,5 @@ export {
 // Read-only desktop consumers enumerate and validate records without lifecycle reconciliation.
 export { createRecordStore, directoryRunsDir } from "./records.js";
 export { summarizeSearch } from "./search-summary.js";
+
+export { draftWorkflow } from "./workflow-draft.js";

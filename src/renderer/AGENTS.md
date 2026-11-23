@@ -1294,3 +1294,9 @@ crash may lose the last five-second interval (or more if storage writes failed).
 Undo restores checkpoint timing, clears anchors and freezes discarded plans.
 Owner teardown cancels timers; failed timing writes do not authorize or dispatch
 work. This adds no preference, agent-write field, IPC endpoint or dependency.
+
+## Transmission prototype
+
+Workflows uses the existing Apps navigation and modal primitives. Create with prompt fills editable fields but never starts work. Preserve form revisions, transient chat, last-known state on errors and explicit cancel/reconnect semantics. Pause polling affects observation only.
+
+The workflow player uses the shared content header, owner-bound controls, bounded newest-first events and an event-derived clock. Legacy runs have no pause/resume controls enabled.

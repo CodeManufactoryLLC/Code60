@@ -36,6 +36,7 @@ describe("Apps home", () => {
       "Scheduled Jobs",
       "System Manager",
       "Update Manager",
+      "Workflows",
     ]);
     for (const card of home.props.cards.filter((card: { id: string }) =>
       ["appearance", "memory", "polling-settings", "updates"].includes(card.id),

@@ -10,6 +10,7 @@ export default defineConfig({
     "logs.e2e.ts",
     "renderer-replay.e2e.ts",
     "system-manager.e2e.ts",
+    "transmission-workflow.e2e.ts",
     "navigation-icons.e2e.ts",
     "memory-recall.e2e.ts",
   ],

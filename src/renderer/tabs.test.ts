@@ -34,6 +34,7 @@ describe("page tabs", () => {
         "assistants",
         "providers",
         "provider",
+        "workflows",
       ],
       active: "chat",
     });

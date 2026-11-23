@@ -30,6 +30,7 @@ describe("sandboxed diagnostic preload", () => {
     }
     for (const [method, channel, request] of [
       ["queryLogs", "desktop:logs-query", { limit: 10 }],
+      ["workflow", "desktop:workflow", { action: "list" }],
       ["logDetail", "desktop:logs-detail", { id: crypto.randomUUID() }],
       ["clearLogs", "desktop:logs-clear", { confirm: true }],
     ] as const) {

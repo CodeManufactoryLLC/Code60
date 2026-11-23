@@ -2499,6 +2499,35 @@ export class DesktopController {
     });
   }
 
+  async draftWorkflow(input: string, signal: AbortSignal) {
+    const provider = this.agentSetup.record?.primary;
+    this.requireEnabled(provider ?? "");
+    const agent = provider ? this.config?.agents[provider] : undefined;
+    if (!provider || !agent) throw new Error("Connect a verified primary provider first");
+    const identity = JSON.stringify(agent.command);
+    const temporary = await mkdtemp(join(tmpdir(), "code60-workflow-draft-"));
+    try {
+      const cwd = join(temporary, "private");
+      await privateDirectory(cwd);
+      const { draftWorkflow } = await import("../core/index.js");
+      const result = await draftWorkflow(
+        this.deps.agents,
+        { name: provider, command: agent.command, cwd },
+        input,
+        signal,
+      );
+      this.requireEnabled(provider);
+      if (
+        this.agentSetup.record?.primary !== provider ||
+        JSON.stringify(this.config?.agents[provider]?.command) !== identity
+      )
+        throw new Error("Drafting provider changed. Generate the draft again.");
+      return result;
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  }
+
   async summarizeSearch(value: SearchSummaryRequest): Promise<SearchSummaryResult> {
     const request = parseSearchSummary(value);
     this.assertDatabaseRequest(request.databaseEpoch);

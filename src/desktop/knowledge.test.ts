@@ -721,3 +721,22 @@ it("invalidates a discovered file view when its panel subscription or visibility
     expect(reads).toEqual([]);
   }
 });
+
+it("describes workflow drafting and execution prerequisites without starting the engine", async () => {
+  const { knowledge, reads } = setup({ database: null, providers: [] });
+  const capabilities = result(
+    await knowledge.call("code60_get_capabilities", { query: "Workflows" }, relay),
+  );
+  expect(capabilities.entries).toContainEqual(
+    expect.objectContaining({
+      id: "workflows",
+      availability: expect.objectContaining({
+        status: "available",
+        reason: expect.stringContaining(
+          process.platform === "darwin" ? "staging.20" : "history is readable",
+        ),
+      }),
+    }),
+  );
+  expect(reads).toEqual([]);
+});

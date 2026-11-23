@@ -448,6 +448,15 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Human installation and schedule consent.",
   ),
   feature(
+    "workflows",
+    "Workflows",
+    "Create ordered coding workflows manually or through Create with prompt, review and explicitly start them in dedicated saved-file worktrees. Track independent verification, repairs, decisions and accepted diffs.",
+    "Apps → Workflows",
+    "runtime",
+    "human-only",
+    "The player shows run activity with tool calls collapsed until expanded, recorded execution time, accepted-task progress and ordered task configuration/results. Pause and resume are available for new Transmission 0.1.0-staging.20 workflows. Existing staging.18 records use their original engine. Stop is terminal. Execution runs on macOS with Node >=24.22 <25. Automatic permission approvals default on. Work continues after desktop quit; no login service is installed. Prompt drafting uses the verified primary provider, bounded root README/package scripts and no tools; generated fields never start work. Source files, HEAD and index stay unchanged; worktrees/evidence remain. No automatic apply or Undo integration. Read-only views never restart the engine. The staging.18 restart path can exceed retry allowances. One active or uncertain workflow per source checkout; at most 100 ordered tasks with 30 checks each, repair/retry allowances 0–30 (default two), and 200 retained workflows within 8 MiB. Activity is paginated with labelled excerpts above 32,768 characters per detail and a display window of 1,000 events within one million characters. Drafting is bounded to 20 messages, 120 seconds, and 160,000 characters each for composed context and output.",
+  ),
+  feature(
     "system-manager",
     "System Manager",
     "Manage the macOS/Linux Scheduling Service through System Manager. Status checks run automatically every two seconds after a completed read while the page and window are visible. Verified status distinguishes Not installed, Stopped and Running, with Install, Start or Stop as the main action. Stop pauses jobs and cancels active scheduled work before stopping the service; there is no separate pause-and-cancel button. Jobs paused is separate from runtime status; Resume jobs remains available for existing paused jobs, and Repair and Uninstall remain in Service options. No public Code60 CLI is available.",
@@ -570,6 +579,7 @@ export const PAGE_CAPABILITIES = {
   tables: "data",
   advanced: "settings",
   experiments: "settings",
+  workflows: "workflows",
   "system-manager": "system-manager",
   automations: "automations",
   "episodic-memory": "episodic-memory",

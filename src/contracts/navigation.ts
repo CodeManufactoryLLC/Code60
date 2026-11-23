@@ -139,6 +139,15 @@ export const pages = [
     icon: "app-robotic-arm",
   },
   {
+    id: "workflows",
+    initialOrder: 27,
+    label: "Workflows",
+    group: "apps",
+    order: 3,
+    database: false,
+    icon: "app-steering-wheel",
+  },
+  {
     id: "system-manager",
     initialOrder: 17,
     label: "System Manager",

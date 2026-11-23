@@ -43,6 +43,7 @@ import { SettingsPage } from "./settings-page.js";
 import { SystemManagerPage } from "./system-manager.js";
 import { updateTabs } from "./tabs.js";
 import { UpdatesSection } from "./updates.js";
+import { WorkflowsPage } from "./workflows.js";
 import { WorktreesPage } from "./worktrees.js";
 
 export function AppPages(props: AppPagesProps) {
@@ -251,6 +252,15 @@ export function AppPages(props: AppPagesProps) {
     tables: parentHome("tables"),
     advanced: parentHome("advanced"),
     experiments: parentHome("experiments"),
+    workflows: (
+      <WorkflowsPage
+        api={api}
+        active={!splash && tabs.active === "workflows"}
+        paused={snapshot?.polling.paused ?? false}
+        providerReady={snapshot?.agentSetup?.complete ?? false}
+        onProvider={() => void navigation.open({ kind: "page", id: "providers" })}
+      />
+    ),
     "system-manager": (
       <SystemManagerPage
         api={api}

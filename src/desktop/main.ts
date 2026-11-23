@@ -94,6 +94,7 @@ import { openProjectDatabase } from "./projects.js";
 import { DesktopUpdates } from "./updates.js";
 import { WebLinks } from "./web-links.js";
 import { controlWindow } from "./window-controls.js";
+import { DesktopWorkflows } from "./workflows.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const sidebarBlurSupported = process.platform === "darwin";
@@ -199,6 +200,18 @@ const automations = new DesktopAutomations(
   },
   () => controller.snapshot(false, true).agents,
 );
+export const workflows = new DesktopWorkflows(
+  process.env,
+  defaultDeps(),
+  async () => {
+    const selected = await dialog.showOpenDialog({
+      properties: ["openDirectory"],
+      title: "Choose workflow repository",
+    });
+    return selected.canceled ? null : (selected.filePaths[0] ?? null);
+  },
+  (input, signal) => controller.draftWorkflow(input, signal),
+);
 let shutdownTask: Promise<void> | undefined;
 function shutdownDesktop(force = false): Promise<void> {
   sidebarBackdrop?.dispose();
@@ -208,8 +221,7 @@ function shutdownDesktop(force = false): Promise<void> {
     return shutdownTask;
   }
   logs.sink({ event: "app.stop", operationId: launchOperation, outcome: "started" });
-  shutdownTask = controller
-    .shutdown(force)
+  shutdownTask = Promise.all([controller.shutdown(force), workflows.close()])
     .then(async () => {
       logs.sink({ event: "app.stopped", operationId: launchOperation, outcome: "succeeded" });
       await logs.close();
@@ -234,12 +246,26 @@ async function quit(confirm: boolean): Promise<void> {
     const background = confirm
       ? await automationClient(process.env)({ action: "status" }).catch(() => null)
       : null;
-    if (confirm && (controller.hasActiveWork || background)) {
+    if (
+      confirm &&
+      (controller.hasActiveWork ||
+        background ||
+        (await workflows
+          .request({ action: "list" })
+          .then((value) =>
+            (value as import("../bridge/index.js").WorkflowList).entries.some(
+              (entry) =>
+                !entry.snapshot ||
+                !["completed", "failed", "cancelled"].includes(entry.snapshot.status),
+            ),
+          )
+          .catch(() => false)))
+    ) {
       const result = await dialog.showMessageBox({
         type: "warning",
         message: "Quit Code60?",
         detail:
-          "Desktop-owned turns will be cancelled and idle sessions finished. Background automations keep running while Code60 is quit. Worktrees are kept. Use Apps → System Manager to pause or cancel background work.",
+          "Desktop-owned turns will be cancelled and idle sessions finished. Background automations and approved Transmission workflows keep running while Code60 is quit. Worktrees are kept. Use Apps → System Manager for scheduled jobs and Apps → Workflows to cancel workflows.",
         buttons: ["Keep working", "Quit"],
         defaultId: 0,
         cancelId: 0,
@@ -453,6 +479,7 @@ async function ready(): Promise<void> {
         .finally(() => app.quit());
     });
   handle("desktop:app-update", (value) => updates?.action(parseUpdateAction(value)));
+  handle("desktop:workflow", (value) => workflows.request(value));
   handle("desktop:automation", (value) => automations.request(value));
   handle("desktop:model-default", (value) =>
     controller.modelDefault(parseModelDefaultAction(value)),
@@ -753,6 +780,13 @@ async function ready(): Promise<void> {
   });
   void controller.restore();
   controller.subscribe((snapshot) => {
+    workflows.observeProvider(
+      JSON.stringify([
+        snapshot.agentSetup?.primary,
+        snapshot.agentSetup?.complete,
+        snapshot.agentSetup?.enabled.includes(snapshot.agentSetup.primary ?? ""),
+      ]),
+    );
     // Mirrors the renderer's rule for opening projects: a database is connected and no batch is active.
     const openProject = Menu.getApplicationMenu()?.getMenuItemById("open-project");
     if (openProject) openProject.enabled = snapshot.database !== null;
@@ -800,6 +834,7 @@ async function ready(): Promise<void> {
   window.webContents.on("render-process-gone", () => void quit(false));
   window.webContents.on("did-start-loading", () => {
     automations.reset();
+    void workflows.reset().catch(() => {});
     controller.clearDetailSubscriptions();
     void controller.cancelRag().catch(() => {});
     void controller.cancelDiffReads().catch(() => {});

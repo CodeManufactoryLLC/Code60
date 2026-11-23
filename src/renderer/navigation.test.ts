@@ -52,7 +52,13 @@ describe("navigation registry", () => {
   it("keeps tables alphabetical and primary navigation in its documented order", () => {
     const labels = pagesInGroup("tables").map((id) => pageDefinitions[id].label);
     expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)));
-    expect(pagesInGroup("apps")).toEqual(["automations", "commands", "prompts", "system-manager"]);
+    expect(pagesInGroup("apps")).toEqual([
+      "automations",
+      "commands",
+      "prompts",
+      "system-manager",
+      "workflows",
+    ]);
     expect(pagesInGroup("primary")).toEqual([
       "home",
       "assistants",
