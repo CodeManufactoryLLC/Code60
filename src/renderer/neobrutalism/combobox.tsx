@@ -10,7 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../icons.js";
-import { clampMenuPosition, menuAnchorMoved } from "../menu-anchor.js";
+import { clampMenuPosition, menuAnchorMoved, scrollMenuOption } from "../menu-anchor.js";
 import { menuTypeahead } from "../menu-typeahead.js";
 
 interface ComboboxOption {
@@ -188,8 +188,8 @@ function ComboboxPopup({
   }, [anchor, open, value]);
   const highlightedId = highlighted ? optionId(highlighted) : undefined;
   useLayoutEffect(() => {
-    if (open && highlightedId)
-      document.getElementById(highlightedId)?.scrollIntoView({ block: "nearest" });
+    const option = highlightedId ? document.getElementById(highlightedId) : null;
+    if (open && list.current && option) scrollMenuOption(list.current, option);
   }, [open, highlightedId]);
 
   return createPortal(

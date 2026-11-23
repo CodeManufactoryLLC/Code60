@@ -1,6 +1,6 @@
 {
   "name": "code60",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Electron desktop app for orchestrating coding agents on macOS and Linux",
   "license": "Apache-2.0",
