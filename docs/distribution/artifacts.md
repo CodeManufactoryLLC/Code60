@@ -48,9 +48,9 @@ then runs the native CPU/model probe against the resulting payload.
 Both descriptors must agree on version, commit and dirty provenance; their archive
 sizes and hashes are verified before packing. The bootstrap goes under
 `release/bootstrap`, separately from the unchanged legacy npm tarball under
-`release/build`. Its only executable behavior is help/version; setup fails without
-network access or installation. Its internal staging library selects an embedded
-platform descriptor and is reserved for later installation orchestration.
+`release/build`. Phase 5 adds setup to the private bootstrap's help/version
+interface. Its staging library selects only an embedded platform descriptor;
+installation and consent semantics are documented in [setup behavior](setup.md).
 
 ## Integrity and extraction
 
@@ -103,3 +103,7 @@ The PR payload job checks out the explicit PR head commit, matching the native
 workflow's selected source identity. Ordinary unit/browser/package jobs still
 validate GitHub's integrated PR merge snapshot. This keeps paired descriptors
 consistent without weakening those existing regression checks.
+
+Phase 5 adds the private candidate setup command; see [setup behavior](setup.md).
+The bootstrap remains dependency-free and below 1 MiB, with no production URL
+override, install hooks or publishing action.

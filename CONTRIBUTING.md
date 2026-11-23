@@ -421,3 +421,14 @@ the narrow Node-only distribution closure for real launcher subprocesses.
 Linux container and disposable native runner. The managed clean-install mode adds
 the full installed production golden journey after removing bootstrap/npm caches.
 No contributor check edits your profiles or installs your login service.
+
+## Setup development
+
+See [candidate setup behavior](docs/distribution/setup.md) for consent, status,
+database defaults and failure recovery. After preparing a platform payload, run
+`npm run test:setup` for real CLI/backend integration through an isolated supervisor
+fixture. On the Docker host, also run
+`npm run test:packaged:clean -- --setup release/payloads/linux-x64.json` for the full
+setup-created-database browser journey. Keep the manual database journey and all
+existing package/model regressions. No real user service or host profiles are
+changed by acceptance; retain evidence and verify owned resource cleanup.

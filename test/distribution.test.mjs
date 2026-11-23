@@ -391,7 +391,7 @@ it("round-trips long UTF-8 paths and contained links", async () => {
   await extractArchive(join(root, "archive"), join(root, "out"), join(root, "tar"));
   expect(await readFile(join(root, "out/link"), "utf8")).toBe("content");
 });
-it("packs only builtins bootstrap files with both exact descriptors and inert CLI", async () => {
+it("packs only builtins bootstrap files with both exact descriptors and strict setup CLI", async () => {
   const f = await fixture();
   const input = join(f.parent, "descriptors");
   await mkdir(input);
@@ -427,7 +427,7 @@ it("packs only builtins bootstrap files with both exact descriptors and inert CL
     ).stdout.trim(),
   ).toBe("0.4.1");
   await expect(
-    execute(process.execPath, [join(unpack, "package/bin/code60.mjs"), "setup"]),
+    execute(process.execPath, [join(unpack, "package/bin/code60.mjs"), "setup", "--unexpected"]),
   ).rejects.toMatchObject({ code: 1 });
   expect((await stat(archive)).size).toBeLessThan(1024 ** 2);
   await writeFile(join(input, mac.archive.name), "changed");

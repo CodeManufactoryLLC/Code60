@@ -66,6 +66,22 @@ describe("branch protection policy", () => {
 });
 
 describe("browser and package validation", () => {
+  it("requires packaged setup acceptance and keeps native setup behind isolated fixtures", () => {
+    expect(
+      ci.jobs.payload.steps.some(
+        (step) => step.run === "npm run devcontainer -- exec npm run test:setup",
+      ),
+    ).toBe(true);
+    expect(
+      ci.jobs.payload.steps.some(
+        (step) =>
+          step.run === "npm run test:packaged:clean -- --setup release/payloads/linux-x64.json",
+      ),
+    ).toBe(true);
+    expect(nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:setup")).toBe(
+      true,
+    );
+  });
   it("uses Node 24 and validates the real browser and installed package", () => {
     for (const name of ["check", "browser", "package"])
       expect(

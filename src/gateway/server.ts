@@ -362,6 +362,10 @@ export async function startGateway(options: GatewayOptions = {}) {
             }
           }
           respond(response, { requirePairing });
+        } else if (path === "/management/prepare-database") {
+          for await (const chunk of request)
+            if (chunk.length) throw new Error("Database preparation accepts no payload");
+          respond(response, await application.prepareInitialDatabase());
         } else if (path === "/management/status")
           respond(response, {
             pid: process.pid,
@@ -369,6 +373,11 @@ export async function startGateway(options: GatewayOptions = {}) {
             requirePairing,
             scheduler: scheduler?.scheduler.status() ?? null,
             schedulerError,
+            database: await application.initialDatabaseStatus(),
+            engines: {
+              bundled: false,
+              platform: process.platform === "darwin" ? "supported" : "unsupported",
+            },
           });
         else if (path === "/management/shutdown") {
           await quiesce();
@@ -681,7 +690,7 @@ async function readGatewayConnection(env: Readonly<NodeJS.ProcessEnv>): Promise<
 }
 export async function managementRequest(
   env: Readonly<NodeJS.ProcessEnv>,
-  action: "pair" | "status" | "shutdown" | "pairing",
+  action: "pair" | "status" | "shutdown" | "pairing" | "prepare-database",
   value?: { requirePairing: boolean },
 ) {
   const connection = await readGatewayConnection(env);

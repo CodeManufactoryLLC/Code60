@@ -4,6 +4,7 @@ import { createServer, request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
+import { readPrivateJson } from "../platform/index.js";
 import { pairingControl } from "./pairing.js";
 import { managementRequest, startGateway } from "./server.js";
 
@@ -27,6 +28,7 @@ async function fixture(
     ...process.env,
     HOME: directory,
     SHELL: "/bin/sh",
+    XDG_DATA_HOME: join(directory, "data"),
     XDG_STATE_HOME: join(directory, "state"),
     XDG_CONFIG_HOME: join(directory, "config"),
   };
@@ -437,4 +439,58 @@ it("persists an explicit choice matching the default without disconnecting the b
       })
     ).status,
   ).toBe(200);
+});
+
+it("prepares a database only through authenticated payload-free private management", async () => {
+  const { gateway, env, directory } = await fixture();
+  const saved = (await readPrivateJson(
+    join(directory, "state/code60/gateway/connection.json"),
+    4096,
+  )) as { token: string };
+  const call = (headers: Record<string, string>, body?: string) =>
+    fetch(`${gateway.origin}/management/prepare-database`, {
+      method: "POST",
+      headers,
+      ...(body ? { body } : {}),
+    });
+  expect((await call({})).status).toBe(403);
+  expect((await call({ "X-Code60-Management": saved.token, Origin: gateway.origin })).status).toBe(
+    403,
+  );
+  expect(
+    (
+      await call(
+        { "X-Code60-Management": saved.token },
+        JSON.stringify({ path: "/tmp/untrusted.sqlite" }),
+      )
+    ).status,
+  ).toBe(400);
+  expect(await managementRequest(env, "prepare-database")).toEqual({ state: "ready" });
+  expect((await managementRequest(env, "status")).database).toEqual({ state: "ready" });
+  const path = join(directory, "data/code60/databases/default.sqlite");
+  const before = await readFile(path);
+  await managementRequest(env, "prepare-database");
+  expect(await readFile(path)).toEqual(before);
+});
+it("normal startup preserves an empty selected file and private setup refuses to initialize it", async () => {
+  const { gateway, env, directory } = await fixture();
+  await gateway.stop();
+  const path = join(directory, "empty.sqlite");
+  await writeFile(path, "");
+  await writeFile(
+    join(directory, "state/code60/desktop.json"),
+    JSON.stringify({ database: path }),
+    { mode: 0o600 },
+  );
+  const restarted = await startGateway({
+    env,
+    assets: join(directory, "assets"),
+    roots: [directory],
+  });
+  const current = owned.at(-1);
+  if (!current) throw Error("Missing fixture");
+  current.gateway = restarted;
+  expect(restarted.application.snapshot().database).toBeNull();
+  await expect(managementRequest(env, "prepare-database")).rejects.toThrow();
+  expect(await readFile(path, "utf8")).toBe("");
 });

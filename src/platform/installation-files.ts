@@ -219,9 +219,9 @@ export async function publishInstallationLink(
     });
   }
 }
-export async function lockInstallation(root: string) {
+export async function lockInstallation(root: string, kind: "install" | "setup" = "install") {
   await installationDirectory(root, false, true);
-  const path = join(root, ".install-lock");
+  const path = join(root, kind === "setup" ? ".setup-lock" : ".install-lock");
   try {
     await mkdir(path, { mode: 0o700 });
   } catch (error) {
@@ -292,4 +292,19 @@ export async function exclusiveInstallationLink(path: string, target: string) {
     throw new Error("Refusing to write a foreign launcher directory");
   await symlink(target, path);
   await syncInstallationDirectory(dirname(path));
+}
+
+export async function removeOwnedInstallationFile(
+  path: string,
+  identity: { dev: bigint; ino: bigint },
+) {
+  const current = await lstat(path, { bigint: true });
+  if (
+    !current.isFile() ||
+    current.uid !== BigInt(uid()) ||
+    current.dev !== identity.dev ||
+    current.ino !== identity.ino
+  )
+    throw Error("Staging ownership changed; preserved uncertain file");
+  await unlink(path);
 }

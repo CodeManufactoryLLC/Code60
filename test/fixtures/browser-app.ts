@@ -41,6 +41,7 @@ export async function browserApp(
     ...process.env,
     HOME: directory,
     SHELL: shell,
+    XDG_DATA_HOME: join(directory, "data"),
     XDG_CONFIG_HOME: join(directory, "config"),
     XDG_STATE_HOME: join(directory, "state"),
   };

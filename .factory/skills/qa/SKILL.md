@@ -28,7 +28,9 @@ Use the existing harness, not a new QA plugin or a live agent.
   process. The checked-in golden path is `test/browser-workflow.e2e.ts`.
 - Start first-use journeys in isolated HOME/config/state with **no saved verified
   setup**. A fixture may configure the fake provider executable, but cannot mark
-  setup complete. Create the database and open the project through the UI.
+  setup complete. Manual-database journeys create/select through the UI. The
+  independent setup journey must prepare its database through the actual packaged
+  setup CLI and still verify the provider and open the project through visible UI.
 - Mock only external providers and native service supervisor boundaries. Drive
   host selection and confirmation through the browser dialogs. Use the real
   scriptable fake-agent subprocess, ACP, MCP gateway, filesystem and Git worktree.
@@ -87,6 +89,12 @@ Use the existing harness, not a new QA plugin or a live agent.
   exit path. Preserve traces and synthetic evidence. If Docker is used by any
   additional validation, remove only that run's containers and temporary images;
   never globally prune Docker or remove other work's resources.
+
+- Setup changes additionally require `npm run test:setup` and the clean-install
+  `--setup` mode. Assert files-only consent, strict metadata/data preservation,
+  cache removal, repeated/restarted backend identity, read-only status and the full
+  golden journey from a setup-created database. Use the dedicated bounded backend
+  supervisor fixture, never legacy scheduler fixtures or a real host service.
 
 ## Report what actually happened
 
