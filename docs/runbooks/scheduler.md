@@ -56,6 +56,12 @@ A version mismatch, recovery block or failed restart keeps the pending restart
 metadata and displays an error. Preserve that evidence and use the consented
 System Manager repair path; never erase the marker to report success.
 
+On macOS, an upgrade may already have unloaded the old launchd job. Stop and
+Uninstall accept that state only after a successful native inventory verifies
+the job is absent. Native inspection allows up to 1 MiB per output stream and
+five seconds per command; failed, truncated or incomplete inventories remain
+unavailable and do not authorize repair or removal.
+
 Observe updated System Manager status and refresh Scheduled Jobs if needed.
 Confirm connectivity, expected pause state,
 no block, future run times, and no duplicate/uncertain executions. Preserve worktrees

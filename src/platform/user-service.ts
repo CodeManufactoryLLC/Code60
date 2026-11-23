@@ -112,7 +112,9 @@ const inspectCommand: ServiceInspectionCommand = (argv) =>
     execFile(
       file,
       args,
-      { timeout: 5000, maxBuffer: 64 * 1024, windowsHide: true },
+      // A GUI domain inventory commonly exceeds 64 KiB. Keep a finite bound;
+      // overflow still fails inspection and never proves a job absent.
+      { timeout: 5000, maxBuffer: 1024 * 1024, windowsHide: true },
       (error, stdout) => resolve({ ok: !error, stdout }),
     );
   });
@@ -212,6 +214,16 @@ const runServiceCommand: ServiceCommand = (argv) =>
     );
   });
 
+async function verifiedStopped(
+  definition: UserServiceDefinition,
+  inspectionCommand: ServiceInspectionCommand,
+): Promise<boolean> {
+  const native = await inspectUserService(definition, inspectionCommand);
+  return (
+    native.state === "stopped" && (definition.status[0] !== "launchctl" || native.loaded === false)
+  );
+}
+
 /** Only invoked after explicit consent, or repair of an already consented registration. */
 export async function controlUserService(
   definition: UserServiceDefinition,
@@ -224,8 +236,7 @@ export async function controlUserService(
     if (action === "repair")
       for (const argv of definition.stop)
         if (!(await command(argv))) {
-          const native = await inspectUserService(definition, inspectionCommand);
-          if (native.state !== "stopped" || (argv[0] === "launchctl" && native.loaded !== false))
+          if (!(await verifiedStopped(definition, inspectionCommand)))
             throw new Error(
               "Scheduling Service could not stop. Its registration was not replaced.",
             );
@@ -250,8 +261,16 @@ export async function controlUserService(
   for (const argv of definition[action])
     if (!(await command(argv))) {
       // Bootstrap fails for an already loaded job; only a successful kickstart
-      // proves that start succeeded. All other failures remain fatal.
+      // proves that start succeeded.
       if (action === "start" && argv[0] === "launchctl" && argv[1] === "bootstrap") continue;
+      // Updates unload launchd jobs before replacement. A repeated bootout may
+      // fail, but only positive absence verification permits Stop/Uninstall.
+      if (
+        (action === "stop" || action === "uninstall") &&
+        argv[0] === "launchctl" &&
+        (await verifiedStopped(definition, inspectionCommand))
+      )
+        continue;
       throw new Error("Scheduling Service control failed. Check the native user supervisor.");
     }
   if (action === "uninstall") await unlink(definition.path);

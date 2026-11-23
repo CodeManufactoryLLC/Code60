@@ -130,6 +130,49 @@ describe("per-user service supervisors", () => {
       }
     },
   );
+  describe.each(["stop", "uninstall"] as const)("unloaded launchd %s", (action) => {
+    it.each(["absent", "running", "waiting", "loaded", "unavailable", "incomplete"])(
+      "requires successful absence verification when bootout fails (%s)",
+      async (kind) => {
+        const root = await mkdtemp(join(tmpdir(), "c60-launchd-control-"));
+        try {
+          const definition = userServiceDefinition("darwin", root, root, runtime);
+          await controlUserService(definition, "install", async () => true);
+          const command = vi.fn(async () => false);
+          const inspect = vi.fn(async (argv: readonly string[]) => {
+            if (argv[2]?.includes("/com."))
+              return {
+                ok: kind === "running" || kind === "waiting",
+                stdout: `state = ${kind}\n`,
+              };
+            return {
+              ok: kind !== "unavailable",
+              stdout:
+                kind === "loaded"
+                  ? "services = {\n  123 0 com.codemanufactory.code60.scheduler\n}\n"
+                  : kind === "incomplete"
+                    ? "services = {\n"
+                    : "services = {\n}\n",
+            };
+          });
+          const result = controlUserService(definition, action, command, inspect);
+          if (kind === "absent") {
+            await expect(result).resolves.toEqual({ available: false });
+            if (action === "uninstall")
+              await expect(readFile(definition.path)).rejects.toMatchObject({ code: "ENOENT" });
+            else expect(await readFile(definition.path, "utf8")).toBe(definition.contents);
+          } else {
+            await expect(result).rejects.toThrow("control failed");
+            expect(await readFile(definition.path, "utf8")).toBe(definition.contents);
+          }
+          expect(command.mock.calls).toEqual([[definition[action][0]]]);
+          expect(inspect).toHaveBeenCalled();
+        } finally {
+          await rm(root, { recursive: true, force: true });
+        }
+      },
+    );
+  });
   it.each(["linux", "darwin"] as const)(
     "reads the native service PID through fixed %s command results",
     async (platform) => {
