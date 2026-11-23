@@ -1,9 +1,9 @@
-name: Release installers
+name: Build release npm package
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag on main, for example v0.2.0-beta.1
+        description: Existing version tag merged into main
         required: true
         type: string
 permissions:
@@ -11,9 +11,6 @@ permissions:
 concurrency:
   group: release-${{ inputs.tag }}
   cancel-in-progress: false
-env:
-  RELEASE_TAG: ${{ inputs.tag }}
-  RELEASE_MAINTAINER: ${{ vars.RELEASE_MAINTAINER }}
 jobs:
   preflight:
     if: github.ref == 'refs/heads/main'
@@ -23,213 +20,46 @@ jobs:
       sha: ${{ steps.validate.outputs.sha }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0, persist-credentials: false }
       - uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-          package-manager-cache: false
-      - name: Validate tag, draft and signing configuration
-        id: validate
+        with: { node-version: "24", package-manager-cache: false }
+      - id: validate
         env:
-          GH_TOKEN: ${{ github.token }}
-          HAS_CSC_LINK: ${{ secrets.CSC_LINK != '' }}
-          HAS_CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD != '' }}
-          HAS_APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_P8 != '' }}
-          HAS_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID != '' }}
-          HAS_APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER != '' }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: node scripts/release/preflight.mjs
-  linux-check:
+  mac:
     needs: preflight
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    env:
-      NODE_OPTIONS: ${{ matrix.node == '22.12' && '--experimental-sqlite' || '' }}
-    strategy:
-      fail-fast: true
-      matrix:
-        node:
-          - "22.12"
-          - "24"
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.preflight.outputs.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: ${{ matrix.node }}
-          cache: npm
-          package-manager-cache: false
-      - run: npm ci
-      - run: npm run check
-      - run: npm run build
-      - run: npm run prepare:models
-      - run: node scripts/test-rag-model.mjs
-  mac-unit:
-    name: macOS unit
-    needs:
-      - preflight
-      - linux-check
     uses: ./.github/workflows/native-tests.yml
     with:
       ref: ${{ needs.preflight.outputs.sha }}
-      suite: unit
-      release: true
-  mac-desktop:
-    name: macOS desktop ${{ matrix.shard }}
-    needs:
-      - preflight
-      - linux-check
-    strategy:
-      fail-fast: false
-      matrix:
-        shard:
-          - 1
-          - 2
-          - 3
-    uses: ./.github/workflows/native-tests.yml
-    with:
-      ref: ${{ needs.preflight.outputs.sha }}
-      suite: desktop
-      shard: ${{ matrix.shard }}
-      shards: 3
-      release: true
-  linux-installers:
-    needs:
-      - preflight
-      - linux-check
+  package:
+    needs: [preflight, mac]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env:
-      CODE60_RELEASE: "1"
-      RELEASE_SHA: ${{ needs.preflight.outputs.sha }}
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.preflight.outputs.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-          cache: npm
-          package-manager-cache: false
-      - uses: ./.github/actions/setup-linux-desktop
+        with: { node-version: "24", cache: npm, package-manager-cache: false }
       - run: npm ci
+      - run: npm run check
+      - run: npx --no-install playwright install --with-deps chromium
       - run: npm run prepare:models
-      - run: node scripts/install-electron.mjs
-      - run: xvfb-run -a npm run test:desktop
-      - run: npm run package:linux
-      - run: xvfb-run -a npm run test:installers
-      - run: node scripts/release/artifacts.mjs linux
-      - uses: actions/upload-artifact@v7.0.2
-        with:
-          name: installers-linux
-          path: release/staged/linux/
-          retention-days: 7
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v7.0.2
-        if: failure()
-        with:
-          name: release-linux-failure
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-  mac:
-    needs:
-      - preflight
-      - linux-check
-      - mac-unit
-      - mac-desktop
-    runs-on: macos-15
-    timeout-minutes: 45
-    env:
-      CODE60_RELEASE: "1"
-      RELEASE_SHA: ${{ needs.preflight.outputs.sha }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.preflight.outputs.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-          cache: npm
-          package-manager-cache: false
-      - name: Verify runner architecture and configure fixture Git identity
-        run: |
-          test "$(uname -m)" = arm64
-          git config --global user.name 'Code60 CI'
-          git config --global user.email 'ci@example.invalid'
-      - run: npm ci
-      - run: npm run prepare:models
-      - run: node scripts/install-electron.mjs
-      - run: npm run build
-      - name: Prepare temporary Apple credentials
+      - run: npm run test:browser
+      - run: npm run package:app
+      - run: npm run test:packaged
+      - name: Verify release package manifest
         env:
-          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
-        run: node scripts/release/mac-signing.mjs prepare
-      - name: Build, sign and notarize the application and DMG
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: |
-          npm run package:mac
-          node scripts/release/notarize-dmg.mjs
-      - run: npm run test:installers
-      - run: node scripts/release/artifacts.mjs mac
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_SHA: ${{ needs.preflight.outputs.sha }}
+        run: node scripts/release/manifest.mjs
       - uses: actions/upload-artifact@v7.0.2
         with:
-          name: installers-mac
-          path: release/staged/mac/
-          retention-days: 7
-          if-no-files-found: error
-      - name: Remove temporary signing material
-        if: always()
-        run: node scripts/release/mac-signing.mjs cleanup
-      - uses: actions/upload-artifact@v7.0.2
-        if: failure()
-        with:
-          name: release-mac-failure
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-  publish:
-    concurrency:
-      group: code60-release-publication
-      cancel-in-progress: false
-    needs:
-      - preflight
-      - linux-check
-      - linux-installers
-      - mac-unit
-      - mac-desktop
-      - mac
-    if: ${{ success() && needs.preflight.result == 'success' && needs.linux-check.result == 'success' && needs.linux-installers.result == 'success' && needs.mac-unit.result == 'success' && needs.mac-desktop.result == 'success' && needs.mac.result == 'success' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    env:
-      RELEASE_SHA: ${{ needs.preflight.outputs.sha }}
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-          package-manager-cache: false
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: installers-*
-          merge-multiple: true
-          path: release-assets/
-      - name: Verify tested artifacts and publish
-        run: |
-          npm ci --ignore-scripts
-          node scripts/release/publish.mjs
+          {
+            name: code60-npm-package,
+            path: release/build/,
+            retention-days: 14,
+            if-no-files-found: error,
+          }

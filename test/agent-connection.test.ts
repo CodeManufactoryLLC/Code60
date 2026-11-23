@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 import { expect, it, vi } from "vitest";
-import { probeAgent } from "../src/desktop/agent-connection.js";
+import { probeAgent } from "../src/application/agent-connection.js";
 import { FakeAgents } from "./fakes.js";
 
 it("creates a private database-independent directory, sends no prompts and stops before deletion", async () => {

@@ -1,6 +1,11 @@
-import type { DesktopApi, MemoryBrowse, MemoryPage, MemorySnapshot } from "../bridge/index.js";
+import type {
+  ApplicationClient,
+  MemoryBrowse,
+  MemoryPage,
+  MemorySnapshot,
+} from "../bridge/index.js";
 
-type Api = Pick<DesktopApi, "memorySnapshot" | "browseMemories">;
+type Api = Pick<ApplicationClient, "memorySnapshot" | "browseMemories">;
 interface State {
   page: MemoryPage;
   metadata: MemorySnapshot | undefined;

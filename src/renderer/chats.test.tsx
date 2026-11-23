@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   ActivitySnapshot,
-  DesktopApi,
+  ApplicationClient,
   DesktopRun,
   OrchestrationChat,
 } from "../bridge/index.js";
@@ -205,7 +205,7 @@ describe("conversation hierarchy", () => {
     worker.record.reason = "the owning process (PID 12345) is gone";
     const html = renderToStaticMarkup(
       <WorkerChat
-        api={{} as DesktopApi}
+        api={{} as ApplicationClient}
         run={worker}
         orchestrated
         events={[]}
@@ -612,7 +612,7 @@ describe("embedded worker chat", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     return renderToStaticMarkup(
       <WorkerChat
-        api={{} as DesktopApi}
+        api={{} as ApplicationClient}
         run={worker}
         {...(label === undefined ? {} : { label })}
         orchestrated={orchestrated}

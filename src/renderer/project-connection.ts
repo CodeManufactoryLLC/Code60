@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { DatabaseMode, MenuCommand } from "../bridge/index.js";
+import type { DatabaseMode } from "../bridge/index.js";
 import type { AppPagesProps } from "./app-page-props.js";
 import { pathLabel } from "./path-label.js";
 import { ScopeLifetime } from "./scope-lifetime.js";
@@ -48,14 +48,6 @@ export function useProjectConnection({
     )
       setProjectChoice(undefined);
   }, [projectChoice, database, directory, state?.projectGeneration, orchestratorConfigured]);
-  useEffect(
-    () =>
-      api.onMenu((command: MenuCommand) => {
-        setError("");
-        setPicker(command === "database" || !database ? "database" : "project");
-      }),
-    [api.onMenu, database, setError],
-  );
 
   const showPicker = (kind: "database" | "project") => {
     setError("");

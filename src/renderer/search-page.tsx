@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  type DesktopApi,
+  type ApplicationClient,
   type ProjectSearchOpened,
   type ProjectSearchSource,
   SEARCH_QUERY_LIMIT,
@@ -55,7 +55,7 @@ export function SearchPage({
   onOpen,
 }: {
   api: Pick<
-    DesktopApi,
+    ApplicationClient,
     | "searchProjects"
     | "searchProjectsPage"
     | "cancelProjectSearch"

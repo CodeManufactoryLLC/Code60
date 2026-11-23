@@ -7,8 +7,8 @@ and supported controls before extending tests. Retain evidence under ignored
 
 ## Request through undo (golden path)
 
-- **Prerequisites:** built app in the Linux container, Git, fake ACP executable,
-  native dialog stubs that record requests, committed synthetic repository.
+- **Prerequisites:** built Node backend and bundled browser app, Git, fake ACP executable,
+  real host chooser and browser confirmations, committed synthetic repository.
 - **Starting state:** empty HOME/config/state, provider command configured but no
   verified setup; repository has unrelated staged and unstaged edits.
 - **Actions:** choose/connect provider in setup, close setup, create database,
@@ -30,21 +30,21 @@ and supported controls before extending tests. Retain evidence under ignored
   warn and test that manual edits since their checkpoint rewind too.
 - **Evidence:** selected plan/revision and dialog assertions, worker/result paths
   in synthetic artifacts, Git/index comparisons, retained failure trace.
-- **Cleanup:** close app, verify owned processes gone, remove isolated fixture
-  only after checks; runner removes owned container/image, retains artifacts/cache.
+- **Cleanup:** close the isolated backend, verify owned processes gone, remove isolated fixture
+  only after checks; retain artifacts/cache; no native service is installed.
 
 ## First use and reopening
 
 - **Prerequisites/start:** fake provider only, empty private storage, committed
   synthetic repository; no preseeded setup/database/project selection.
 - **Actions:** visible setup, database create/select, Start, Open Project; complete
-  a real request, close/reopen app using the same isolated state.
+  a real request, stop/restart the isolated backend using the same isolated state.
 - **Invariants:** setup verification comes from connection, database picker
   cancellation does not fake a connection, reopening retains evidence but does
   not grant saved workers or pending plans authority.
 - **Independent checks/evidence:** private settings and SQLite existence, no
   duplicate worker worktrees/process launches; UI checkpoint/trace.
-- **Cleanup:** close both owned app instances and verify no children remain.
+- **Cleanup:** close browser contexts and the isolated backend and verify no children remain.
 
 ## Navigation and concurrent ownership
 
@@ -57,21 +57,21 @@ and supported controls before extending tests. Retain evidence under ignored
   stops A-owned work, not Relay work merely using that directory.
 - **Independent checks/evidence:** distinct worktree outputs/PIDs and owner-local
   revisions; compare both repositories, UI selection/stream checkpoint trace.
-- **Cleanup:** stop each owner explicitly, close app and verify child exit;
+- **Cleanup:** stop each owner explicitly, close the isolated backend and verify child exit;
   preserve evidence needed for failed ownership checks before fixture removal.
 
 ## Cancellation, reload and restart
 
 - **Prerequisites/start:** fake slow worker at a condition-controlled checkpoint,
   plus completed worker evidence and an accepted plan.
-- **Actions:** navigate/reload during progress, cancel via UI, quit/reopen after
+- **Actions:** navigate/reload during progress, cancel via UI, stop/restart the backend after
   completion; try historical review and supported explicit continuation only.
 - **Invariants:** cancellation settles owned cleanup; reload does not dispatch
-  another worker; app restart restores evidence, not live authority, pending
+  another worker; backend restart restores evidence, not live authority, pending
   feedback, provider context or uncertain work.
 - **Independent checks/evidence:** PID exit, no late filesystem changes, exact
   worktree/run counts and retained transcripts; checkpoint trace and cleanup.
-- **Cleanup:** release fixture gates, close app and check all owned process trees.
+- **Cleanup:** release fixture gates, close the isolated backend and check all owned process trees.
 
 ## Scheduler ownership and recovery
 
@@ -79,12 +79,12 @@ and supported controls before extending tests. Retain evidence under ignored
   fake agents, saved schedule and pinned repository/provider; never a real
   per-user installation without explicit permission.
 - **Actions:** use Automations to review disabled schedule, run once with consent,
-  pause/cancel; close desktop while service-owned work is active; reopen and
+  pause/cancel; close the browser while backend-owned work is active; reopen and
   inspect history/block, following the [scheduler runbook](../../../../docs/runbooks/scheduler.md).
-- **Invariants:** desktop Stop all/quit do not stop service-owned automation;
+- **Invariants:** interactive Stop all/browser close do not stop service-owned automation;
   no catch-up/retry, automatic apply or restored uncertain work; service remains
   sole metadata writer. No unit-only injected-clock result counts as UI E2E.
-- **Independent checks/evidence:** service versus desktop PIDs, persisted occurrence
+- **Independent checks/evidence:** backend versus provider PIDs, persisted occurrence
   claims/history, worktree diff and absence of checkout/index mutation.
 - **Cleanup:** explicitly stop the isolated service and its children, uninstall
   only a registration created for this run with authorization. Otherwise BLOCKED.

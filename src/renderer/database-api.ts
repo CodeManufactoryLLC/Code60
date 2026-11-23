@@ -1,7 +1,10 @@
-import type { DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient } from "../bridge/index.js";
 
 /** Retained views keep this captured epoch, including across native pickers. */
-export function bindDatabaseWrites(api: DesktopApi, databaseEpoch: number | undefined): DesktopApi {
+export function bindDatabaseWrites(
+  api: ApplicationClient,
+  databaseEpoch: number | undefined,
+): ApplicationClient {
   if (databaseEpoch === undefined) return api;
   return {
     ...api,

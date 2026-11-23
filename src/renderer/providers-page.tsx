@@ -1,4 +1,4 @@
-import type { DesktopApi, ModelDefaultAction, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, ModelDefaultAction, Snapshot } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { NavigationCards } from "./navigation-cards.js";
 import { PrimaryProviderMark } from "./neobrutalism/provider-controls.js";
@@ -16,7 +16,7 @@ export function ProvidersPage({
   onOpen,
   active = true,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   snapshot: Snapshot | undefined;
   management: ProviderManagement;
   providerId?: string | undefined;

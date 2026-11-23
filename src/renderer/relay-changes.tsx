@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { DesktopApi, RelayReviewEntry, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, RelayReviewEntry, Snapshot } from "../bridge/index.js";
 import { ReviewFlow } from "./review-flow.js";
 
 const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
@@ -10,7 +10,7 @@ export function RelayChanges({
   snapshot,
   active,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   snapshot: Snapshot | undefined;
   active: boolean;
 }) {

@@ -11,8 +11,6 @@ export function AboutSection({ versions }: { versions: Versions | undefined }) {
         ["Run record format", versions.runRecordFormat],
         ["ACP protocol", versions.acpProtocol],
         ["MCP protocol", versions.mcpProtocol],
-        ["Electron", versions.electron ?? "Unavailable"],
-        ["Chromium", versions.chromium ?? "Unavailable"],
         ["Node.js", versions.node],
         ["Embedding model", versions.embeddingModel?.id ?? "Unavailable"],
         ["Embedding revision", versions.embeddingModel?.revision ?? "Unavailable"],

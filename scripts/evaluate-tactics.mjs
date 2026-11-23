@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { ApplicationHost } from "../dist/application/controller.js";
+import { filePreferences } from "../dist/application/preferences.js";
+import { openProjectDatabase } from "../dist/application/projects.js";
 import { defaultDeps, loadConfig } from "../dist/core/index.js";
-import { DesktopController } from "../dist/desktop/controller.js";
-import { filePreferences } from "../dist/desktop/preferences.js";
-import { openProjectDatabase } from "../dist/desktop/projects.js";
 
 // Opt-in, billed live-provider evaluation. Never run from the routine test suite.
 const exec = promisify(execFile);
@@ -111,7 +111,7 @@ async function run(task, tactic) {
     { mode: 0o600 },
   );
   let database;
-  const controller = new DesktopController(
+  const controller = new ApplicationHost(
     defaultDeps(),
     env,
     { confirm: async () => true },

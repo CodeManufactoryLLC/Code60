@@ -61,29 +61,12 @@ describe("Settings page titles", () => {
     expect(enabled).toContain('Icon color<input type="color" value="#348a56"');
     expect(enabled).toContain('aria-valuetext="150%"');
   });
-  it("labels window background ranges, shows live units and reports unsaved appearance values", () => {
-    const html = renderToStaticMarkup(
-      <SettingsPage
-        {...props}
-        section="appearance"
-        sidebarAppearance={{ opacity: 35, blur: 12 }}
-        sidebarAppearanceSaved={false}
-        sidebarBlurError="Native window background blur could not be applied."
-      />,
-    );
-    expect(html).toContain("Background opacity</label>");
-    expect(html).toContain("Background blur</label>");
-    expect(html).toContain('aria-valuetext="35%"');
-    expect(html).toContain('aria-valuetext="12%"');
-    expect(html).toContain('type="range" min="0" max="100" step="1"');
-    expect(html).toContain('role="alert"');
-    expect(html).toContain("could not be saved");
-    expect(html).toContain("Native window background blur could not be applied.");
-    expect(html).toContain("Native window background blur could not be applied.");
-    expect(html).toContain("Reset background");
-    expect(html).toContain("Window background</legend>");
-    expect(html).not.toContain("Transparent background");
-    expect(html).toContain("entire app window");
+  it("omits native window effects while preserving browser appearance", () => {
+    const html = renderToStaticMarkup(<SettingsPage {...props} section="appearance" />);
+    expect(html).not.toContain("Background opacity</label>");
+    expect(html).not.toContain("Background blur</label>");
+    expect(html).toContain('aria-label="Theme"');
+    expect(html).toContain("Monochrome");
   });
   it.each(settingsSectionIds)(
     "uses the specific %s page name instead of a Settings heading",

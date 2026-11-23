@@ -1,3 +1,9 @@
+# Browser application boundary
+
+ApplicationClient and gateway schemas are the browser/backend contract. This supersedes
+the former native transport. Validate strict requests, bound data and
+preserve captured owner identities. Native shell APIs are not browser capabilities.
+
 # Bridge
 
 - `code60_browser` is an orchestrator gateway tool, not a renderer process API.
@@ -64,7 +70,7 @@
   requires both. Return this ephemeral address separately from persisted review data.
 - Database selection, folder picking, project history and command/configuration/prompt writes wrap their existing validated
   request with a database epoch. Main requires the epoch in Relay mode and
-  rechecks it after native dialogs and inside the action queue; never persist
+  rechecks it after browser dialogs and inside the action queue; never persist
   it as database content. Empty picker/history requests accept no extra payload.
 - Explicit polling carries the originating target runtime UUID and database epoch.
   Application-only configuration polling needs neither. Database-only polling
@@ -88,7 +94,7 @@
 
 - Use the browser-safe `contracts` module for shared validation. Import only types from `core`, and nothing from Node.js, Electron, or React, so the renderer can use this module.
 - Validate every renderer request here: reject unknown fields, check sizes, and check run-ID and permission-ID formats.
-- openWebLink accepts only a bounded absolute HTTP(S) URL without credentials, controls, whitespace or backslashes. Main validates again before a native confirmation; no other protocols or filesystem access.
+- openWebLink accepts only a bounded absolute HTTP(S) URL without credentials, controls, whitespace or backslashes. Main validates again before confirmation; no other protocols or filesystem access.
 - Offer only once-only permission answers (`allow` or `deny`). Never add generic file access or command execution.
 - Logs exposes bounded query/detail and explicit-confirmation clear requests, plus
   a payload-free change subscription. No paths, agent access, generic filesystem,
@@ -97,7 +103,7 @@
   Keep lifecycle timing metadata optional for older events; add no clipboard or generic
   filesystem capability for renderer presentation.
 
-- Project Search accepts strict captured database epochs and request UUIDs with bounded query/Type/Sort values. Paging uses opaque cursors; cancellation uses the query identity; source opening uses an opaque captured source ID. Main resolves the complete registered project set, never caller roots. Overview requests reference captured search evidence plus their own UUID, never raw renderer excerpts, paths or provider commands. Return project-qualified provenance and exact numbered evidence. Reject stale database/member/source actions; native closed-project confirmation is revalidated before navigation.
+- Project Search accepts strict captured database epochs and request UUIDs with bounded query/Type/Sort values. Paging uses opaque cursors; cancellation uses the query identity; source opening uses an opaque captured source ID. Main resolves the complete registered project set, never caller roots. Overview requests reference captured search evidence plus their own UUID, never raw renderer excerpts, paths or provider commands. Return project-qualified provenance and exact numbered evidence. Reject stale database/member/source actions; browser closed-project confirmation is revalidated before navigation.
 
 - Setup actions accept only a strict mode, session UUID and provider ID. Never accept commands, environment values or directories. Snapshots carry the main-process setup transaction and enabled membership; persisted command identities are hashes, not credentials or live connection assertions.
 
@@ -112,31 +118,6 @@ Reuse the Relay runtime for custom application-owned conversations. Route all
 requests by explicit conversation/generation ownership, including file previews,
 worker controls, review reads, memory and cleanup. Keep built-in Relay unchanged.
 Custom definitions are private, revision-checked and database-independent.
-
-- The legacy sidebar-backdrop channel controls window-wide blur using only strict
-  bounded viewport width, 0–100 strength and visibility. Positive width gates display;
-  main derives the full bounds from its owned window. Never accept coordinates,
-  window handles, materials, paths or code; no screen capture access is granted.
-- Legacy transparency/hit-test interfaces remain validated, but the removed toggle
-  cannot affect live backdrop alpha or enable foreground mouse-event passthrough.
-
-Transparent Linux windows use three renderer caption buttons in the native drag
-strip because Electron hides its native caption controls for translucent windows.
-A strict minimize/maximize/close enum targets only the owned main window. Close
-must call the normal guarded close path, never destroy the window or kill work.
-macOS retains native window controls. No arbitrary window IDs cross the bridge.
-
-Native window backdrop failures use a payload-free main-to-renderer notification.
-The renderer shows a fixed error; no native error, path or window handle crosses IPC.
-
-Native window backdrop visibility follows owner show/hide/minimize events and immediate
-renderer hidden reports, without Electron's macOS native visibility predicate. Hide the
-decorative window from Mission Control. A payload-free failure notice reports native
-event failures beside Appearance controls, separately from preference save errors; a
-successful adjustment clears the native error. Keep caption controls inside the active
-splash/setup dialog on Linux so modal top-layer and inert rules cannot block them.
-Conversation icon/label insets shrink at narrow sidebar widths to preserve readable names.
-
 
 ## Providers
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  type DesktopApi,
+  type ApplicationClient,
   type DesktopRun,
   type DetailFrame,
   type DetailScope,
@@ -242,7 +242,7 @@ export function applyDetails(
 
 /** Retain view data on navigation, but never retain a closed runtime's authority. */
 export function useScopedDetails(
-  api: DesktopApi,
+  api: ApplicationClient,
   state: DesktopState | undefined,
   fail: (message: string) => void,
   workerId?: string,

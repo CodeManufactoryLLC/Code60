@@ -2,9 +2,9 @@ import { mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { ApplicationAgents } from "../src/application/application-agents.js";
 import type { CustomAgent } from "../src/bridge/index.js";
 import { DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
-import { ApplicationAgents } from "../src/desktop/application-agents.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
 
 // Each owner persists private Relay-style storage through the native ACL helper on Windows.

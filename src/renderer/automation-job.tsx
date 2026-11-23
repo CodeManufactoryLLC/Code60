@@ -1,9 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type {
+  ApplicationClient,
   AutomationEditor,
   AutomationSummary,
   AutomationUiRequest,
-  DesktopApi,
 } from "../bridge/index.js";
 import { automationDate, automationWeekdays } from "./automation-date.js";
 import { AutomationForm } from "./automation-form.js";
@@ -37,7 +37,7 @@ export function AutomationJob({
   onSaved,
 }: {
   job: AutomationSummary;
-  api: DesktopApi;
+  api: ApplicationClient;
   agents: string[];
   active: boolean;
   open: boolean;

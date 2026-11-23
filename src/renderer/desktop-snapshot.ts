@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import type { DesktopApi, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, Snapshot } from "../bridge/index.js";
 import { applyUpdate, type DesktopState } from "./snapshot-state.js";
 import { startSnapshotStream } from "./snapshot-stream.js";
 
@@ -29,7 +29,7 @@ export class SnapshotStore {
     for (const listener of this.listeners) listener();
   }
   start(
-    api: Pick<DesktopApi, "subscribe" | "snapshot" | "appSummary">,
+    api: Pick<ApplicationClient, "subscribe" | "snapshot" | "appSummary">,
     fail: (message: string) => void,
   ) {
     return startSnapshotStream({
@@ -44,7 +44,7 @@ export class SnapshotStore {
   }
 }
 
-export function useDesktopSnapshot(api: DesktopApi, fail: (message: string) => void) {
+export function useDesktopSnapshot(api: ApplicationClient, fail: (message: string) => void) {
   const store = useMemo(() => new SnapshotStore(), []);
   const state = useSyncExternalStore(store.subscribe, store.snapshot);
   useEffect(() => store.start(api, fail), [api, fail, store]);

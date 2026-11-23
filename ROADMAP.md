@@ -6,6 +6,21 @@ are the source of truth for scope, dependencies, acceptance criteria and progres
 This page provides orientation and links. The versions below describe planned
 outcomes; they do not claim that the capabilities have shipped.
 
+## Current architecture direction
+
+Feature delivery speed is the primary design goal. Code60 now uses one local
+Node 24 backend for interactive work and scheduling, with a React browser UI.
+Electron, package and native service behavior and automatic updates have been removed. The narrow
+management CLI opens/pairs the browser and manages an opt-in per-user login
+service. Browser closure preserves approved work; confirmed Stop Backend stops
+both components. Backend restart restores evidence, never uncertain work authority.
+
+Supported targets are macOS Apple Silicon and Linux x64. Distribution is an npm
+tarball with manual updates. See [the migration record](docs/gateway-daemon-migration-plan.md)
+and [architecture](ARCHITECTURE.md) for current behavior and validation limits.
+The linked GitHub milestones predate this direction and require separate tracker
+reconciliation before they can be treated as a current delivery sequence.
+
 ## Version sequence
 
 | Target milestone | Intended outcome |
@@ -20,7 +35,7 @@ outcomes; they do not claim that the capabilities have shipped.
 | [v0.10.0 — Safe reconciliation and bounded recovery](https://github.com/CodeManufactoryLLC/code60/milestone/9) | Reconcile interrupted effects and add bounded recovery, retries and useful-progress checks. |
 | [v0.11.0 — Versioned workflows and extensions](https://github.com/CodeManufactoryLLC/code60/milestone/10) | Add immutable workflows with branches, joins, loops, durable waits and governed code/tool/retrieval steps. |
 | [v0.12.0 — Operability and product readiness](https://github.com/CodeManufactoryLLC/code60/milestone/11) | Complete diagnostics, export/restore, performance, accessibility, quickstarts and operational disclosures. |
-| [v1.0.0 — Supported release](https://github.com/CodeManufactoryLLC/code60/milestone/12) | Establish supported contracts and verify final native installers, provider/backend combinations and checklist claims. |
+| [v1.0.0 — Supported release](https://github.com/CodeManufactoryLLC/code60/milestone/12) | Establish supported contracts and verify final package and native service behavior, provider/backend combinations and checklist claims. |
 
 ## Why this order
 
@@ -40,18 +55,14 @@ preparation issue.
 
 ## Product direction
 
-- Deliver a desktop application with a private headless runtime API. Remove the
-  public Code60 CLI in v0.3.0; provider CLIs remain supported prerequisites.
-- Allow breaking changes before 1.0 without legacy migration support. Preserve
-  existing repositories, worktrees and old application data.
-- Use an app-managed local runtime and store, with project folders as the primary
-  user concept.
-- Keep execution running when its window closes. Explicit Quit cancels and stops
-  owned execution.
-- Keep native host execution as the default and add optional Docker Linux workers
-  before 1.0. Container verification is distinct from native-platform verification.
-- Retain Windows 11 x64, macOS Apple Silicon and Linux x64 targets, with exact
-  tested environments and provider/backend limits recorded in GitHub.
+- Deliver the browser UI and one local backend, with direct foreground operation
+  for development and explicit per-user service enrollment for normal use.
+- Preserve repositories, worktrees, records and existing domain capabilities.
+- Keep agent execution in the backend; the public CLI is limited to open/service
+  management and has no run, prompt or scheduling execution commands.
+- Keep macOS Apple Silicon and Linux x64 support. Login services require a logged-in,
+  awake machine; no privileged service or Linux linger.
+- Defer feature-slice reorganization and database consolidation to separate work.
 
 ## Using the backlog
 

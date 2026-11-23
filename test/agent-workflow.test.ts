@@ -4,8 +4,8 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, it, vi } from "vitest";
+import { RelayService } from "../src/application/relay-service.js";
 import { DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
-import { RelayService } from "../src/desktop/relay-service.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
 const required = <T>(value: T | undefined | null): T => {

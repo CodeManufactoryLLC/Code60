@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type {
-  DesktopApi,
+  ApplicationClient,
   DesktopRun,
   OrchestrationChat,
   RelayReviewEntry,
@@ -49,7 +49,7 @@ export function useConversationRevisions({
   active,
   onPreview,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   chat: OrchestrationChat | undefined;
   reviews: ReviewSummary[];
   runs: readonly DesktopRun[];

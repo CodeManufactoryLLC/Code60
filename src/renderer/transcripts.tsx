@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
-import type { DesktopApi, DesktopRun } from "../bridge/index.js";
+import type { ApplicationClient, DesktopRun } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { ScopeLifetime } from "./scope-lifetime.js";
 
@@ -17,7 +17,7 @@ export class TranscriptCache extends ScopeLifetime {
   private versions = new Map<string, string>();
   private batch: Promise<void> = Promise.resolve();
   constructor(
-    private api: Pick<DesktopApi, "action">,
+    private api: Pick<ApplicationClient, "action">,
     identity = "transcripts",
   ) {
     super(identity);
@@ -110,7 +110,7 @@ const emptyEvents: Readonly<Record<string, readonly RunEvent[]>> = {};
 const emptyRuns: DesktopRun[] = [];
 const emptyIds: string[] = [];
 export function useTranscripts(
-  api: Pick<DesktopApi, "action">,
+  api: Pick<ApplicationClient, "action">,
   scope: string,
   active: boolean,
   runs: readonly DesktopRun[] = emptyRuns,

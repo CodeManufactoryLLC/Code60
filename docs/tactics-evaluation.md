@@ -16,7 +16,7 @@ application tests remain authoritative.
 Run production UI checks only in Docker:
 
 ```sh
-npm run test:desktop:container -- --grep "Tactics preview|Chat.*stopped startup|read-only task revisions"
+npm run test:browser -- --grep "Tactics preview|Chat.*stopped startup|read-only task revisions"
 ```
 
 The Tactics scenario exercises search/no matches, preview versus Apply, full shared

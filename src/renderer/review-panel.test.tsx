@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { DesktopApi, Review, ReviewContent } from "../bridge/index.js";
+import type { ApplicationClient, Review, ReviewContent } from "../bridge/index.js";
 import { ReviewPanel } from "./review-panel.js";
 
 const read = vi.hoisted(() => vi.fn());
@@ -47,7 +47,7 @@ function render(overrides: Partial<Review> = {}, stored: Record<string, string> 
   };
   const html = renderToStaticMarkup(
     <ReviewPanel
-      api={api as unknown as DesktopApi}
+      api={api as unknown as ApplicationClient}
       review={review}
       project="/project"
       revisionId={revision.id}

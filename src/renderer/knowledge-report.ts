@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  type DesktopApi,
+  type ApplicationClient,
   isKnowledgeRelativePath,
   KNOWLEDGE_LIMITS,
   type KnowledgeOwner,
@@ -17,7 +17,7 @@ let renderer: Promise<string | null> | undefined;
 let sequence = 0;
 
 /** Presentation-only metadata. Main validates and ignores it for authority. */
-function report(api: DesktopApi | undefined, view: View): void {
+function report(api: ApplicationClient | undefined, view: View): void {
   if (!api?.reportKnowledge || !api.knowledgeRenderer) return;
   renderer ??= api.knowledgeRenderer().catch(() => null);
   const order = ++sequence;
@@ -43,7 +43,7 @@ function reportedTab(tab: FileTab): ReportedTab | null {
 }
 
 export function useKnowledgeNavigation(
-  api: DesktopApi,
+  api: ApplicationClient,
   view: {
     page: PageId;
     settingsSection: SettingsSectionId | null;
@@ -85,7 +85,7 @@ export function panelReport(tabs: FileTabs) {
 }
 
 export function useKnowledgePanel(
-  api: DesktopApi | undefined,
+  api: ApplicationClient | undefined,
   owner: KnowledgeOwner | undefined,
   panel: { tabs: FileTabs; open: boolean; active: boolean; fileSubscription?: string | undefined },
 ): void {

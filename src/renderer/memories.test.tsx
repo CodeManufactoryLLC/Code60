@@ -1,7 +1,7 @@
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
-import type { DesktopApi, MemoryRecord } from "../bridge/index.js";
+import type { ApplicationClient, MemoryRecord } from "../bridge/index.js";
 import { MemoriesPage } from "./memories.js";
 import { defaultTextStyles } from "./typography.js";
 
@@ -24,7 +24,7 @@ it("uses an application-scoped shared table with bounded paging and labelled fil
   const browseMemories = vi.fn();
   const html = renderToStaticMarkup(
     <MemoriesPage
-      api={{ browseMemories } as unknown as DesktopApi}
+      api={{ browseMemories } as unknown as ApplicationClient}
       active={false}
       lines={{ horizontal: false, vertical: false, heading: false }}
       density="high"

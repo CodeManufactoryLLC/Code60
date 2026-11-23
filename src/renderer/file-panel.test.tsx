@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
-import type { DesktopApi, PlanSummary, ReviewSummary } from "../bridge/index.js";
+import type { ApplicationClient, PlanSummary, ReviewSummary } from "../bridge/index.js";
 import { FilePanel, RevisionList } from "./file-panel.js";
 import { emptyFileTabs, updateFileTabs } from "./file-tabs.js";
 import type { FileBrowser } from "./files.js";
@@ -75,7 +75,7 @@ it("offers View Plan only in the displayed session’s centered blank-tab choice
 
 it("offers recall beside Files without opening it automatically and never mounts hidden recall content", () => {
   const memoryDetail = vi.fn();
-  const api = { memoryDetail } as unknown as DesktopApi;
+  const api = { memoryDetail } as unknown as ApplicationClient;
   const render = (kind: "recall" | "blank", active: boolean, open: boolean) =>
     renderToStaticMarkup(
       <FilePanel

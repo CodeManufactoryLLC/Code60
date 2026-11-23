@@ -1,4 +1,4 @@
-import { access, lstat, realpath, unlink } from "node:fs/promises";
+import { realpath, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { SchedulerStatus, ServiceStatus } from "../contracts/index.js";
@@ -219,40 +219,17 @@ async function restoreUpdate(
   await unlink(updatePath(env));
 }
 
-// Resolve the entry inside each new AppImage mount, never save a temporary mount path.
-const APPIMAGE_SERVICE_CODE =
-  'import(require("node:url").pathToFileURL(require("node:path").join(require("node:path").dirname(process.execPath),"resources/app.asar/dist/automation/main.js")).href)';
-
 async function schedulerRuntime(
   env: Readonly<NodeJS.ProcessEnv>,
-  validate = false,
+  _validate = false,
 ): Promise<ServiceRuntime> {
-  const executable = await realpath(env.APPIMAGE || process.execPath);
-  if (env.APPIMAGE && validate) {
-    // Resolve first, then verify every canonical ancestor. Sticky shared directories
-    // still permit replacement of user-owned executable names and are refused.
-    for (let path = executable; ; path = dirname(path)) {
-      const info = await lstat(path);
-      if (
-        (path === executable ? !info.isFile() || !(info.mode & 0o111) : !info.isDirectory()) ||
-        (info.uid !== 0 && info.uid !== process.getuid?.()) ||
-        info.mode & 0o022
-      )
-        throw new AutomationError(
-          "refused",
-          "The AppImage location is replaceable. Move it to a protected directory before updating the Scheduling Service.",
-        );
-      if (dirname(path) === path) break;
-    }
-  }
-  await access(executable);
-  const entry = resolve(dirname(fileURLToPath(import.meta.url)), "main.js");
-  const runtimeEnv: Record<string, string> = { ELECTRON_RUN_AS_NODE: "1" };
-  for (const key of ["PATH", "HOME", "USERPROFILE", "XDG_STATE_HOME", "XDG_CONFIG_HOME"])
+  const executable = await realpath(process.execPath);
+  const runtimeEnv: Record<string, string> = {};
+  for (const key of ["PATH", "HOME", "XDG_STATE_HOME", "XDG_CONFIG_HOME"])
     if (env[key]) runtimeEnv[key] = env[key];
   return {
     executable,
-    args: env.APPIMAGE ? ["-e", APPIMAGE_SERVICE_CODE] : [entry],
+    args: [resolve(dirname(fileURLToPath(import.meta.url)), "main.js")],
     env: runtimeEnv,
   };
 }

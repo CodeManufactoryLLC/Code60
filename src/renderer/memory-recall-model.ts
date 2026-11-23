@@ -1,6 +1,6 @@
-import type { DesktopApi, MemoryDetail } from "../bridge/index.js";
+import type { ApplicationClient, MemoryDetail } from "../bridge/index.js";
 
-type Api = Pick<DesktopApi, "memoryDetail">;
+type Api = Pick<ApplicationClient, "memoryDetail">;
 export type RecallRecord =
   | { detail: Pick<MemoryDetail, "record" | "incomplete"> }
   | { unavailable: true };

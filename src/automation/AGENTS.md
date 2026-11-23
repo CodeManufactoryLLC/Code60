@@ -1,7 +1,7 @@
 # Automation
 
-Electron-independent local service. Depend only on core, contracts and platform,
-through their public indexes. Never import desktop or expose a TCP listener.
+Backend-owned scheduler runtime. Depend only on core, contracts and platform,
+through their public indexes. Never import application or gateway or expose a TCP listener.
 
 - Serialize mutations and persist occurrence claims before any agent launch.
 - Never replay uncertain work, retry failed runs or accumulate a backlog.
@@ -11,8 +11,8 @@ through their public indexes. Never import desktop or expose a TCP listener.
   never permission to erase history or displace a live/unverifiable writer.
 - Bound storage reads, protocol frames, clients and notices. Keep diagnostics
   fixed and free of paths, prompts, tokens and provider output.
-- Service installation requires explicit consent. Desktop shutdown must not
-  terminate service-owned work. Tests use fake agents and injected clocks.
+- Service installation requires explicit consent. Browser closure and interactive Stop all must not
+  terminate scheduler-owned work; backend shutdown must stop it. Tests use fake agents and injected clocks.
 - Scheduler registration status is read-only: validate installed flags and native
   definition presence; installed:false markers never imply installation. Return
   typed native runtime state and optional live status. Unverifiable registration

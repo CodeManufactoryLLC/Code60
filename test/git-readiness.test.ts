@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
+import { ReviewStore } from "../src/application/reviews.js";
 import { DEFAULT_CONFIG, defaultDeps, openWorkspace, prepareRuns } from "../src/core/index.js";
-import { ReviewStore } from "../src/desktop/reviews.js";
 import { FakeAgents } from "./fakes.js";
 
 let root: string;

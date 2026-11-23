@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  type DesktopApi,
+  type ApplicationClient,
   RAG_QUERY_LIMIT,
   type RagResults,
   type RagStatus,
@@ -13,7 +13,7 @@ export function RagPage({
   databaseEpoch,
 }: {
   api: Pick<
-    DesktopApi,
+    ApplicationClient,
     "ragStatus" | "onRagStatus" | "rebuildRag" | "retrieveRag" | "cancelRag" | "clearRag"
   >;
   database: string | null;

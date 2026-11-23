@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from "react";
-import type { DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { type RecallTurn, recallHistory } from "./memory-recall-history.js";
 import { RECALL_PAGE_SIZE, type RecallRecord, RecallRecords } from "./memory-recall-model.js";
@@ -79,7 +79,7 @@ export function RecallGroup({
 }
 
 /** Mounted only for the selected, visible tab; owner keys prevent cross-chat state reuse. */
-export function MemoryRecall({ api, source }: { api: DesktopApi; source: RecallSource }) {
+export function MemoryRecall({ api, source }: { api: ApplicationClient; source: RecallSource }) {
   const [model] = useState(() => new RecallRecords(api));
   const records = useSyncExternalStore(model.subscribe, model.snapshot, model.snapshot);
   const history = useMemo(

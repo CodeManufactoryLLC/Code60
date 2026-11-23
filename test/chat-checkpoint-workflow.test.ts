@@ -5,8 +5,8 @@ import { access, link, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { RelayService } from "../src/application/relay-service.js";
 import { DEFAULT_CONFIG, defaultDeps, TaskLoop } from "../src/core/index.js";
-import { RelayService } from "../src/desktop/relay-service.js";
 import { FakeAgents, FakeProcesses } from "./fakes.js";
 
 // These complete multi-target journeys run real Git and durable journals, not only mocks.

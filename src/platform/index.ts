@@ -1,7 +1,6 @@
 export { resolveCommand } from "./command.js";
 export { DiagnosticTail, diagnosticMessage, diagnosticText } from "./diagnostics.js";
 export { environmentValue, mergeSearchPath, setEnvironmentPath, userHome } from "./environment.js";
-export { guardOptionalOutput } from "./optional-output.js";
 export { containedPath, samePath } from "./paths.js";
 export {
   fileCode,

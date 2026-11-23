@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type {
-  DesktopApi,
+  ApplicationClient,
   FilePreview,
   GitReadiness,
   GitSetupSession,
@@ -48,7 +48,7 @@ export function GitSetupDialog({
   databaseEpoch,
   onClose,
 }: ProjectRequestIdentity & {
-  api: DesktopApi;
+  api: ApplicationClient;
   project: string;
   onClose(): void;
 }) {

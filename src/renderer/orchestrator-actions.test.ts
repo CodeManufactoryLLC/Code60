@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient } from "../bridge/index.js";
 import { bindDatabaseWrites } from "./database-api.js";
 import { useOrchestratorActions } from "./orchestrator-actions.js";
 
@@ -49,7 +49,7 @@ it.each([true, false])(
           finish = () => resolve(undefined);
         }),
     );
-    const api = { orchestrationChatAction } as unknown as DesktopApi;
+    const api = { orchestrationChatAction } as unknown as ApplicationClient;
     const first = useOrchestratorActions(
       bindDatabaseWrites(api, 1),
       "/a",
@@ -82,7 +82,7 @@ it("still rejects late results after conversation or transport replacement", asy
       new Promise<undefined>((resolve) => {
         finish = () => resolve(undefined);
       }),
-  } as unknown as DesktopApi;
+  } as unknown as ApplicationClient;
   const first = useOrchestratorActions(api, null, "a", true);
   const sent = first.action({ type: "send", id: "run-a", text: "request" });
   const second = useOrchestratorActions(api, null, "b", true);

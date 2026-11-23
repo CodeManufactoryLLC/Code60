@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import type {
-  DesktopApi,
+  ApplicationClient,
   MemoryAction,
   MemoryDetail,
   MemorySettings,
@@ -9,7 +9,7 @@ import type {
 import { ControlDescription } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
-type Api = Pick<DesktopApi, "memorySnapshot" | "memoryAction" | "onMemoryChanged">;
+type Api = Pick<ApplicationClient, "memorySnapshot" | "memoryAction" | "onMemoryChanged">;
 
 export function MemoryPage({
   api,

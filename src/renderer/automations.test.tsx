@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
-import type { DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient } from "../bridge/index.js";
 import { AutomationsPage } from "./automations.js";
 import { defaultTextStyles } from "./typography.js";
 
@@ -13,7 +13,7 @@ vi.mock("./data-table.js", () => ({
 it("keeps service controls and explanatory notes out of Scheduled Jobs", () => {
   const markup = renderToStaticMarkup(
     <AutomationsPage
-      api={{} as DesktopApi}
+      api={{} as ApplicationClient}
       active={false}
       agents={[]}
       lines={{ horizontal: false, vertical: false, heading: false }}

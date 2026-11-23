@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import type { Action, DesktopApi } from "../bridge/index.js";
+import type { Action, ApplicationClient } from "../bridge/index.js";
 import { ScopeLifetime } from "./scope-lifetime.js";
 
 interface State {
@@ -12,7 +12,7 @@ export class WorkerActions extends ScopeLifetime {
   private state: State = { busy: false, error: "" };
   private listeners = new Set<() => void>();
   constructor(
-    private api: Pick<DesktopApi, "action">,
+    private api: Pick<ApplicationClient, "action">,
     identity: string,
   ) {
     super(identity);
@@ -48,7 +48,7 @@ export class WorkerActions extends ScopeLifetime {
     }
   };
 }
-export function useWorkerActions(api: DesktopApi, id: string) {
+export function useWorkerActions(api: ApplicationClient, id: string) {
   const owner = useMemo(() => new WorkerActions(api, id), [api, id]);
   useEffect(() => {
     owner.activate();

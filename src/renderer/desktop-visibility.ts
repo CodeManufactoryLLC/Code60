@@ -1,9 +1,9 @@
 import { useEffect } from "react";
-import type { DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient } from "../bridge/index.js";
 import type { PageId } from "./navigation.js";
 
 export function useDesktopVisibility(
-  api: DesktopApi,
+  api: ApplicationClient,
   page: PageId,
   splash: boolean,
   filesActive: boolean,

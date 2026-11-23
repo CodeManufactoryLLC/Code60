@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
-import type { DesktopApi, LogPage } from "../bridge/index.js";
+import type { ApplicationClient, LogPage } from "../bridge/index.js";
 import { LogsPage } from "./logs.js";
 import { defaultTextStyles } from "./typography.js";
 
@@ -34,7 +34,7 @@ it("offers private app-wide diagnostics without a database and wires explicit re
   const queryLogs = vi.fn().mockResolvedValue(page);
   const markup = renderToStaticMarkup(
     <LogsPage
-      api={{ queryLogs } as unknown as DesktopApi}
+      api={{ queryLogs } as unknown as ApplicationClient}
       active
       project={null}
       lines={{ horizontal: false, vertical: false, heading: false }}

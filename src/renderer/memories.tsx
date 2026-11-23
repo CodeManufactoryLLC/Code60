@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
-  type DesktopApi,
+  type ApplicationClient,
   MEMORY_TYPES,
   type MemoryAction,
   type MemoryBrowse,
@@ -52,7 +52,7 @@ export function MemoriesPage({
   active,
   ...table
 }: Pick<TableOptions, "lines" | "density" | "fit" | "textStyles"> & {
-  api: DesktopApi;
+  api: ApplicationClient;
   active: boolean;
 }) {
   const [model] = useState(() => new MemoriesModel(api));

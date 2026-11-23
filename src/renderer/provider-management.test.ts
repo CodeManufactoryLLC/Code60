@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import type { DesktopApi, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, Snapshot } from "../bridge/index.js";
 import { useProviderManagement } from "./provider-management.js";
 
 const hooks = vi.hoisted(() => ({ slots: [] as unknown[], index: 0 }));
@@ -28,7 +28,7 @@ function fixture() {
   const api = {
     providerAction: vi.fn(async () => {}),
     modelDefault: vi.fn(async () => {}),
-  } as unknown as DesktopApi;
+  } as unknown as ApplicationClient;
   const snapshot = {
     agentSetup: {
       complete: true,

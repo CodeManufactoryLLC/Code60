@@ -1,11 +1,11 @@
 import { type ChatUndoResult, chatReferenceSchema } from "./chat-context.js";
 
 export {
+  APPLICATION_CAPABILITIES,
   type BrowserMode,
   type Capability,
   capabilityReference,
   capabilityReferences,
-  DESKTOP_CAPABILITIES,
   defaultableSelections,
   type Group,
   isAllowedBrowserTool,
@@ -50,8 +50,6 @@ import type { AgentSetupSnapshot, SetupAttempt, SetupBegin, SetupIdentity } from
 
 export * from "./agent-setup.js";
 export * from "./git-setup.js";
-export * from "./sidebar-backdrop.js";
-export * from "./window-controls.js";
 
 import { z } from "zod";
 import type {
@@ -380,7 +378,7 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
-export interface DesktopApi {
+export interface ApplicationClient {
   workflow(request: import("./workflows.js").WorkflowRequest): Promise<unknown>;
   modelDefault?(request: import("./model-defaults.js").ModelDefaultAction): Promise<void>;
   customAgent?(
@@ -458,8 +456,6 @@ export interface DesktopApi {
   cancelAgentSetup(request: SetupIdentity): Promise<void>;
   finishAgentSetup(request: SetupIdentity): Promise<void>;
   abandonAgentSetup(request: SetupIdentity): Promise<void>;
-  update(action: UpdateAction): Promise<UpdateState>;
-  onUpdate(listener: (state: UpdateState) => void): () => void;
   searchProjects(request: ProjectSearchQuery): Promise<ProjectSearchPage>;
   searchProjectsPage(request: ProjectSearchPageRequest): Promise<ProjectSearchPage>;
   cancelProjectSearch(request: ProjectSearchIdentity): Promise<void>;
@@ -470,20 +466,6 @@ export interface DesktopApi {
   cancelMemoryExtraction(requestId: string): Promise<void>;
   setFileContext(context: FileContext | null): Promise<void>;
   orchestrationChatAction(request: OrchestrationChatAction): Promise<ChatUndoResult | undefined>;
-  windowAppearance(): Promise<{
-    transparent: boolean;
-    enabled: boolean;
-    clickThrough: boolean;
-    sidebarBlurSupported: boolean;
-    customWindowControls: boolean;
-  }>;
-  setSidebarBackdrop(
-    request: import("./sidebar-backdrop.js").SidebarBackdropRequest,
-  ): Promise<void>;
-  onSidebarBackdropError(listener: () => void): () => void;
-  controlWindow(action: import("./window-controls.js").WindowControl): Promise<void>;
-  setTransparent(enabled: boolean): Promise<void>;
-  setBackgroundHitTest(ignore: boolean): Promise<void>;
   snapshot(): Promise<Snapshot>;
   /** Initial app state and gap recovery without transcript/file payloads. */
   appSummary?(): Promise<Snapshot>;
@@ -520,11 +502,7 @@ export interface DesktopApi {
   action(action: Action): Promise<ActionResult>;
   stopAll(): Promise<void>;
   subscribe(listener: (update: Snapshot) => void): () => void;
-  /** Commands chosen from the native application menu. */
-  onMenu(listener: (command: MenuCommand) => void): () => void;
 }
-
-export type MenuCommand = "open-project" | "database";
 
 const updateActionSchema = z.enum([
   "status",
@@ -1044,6 +1022,7 @@ export const parseSearchSummary = (value: unknown): SearchSummaryRequest =>
 export const parseSearchSummaryRequestId = (value: unknown): string =>
   parseValue(memoryRequestIdSchema, value);
 
+export * from "./gateway.js";
 export * from "./reviews.js";
 export { parseTaskAction, type TaskAction, type TaskView } from "./tasks.js";
 

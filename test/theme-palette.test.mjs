@@ -193,10 +193,4 @@ describe("application palette", () => {
       );
     });
   }
-
-  it("keeps native alpha available for live sidebar transparency", () => {
-    const main = readFileSync(new URL("../src/desktop/main.ts", import.meta.url), "utf8");
-    expect(main).toContain("transparent: true");
-    expect(main).toContain('backgroundColor: "#00000000"');
-  });
 });

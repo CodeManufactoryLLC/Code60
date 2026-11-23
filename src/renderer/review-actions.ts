@@ -1,5 +1,5 @@
 import type {
-  DesktopApi,
+  ApplicationClient,
   ProjectRequestIdentity,
   RelayReviewRequest,
   RelayReviewResponse,
@@ -37,7 +37,7 @@ type Request = RelayReviewRequest extends infer R
 
 /** Presentation adapter only. Main remains responsible for ownership and confirmations. */
 export async function reviewRequest(
-  api: DesktopApi,
+  api: ApplicationClient,
   scope: ReviewScope,
   request: Request,
 ): Promise<RelayReviewResponse> {

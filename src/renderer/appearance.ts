@@ -8,7 +8,7 @@ export interface SidebarAppearance {
   opacity: number;
   blur: number;
 }
-export const sidebarPercentageLimit = 100;
+const sidebarPercentageLimit = 100;
 export const defaultSidebarAppearance: Readonly<SidebarAppearance> = Object.freeze({
   opacity: 100,
   blur: 0,

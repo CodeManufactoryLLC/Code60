@@ -2,7 +2,7 @@ import { z } from "zod";
 import { parseValue } from "../contracts/index.js";
 
 const databaseWriteSchema = z.strictObject({
-  request: z.unknown(),
+  request: z.unknown().optional(),
   databaseEpoch: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
 });
 

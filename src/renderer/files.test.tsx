@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { DesktopApi, FileSnapshot, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, FileSnapshot, Snapshot } from "../bridge/index.js";
 import { type FileBrowser, useFiles } from "./files.js";
 
 const context = { project: "/project", root: "/project", directories: [""], preview: "a.ts" };
@@ -20,7 +20,7 @@ function Probe({
   active: boolean;
   capture(browser: FileBrowser): void;
 }) {
-  capture(useFiles({} as DesktopApi, snapshot, active, preview));
+  capture(useFiles({} as ApplicationClient, snapshot, active, preview));
   return null;
 }
 function read(current: FileSnapshot, preview: string | null, active = true, project = "/project") {

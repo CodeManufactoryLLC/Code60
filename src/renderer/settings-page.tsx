@@ -6,7 +6,6 @@ import { type IconAppearance, iconContrastBounds } from "./icon-appearance.js";
 import { type SettingsSectionId, settingsLabels } from "./navigation.js";
 import { ControlDescription } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
-import { SidebarAppearanceSettings } from "./sidebar-appearance-settings.js";
 import { type RowDensity, rowDensities, type TableLines } from "./table-preferences.js";
 import { TextSettings } from "./text-settings.js";
 import { TransitionSettings } from "./transition-settings.js";
@@ -94,13 +93,6 @@ export function SettingsPage({
         "appearance",
         <section className="settings-section" aria-labelledby={`${id}-appearance`}>
           <SettingsHeader page="appearance" id={`${id}-appearance`} />
-          <SidebarAppearanceSettings
-            appearance={sidebarAppearance}
-            saved={sidebarAppearanceSaved}
-            blurSupported={sidebarBlurSupported}
-            nativeError={sidebarBlurError}
-            onChange={onSidebarAppearance}
-          />
           <SettingsCard title="Icons">
             <label className="settings-row">
               Monochrome

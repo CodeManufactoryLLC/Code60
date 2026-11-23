@@ -1,6 +1,6 @@
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { AutomationTranscript, DesktopApi } from "../../src/bridge/index.js";
+import type { ApplicationClient, AutomationTranscript } from "../../src/bridge/index.js";
 import { AutomationTranscriptModal } from "../../src/renderer/automation-transcript.js";
 
 const listeners = new Set<() => void>();
@@ -52,7 +52,7 @@ const api = {
       listeners.delete(listener);
     };
   },
-} satisfies Pick<DesktopApi, "automation" | "onAutomationChanged">;
+} satisfies Pick<ApplicationClient, "automation" | "onAutomationChanged">;
 function Fixture() {
   const [id, setId] = useState<string>();
   fixture.switchExecution = setId;
@@ -66,7 +66,7 @@ function Fixture() {
       </button>
       {id && (
         <AutomationTranscriptModal
-          api={api as DesktopApi}
+          api={api as ApplicationClient}
           executionId={id}
           onClose={() => setId(undefined)}
         />

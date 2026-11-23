@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
-import { BUILTIN_COMMANDS, type Command, type DesktopApi } from "../bridge/index.js";
+import { type ApplicationClient, BUILTIN_COMMANDS, type Command } from "../bridge/index.js";
 import {
   CommandComposer,
   CommandMessage,
@@ -20,7 +20,7 @@ const command: Command = {
 };
 it("renders labelled fields and actions without treating a saved command's metadata as editable fields", () => {
   const html = renderToStaticMarkup(
-    <CommandsPage commands={[command]} api={{} as DesktopApi} onSnapshot={() => {}} />,
+    <CommandsPage commands={[command]} api={{} as ApplicationClient} onSnapshot={() => {}} />,
   );
   for (const label of [
     "Title",

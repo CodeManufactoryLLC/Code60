@@ -1,7 +1,7 @@
 # Workflow QA report
 
 - Revision / local diff:
-- Environment (container/native CI, runtime, fixture providers):
+- Environment (headless browser/native CI, runtime, fixture providers):
 - Scope selected from behavior and reported starting state:
 - Overall: PASS / FAIL / BLOCKED (any required blocked/failed journey prevents PASS)
 
@@ -28,5 +28,5 @@
 
 ## Checks outside the journey
 
-List unit/static/collection results separately. State explicitly when desktop
+List unit/static/collection results separately. State explicitly when native login-service
 execution was not performed; these checks do not establish an E2E PASS.

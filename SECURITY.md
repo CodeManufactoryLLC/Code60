@@ -1,17 +1,26 @@
 # Security Policy
 
-Code60 runs coding agents on your machine. Its desktop safeguards protect the
+Code60 runs coding agents on your machine. Its browser safeguards protect the
 application interface; they do not sandbox the agents you launch. Read the
 limitations below before giving an agent access to sensitive repositories.
 
 ## Runtime safeguards and limits
 
-- **Desktop interface isolation.** The Electron renderer uses the Chromium
-  sandbox, context isolation, no Node.js integration, and a restrictive Content
-  Security Policy. External navigation, new windows, and webviews are blocked.
-- **Validated desktop requests.** A fixed preload API exposes specific
-  capabilities, not raw IPC or arbitrary command execution. The main process
-  checks the sender, validates requests, and checks workspace/run ownership.
+- **Authenticated browser interface.** The Node backend binds only to
+  `127.0.0.1` on an ephemeral port and serves bundled assets. A short-lived,
+  single-use pairing code creates a tab session; its token remains in session
+  storage and never enters a URL or cookie. Explicit headers authenticate API
+  and event requests. Host/Origin checks and same-origin JSON mutation requests
+  reject cross-site use. A CSP limits executable content to bundled assets.
+- **Validated application requests.** A fixed operation map validates inputs and
+  checks workspace/run ownership. One browser controls mutations; takeover is
+  explicit and revokes pending page decisions. Host selection uses opaque IDs
+  under locally configured roots. No generic shell or filesystem RPC is exposed.
+- **Separate local management.** Private filesystem metadata authenticates the
+  management CLI separately from browsers. Installation, repair, stop and uninstall
+  require explicit local consent. Closing a tab preserves approved execution;
+  stopping the backend stops application and scheduler work. Restart restores
+  evidence without replaying uncertain work or approvals.
 - **Scoped local agent controls.** The orchestration MCP sidecar connects to a
   token-authenticated gateway bound to `127.0.0.1`. Requests have size and time
   limits. Worker mutations require the current chat/project scope and ownership;
@@ -31,7 +40,7 @@ or misleading. Behavioral instructions such as the Operating Contract are not
 security boundaries. Review agent changes yourself; a `finished` run means the
 agent ended its turn normally, not that its changes were verified.
 
-Technical details: [desktop security](ARCHITECTURE.md#desktop-security),
+Technical details: [browser security](ARCHITECTURE.md#browser-security),
 [module boundaries](ARCHITECTURE.md#modules), and
 [runs without a worktree](ARCHITECTURE.md#runs-without-a-worktree).
 
@@ -41,8 +50,8 @@ Code60 answers permission requests reported by the agent through ACP. This
 policy is not an operating-system sandbox and cannot constrain actions an
 agent does not submit for approval.
 
-- **Manual desktop runs:** the default policy allows `read`, `search`,
-  `think`, and `edit`, and asks for other kinds. Configuration and explicit desktop permission choices can change these decisions.
+- **Manual application runs:** the default policy allows `read`, `search`,
+  `think`, and `edit`, and asks for other kinds. Configuration and explicit application permission choices can change these decisions.
 - **Scheduled automations:** use the saved explicit allowlist and deny other
   requests. The internal headless executor never prompts.
 - **Orchestration chats and their workers:** Code60 auto-approval defaults on.
@@ -86,8 +95,7 @@ user-selected SQLite database. See [files](ARCHITECTURE.md#files) for the full
 storage contract.
 
 On macOS and Linux, new run directories use mode `0700` and record files use
-`0600`. On Windows, Code60 uses private owner/SYSTEM ACLs for new private
-objects and rejects unsafe existing private ACLs. Filesystem permissions do
+`0600`. Filesystem permissions do
 not protect against processes running as you, administrator access, backups,
 or copies you make. The JSON transcript files are not encrypted by Code60.
 
@@ -117,7 +125,7 @@ own CLIs.
 
 ## Desktop diagnostic logs
 
-Tables → Logs is a desktop-only operational history, available without a project
+Tables → Logs is a local application operational history, available without a project
 database. It is separate from the Events table and `events.jsonl` transcripts.
 Local JSONL files live under `$XDG_STATE_HOME/code60/logs` (default
 `~/.local/state/code60/logs`) and persist across app restarts.
@@ -173,10 +181,10 @@ Local record storage does not mean that your task data stays on your machine:
   the configured agent; search overviews can include project-file excerpts.
   Temporary working directories and denied helper permission requests are
   not filesystem sandboxes.
-- Supported packaged desktop builds check GitHub for updates automatically
-  by default. You can disable automatic checks in **Settings > Updates**.
-  Downloads and installation require explicit user actions. Disabling
-  update checks does not disable provider network access.
+- Updates are manual npm tarball installations. The browser does not check for,
+  download or install packages. Stop work, install the reviewed package, repair
+  the local backend registration and start it again. Provider network access is
+  independent of the update process.
 
 See [ended-run recovery](ARCHITECTURE.md#ended-run-recovery),
 [consolidated search](ARCHITECTURE.md#desktop-app), and

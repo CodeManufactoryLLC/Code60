@@ -4,18 +4,18 @@ import { mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { RelayReviewRequest, RelayReviewResponse } from "../src/bridge/index.js";
-import { type CoreDeps, DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
 import {
   ExecutionHost,
   type ExecutionOwner,
   type ExecutionWorker,
-} from "../src/desktop/execution-host.js";
-import { RelayReviewStore } from "../src/desktop/relay-review-store.js";
-import { RelayReviews } from "../src/desktop/relay-reviews.js";
-import { RelayService } from "../src/desktop/relay-service.js";
-import * as relayStorage from "../src/desktop/relay-storage.js";
-import { ReviewStore } from "../src/desktop/reviews.js";
+} from "../src/application/execution-host.js";
+import { RelayReviewStore } from "../src/application/relay-review-store.js";
+import { RelayReviews } from "../src/application/relay-reviews.js";
+import { RelayService } from "../src/application/relay-service.js";
+import * as relayStorage from "../src/application/relay-storage.js";
+import { ReviewStore } from "../src/application/reviews.js";
+import type { RelayReviewRequest, RelayReviewResponse } from "../src/bridge/index.js";
+import { type CoreDeps, DEFAULT_CONFIG, defaultDeps } from "../src/core/index.js";
 import { FakeAgents, FakeProcesses } from "./fakes.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 

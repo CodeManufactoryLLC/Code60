@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "../src");
 
 const ALLOWED: Readonly<Record<string, readonly string[]>> = {
-  desktop: ["core", "bridge", "platform", "automation"],
+  application: ["core", "bridge", "platform", "automation"],
+  gateway: ["application", "automation", "bridge", "contracts", "core", "platform"],
+  management: ["gateway", "platform", "core", "contracts"],
   automation: ["core", "contracts", "platform"],
   renderer: ["bridge", "core"],
   bridge: ["core", "contracts"],
@@ -20,8 +22,6 @@ const ALLOWED: Readonly<Record<string, readonly string[]>> = {
 /** Packages only one module may import, so integrations stay in their module. */
 const PACKAGE_OWNERS: Readonly<Record<string, string>> = {
   "@agentclientprotocol/sdk": "agents",
-  electron: "desktop",
-  "electron-updater": "desktop",
   react: "renderer",
   "react-dom": "renderer",
   "react-markdown": "renderer",
@@ -62,6 +62,10 @@ function findViolations(files: readonly SourceFile[]): string[] {
         spec.startsWith("node:")
       )
         violations.push(`${where}: renderer contracts may not import Node.js`);
+      if (spec === "electron" || spec === "electron-updater") {
+        violations.push(`${where}: Electron is not part of the browser application`);
+        continue;
+      }
       if (!spec.startsWith(".")) {
         if (
           from === "contracts" &&
@@ -163,7 +167,7 @@ describe("module boundaries", () => {
         f("core", 'import { createRoot } from "react-dom";'),
         f("renderer", 'import { useState } from "react";'),
         f("renderer", 'import { app } from "electron";'),
-        f("desktop", 'import { render } from "react-dom";'),
+        f("application", 'import { render } from "react-dom";'),
         f("renderer", 'import { defaultDeps } from "../core/index.js";'),
       ]),
     ).toEqual([
@@ -173,8 +177,8 @@ describe("module boundaries", () => {
       'automation/x.ts imports "../core/run.js": import core through its index.js',
       'core/x.ts imports "@agentclientprotocol/sdk": only agents may import @agentclientprotocol/sdk',
       'core/x.ts imports "react-dom": only renderer may import react-dom',
-      'renderer/x.ts imports "electron": only desktop may import electron',
-      'desktop/x.ts imports "react-dom": only renderer may import react-dom',
+      'renderer/x.ts imports "electron": Electron is not part of the browser application',
+      'application/x.ts imports "react-dom": only renderer may import react-dom',
       'renderer/x.ts imports "../core/index.js": core imports must be type-only',
     ]);
   });

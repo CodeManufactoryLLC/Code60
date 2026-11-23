@@ -3,6 +3,9 @@ import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryService } from "../src/application/memory-service.js";
+import { MemoryStore } from "../src/application/memory-store.js";
+import { memorySearch } from "../src/application/memory-worker.js";
 import {
   DEFAULT_MEMORY_SETTINGS,
   type MemoryAction,
@@ -13,9 +16,6 @@ import {
 import { DEFAULT_PERMISSIONS } from "../src/core/config.js";
 import type { CoreDeps, MemoryTurn, RunEvent, RunMemory, RunRecord } from "../src/core/index.js";
 import { createOrchestrator } from "../src/core/orchestrator.js";
-import { MemoryService } from "../src/desktop/memory-service.js";
-import { MemoryStore } from "../src/desktop/memory-store.js";
-import { memorySearch } from "../src/desktop/memory-worker.js";
 import {
   FakeAgents,
   FakeClock,

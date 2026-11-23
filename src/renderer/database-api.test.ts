@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import type { DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient } from "../bridge/index.js";
 import { bindDatabaseWrites } from "./database-api.js";
 
 it("keeps delayed database actions on their captured epoch rather than a replacement", async () => {
@@ -16,7 +16,7 @@ it("keeps delayed database actions on their captured epoch rather than a replace
   ] as const;
   const api = Object.fromEntries(methods.map((method) => [method, vi.fn(async () => "result")]));
   const snapshot = vi.fn();
-  const raw = { ...api, snapshot } as unknown as DesktopApi;
+  const raw = { ...api, snapshot } as unknown as ApplicationClient;
   const old = bindDatabaseWrites(raw, 7);
   const next = bindDatabaseWrites(raw, 8);
   for (const method of methods) {
@@ -37,7 +37,7 @@ it("keeps delayed database actions on their captured epoch rather than a replace
 it("captures epochs for native folder picking and project-history clearing without a payload", async () => {
   const chooseFolder = vi.fn(async () => true);
   const clearProjects = vi.fn(async () => false);
-  const raw = { chooseFolder, clearProjects } as unknown as DesktopApi;
+  const raw = { chooseFolder, clearProjects } as unknown as ApplicationClient;
   const old = bindDatabaseWrites(raw, 7);
   const next = bindDatabaseWrites(raw, 8);
   for (const method of ["chooseFolder", "clearProjects"] as const) {

@@ -10,11 +10,11 @@ globalThis.fetch = async () => {
   throw new Error("Network is forbidden in the memory benchmark");
 };
 const root = fileURLToPath(new URL("../", import.meta.url));
-const { MemoryStore } = await import("../dist/desktop/memory-store.js");
+const { MemoryStore } = await import("../dist/application/memory-store.js");
 const { indexMemoryBatch, memorySearch, MEMORY_MODEL } = await import(
-  "../dist/desktop/memory-worker.js"
+  "../dist/application/memory-worker.js"
 );
-const { loadRagModel } = await import("../dist/desktop/rag-model.js");
+const { loadRagModel } = await import("../dist/application/rag-model.js");
 
 const topics = [
   "The release pipeline signs macOS builds with the team notarization profile",

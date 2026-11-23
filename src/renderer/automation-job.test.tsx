@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
-import type { AutomationSummary, DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient, AutomationSummary } from "../bridge/index.js";
 import { AutomationJob } from "./automation-job.js";
 
 const job: AutomationSummary = {
@@ -20,7 +20,7 @@ const render = (changes: Partial<AutomationSummary> = {}, legacy = false) =>
           ? (({ running: _running, ...rest }) => rest)({ ...job, ...changes })
           : { ...job, ...changes }
       }
-      api={{} as DesktopApi}
+      api={{} as ApplicationClient}
       agents={[]}
       active={false}
       open={false}

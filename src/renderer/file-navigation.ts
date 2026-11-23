@@ -1,4 +1,4 @@
-import type { DesktopApi, FileContext, Snapshot } from "../bridge/index.js";
+import type { ApplicationClient, FileContext, Snapshot } from "../bridge/index.js";
 
 export function sameFileContext(
   first: FileContext | null | undefined,
@@ -33,7 +33,7 @@ export function showsProjectFiles(
 
 /** Legacy links always browse the project; discard navigation if its scope changed. */
 export async function prepareFileNavigation(
-  api: Pick<DesktopApi, "snapshot">,
+  api: Pick<ApplicationClient, "snapshot">,
   scope: Pick<Snapshot, "database" | "directory" | "projectInstanceId" | "databaseEpoch">,
   _root?: string,
 ): Promise<Snapshot | null> {

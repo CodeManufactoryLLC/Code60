@@ -1,4 +1,4 @@
-import type { DesktopApi, LogPage, LogQuery, LogRecord } from "../bridge/index.js";
+import type { ApplicationClient, LogPage, LogQuery, LogRecord } from "../bridge/index.js";
 import { parseLogQuery } from "../bridge/index.js";
 
 interface ViewerState {
@@ -32,7 +32,7 @@ export class LogViewer {
   private query: LogQuery = parseLogQuery({ scope: "current" });
   private invalidated = false;
   private context = "";
-  constructor(private readonly api: Pick<DesktopApi, "queryLogs">) {}
+  constructor(private readonly api: Pick<ApplicationClient, "queryLogs">) {}
   snapshot = () => this.state;
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);

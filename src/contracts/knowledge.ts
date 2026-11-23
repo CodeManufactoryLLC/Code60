@@ -130,7 +130,7 @@ export const MCP_KNOWLEDGE_TOOL_DEFINITIONS = [
   {
     name: "code60_get_capabilities",
     description:
-      "Discover shipped Code60 desktop capabilities, access paths, restrictions and current availability. Availability never grants permission.",
+      "Discover shipped Code60 browser capabilities, access paths, restrictions and current availability. Availability never grants permission.",
     properties: { ...paging, query: { type: "string", maxLength: 200 } },
   },
   {
@@ -228,7 +228,7 @@ const feature = (
   confirmation,
   status,
 });
-export const DESKTOP_CAPABILITIES: readonly Capability[] = [
+export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
     "page-navigation",
     "Page navigation",
@@ -285,7 +285,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "none",
     "human-only",
     "Up to 64 assistants, 120-character names and 32,000-character instructions. Shared verified provider required for chat. Independent histories, workspaces, workers and memory scope; no automatic task resumption. Stop the assistant and its workers before editing. Edits refresh provider context on next human Send, preserving history. No management MCP tools.",
-    "Archiving confirms natively, stops only the assistant and preserves history.",
+    "Archiving requires browser confirmation, stops only the assistant and preserves history.",
   ),
   feature(
     "projects",
@@ -295,7 +295,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "database",
     "read",
     "Opening or selecting a project is a human action; opening never initializes Git. Archiving the last displayed project chat returns to its home without a replacement. New Session explicitly creates a chat. Project chat auto-names are limited to 19 characters. Manual names and existing titles are unchanged. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.",
-    "The native folder picker allows directory creation. Confirm the full selected path to open; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.",
+    "The authenticated host folder chooser allows directory creation within locally configured roots. Confirm the full selected path to open; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.",
   ),
   feature(
     "workers",
@@ -343,7 +343,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "runtime",
     "human-only",
     "Zero-edit requests can rewind. The request and saved-code references return unsent. Direct-folder snapshots also rewind manual edits since their checkpoint; Git metadata and Code60 state are excluded. Direct preimages and current Undo reads allow 32 MiB total regular-file contents, 10,000 entries per folder and 64 directory levels; links are unsupported. Nested children share parent coverage; adding a parent after child execution needs a new request. Checkpoints have bounded 256 MiB storage and 100 prior requests. Interrupted Undo requires explicit recovery, even without a live provider. No automatic commit or reversal of external effects.",
-    "Native confirmation names request and targets, warns about replacing an unsent draft and direct-folder manual edits. Isolated conflicts block rather than overwrite newer edits.",
+    "Browser confirmation names request and targets, warns about replacing an unsent draft and direct-folder manual edits. Isolated conflicts block rather than overwrite newer edits.",
   ),
   feature(
     "files",
@@ -407,7 +407,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Providers → provider details → title actions for Disconnect or Set as Primary",
     "none",
     "read",
-    "Database-independent. Add Provider verifies catalog connectors. Set as Primary preserves other memberships and uses saved command verification; Disconnect removes only Code60 membership and retains model defaults, history and external login. Both actions require stopped desktop agent work and no setup transaction. The primary cannot disconnect until another provider is primary. Verified membership is not live connection health. No automatic installation or management MCP tools.",
+    "Database-independent. Add Provider verifies catalog connectors. Set as Primary preserves other memberships and uses saved command verification; Disconnect removes only Code60 membership and retains model defaults, history and external login. Both actions require stopped interactive agent work and no setup transaction. The primary cannot disconnect until another provider is primary. Verified membership is not live connection health. No automatic installation or management MCP tools.",
   ),
   feature(
     "model-settings",
@@ -432,7 +432,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "continuity",
     "Context handoff",
     "Maintain bounded session continuity between turns.",
-    "Automatic between-turn desktop lifecycle",
+    "Automatic between-turn application lifecycle",
     "provider",
     "read",
     "Never restores permissions or replays dispatched work; independent of Memory On/Off.",
@@ -444,7 +444,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "Apps → Scheduled Jobs",
     "none",
     "human-only",
-    "Transcripts subscribe before reading, refresh from saved-chunk notices, retain partial content on errors and show bounded evidence with execution status. Desktop quit/Stop all does not stop service-owned work. Delete requires native confirmation and refuses active jobs; evidence is preserved. Run state is independent of schedule enablement and history paging. Older services without live job state require a service restart for run/stop controls. Reduced motion and forced colors keep the stop glyph static. Awareness never installs or probes the service.",
+    "Transcripts subscribe before reading, refresh from saved-chunk notices, retain partial content on errors and show bounded evidence with execution status. Closing the browser and interactive Stop all leave scheduled work running. Stopping the backend stops both. Delete requires browser confirmation and refuses active jobs; evidence is preserved. Run state is independent of schedule enablement and history paging. Older services without live job state require a service restart for run/stop controls. Reduced motion and forced colors keep the stop glyph static. Awareness never installs or probes the service.",
     "Human installation and schedule consent.",
   ),
   feature(
@@ -459,12 +459,12 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "system-manager",
     "System Manager",
-    "Manage the macOS/Linux Scheduling Service through System Manager. Status checks run automatically every two seconds after a completed read while the page and window are visible. Verified status distinguishes Not installed, Stopped and Running, with Install, Start or Stop as the main action. Stop pauses jobs and cancels active scheduled work before stopping the service; there is no separate pause-and-cancel button. Jobs paused is separate from runtime status; Resume jobs remains available for existing paused jobs, and Repair and Uninstall remain in Service options. No public Code60 CLI is available.",
+    "Inspect Backend Service scheduling health automatically every two seconds. Jobs paused is separate from backend lifetime.",
     "Apps → System Manager",
     "none",
     "human-only",
-    "Automatic status checks respect global Pause polling and back off to at most sixty seconds on failure; manual Refresh Scheduling Service remains available in the title actions menu. Awareness never installs, probes or controls the service. Checking or unavailable status never guesses a lifecycle action. A standalone running scheduler is labelled Not installed and has no native Stop action. No database is required.",
-    "Human service consent; native confirmation for service controls.",
+    "Automatic checks respect global Pause polling and back off to at most sixty seconds on failure. Manual Refresh Backend Service is available. Install, repair, start, stop and uninstall use local code60 service commands. No database is required; awareness never probes or controls the service.",
+    "Human CLI consent is required for service changes; scheduled jobs retain their own explicit controls.",
   ),
   feature(
     "data",
@@ -478,21 +478,31 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
   feature(
     "settings",
     "Settings",
-    "Change appearance, text, polling and application options. Text typefaces include locally bundled Scientifica; OCR-A is no longer offered. Table defaults start at Low density (44px rows), with row, column and heading lines off; saved global and per-table choices are retained. Options include Icon animations (on by default), Monochrome icons with a color selector (gray by default) and Icon contrast (0–200%, default 100%), whole-window background opacity (0–100%) and native macOS desktop blur strength (0–100%). Transparent Linux windows retain minimize, maximize/restore and guarded close controls in the title bar, including the splash and first-use setup.",
-    "Sidebar → Settings for About, Advanced, Table defaults and Text; Apps → Appearance → Window background or Icons; Apps → Polling; breadcrumb card → Color theme or Icon animations",
+    "Change appearance, text, polling and application options. Text typefaces include locally bundled Scientifica; OCR-A is no longer offered. Table defaults start at Low density (44px rows), with row, column and heading lines off; saved global and per-table choices are retained. Options include Icon animations (on by default), Monochrome icons with a color selector (gray by default) and Icon contrast (0–200%, default 100%). Browser-native window management is outside Code60.",
+    "Sidebar → Settings for About, Advanced, Table defaults and Text; Apps → Appearance → Icons or Theme; Apps → Polling; breadcrumb card → Color theme or Icon animations",
     "none",
     "human-only",
-    "Only explicitly allowlisted values are included in awareness. Each sidebar foreground card has a dedicated top-right chevron to expand or collapse its children without changing the current page. Home/Search is also collapsible. Header navigation never toggles expansion; Assistants opens a database-independent page with Relay and Custom Assistants cards. Hidden children are inert; explicit child navigation reveals ancestors. Monochrome is off by default; enabling it immediately tints icon artwork, provider logos and animated frames in shades of the selected color while preserving transparency and playback. Its color defaults to gray (#808080). Icon contrast spreads its shades from a flat color at 0%, through the standard range at 100%, to black/white extremes at 200%. Color and contrast persist locally and are retained when disabled. Forced colors bypasses the tint. The breadcrumb Icon animations toggle immediately freezes GIF artwork and CSS icon pulses app-wide, with a transparent block over its wheel when off. Re-enabling plays the wheel once; other icons wait for their usual triggers. Playback is on by default and saved locally alongside icon color/contrast. Page, panel, popover and status-text transitions remain unchanged; reduced motion and forced colors still suppress icon playback. The breadcrumb Color theme button shows System (eclipse), Dark (night) or Light (sun) and cycles System → Dark → Light → System on activation. System is the default and follows OS appearance; explicit choices persist locally and stay synchronized with Apps → Appearance → Theme. Window background sliders are saved locally and apply immediately across the title strip, margins and footer regardless of sidebar size or collapse. There is no separate Transparent background switch. Foreground cards, text and icons stay opaque and sharp; the background remains interactive even at zero opacity. Native desktop blur is macOS-only; strength blends the system-managed blur, not a pixel radius. Lower Background opacity to see it. Native blur failures appear beside its Appearance controls; adjust the slider to retry. Linux retains opacity with blur disabled. Forced colors use an opaque background without blur.",
+    "Only explicitly allowlisted values are included in awareness. Each sidebar foreground card has a dedicated top-right chevron to expand or collapse its children without changing the current page. Home/Search is also collapsible. Header navigation never toggles expansion; Assistants opens a database-independent page with Relay and Custom Assistants cards. Hidden children are inert; explicit child navigation reveals ancestors. Monochrome is off by default; enabling it immediately tints icon artwork, provider logos and animated frames in shades of the selected color while preserving transparency and playback. Its color defaults to gray (#808080). Icon contrast spreads its shades from a flat color at 0%, through the standard range at 100%, to black/white extremes at 200%. Color and contrast persist locally and are retained when disabled. Forced colors bypasses the tint. The breadcrumb Icon animations toggle immediately freezes GIF artwork and CSS icon pulses app-wide, with a transparent block over its wheel when off. Re-enabling plays the wheel once; other icons wait for their usual triggers. Playback is on by default and saved locally alongside icon color/contrast. Page, panel, popover and status-text transitions remain unchanged; reduced motion and forced colors still suppress icon playback. The breadcrumb Color theme button shows System (eclipse), Dark (night) or Light (sun) and cycles System → Dark → Light → System on activation. System is the default and follows OS appearance; explicit choices persist locally and stay synchronized with Apps → Appearance → Theme.",
   ),
   feature(
     "updates",
     "Update Manager",
-    "Check, download and install macOS arm64 and Linux x64 desktop releases.",
-    "Apps → Update Manager → title actions",
-    "runtime",
+    "Review the manual package update procedure.",
+    "Apps → Update Manager",
+    "none",
     "human-only",
-    "Development builds may be unavailable; awareness does not check or download. App updates stop the installed Scheduling Service before replacement. After installation, startup upgrades its registration, verifies the matching app version and restores its prior global pause state. Packaged startup also reconciles an active older service after manual installation; stopped and uninstalled services stay stopped. Automatic recovery requires the native service PID to match the responding scheduler and never replaces a newer or unknown version. Recovery has one exclusive owner. AppImages require executable and parent locations protected from other users. Failed recovery keeps schedules, history and pending restart evidence for System Manager repair.",
-    "Human approval before installation and shutdown.",
+    "Requires Node 24 and npm. Stop the backend, install the replacement npm tarball, repair the service registration and start the backend. No automatic downloads, native installers or bundled runtime.",
+    "Local terminal consent is required for service changes. Histories, worktrees and settings are preserved.",
+  ),
+  feature(
+    "browser-runtime",
+    "Browser access and backend",
+    "Connect a browser to the local Code60 backend and manage its lifetime.",
+    "Terminal → code60 open; browser footer → Stop Code60 Backend",
+    "none",
+    "human-only",
+    "macOS Apple Silicon and Linux x64 require Node 24. The opt-in per-user backend starts at login. A single-use pairing code grants a per-tab session, with one controlling browser. Closing or refreshing a browser preserves approved work. Workspace chooser roots default to the user's home and require local configuration to expand. No Electron, remote hosting or general agent execution CLI.",
+    "Take control explicitly replaces another browser's control; stale page confirmations are rejected. Stopping the backend confirms cancellation of all interactive and scheduled work. Restart never replays uncertain tasks.",
   ),
   feature(
     "rag",
@@ -502,7 +512,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "database",
     "human-only",
     "Excludes Relay; no automatic indexing or agent retrieval.",
-    "Native confirmation before Clear.",
+    "Browser confirmation before Clear.",
     "experimental",
   ),
   feature(
@@ -545,7 +555,7 @@ export const DESKTOP_CAPABILITIES: readonly Capability[] = [
     "none",
     "human-only",
     "Never exposed to agents, MCP or awareness.",
-    "Native confirmation before Clear.",
+    "Browser confirmation before Clear.",
   ),
   feature(
     "activity",
@@ -671,7 +681,7 @@ export function capabilityReference(): string {
     "",
     `Schema version: ${KNOWLEDGE_SCHEMA_VERSION}`,
     "",
-    ...DESKTOP_CAPABILITIES.flatMap((c) => {
+    ...APPLICATION_CAPABILITIES.flatMap((c) => {
       const refs = references(c.id);
       return [
         `## ${c.label}`,

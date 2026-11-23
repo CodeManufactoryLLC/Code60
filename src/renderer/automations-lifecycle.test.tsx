@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { AutomationSummary, AutomationUiRequest, DesktopApi } from "../bridge/index.js";
+import type { ApplicationClient, AutomationSummary, AutomationUiRequest } from "../bridge/index.js";
 import { AutomationForm } from "./automation-form.js";
 import { AutomationJob } from "./automation-job.js";
 import { AutomationsPage } from "./automations.js";
@@ -133,7 +133,7 @@ function mount() {
       hooks.effects = [];
       current.hooks = hooks;
       tree = AutomationsPage({
-        api: api as unknown as DesktopApi,
+        api: api as unknown as ApplicationClient,
         active,
         agents: [],
         lines: { horizontal: false, vertical: false, heading: false },

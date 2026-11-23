@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
-import type { DesktopApi, DesktopRun, OrchestrationChat, ReviewSummary } from "../bridge/index.js";
+import type {
+  ApplicationClient,
+  DesktopRun,
+  OrchestrationChat,
+  ReviewSummary,
+} from "../bridge/index.js";
 import { revisionCards, revisionSlot, useConversationRevisions } from "./conversation-revisions.js";
 
 const summary: ReviewSummary = {
@@ -55,7 +60,7 @@ function Harness({
   chat,
   runs,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   reviews: ReviewSummary[];
   restored: boolean;
   chat?: OrchestrationChat;
@@ -79,7 +84,7 @@ function Harness({
 function render(reviews: ReviewSummary[], restored = false) {
   const api = { readReview: vi.fn(), taskAction: vi.fn(), relayReview: vi.fn() };
   const html = renderToStaticMarkup(
-    <Harness api={api as unknown as DesktopApi} reviews={reviews} restored={restored} />,
+    <Harness api={api as unknown as ApplicationClient} reviews={reviews} restored={restored} />,
   );
   expect(api.readReview).not.toHaveBeenCalled();
   expect(api.taskAction).not.toHaveBeenCalled();
@@ -149,7 +154,7 @@ it("labels direct Relay work without offering isolated revision/application acti
   const api = { relayReview: vi.fn() };
   const html = renderToStaticMarkup(
     <Harness
-      api={api as unknown as DesktopApi}
+      api={api as unknown as ApplicationClient}
       reviews={[]}
       restored={false}
       chat={

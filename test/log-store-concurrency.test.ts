@@ -6,8 +6,8 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { build } from "vite";
 import { expect, it } from "vitest";
+import { DesktopLogStore } from "../src/application/log-store.js";
 import { parseLogQuery } from "../src/bridge/index.js";
-import { DesktopLogStore } from "../src/desktop/log-store.js";
 
 it("independent processes share the private writer lock without losing accepted records", async () => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-log-processes-")));
@@ -19,7 +19,7 @@ it("independent processes share the private writer lock without losing accepted 
       logLevel: "silent",
       ssr: { noExternal: true },
       build: {
-        ssr: resolve(import.meta.dirname, "../src/desktop/log-store.ts"),
+        ssr: resolve(import.meta.dirname, "../src/application/log-store.ts"),
         write: false,
         minify: false,
       },

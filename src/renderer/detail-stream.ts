@@ -1,5 +1,5 @@
 import {
-  type DesktopApi,
+  type ApplicationClient,
   type DetailFrame,
   type DetailPayload,
   type DetailRequest,
@@ -55,8 +55,11 @@ export function mergeDetailFrame(
 
 /** Each view subscribes before reading and owns an independent revision sequence. */
 export function startDetailStream(
-  api: Pick<DesktopApi, "onDetails" | "subscribeDetails" | "readDetails" | "unsubscribeDetails"> &
-    Partial<Pick<DesktopApi, "subscribe">>,
+  api: Pick<
+    ApplicationClient,
+    "onDetails" | "subscribeDetails" | "readDetails" | "unsubscribeDetails"
+  > &
+    Partial<Pick<ApplicationClient, "subscribe">>,
   request: DetailRequest,
   publish: (frame: DetailFrame) => void,
   fail: (message: string) => void,

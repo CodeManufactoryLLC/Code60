@@ -3,16 +3,16 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { ApplicationHost } from "../src/application/controller.js";
+import type { DesktopPreferences } from "../src/application/preferences.js";
+import type { ProjectDatabase } from "../src/application/projects.js";
 import type { PromptTemplates } from "../src/bridge/index.js";
 import { type CoreDeps, DEFAULT_CONFIG, openWorkspace, type RunRecord } from "../src/core/index.js";
-import { DesktopController } from "../src/desktop/controller.js";
-import type { DesktopPreferences } from "../src/desktop/preferences.js";
-import type { ProjectDatabase } from "../src/desktop/projects.js";
 import { FakeAgents, FakeClock, FakeGit, FakeProcesses, flush } from "./fakes.js";
 import { verifiedAgents } from "./fixtures/verified-agents.js";
 
 const dirs: string[] = [];
-const controllers: DesktopController[] = [];
+const controllers: ApplicationHost[] = [];
 
 afterEach(async () => {
   await Promise.all(controllers.splice(0).map((controller) => controller.shutdown(true)));
@@ -102,7 +102,7 @@ async function setup(
     read: async () => undefined,
     write: async () => {},
   };
-  const controller = new DesktopController(
+  const controller = new ApplicationHost(
     deps,
     env,
     { confirm: async () => true },

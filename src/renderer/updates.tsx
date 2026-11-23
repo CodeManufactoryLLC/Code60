@@ -1,182 +1,56 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
-import type { DesktopApi, UpdateAction, UpdateState } from "../bridge/index.js";
-import { Icon } from "./icons.js";
+import { useId } from "react";
+import type { ApplicationClient, UpdateAction, UpdateState } from "../bridge/index.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
-export function useUpdates(api: DesktopApi) {
-  const [state, setState] = useState<UpdateState>();
-  const [error, setError] = useState("");
-  const [savingPreference, setSavingPreference] = useState<boolean>();
-  useEffect(() => {
-    let alive = true;
-    const receive = (next: UpdateState) => {
-      if (alive)
-        setState((current) => (!current || next.revision >= current.revision ? next : current));
-    };
-    const unsubscribe = api.onUpdate(receive);
-    api
-      .update("status")
-      .then(receive)
-      .catch(() => {
-        if (alive) setError("Could not load update status.");
-      });
-    return () => {
-      alive = false;
-      unsubscribe();
-    };
-  }, [api]);
-  const act = useCallback(
-    async (action: UpdateAction) => {
-      setError("");
-      const preference = action === "auto-on" || action === "auto-off";
-      if (preference) setSavingPreference(action === "auto-on");
-      try {
-        const next = await api.update(action);
-        setState((current) => (!current || next.revision >= current.revision ? next : current));
-      } catch {
-        setError("Could not complete the update action. Try again.");
-      } finally {
-        if (preference) setSavingPreference(undefined);
-      }
+const manual: UpdateState = {
+  revision: 0,
+  status: "unavailable",
+  version: null,
+  percent: 0,
+  autoCheck: false,
+  message: "Updates are installed manually.",
+};
+export function useUpdates(_api: ApplicationClient) {
+  return {
+    state: manual,
+    error: "",
+    savingPreference: false,
+    act: async (_action: UpdateAction): Promise<void> => {
+      throw new Error("Install updates manually from the terminal.");
     },
-    [api],
-  );
-  return {
-    state:
-      state && savingPreference !== undefined ? { ...state, autoCheck: savingPreference } : state,
-    savingPreference: savingPreference !== undefined,
-    error,
-    act,
   };
 }
-
-export function useUpdateNotice(state: UpdateState | undefined, enabled: boolean) {
-  const [notice, setNotice] = useState<string | null>(null);
-  const shown = useRef(new Set<string>());
-  useEffect(() => {
-    const version = state?.version;
-    if (!enabled || state?.status !== "available" || !version || shown.current.has(version)) return;
-    const key = `code60.updateNotice.${version}`;
-    try {
-      if (localStorage.getItem(key)) return;
-    } catch {
-      // Still show only once in this renderer if storage is unavailable.
-    }
-    const show = () => {
-      if (document.querySelector("dialog[open]")) return;
-      shown.current.add(version);
-      try {
-        localStorage.setItem(key, "shown");
-      } catch {}
-      setNotice(version);
-      observer.disconnect();
-    };
-    // Wait for an existing dialog to close instead of covering it with another modal.
-    const observer = new MutationObserver(show);
-    observer.observe(document.body, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ["open"],
-    });
-    show();
-    return () => observer.disconnect();
-  }, [state?.status, state?.version, enabled]);
-  return {
-    notice: enabled && state?.status === "available" && notice === state.version ? notice : null,
-    dismiss: () => setNotice(null),
-  };
+export function useUpdateNotice(_state: UpdateState | undefined, _enabled: boolean) {
+  return { notice: null, dismiss() {} };
 }
-
-export function UpdateIndicator({
-  state,
-  onOpen,
-}: {
-  state: UpdateState | undefined;
-  onOpen(): void;
-}) {
-  if (!state || !["available", "downloading", "ready", "installing"].includes(state.status))
-    return null;
-  const label =
-    state.status === "ready"
-      ? "Ready to install"
-      : state.status === "downloading"
-        ? `Downloading update ${state.percent}%`
-        : state.status === "installing"
-          ? "Installing update…"
-          : "Update available";
-  return (
-    <button
-      type="button"
-      className="update-indicator"
-      onClick={onOpen}
-      title={`Code60 ${state.version}`}
-    >
-      <Icon name="renew" />
-      {label}
-    </button>
-  );
+export function UpdateIndicator(_props: { state: UpdateState | undefined; onOpen(): void }) {
+  return null;
 }
 
 export function UpdatesSection({ updates }: { updates: ReturnType<typeof useUpdates> }) {
   const id = useId();
-  const { state, error, act } = updates;
+  void updates;
   return (
     <section id="app-updates" className="settings-section" aria-labelledby={id}>
-      <SettingsHeader
-        page="updates"
-        id={id}
-        actions={[
-          {
-            id: "updates-0",
-            label: "Check for updates",
-            run: () => void act("check"),
-            disabled: !state || !["idle", "available", "error"].includes(state.status),
-            describedBy: `${id}-help`,
-          },
-          ...(state?.status === "available"
-            ? [{ id: "updates-1", label: "Download update", run: () => void act("download") }]
-            : []),
-          ...(state?.status === "downloading"
-            ? [{ id: "updates-2", label: "Cancel download", run: () => void act("cancel") }]
-            : []),
-          ...(state?.status === "ready"
-            ? [{ id: "updates-3", label: "Install and restart", run: () => void act("install") }]
-            : []),
-        ]}
-      >
-        <span className="sr-only" id={`${id}-help`}>
-          Updates are downloaded only when you choose. Your settings, databases and worktrees are
-          preserved.
-        </span>
-      </SettingsHeader>
+      <SettingsHeader page="updates" id={id} />
       <SettingsCard>
-        <div className="settings-row">
-          <span role="status">{state?.message ?? "Loading update status…"}</span>
-          {state?.status === "downloading" && (
-            <span className="update-progress">
-              <progress aria-label="Update download" value={state.percent} max={100} />
-              {state.percent}%
-            </span>
-          )}
-        </div>
-        <label className="settings-row">
-          Automatically check for updates
-          <input
-            type="checkbox"
-            role="switch"
-            checked={state?.autoCheck ?? true}
-            aria-checked={state?.autoCheck ?? true}
-            disabled={!state || updates.savingPreference || state.status === "installing"}
-            onChange={(event) => void act(event.target.checked ? "auto-on" : "auto-off")}
-          />
-        </label>
-      </SettingsCard>
-      {error && (
-        <p className="error-banner" role="alert">
-          {error}
+        <p>
+          Code60 updates are installed manually from the terminal. Your histories, databases and
+          worktrees are kept.
         </p>
-      )}
+        <ol>
+          <li>
+            Stop active work with <code>code60 service stop</code>.
+          </li>
+          <li>Install the new Code60 npm package.</li>
+          <li>
+            Run <code>code60 service repair</code>, then <code>code60 service start</code>.
+          </li>
+          <li>
+            Run <code>code60 open</code> to reconnect.
+          </li>
+        </ol>
+      </SettingsCard>
     </section>
   );
 }

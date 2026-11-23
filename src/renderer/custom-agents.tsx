@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type {
+  ApplicationClient,
   CustomAgent,
   CustomAgentRequest,
   CustomAgentSummary,
-  DesktopApi,
 } from "../bridge/index.js";
 import { AnchoredMenu } from "./anchored-menu.js";
 import { Icon } from "./icons.js";
@@ -19,7 +19,7 @@ export function CustomAgentsPage({
   storageError,
 }: {
   storageError?: string | undefined;
-  api: DesktopApi;
+  api: ApplicationClient;
   agents: readonly CustomAgentSummary[];
   active: boolean;
   onOpen(id: string): Promise<boolean>;
@@ -161,7 +161,7 @@ export function AgentEditor({
   onClose,
 }: {
   agent: CustomAgent | "new";
-  api: DesktopApi;
+  api: ApplicationClient;
   onClose(): void;
 }) {
   const id = useId();

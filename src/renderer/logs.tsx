@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { DesktopApi, LogRecord } from "../bridge/index.js";
+import type { ApplicationClient, LogRecord } from "../bridge/index.js";
 import { parseLogQuery } from "../bridge/index.js";
 import { DataTable, type RetainedTableQuery, type TableOptions } from "./data-table.js";
 import { Icon } from "./icons.js";
@@ -35,7 +35,7 @@ export function LogsPage({
   project,
   ...table
 }: Pick<TableOptions, "lines" | "density" | "fit" | "textStyles"> & {
-  api: DesktopApi;
+  api: ApplicationClient;
   active: boolean;
   project: string | null;
 }) {

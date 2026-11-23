@@ -2,15 +2,15 @@ import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
+import { ChatCheckpoints } from "../src/application/chat-checkpoints.js";
+import { ApplicationHost } from "../src/application/controller.js";
+import { filePreferences } from "../src/application/preferences.js";
+import { openProjectDatabase, sqliteAvailable } from "../src/application/projects.js";
 import type { CoreDeps } from "../src/core/index.js";
-import { ChatCheckpoints } from "../src/desktop/chat-checkpoints.js";
-import { DesktopController } from "../src/desktop/controller.js";
-import { filePreferences } from "../src/desktop/preferences.js";
-import { openProjectDatabase, sqliteAvailable } from "../src/desktop/projects.js";
 import { FakeAgents, FakeClock, FakeGit, FakeProcesses, type TurnScript } from "./fakes.js";
 
 const directories: string[] = [];
-const controllers: DesktopController[] = [];
+const controllers: ApplicationHost[] = [];
 afterEach(async () => {
   await Promise.all(controllers.splice(0).map((controller) => controller.shutdown(true)));
   await Promise.all(
@@ -26,7 +26,7 @@ async function fixture(relay = false, script?: TurnScript) {
   const openDatabase = vi.fn(openProjectDatabase);
   const env = { XDG_CONFIG_HOME: join(dir, "config"), XDG_STATE_HOME: join(dir, "state") };
   const create = () => {
-    const controller = new DesktopController(
+    const controller = new ApplicationHost(
       {
         agents,
         fs: fs as unknown as CoreDeps["fs"],

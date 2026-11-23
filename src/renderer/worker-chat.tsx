@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { DesktopApi, DesktopRun } from "../bridge/index.js";
+import type { ApplicationClient, DesktopRun } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { useChatDraft } from "./chat-draft.js";
 import { ChatMessage } from "./chat-message.js";
@@ -38,7 +38,7 @@ export function WorkerChat({
   autoApproval = true,
   notice,
 }: {
-  api: DesktopApi;
+  api: ApplicationClient;
   run: DesktopRun;
   /** Defaults to the provider and short run ID. */
   label?: string;

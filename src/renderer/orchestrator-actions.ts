@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import type { ChatUndoResult, DesktopApi, OrchestrationChatAction } from "../bridge/index.js";
+import type {
+  ApplicationClient,
+  ChatUndoResult,
+  OrchestrationChatAction,
+} from "../bridge/index.js";
 import { ScopeLifetime } from "./scope-lifetime.js";
 
 interface State {
@@ -12,7 +16,7 @@ export class OrchestratorActions extends ScopeLifetime {
   private state: State = { pending: null, error: "" };
   private listeners = new Set<() => void>();
   constructor(
-    private api: Pick<DesktopApi, "orchestrationChatAction">,
+    private api: Pick<ApplicationClient, "orchestrationChatAction">,
     identity: string,
     private enabled: boolean,
   ) {
@@ -56,7 +60,7 @@ export class OrchestratorActions extends ScopeLifetime {
   };
 }
 export function useOrchestratorActions(
-  api: DesktopApi,
+  api: ApplicationClient,
   database: string | null,
   key: string,
   applicationOwned = false,

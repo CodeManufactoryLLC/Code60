@@ -1,9 +1,9 @@
 import { type MouseEvent, memo, type ReactNode, useMemo, useRef, useState } from "react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { type DesktopApi, parseWebLink } from "../bridge/index.js";
+import { type ApplicationClient, parseWebLink } from "../bridge/index.js";
 
-type OpenLink = DesktopApi["openWebLink"];
+type OpenLink = ApplicationClient["openWebLink"];
 const plugins = [remarkGfm];
 
 function ChatLink({

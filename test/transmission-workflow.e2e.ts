@@ -32,7 +32,7 @@ async function attachTransmissionBoundary(application: ElectronApplication) {
         };
       }
     },
-    join(root, "dist/desktop/main.js"),
+    join(root, "dist/application/main.js"),
   );
 }
 
