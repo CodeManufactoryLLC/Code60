@@ -234,7 +234,6 @@ export async function applyShellIntegration(
       : {};
     for (const edit of preview.edits) {
       try {
-        await createInstallationParents(dirname(edit.path));
         // Recompute the approved mutation from the current snapshot rather than trusting arbitrary preview content.
         const env = {
           HOME: record.home,
@@ -249,9 +248,11 @@ export async function applyShellIntegration(
         if (
           !expected ||
           expected.append !== edit.append ||
+          expected.mode !== edit.mode ||
           JSON.stringify(expected.before) !== JSON.stringify(edit.before)
         )
           throw new Error("Profile changed since preview");
+        await createInstallationParents(dirname(edit.path));
         const snapshot = await installationSnapshot(edit.path);
         const identity = await writeInstallationFile(
           edit.path,

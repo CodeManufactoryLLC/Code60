@@ -390,6 +390,26 @@ it("bounds profile previews and preserves original contents after oversized or f
   expect(result.manual.join()).toContain("changed");
 });
 
+it("rejects changed shell permissions before creating profile directories", async () => {
+  const f = await fixture();
+  await installManagedRelease(f.options);
+  const config = join(f.home, "uncreated fish config");
+  const preview = await planShellIntegration({
+    ...f.env,
+    SHELL: "/bin/fish",
+    XDG_CONFIG_HOME: config,
+  });
+  expect(preview.manual).toEqual([]);
+  expect(preview.edits).toHaveLength(1);
+  const edit = preview.edits[0];
+  if (!edit) throw Error("Expected fish profile edit");
+  edit.mode = 0o777;
+  const result = await applyShellIntegration(preview, { approved: true, interactive: true });
+  expect(result.applied).toEqual([]);
+  expect(result.manual.join()).toContain("changed");
+  await expect(lstat(config)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
 it("explicit repair replaces only owned launcher support without downloading the release", async () => {
   const f = await fixture();
   await installManagedRelease(f.options);
