@@ -28,9 +28,16 @@ flowchart LR
 ```
 
 The gateway binds only 127.0.0.1 on an allocated port. Private connection metadata
-contains the local management token; it is never sent to browsers. code60 open prints
-a short-lived single-use pairing code and opens a token-free URL. Paired browser tokens
-are held in per-tab session storage and sent only to the exact origin in explicit headers.
+contains the local management token; it is never sent to browsers. Browsers connect
+without a pairing code by default through a same-origin JSON handshake that issues
+an ephemeral session token. code60 open opens the token-free URL. Local
+`code60 pairing on|off|status` controls the optional code requirement; mutations
+require explicit consent (--yes without a TTY). When required, code60 open also
+prints a short-lived single-use code. Browser tokens are held in per-tab session
+storage and sent only to the exact origin in explicit headers. Changing the policy
+persists private gateway/settings.json, revokes old browser sessions and pending
+page interactions, and leaves approved execution running. The setting is unavailable
+to browser/agent APIs. Offline changes require exclusive backend ownership.
 One browser controls execution; taking control is explicit. Page identities invalidate
 stale requests and confirmations. Backend restart invalidates browser sessions. Origin,
 Host, strict schemas, quotas, CSP and an asset manifest constrain the web boundary.

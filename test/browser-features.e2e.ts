@@ -1,9 +1,72 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
 import { expect, type Page, test } from "@playwright/test";
 import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
 import { commitFixture } from "./fixtures/git-repository.js";
+
+test("browser: skips pairing by default and can require or skip it again without restarting work", async ({
+  browser,
+}) => {
+  const fixture = await browserApp(browser, ["--relay", "--session-info"], false);
+  const gate = join(fixture.directory, "finish-policy-smoke");
+  const policy = (mode: string) =>
+    promisify(execFile)(
+      process.execPath,
+      [resolve("dist/management/main.js"), "pairing", mode, "--yes"],
+      { env: fixture.env, timeout: 15_000 },
+    );
+  try {
+    const { page } = await fixture.open();
+    await start(page, fixture.directory);
+    await expect(page.getByLabel("Pairing code", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Backend connected", { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByText("Backend connected", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Pairing code", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    const chat = page.locator(".orchestration-chat-page:visible");
+    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    await composer.fill(
+      JSON.stringify([
+        { message: "Waiting during pairing policy change" },
+        { waitForFile: gate },
+        { message: "Continued after pairing policy change" },
+      ]),
+    );
+    await composer.press("Enter");
+    await expect(chat).toContainText("Waiting during pairing policy change");
+    const launches = await readdir(fixture.processLog);
+    await policy("on");
+    await expect(page.getByLabel("Pairing code", { exact: true })).toBeVisible();
+    await page.getByLabel("Pairing code", { exact: true }).fill(fixture.gateway.proof());
+    await page.getByRole("button", { name: "Connect to Code60", exact: true }).click();
+    await expect(page.getByText("Backend connected", { exact: true })).toBeVisible();
+    await policy("off");
+    await expect(page.getByText("Backend connected", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Pairing code", { exact: true })).toHaveCount(0);
+    expect(await readdir(fixture.processLog)).toEqual(launches);
+    await writeFile(gate, "continue");
+    await expect(chat).toContainText("Continued after pairing policy change");
+    await expect(composer).toBeEditable();
+    const second = await fixture.open();
+    await expect(
+      second.page.getByRole("button", { name: "Take control", exact: true }),
+    ).toBeVisible();
+    await second.page.getByRole("button", { name: "Take control", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Take control", exact: true })).toBeVisible();
+    expect(await readFile(join(fixture.directory, "projects.sqlite"))).toBeTruthy();
+    await fixture.restart();
+    const reopened = await fixture.open();
+    await expect(reopened.page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+    await expect(reopened.page.getByLabel("Pairing code", { exact: true })).toHaveCount(0);
+    expect(JSON.parse((await policy("status")).stdout)).toEqual({ requirePairing: false });
+  } finally {
+    await writeFile(gate, "continue").catch(() => {});
+    await fixture.close();
+  }
+});
 
 async function start(page: Page, directory: string) {
   await onboard(page);

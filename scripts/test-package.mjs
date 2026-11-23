@@ -39,19 +39,40 @@ try {
     timeout: 10_000,
   });
   assert.match(help, /code60 service/);
+  assert.match(help, /code60 pairing/);
   const api = await import(pathToFileURL(join(root, "dist/gateway/index.js")).href);
   const isolated = join(prefix, "fixture");
+  const env = {
+    ...process.env,
+    HOME: prefix,
+    SHELL: "/bin/sh",
+    XDG_STATE_HOME: join(isolated, "state"),
+    XDG_CONFIG_HOME: join(isolated, "config"),
+  };
+  const policy = (...args) =>
+    JSON.parse(
+      execFileSync(process.execPath, [join(root, installed.bin.code60), "pairing", ...args], {
+        env,
+        encoding: "utf8",
+        timeout: 10_000,
+      }),
+    );
+  assert.equal(policy("status").requirePairing, false);
+  assert.equal(policy("on", "--yes").requirePairing, true);
+  assert.equal(policy("off", "--yes").requirePairing, false);
   gateway = await api.startGateway({
-    env: {
-      ...process.env,
-      HOME: prefix,
-      SHELL: "/bin/sh",
-      XDG_STATE_HOME: join(isolated, "state"),
-      XDG_CONFIG_HOME: join(isolated, "config"),
-    },
+    env,
     roots: [prefix],
   });
   assert.equal((await fetch(gateway.origin)).status, 200);
+  assert.equal(gateway.requirePairing, false);
+  const connection = await fetch(`${gateway.origin}/api/connect`, {
+    method: "POST",
+    headers: { Origin: gateway.origin, "Content-Type": "application/json" },
+    body: JSON.stringify({ version: 1 }),
+  });
+  assert.equal(connection.status, 200);
+  assert.equal((await connection.json()).controlling, true);
   const { loadRagModel } = await import(
     pathToFileURL(join(root, "dist/application/rag-model.js")).href
   );

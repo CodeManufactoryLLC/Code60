@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   type BrowserSession,
   type Choices,
+  connectionStatusSchema,
   GATEWAY_VERSION,
   type GatewayFrame,
   type Interaction,
@@ -10,6 +11,7 @@ import {
 import { App } from "./app.js";
 import {
   browserRequest,
+  connectBrowser,
   createBrowserClient,
   pairBrowser,
   saveBrowserSession,
@@ -148,7 +150,9 @@ function BrowserInteraction({
 }
 
 export function BrowserApp() {
-  const [session, setSession] = useState<BrowserSession | null>(savedBrowserSession);
+  const [session, setSession] = useState<BrowserSession | null>(null);
+  const [ready, setReady] = useState(false);
+  const [requirePairing, setRequirePairing] = useState(true);
   const [client, setClient] = useState<ReturnType<typeof createBrowserClient>>();
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -158,8 +162,37 @@ export function BrowserApp() {
   const establish = useCallback((value: BrowserSession | null) => {
     saveBrowserSession(value);
     setSession(value);
+    setClient(undefined);
+    setConnected(false);
     setInteractions([]);
   }, []);
+  const bootstrap = useCallback(async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const policy = connectionStatusSchema.parse(await browserRequest("/api/connection", null));
+      setRequirePairing(policy.requirePairing);
+      let next = savedBrowserSession();
+      if (next?.version !== GATEWAY_VERSION) next = null;
+      if (next) {
+        try {
+          next = await browserRequest<BrowserSession>("/api/session", next);
+        } catch {
+          next = null;
+        }
+      }
+      if (!next && !policy.requirePairing) next = await connectBrowser();
+      establish(next);
+      setReady(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not connect to Code60.");
+    } finally {
+      setBusy(false);
+    }
+  }, [establish]);
+  useEffect(() => {
+    void bootstrap();
+  }, [bootstrap]);
   useEffect(() => {
     if (!session?.controlling) return;
     if (session.version !== GATEWAY_VERSION) {
@@ -182,6 +215,10 @@ export function BrowserApp() {
         setInteractions((current) => current.filter((entry) => entry.id !== frame.value));
       }
       if (frame.event === "control-lost") establish({ ...session, controlling: false });
+      if (frame.event === "session-reset") {
+        establish(null);
+        void bootstrap();
+      }
     };
     const next = createBrowserClient(session, receive);
     let disposed = false;
@@ -193,7 +230,7 @@ export function BrowserApp() {
       next.stop();
       setClient(undefined);
     };
-  }, [session, establish]);
+  }, [session, establish, bootstrap]);
   const pair = async () => {
     setBusy(true);
     setError("");
@@ -217,11 +254,24 @@ export function BrowserApp() {
       setBusy(false);
     }
   };
+  if (!ready)
+    return (
+      <main className="browser-pairing">
+        <h1>Code60</h1>
+        <p role="status">{error ? "Code60 could not connect." : "Connecting to Code60…"}</p>
+        {error && <p role="alert">{error}</p>}
+        {error && (
+          <button type="button" disabled={busy} onClick={() => void bootstrap()}>
+            Retry connection
+          </button>
+        )}
+      </main>
+    );
   if (!session?.controlling)
     return (
       <main className="browser-pairing">
         <h1>Code60</h1>
-        {!session ? (
+        {!session && requirePairing ? (
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -243,7 +293,7 @@ export function BrowserApp() {
               Connect to Code60
             </button>
           </form>
-        ) : (
+        ) : session ? (
           <>
             <p>
               Code60 is controlled by another browser window. Taking control keeps approved work
@@ -252,10 +302,20 @@ export function BrowserApp() {
             <button type="button" disabled={busy} onClick={() => void takeControl()}>
               Take control
             </button>
-            <button type="button" onClick={() => establish(null)}>
-              Pair again
+            <button
+              type="button"
+              onClick={() => {
+                establish(null);
+                void bootstrap();
+              }}
+            >
+              Reconnect
             </button>
           </>
+        ) : (
+          <button type="button" disabled={busy} onClick={() => void bootstrap()}>
+            Connect to Code60
+          </button>
         )}
         {error && <p role="alert">{error}</p>}
       </main>
@@ -266,8 +326,14 @@ export function BrowserApp() {
       <div className="backend-controls">
         <span role="status">{connected ? "Backend connected" : "Reconnecting to backend…"}</span>
         {!connected && (
-          <button type="button" onClick={() => establish(null)}>
-            Pair again
+          <button
+            type="button"
+            onClick={() => {
+              establish(null);
+              void bootstrap();
+            }}
+          >
+            Reconnect
           </button>
         )}
         <button

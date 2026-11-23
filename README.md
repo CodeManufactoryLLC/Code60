@@ -16,7 +16,20 @@ code60 open
 
 Installation asks for confirmation before creating a launchd or user systemd service. Use `--yes` only for an explicitly authorized unattended service change. Provider CLIs keep their own authentication; Code60 never installs providers or asks for their passwords.
 
-`code60 open` prints a single-use pairing code, valid for sixty seconds, and opens a token-free localhost address. Enter the code in that browser. Refresh reconnects the same tab; restarting the backend requires pairing again. Only one browser controls Code60 at a time; Take control explicitly replaces the previous controller.
+`code60 open` opens Code60 directly. Pairing codes are skipped by default. Each
+browser still gets its own session, and **Take control** explicitly replaces the
+current controlling window. Refresh reconnects the same tab.
+
+To require a code, run `code60 pairing on`. Use `code60 pairing off` to skip it
+again, or `code60 pairing status` to inspect the setting. Changes ask for local
+confirmation; add `--yes` for an explicitly intended noninteractive change. The
+setting works before service installation and takes effect immediately when the
+backend is running. Browser sessions reconnect; approved agents keep running.
+
+When pairing is enabled, `code60 open` prints a single-use code valid for sixty
+seconds. Enter it in the browser. Restarting the backend requires a new code in
+that mode. With pairing off, any browser on this computer can connect; enable
+pairing when you want an explicit local authorization step.
 
 Complete provider verification in the browser. Create or select a database and open a project through the host-side chooser. Project workers require Git with an initial commit. Relay can explicitly target a direct folder. Accept the displayed plan to dispatch work, inspect the automatically integrated changes, and use message Undo to restore covered files and return the request unsent. Undo does not reverse external website effects.
 
@@ -56,7 +69,7 @@ npm run prepare:models
 npm run dev
 ```
 
-Development uses isolated configuration/state under ignored `test-results/dev`, a foreground Node backend and Vite React Fast Refresh. It prints a browser address and pairing code. UI edits preserve running agents; backend edits restart gracefully. Production login services and user data are untouched.
+Development uses isolated configuration/state under ignored `test-results/dev`, a foreground Node backend and Vite React Fast Refresh. It prints a browser address, plus a code only when pairing is enabled. UI edits preserve running agents; backend edits restart gracefully. Production login services and user data are untouched.
 
 ```sh
 npm run check

@@ -241,6 +241,7 @@ it("routes plans, worker transcripts, reviews and Undo to their owner while anot
 
 it("cancels a queued lazy Open when Stop all intervenes, without starting a new provider", async () => {
   const a = await define("A");
+  await vi.waitFor(() => expect(host.snapshot().run?.status).toBe("idle"));
   const stopped = expect(host.manage({ type: "open", id: a.id })).rejects.toThrow("cancelled");
   await host.stopAll();
   await stopped;

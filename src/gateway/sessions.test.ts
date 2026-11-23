@@ -31,4 +31,15 @@ describe("browser session authority", () => {
     expect(() => sessions.authenticate(session.token)).toThrow("Pair this browser");
     expect(sessions.pair(sessions.proof()).generation).toBeGreaterThan(session.generation);
   });
+  it("resets all proofs and sessions when the local connection policy changes", () => {
+    const sessions = new Sessions();
+    const first = sessions.connect();
+    const proof = sessions.proof();
+    sessions.reset();
+    expect(() => sessions.authenticate(first.token)).toThrow();
+    expect(() => sessions.pair(proof)).toThrow();
+    const next = sessions.connect();
+    expect(next.controlling).toBe(true);
+    expect(next.generation).toBeGreaterThan(first.generation);
+  });
 });

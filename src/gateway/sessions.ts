@@ -8,7 +8,7 @@ export const sameSecret = (a: string, b: string) => {
 };
 type Session = { token: string; expires: number };
 
-/** Sessions are local to one backend lifetime; pairing is explicit and single-use. */
+/** Browser tokens are required in both optional and required pairing modes. */
 export class Sessions {
   private readonly proofs = new Map<string, number>();
   private readonly sessions = new Map<string, Session>();
@@ -38,6 +38,12 @@ export class Sessions {
     this.prune();
     if (!this.proofs.delete(proof) || this.sessions.size >= GATEWAY_LIMITS.sessions)
       throw new Error("Pairing code is invalid or expired.");
+    return this.connect();
+  }
+  connect(): BrowserSession {
+    this.prune();
+    if (this.sessions.size >= GATEWAY_LIMITS.sessions)
+      throw new Error("Too many browser sessions. Try again later.");
     const token = randomBytes(32).toString("hex");
     this.sessions.set(token, { token, expires: this.now() + GATEWAY_LIMITS.sessionMs });
     if (!this.controller) {
@@ -45,6 +51,12 @@ export class Sessions {
       this.generation++;
     }
     return this.describe(token);
+  }
+  reset() {
+    this.proofs.clear();
+    this.sessions.clear();
+    this.controller = undefined;
+    this.generation++;
   }
   authenticate(value: string | undefined) {
     this.prune();

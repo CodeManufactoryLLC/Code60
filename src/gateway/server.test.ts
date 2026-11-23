@@ -1,9 +1,11 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
+import { once } from "node:events";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { createServer, request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { startGateway } from "./server.js";
+import { pairingControl } from "./pairing.js";
+import { managementRequest, startGateway } from "./server.js";
 
 const owned: { directory: string; gateway: Awaited<ReturnType<typeof startGateway>> }[] = [];
 afterEach(async () => {
@@ -12,7 +14,7 @@ afterEach(async () => {
     await rm(fixture.directory, { recursive: true, force: true });
   }
 });
-async function fixture(developmentAssets?: string) {
+async function fixture(developmentAssets?: string, requirePairing?: boolean) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-gateway-")));
   const assets = join(directory, "assets");
   await mkdir(assets);
@@ -24,6 +26,14 @@ async function fixture(developmentAssets?: string) {
     XDG_STATE_HOME: join(directory, "state"),
     XDG_CONFIG_HOME: join(directory, "config"),
   };
+  if (requirePairing !== undefined) {
+    await mkdir(join(directory, "state/code60/gateway"), { recursive: true, mode: 0o700 });
+    await writeFile(
+      join(directory, "state/code60/gateway/settings.json"),
+      JSON.stringify({ roots: [directory], requirePairing }),
+      { mode: 0o600 },
+    );
+  }
   const gateway = await startGateway({
     env,
     assets,
@@ -87,6 +97,95 @@ it("authenticates operations, rejects hostile origins and serves only its asset 
     ).status,
   ).toBe(400);
   events.abort();
+});
+
+it("skips pairing by default but requires a same-origin handshake and session for application access", async () => {
+  const { gateway } = await fixture();
+  const connect = (headers: Record<string, string>, value: unknown = { version: 1 }) =>
+    fetch(`${gateway.origin}/api/connect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify(value),
+    });
+  expect(await (await fetch(`${gateway.origin}/api/connection`)).json()).toEqual({
+    version: 1,
+    requirePairing: false,
+  });
+  expect((await connect({})).status).toBe(403);
+  expect((await connect({ Origin: "https://untrusted.invalid" })).status).toBe(403);
+  expect((await connect({ Origin: gateway.origin, "Sec-Fetch-Site": "cross-site" })).status).toBe(
+    403,
+  );
+  const hostileHost = await new Promise<number | undefined>((resolve, reject) => {
+    const request = httpRequest(
+      `${gateway.origin}/api/connect`,
+      {
+        method: "POST",
+        headers: {
+          Host: "untrusted.invalid",
+          Origin: gateway.origin,
+          "Content-Type": "application/json",
+        },
+      },
+      (response) => {
+        response.resume();
+        response.on("end", () => resolve(response.statusCode));
+      },
+    );
+    request.on("error", reject);
+    request.end(JSON.stringify({ version: 1 }));
+  });
+  expect(hostileHost).toBe(403);
+  expect((await connect({ Origin: gateway.origin }, { version: 2 })).status).toBe(400);
+  expect((await connect({ Origin: gateway.origin }, { version: 1, extra: true })).status).toBe(400);
+  const first = await (await connect({ Origin: gateway.origin })).json();
+  expect(first.controlling).toBe(true);
+  expect(first.token).toMatch(/^[a-f0-9]{64}$/);
+  expect((await (await connect({ Origin: gateway.origin })).json()).controlling).toBe(false);
+  expect((await fetch(`${gateway.origin}/api/session`)).status).toBe(400);
+  expect(
+    (await fetch(`${gateway.origin}/api/session`, { headers: { "X-Code60-Session": first.token } }))
+      .status,
+  ).toBe(200);
+});
+
+it("persists local pairing changes, revokes old sessions and never grants a browser the management setting", async () => {
+  const { gateway, env, directory } = await fixture(undefined, false);
+  const post = (path: string, value: unknown, headers: Record<string, string> = {}) =>
+    fetch(`${gateway.origin}${path}`, {
+      method: "POST",
+      headers: { Origin: gateway.origin, "Content-Type": "application/json", ...headers },
+      body: JSON.stringify(value),
+    });
+  expect(await pairingControl(env)).toEqual({ requirePairing: false });
+  expect((await managementRequest(env, "pair")).code).toBeUndefined();
+  const first = await (await post("/api/connect", { version: 1 })).json();
+  expect((await post("/management/pairing", { requirePairing: false })).status).toBe(403);
+  expect(await pairingControl(env, true)).toEqual({ requirePairing: true });
+  expect(gateway.requirePairing).toBe(true);
+  const settings = JSON.parse(
+    await readFile(join(directory, "state/code60/gateway/settings.json"), "utf8"),
+  );
+  expect(settings).toEqual({ roots: [directory], requirePairing: true });
+  expect((await post("/api/connect", { version: 1 })).status).toBe(403);
+  expect(
+    (await fetch(`${gateway.origin}/api/session`, { headers: { "X-Code60-Session": first.token } }))
+      .status,
+  ).toBe(400);
+  const proof = (await managementRequest(env, "pair")).code;
+  expect(proof).toMatch(/^[a-f0-9]{16}$/);
+  const paired = await (await post("/api/pair", { version: 1, code: proof })).json();
+  expect(paired.controlling).toBe(true);
+  expect((await post("/api/pair", { version: 1, code: proof })).status).toBe(400);
+  await pairingControl(env, false);
+  expect(
+    (
+      await fetch(`${gateway.origin}/api/session`, {
+        headers: { "X-Code60-Session": paired.token },
+      })
+    ).status,
+  ).toBe(400);
+  expect((await post("/api/connect", { version: 1 })).status).toBe(200);
 });
 
 it("proxies Vite asset query strings only in development and rejects API query strings", async () => {
@@ -209,4 +308,75 @@ it("revokes a pending confirmation on explicit takeover and rejects stale decisi
   ).toBe(400);
   active.abort();
   await reader?.cancel();
+});
+
+it("rechecks revoked authorization after receiving a delayed operation body", async () => {
+  const { gateway, env } = await fixture();
+  const session = await (
+    await fetch(`${gateway.origin}/api/connect`, {
+      method: "POST",
+      headers: { Origin: gateway.origin, "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 1 }),
+    })
+  ).json();
+  const auth = {
+    "X-Code60-Session": session.token,
+    "X-Code60-Generation": String(session.generation),
+    "X-Code60-Client": crypto.randomUUID(),
+  };
+  const abort = new AbortController();
+  await fetch(`${gateway.origin}/api/events`, { headers: auth, signal: abort.signal });
+  const payload = JSON.stringify({ id: crypto.randomUUID(), operation: "snapshot-summary" });
+  const request = httpRequest(`${gateway.origin}/api/operation`, {
+    method: "POST",
+    headers: {
+      ...auth,
+      Origin: gateway.origin,
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(payload),
+      Expect: "100-continue",
+    },
+  });
+  const finished = new Promise<number | undefined>((resolve, reject) => {
+    request.once("response", (response) => {
+      response.resume();
+      response.on("end", () => resolve(response.statusCode));
+    });
+    request.once("error", reject);
+  });
+  void finished.catch(() => {});
+  const ready = once(request, "continue");
+  request.setTimeout(5000, () => request.destroy(new Error("Fixture timeout")));
+  request.flushHeaders();
+  await ready;
+  try {
+    await pairingControl(env, true);
+    request.end(payload);
+    expect(await finished).toBe(400);
+  } finally {
+    abort.abort();
+    request.destroy();
+  }
+});
+
+it("persists an explicit choice matching the default without disconnecting the browser", async () => {
+  const { gateway, env, directory } = await fixture();
+  const session = await (
+    await fetch(`${gateway.origin}/api/connect`, {
+      method: "POST",
+      headers: { Origin: gateway.origin, "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 1 }),
+    })
+  ).json();
+  await pairingControl(env, false);
+  expect(
+    JSON.parse(await readFile(join(directory, "state/code60/gateway/settings.json"), "utf8")),
+  ).toEqual({ requirePairing: false });
+  expect(
+    (
+      await fetch(`${gateway.origin}/api/session`, {
+        headers: { "X-Code60-Session": session.token },
+      })
+    ).status,
+  ).toBe(200);
 });

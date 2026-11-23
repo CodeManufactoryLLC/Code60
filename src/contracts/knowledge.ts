@@ -501,7 +501,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Terminal → code60 open; browser footer → Stop Code60 Backend",
     "none",
     "human-only",
-    "macOS Apple Silicon and Linux x64 require Node 24. The opt-in per-user backend starts at login. A single-use pairing code grants a per-tab session, with one controlling browser. Closing or refreshing a browser preserves approved work. Workspace chooser roots default to the user's home and require local configuration to expand. No Electron, remote hosting or general agent execution CLI.",
+    "macOS Apple Silicon and Linux x64 require Node 24. The opt-in per-user backend starts at login. Browsers connect without a code by default, with per-tab sessions and one controlling browser. Local code60 pairing on/off/status makes the code requirement optional; setting changes require consent and revoke browser sessions without cancelling approved work. When enabled, the code is single-use and expires after sixty seconds. Closing or refreshing a browser preserves approved work. Workspace chooser roots default to the user's home and require local configuration to expand. No Electron, remote hosting or general agent execution CLI.",
     "Take control explicitly replaces another browser's control; stale page confirmations are rejected. Stopping the backend confirms cancellation of all interactive and scheduled work. Restart never replays uncertain tasks.",
   ),
   feature(

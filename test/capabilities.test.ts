@@ -193,6 +193,8 @@ describe("browser capability catalog", () => {
     const browser = APPLICATION_CAPABILITIES.find((cap) => cap.id === "browser-runtime");
     expect(browser?.limitations).toContain("macOS Apple Silicon and Linux x64 require Node 24");
     expect(browser?.limitations).toContain("starts at login");
+    expect(browser?.limitations).toContain("Browsers connect without a code by default");
+    expect(browser?.limitations).toContain("code60 pairing on/off/status");
     expect(browser?.limitations).toContain(
       "Closing or refreshing a browser preserves approved work",
     );

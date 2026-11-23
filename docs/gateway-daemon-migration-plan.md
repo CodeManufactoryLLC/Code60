@@ -31,10 +31,13 @@ compilation restarts only the isolated development backend. Development does not
 install a service or open native windows.
 
 The gateway binds an ephemeral `127.0.0.1` port. Private connection metadata holds
-a management secret. The CLI exchanges that secret for a 60-second single-use
-pairing code; the browser receives only its own session token. Tokens use explicit
+a management secret. The CLI opens a token-free URL. Browsers connect directly by default; local
+code60 pairing on/off/status controls an optional 60-second single-use code.
+The browser receives only its own session token, and policy changes revoke page
+sessions without cancelling approved work. Tokens use explicit
 same-origin headers, never cookies or URLs. Session storage permits refresh in
-the same tab; backend restart invalidates sessions. One controller has an explicit
+the same tab; backend restart invalidates sessions and direct entry establishes a
+new session automatically when pairing is off. One controller has an explicit
 lease generation and per-page identity. Takeover/detach invalidates pending page
 decisions without cancelling approved work. New permissions remain explicit.
 

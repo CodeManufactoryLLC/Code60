@@ -58,6 +58,8 @@ export const pairBrowser = (code: string) =>
     code: code.trim().replaceAll(" ", ""),
     version: GATEWAY_VERSION,
   });
+export const connectBrowser = () =>
+  browserRequest<BrowserSession>("/api/connect", null, { version: GATEWAY_VERSION });
 
 class BrowserEvents {
   private readonly listeners = new Map<string, Set<(value: unknown) => void>>();

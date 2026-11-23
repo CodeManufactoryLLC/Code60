@@ -7,9 +7,11 @@ limitations below before giving an agent access to sensitive repositories.
 ## Runtime safeguards and limits
 
 - **Authenticated browser interface.** The Node backend binds only to
-  `127.0.0.1` on an ephemeral port and serves bundled assets. A short-lived,
-  single-use pairing code creates a tab session; its token remains in session
-  storage and never enters a URL or cookie. Explicit headers authenticate API
+  `127.0.0.1` on an ephemeral port and serves bundled assets. By default a same-origin JSON handshake creates a tab session without a code.
+  Local `code60 pairing on` can require a short-lived, single-use code instead;
+  `code60 pairing off` restores direct entry. With pairing off, browsers on this
+  computer can connect without private filesystem access. Session tokens remain
+  in session storage and never enter a URL or cookie. Explicit headers authenticate API
   and event requests. Host/Origin checks and same-origin JSON mutation requests
   reject cross-site use. A CSP limits executable content to bundled assets.
 - **Validated application requests.** A fixed operation map validates inputs and
@@ -18,7 +20,9 @@ limitations below before giving an agent access to sensitive repositories.
   under locally configured roots. No generic shell or filesystem RPC is exposed.
 - **Separate local management.** Private filesystem metadata authenticates the
   management CLI separately from browsers. Installation, repair, stop and uninstall
-  require explicit local consent. Closing a tab preserves approved execution;
+  require explicit local consent. Pairing policy changes are local management
+  actions and revoke current browser sessions without cancelling approved work.
+  Closing a tab preserves approved execution;
   stopping the backend stops application and scheduler work. Restart restores
   evidence without replaying uncertain work or approvals.
 - **Scoped local agent controls.** The orchestration MCP sidecar connects to a

@@ -13,11 +13,13 @@ import {
 import { startSchedulerRuntime } from "../automation/index.js";
 import {
   chooserRequestSchema,
+  connectionRequestSchema,
   GATEWAY_LIMITS,
   GATEWAY_VERSION,
   type GatewayFrame,
   interactionAnswerSchema,
   operationRequestSchema,
+  pairingPolicySchema,
   pairingRequestSchema,
 } from "../bridge/index.js";
 import { type CoreDeps, defaultDeps, stateHome } from "../core/index.js";
@@ -32,6 +34,7 @@ import {
 import { Interactions } from "./interactions.js";
 import { applicationOperations } from "./operations.js";
 import { Sessions, sameSecret } from "./sessions.js";
+import { readGatewaySettings, writeGatewaySettings } from "./settings.js";
 
 export const gatewayRoot = (env: Readonly<NodeJS.ProcessEnv>) =>
   join(stateHome(env), "code60", "gateway");
@@ -108,6 +111,8 @@ export async function startGateway(options: GatewayOptions = {}) {
   let stopped: Promise<void> | undefined;
   let shutdownRequested = false;
   let transferring = false;
+  let changingPairing = false;
+  let pairingChange: Promise<void> | undefined;
   const send = (session: string, event: string, value?: unknown) => {
     const response = streams.get(session);
     if (!response) return;
@@ -127,10 +132,8 @@ export async function startGateway(options: GatewayOptions = {}) {
     if (controlling) send(controlling, event, value);
   };
   const logs = new DesktopLogStore(join(stateHome(env), "code60", "logs"));
-  const settings = (await readPrivateJson(join(root, "settings.json"), 16_384).catch((error) => {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    return null;
-  })) as { roots?: unknown } | null;
+  let settings = await readGatewaySettings(root);
+  let requirePairing = settings?.requirePairing ?? false;
   const roots = options.roots ?? settings?.roots ?? [userHome(env)];
   if (
     !Array.isArray(roots) ||
@@ -283,11 +286,50 @@ export async function startGateway(options: GatewayOptions = {}) {
           return;
         }
         if (path === "/management/pair")
-          respond(response, { code: sessions.proof(), origin, version: GATEWAY_VERSION });
-        else if (path === "/management/status")
+          respond(response, {
+            ...(requirePairing ? { code: sessions.proof() } : {}),
+            requirePairing,
+            origin,
+            version: GATEWAY_VERSION,
+          });
+        else if (path === "/management/pairing") {
+          const value = await body(request);
+          if (value !== null) {
+            if (changingPairing || transferring || quiescing)
+              throw new Error("Backend is busy. Try again.");
+            const next = pairingPolicySchema.parse(value).requirePairing;
+            if (next !== requirePairing || settings?.requirePairing !== next) {
+              changingPairing = true;
+              pairingChange = (async () => {
+                const changed = next !== requirePairing;
+                const updated = { ...settings, requirePairing: next };
+                await writeGatewaySettings(root, updated, settings);
+                settings = updated;
+                if (!changed) return;
+                for (const session of streams.keys()) await detach(session);
+                sessions.reset();
+                requirePairing = next;
+                // Revoke view authorization only; approved execution continues.
+                for (const [session, stream] of streams) {
+                  send(session, "session-reset");
+                  stream.end();
+                }
+                streams.clear();
+                owners.clear();
+                clients.clear();
+              })().finally(() => {
+                changingPairing = false;
+                pairingChange = undefined;
+              });
+              await pairingChange;
+            }
+          }
+          respond(response, { requirePairing });
+        } else if (path === "/management/status")
           respond(response, {
             pid: process.pid,
             version: GATEWAY_VERSION,
+            requirePairing,
             scheduler: scheduler?.scheduler.status() ?? null,
             schedulerError,
           });
@@ -298,7 +340,7 @@ export async function startGateway(options: GatewayOptions = {}) {
         return;
       }
       if (path.startsWith("/api/")) {
-        if (quiescing) {
+        if (quiescing || changingPairing) {
           respond(response, { error: "Backend is stopping." }, 503);
           return;
         }
@@ -308,6 +350,19 @@ export async function startGateway(options: GatewayOptions = {}) {
             !request.headers["content-type"]?.startsWith("application/json"))
         ) {
           respond(response, { error: "Untrusted request." }, 403);
+          return;
+        }
+        if (path === "/api/connection" && request.method === "GET") {
+          respond(response, { version: GATEWAY_VERSION, requirePairing });
+          return;
+        }
+        if (path === "/api/connect" && request.method === "POST") {
+          connectionRequestSchema.parse(await body(request));
+          if (requirePairing) {
+            respond(response, { error: "A pairing code is required." }, 403);
+            return;
+          }
+          respond(response, sessions.connect());
           return;
         }
         if (path === "/api/pair" && request.method === "POST") {
@@ -379,8 +434,18 @@ export async function startGateway(options: GatewayOptions = {}) {
           });
           return;
         }
-        if (typeof client !== "string" || clients.get(session) !== client)
-          throw new Error("This browser page was replaced. Reload before continuing.");
+        const assertPage = () => {
+          sessions.assertController(session, generation);
+          if (
+            changingPairing ||
+            transferring ||
+            quiescing ||
+            typeof client !== "string" ||
+            clients.get(session) !== client
+          )
+            throw new Error("This browser connection changed. Reconnect before continuing.");
+        };
+        assertPage();
         if (request.method !== "POST") {
           respond(response, { error: "Unknown operation." }, 404);
           return;
@@ -402,6 +467,7 @@ export async function startGateway(options: GatewayOptions = {}) {
           return;
         }
         const value = operationRequestSchema.parse(await body(request));
+        assertPage();
         const operation = operations.get(value.operation);
         if (!operation) throw new Error("Unknown application operation.");
         const receiptKey = `${owner}:${value.id}`;
@@ -422,7 +488,10 @@ export async function startGateway(options: GatewayOptions = {}) {
           throw new Error("Too many pending operations.");
         calls.set(session, (calls.get(session) ?? 0) + 1);
         const task = Promise.resolve()
-          .then(() => interactions.run(owner, () => operation(value.value)))
+          .then(() => {
+            assertPage();
+            return interactions.run(owner, () => operation(value.value));
+          })
           .finally(() => {
             const remaining = (calls.get(session) ?? 1) - 1;
             if (remaining > 0) calls.set(session, remaining);
@@ -480,6 +549,7 @@ export async function startGateway(options: GatewayOptions = {}) {
   server.headersTimeout = 10_000;
   async function quiesce() {
     quiescing = true;
+    await pairingChange?.catch(() => {});
     interactions.close();
     const results = await Promise.allSettled([application.shutdown(), scheduler?.stop()]);
     if (results.some((result) => result.status === "rejected")) {
@@ -524,7 +594,16 @@ export async function startGateway(options: GatewayOptions = {}) {
       4096,
     );
     await application.restore();
-    return { origin, application, scheduler, stop, proof: () => sessions.proof() };
+    return {
+      origin,
+      application,
+      scheduler,
+      stop,
+      proof: () => sessions.proof(),
+      get requirePairing() {
+        return requirePairing;
+      },
+    };
   } catch (error) {
     for (const dispose of disposers) dispose();
     await Promise.allSettled([application.shutdown(), scheduler?.stop(), logs.close()]);
@@ -551,13 +630,18 @@ async function readGatewayConnection(env: Readonly<NodeJS.ProcessEnv>): Promise<
 }
 export async function managementRequest(
   env: Readonly<NodeJS.ProcessEnv>,
-  action: "pair" | "status" | "shutdown",
+  action: "pair" | "status" | "shutdown" | "pairing",
+  value?: { requirePairing: boolean },
 ) {
   const connection = await readGatewayConnection(env);
   const response = await fetch(`${connection.origin}/management/${action}`, {
     method: "POST",
     redirect: "error",
-    headers: { "X-Code60-Management": connection.token },
+    headers: {
+      "X-Code60-Management": connection.token,
+      ...(action === "pairing" ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(action === "pairing" ? { body: JSON.stringify(value ?? null) } : {}),
     signal: AbortSignal.timeout(action === "shutdown" ? 90_000 : 5000),
   });
   const result = (await response.json()) as Record<string, unknown>;

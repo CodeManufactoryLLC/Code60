@@ -12,6 +12,7 @@ const { startGateway } = (await import(pathToFileURL(resolve("dist/gateway/index
 export async function browserApp(
   browser: Browser,
   flags: string[] = ["--relay", "--session-info"],
+  requirePairing = true,
 ) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-browser-")));
   const config = join(directory, "config/code60");
@@ -43,6 +44,13 @@ export async function browserApp(
     XDG_CONFIG_HOME: join(directory, "config"),
     XDG_STATE_HOME: join(directory, "state"),
   };
+  if (requirePairing) {
+    const settings = join(directory, "state/code60/gateway");
+    await mkdir(settings, { recursive: true, mode: 0o700 });
+    await writeFile(join(settings, "settings.json"), JSON.stringify({ requirePairing: true }), {
+      mode: 0o600,
+    });
+  }
   let gateway = await startGateway({ env, roots: [directory], assets: resolve("dist/renderer") });
   const contexts = new Set<Awaited<ReturnType<Browser["newContext"]>>>();
   async function open() {
@@ -50,8 +58,10 @@ export async function browserApp(
     contexts.add(context);
     const page = await context.newPage();
     await page.goto(gateway.origin);
-    await page.getByLabel("Pairing code", { exact: true }).fill(gateway.proof());
-    await page.getByRole("button", { name: "Connect to Code60", exact: true }).click();
+    if (gateway.requirePairing) {
+      await page.getByLabel("Pairing code", { exact: true }).fill(gateway.proof());
+      await page.getByRole("button", { name: "Connect to Code60", exact: true }).click();
+    }
     return { page, context };
   }
   return {
