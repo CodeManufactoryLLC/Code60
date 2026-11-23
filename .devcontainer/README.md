@@ -20,10 +20,14 @@ npm ci
 npm run devcontainer -- prepare
 ```
 
-Preparation generates ignored machine-specific Compose configuration. It discovers
+Preparation generates ignored machine-specific Compose and `devcontainer.json`
+configuration from the tracked `template.json`. Run it before reopening the editor;
+the editor and terminal CLI use the same generated configuration. It discovers
 the canonical checkout and common Git directory, preserving absolute paths so
 ordinary clones and linked worktrees work even when their paths contain spaces.
 Open the canonical path printed by preparation if you reached it through a symlink.
+When upgrading an existing fixed-port container, run `npm run devcontainer -- down`
+first, then prepare and start it again.
 
 Only the checkout and, for a linked worktree, its common Git directory are bound
 into the container. Container dependencies, build output, npm cache, Chromium and
@@ -64,10 +68,10 @@ npm run prepare:models
 npm run dev
 ```
 
-The editor forwards gateway port **43160** and Vite/HMR port **43161**, preserving
-the same local port numbers. Open `http://127.0.0.1:43160`, using `127.0.0.1`
-rather than `localhost`. Approve no remapping to different ports: free an occupied
-port and retry. Both servers retain their loopback bindings and existing
+Preparation prints this worktree's gateway and Vite/HMR URLs. The editor forwards
+its assigned pair, preserving the same local port numbers. Open the printed gateway
+URL using `127.0.0.1` rather than `localhost`. Approve no remapping to different
+ports: free an occupied port and retry. Both servers retain their loopback bindings and existing
 Host/Origin checks. No Docker ports are published to the LAN.
 
 React Fast Refresh preserves the backend; compiled backend changes restart only
@@ -100,6 +104,35 @@ and coverage gates remain unchanged. Browser artifacts live in
 These commands run no live provider or per-user service. The existing development
 backend uses isolated state under `test-results/dev`. For Git commits, supply a
 synthetic identity locally in test repositories or perform commits on the host.
+
+## Concurrent agents
+
+Give each agent a separate Git worktree and run the same host preparation/startup
+commands from each worktree. Containers, images, dependency/build/model/browser
+caches, development state and test evidence are separate. Agents can remain on
+the host and use `exec`; provider credentials need not enter the container.
+
+Port pairs are reserved in the common Git directory's `code60-devcontainers`
+metadata, shared by linked worktrees. Allocation uses an exclusive, bounded lock
+so simultaneous preparation cannot claim the same pair, including hash collisions.
+Pairs are drawn from 40000–59999 and persist across `down`/`up`; preparation prints
+both URLs and writes matching container and editor ports. Unrelated listeners are
+skipped for a new reservation. An occupied saved port produces an error instead
+of silently changing the origin. Close existing forwarding before rerunning
+preparation/startup. The editor also requires the exact local ports, covering
+listeners that appear after preparation. Independent repositories have separate
+registries; occupied host ports are still checked, but reservations between
+unrelated repositories are not coordinated.
+
+Both worktrees can run development servers, headless browser journeys and editor
+forwarding concurrently. Stop a foreground development server before running its
+development browser journey, which tests that worktree's selected port pair.
+Docker CPU/memory remains shared; each container limits Vitest to two workers.
+
+`down` or a cancelled `exec` removes only that worktree's containers/images and
+leaves another worktree running. Multiple agents sharing one worktree also share
+its files and container lifecycle. Port reservations are retained with caches;
+never delete a preparation lock while another preparation process owns it.
 
 ## Cleanup and failures
 

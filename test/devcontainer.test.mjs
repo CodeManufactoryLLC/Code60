@@ -57,11 +57,14 @@ function control({ unavailable = false, failStartup = false, failRemoval = false
     if (failStartup) throw new Error("build failed");
     return "";
   });
-  return { run, write: vi.fn() };
+  return { run, write: vi.fn(), available: async () => true };
 }
 
 it("generates isolated amd64 mounts and keeps root initialization away from the checkout", () => {
-  const { compose } = containerConfiguration("/source with spaces", "/main/.git", 1001, 1002);
+  const { compose } = containerConfiguration("/source with spaces", "/main/.git", 1001, 1002, {
+    gateway: 44000,
+    vite: 44001,
+  });
   const service = compose.services.code60;
   expect(service.platform).toBe("linux/amd64");
   expect(service.user).toBe("1001:1002");
@@ -84,6 +87,8 @@ it("generates isolated amd64 mounts and keeps root initialization away from the 
   expect(service.ports).toBeUndefined();
   expect(service.environment.SSH_AUTH_SOCK).toBe("");
   expect(service.environment.GIT_CONFIG_GLOBAL).toBe("/dev/null");
+  expect(service.environment.CODE60_DEV_GATEWAY_PORT).toBe("44000");
+  expect(service.environment.CODE60_VITE_PORT).toBe("44001");
   expect(JSON.stringify(compose)).not.toContain("docker.sock");
 });
 
@@ -126,6 +131,35 @@ it("refuses redirected output directories", async () => {
     /symlink|redirect/i,
   );
   expect(await readFile(join(target, "compose.json"), "utf8")).toBe("preserve");
+});
+
+it("prepares concurrent linked worktrees with matching, distinct container and editor ports", async () => {
+  const linked = await checkout(true);
+  const root = join(linked, "../source clone");
+  const roots = [await realpath(root), linked];
+  await Promise.all(roots.map((path) => manageContainer(path, "prepare", [], control())));
+  const configs = await Promise.all(
+    roots.map(async (path) => ({
+      compose: JSON.parse(await readFile(join(path, ".devcontainer/local/compose.json"), "utf8")),
+      editor: JSON.parse(await readFile(join(path, ".devcontainer/devcontainer.json"), "utf8")),
+    })),
+  );
+  const forwarded = [];
+  for (const { compose, editor } of configs) {
+    const env = compose.services.code60.environment;
+    expect(editor.forwardPorts).toEqual([
+      Number(env.CODE60_DEV_GATEWAY_PORT),
+      Number(env.CODE60_VITE_PORT),
+    ]);
+    for (const port of editor.forwardPorts)
+      expect(editor.portsAttributes[port].requireLocalPort).toBe(true);
+    forwarded.push(...editor.forwardPorts);
+  }
+  expect(new Set(forwarded).size).toBe(4);
+  expect(configs[0].compose.name).not.toBe(configs[1].compose.name);
+  expect(Object.values(configs[0].compose.volumes).map((value) => value.name)).not.toEqual(
+    Object.values(configs[1].compose.volumes).map((value) => value.name),
+  );
 });
 
 it("reports a stopped daemon before attempting builds", async () => {

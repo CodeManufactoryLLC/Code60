@@ -89,8 +89,10 @@ use the documented editor or terminal workflow. Docker must already be running.
 Always finish a test session with `npm run devcontainer -- down`; it removes owned
 containers and exported images while preserving caches and test evidence.
 
-The editor workflow uses fixed loopback development ports 43160 (gateway) and
-43161 (Vite), forwarded without remapping. Ordinary host development keeps its
+Preparation reserves a stable gateway/Vite port pair for each worktree and generates
+matching editor forwarding without remapping. Agents in separate worktrees can
+develop and test concurrently; cleanup affects only its own worktree. Close existing
+forwarding before preparing again. Ordinary host development keeps its
 existing allocated ports. The container does not validate native login services.
 
 ### Workflow QA

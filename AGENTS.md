@@ -37,6 +37,9 @@ environments.
   `npm run devcontainer` on the host with `prepare`, `up`, `exec` or `down`. Docker must already
   be running. Keep container dependencies separate from host files; clean up owned
   containers and exported images after tests, retaining documented caches.
+  Use one worktree/container per concurrent agent. Run preparation before editor
+  reopening; it generates matching unique ports. Never share a worktree's lifecycle
+  or bypass exact-origin forwarding with port remapping.
 - Run browser journeys with `npm run test:browser` using headless Playwright and isolated
   HOME/config/state. They exercise the built Node backend and real UI. Never install a
   real user service or use live providers during routine testing. Native service validation

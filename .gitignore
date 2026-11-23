@@ -25,6 +25,7 @@ playwright-report/
 .idea/
 .vscode/
 .devcontainer/local/
+.devcontainer/devcontainer.json
 
 # Operating system metadata
 .DS_Store
