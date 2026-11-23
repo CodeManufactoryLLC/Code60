@@ -134,9 +134,14 @@ if (mode === "ready" || mode === "assets") {
     .split("\n")
     .filter(Boolean)
     .map(JSON.parse);
+  const setup = JSON.parse(await readFile("/harness/layout.json", "utf8")).setup;
   assert.ok(
     calls.every(
-      (call) => call.name === "systemctl" && call.args[0] === "--user" && call.args[1] === "show",
+      (call) =>
+        call.name === "systemctl" &&
+        call.args[0] === "--user" &&
+        (call.args[1] === "show" ||
+          (setup && ["daemon-reload", "enable", "start"].includes(call.args[1]))),
     ),
     "Unexpected supervisor/opener mutation",
   );

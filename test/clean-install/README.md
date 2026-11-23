@@ -85,3 +85,17 @@ This mode verifies descriptor/platform/hash/inventory before using the same
 installed golden journey and fault/process probes. Extraction uses the local
 artifact server with external networking disabled and performs no npm install,
 lifecycle scripts or compilation. The original npm tarball mode remains independent.
+
+## Setup mode
+
+Run `npm run test:packaged:clean -- --setup release/payloads/linux-x64.json` after
+building the Linux candidate. The test-only single-platform bootstrap uses the
+actual CLI entry and installer adapter; production packaging still requires both
+real descriptors. A files-only stage preserves its isolated HOME/config/state;
+explicit approval then runs real backend setup through the dedicated bounded
+supervisor, with no actual systemd registration. The launcher runs after cache
+removal, then the shared golden journey verifies the provider through UI and uses
+the setup-created database. Release/activation volume subpaths are read-only;
+management metadata and database storage remain writable. No checkout or host
+credentials enter the customer. Original tarball, payload and managed modes retain
+their independent manual-database journeys and fault/leak/cleanup probes.

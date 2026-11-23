@@ -33,6 +33,18 @@ and supported controls before extending tests. Retain evidence under ignored
 - **Cleanup:** close the isolated backend, verify owned processes gone, remove isolated fixture
   only after checks; retain artifacts/cache; no native service is installed.
 
+## Setup-created database first use
+
+- Start with isolated empty state and invoke the actual packaged setup entry with
+  internal artifact transport injection and a bounded backend supervisor fixture.
+- Default-no/non-TTY setup reports files-only success; explicit service consent
+  reaches authenticated readiness and database preparation without provider authority.
+- Remove transient caches, run the persistent launcher elsewhere and complete the
+  shared golden journey with provider verification and project choice through UI.
+- Compare database/preferences, exact Git/index/HEAD/worktree state, process identity,
+  repeat/restart/pairing behavior and owned cleanup. Keep manual-database coverage.
+- Real native login lifecycle remains separately isolated Phase 9 coverage.
+
 ## First use and reopening
 
 - **Prerequisites/start:** fake provider only, empty private storage, committed

@@ -35,3 +35,13 @@ The bootstrap build now compiles a narrow Node-only installer/launcher closure;
 its build job installs development dependencies, while the artifact itself retains
 zero runtime dependencies. Public setup remains unavailable and publication stays
 an explicit later release action.
+
+## Setup candidate acceptance
+
+The private bootstrap supports `setup [--yes] [--no-open]`; it remains unpublished.
+Follow [setup semantics](docs/distribution/setup.md). Test `npm run test:setup` on
+both supported targets and the Linux clean-install `--setup` mode in addition to
+artifact-only, managed and legacy npm checks. Pair only real descriptors from the
+same commit and verify bootstrap size/integrity. Keep release visibility private;
+this phase neither uploads release assets nor publishes npm packages. Real native
+login lifecycle validation remains a later, separately isolated release gate.

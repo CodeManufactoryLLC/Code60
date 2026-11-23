@@ -43,7 +43,14 @@ async function currentRuntime(env: Readonly<NodeJS.ProcessEnv>): Promise<Service
   if (Number(process.versions.node.split(".")[0]) !== 24)
     throw new Error("Code60 requires Node 24.");
   const runtimeEnv: Record<string, string> = {};
-  for (const name of ["PATH", "HOME", "SHELL", "XDG_STATE_HOME", "XDG_CONFIG_HOME"])
+  for (const name of [
+    "PATH",
+    "HOME",
+    "SHELL",
+    "XDG_STATE_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+  ])
     if (env[name]) runtimeEnv[name] = env[name];
   return {
     executable: await realpath(process.execPath),
@@ -88,7 +95,11 @@ export async function backendControl(
           ? "unavailable"
           : native.state,
       service: native.state === "running" && native.pid === service?.pid ? service : null,
-      runtimeCurrent: saved?.appVersion === CODE60_VERSION,
+      runtimeCurrent:
+        saved?.appVersion === CODE60_VERSION &&
+        saved.runtime.executable === (await realpath(process.execPath)) &&
+        JSON.stringify(saved.runtime.args) ===
+          JSON.stringify([fileURLToPath(new URL("./main.js", import.meta.url))]),
     };
   }
   await privateDirectory(root);

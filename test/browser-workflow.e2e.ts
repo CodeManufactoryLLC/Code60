@@ -1,4 +1,5 @@
 import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { browserApp, onboard } from "./fixtures/browser-app.js";
 import { goldenJourney } from "./fixtures/golden-journey.js";
@@ -7,6 +8,22 @@ test("browser: first use through accepted plan, automatic edits, diff, attachmen
   browser,
 }) => {
   await goldenJourney(await browserApp(browser));
+});
+
+test("browser: setup-prepared database through provider verification and accepted work", async ({
+  browser,
+}) => {
+  const fixture = await browserApp(browser);
+  try {
+    await fixture.gateway.application.prepareInitialDatabase();
+    await goldenJourney(
+      fixture,
+      join(fixture.env.XDG_DATA_HOME, "code60/databases/default.sqlite"),
+    );
+  } catch (error) {
+    await fixture.close();
+    throw error;
+  }
 });
 
 test("browser: closing and reconnecting preserves the backend; takeover and stop require explicit action", async ({

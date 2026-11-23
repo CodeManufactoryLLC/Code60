@@ -45,6 +45,7 @@ export async function browserApp(
     HOME: directory,
     CODE60_DEV_CONTAINER: "0",
     SHELL: shell,
+    XDG_DATA_HOME: join(directory, "data"),
     XDG_CONFIG_HOME: join(directory, "config"),
     XDG_STATE_HOME: join(directory, "state"),
   };

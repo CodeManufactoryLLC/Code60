@@ -11,7 +11,7 @@ interface GoldenApplication {
   close(): Promise<void>;
 }
 
-export async function goldenJourney(fixture: GoldenApplication) {
+export async function goldenJourney(fixture: GoldenApplication, setupDatabase?: string) {
   test.setTimeout(120_000);
   const repo = join(fixture.directory, "project with spaces");
   await mkdir(repo);
@@ -39,9 +39,13 @@ export async function goldenJourney(fixture: GoldenApplication) {
     const { page } = await fixture.open();
     page.on("pageerror", (error) => errors.push(error.message));
     await onboard(page);
-    await createDatabase(page, fixture.directory);
+    if (setupDatabase) {
+      expect((await page.evaluate(() => window.code60.snapshot())).database).toBe(setupDatabase);
+    } else await createDatabase(page, fixture.directory);
     expect(
-      (await readFile(join(fixture.directory, "projects.sqlite"))).subarray(0, 16).toString(),
+      (await readFile(setupDatabase ?? join(fixture.directory, "projects.sqlite")))
+        .subarray(0, 16)
+        .toString(),
     ).toBe("SQLite format 3\0");
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await openProject(page, fixture.directory, "project with spaces");

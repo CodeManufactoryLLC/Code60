@@ -1,10 +1,10 @@
 # Managed installation internals
 
 Phase 4 introduces the first supported installation layout. There is no legacy
-recognition, migration or compatibility layer. The APIs remain internal; the
-bootstrap CLI still exposes only help/version, and public setup remains Phase 5.
-No database is initialized, provider verified, login service registered, release
-updated or application uninstalled by these APIs.
+recognition, migration or compatibility layer. The filesystem APIs remain internal. Phase 5 now composes them through the private
+candidate setup command; see [setup behavior](setup.md). Installation primitives
+do not initialize databases, verify providers, register services or update/remove
+releases themselves.
 
 ## Layout and activation
 

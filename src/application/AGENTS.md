@@ -285,3 +285,14 @@ work. This adds no preference, agent-write field, IPC endpoint or dependency.
 Transmission workflows are owned by DesktopWorkflows, independently of databases, projects and Relay. Keep the private registry locked, identity checks and durable start keys intact. Quit disconnects readers without stopping the engine; never silently bootstrap on reads. Draft helpers have no gateway, denied permissions and generation-scoped cancellation. See ARCHITECTURE.md for the approved exception.
 
 Route each record to its saved engine version. Records lacking a version belong to staging.18. Reconnect and recovery require explicit actions tied to that record.
+
+## Initial database preparation
+
+Only explicit private management setup may prepare the default database under
+XDG_DATA_HOME/code60/databases/default.sqlite. Strictly distinguish absent selection
+from damaged metadata. Validate existing files read-only before initialization;
+never adopt empty/unrelated files or replace a missing/corrupt/custom selection.
+Serialize preparation with application actions and compare preference identities
+before committing. Publish new defaults exclusively from private staged SQLite
+files. Ordinary restore/open must not create replacement databases or provider
+verification/agent authority.

@@ -15,10 +15,12 @@ export {
   lockInstallation,
   publishInstallationLink,
   removeInstallationTree,
+  removeOwnedInstallationFile,
   syncInstallationDirectory,
   verifyInstallationNode,
   writeInstallationFile,
 } from "./installation-files.js";
+export { installationPrerequisite, runInstallationCommand } from "./installation-process.js";
 export { isPrivateIPv4, primaryPrivateIPv4 } from "./lan-address.js";
 export { containedPath, samePath } from "./paths.js";
 export {

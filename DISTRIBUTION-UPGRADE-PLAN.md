@@ -71,8 +71,8 @@ service/shell changes still require clear instructions or consent.
 - Install the persistent launcher at `~/.local/bin/code60`. Respect an existing
   unrelated command; never overwrite it or write privileged command directories.
 - Put the first default database at
-  `$XDG_STATE_HOME/code60/database/code60.sqlite`, with the existing
-  `~/.local/state` fallback and adjacent private `.code60_workspace`.
+  `$XDG_DATA_HOME/code60/databases/default.sqlite`, with the
+  `~/.local/share` fallback and adjacent private `.code60_workspace`.
 - Repeat setup reuses a healthy installed release and existing database selection.
   It does not implicitly update an installation, reconnect agents or resume work.
 - Installation and update use exclusive ownership, bounded downloads, staging,
@@ -285,6 +285,12 @@ Existing installations remain usable after failed candidates.
 **Depends on:** Phase 3.
 
 ## Phase 5 — One-command setup, database and browser onboarding
+
+**Status:** implemented on `codex/one-command-setup-and-onboarding`; final acceptance and PR validation in progress.
+The confirmed default uses user data storage; declined/non-TTY service setup exits
+0 with explicit incomplete status and a continuation command. Delivery requires
+packaged setup golden coverage, required Linux CI and exact-commit native fixture
+validation; real native login lifecycle remains Phase 9.
 
 **PR outcome:** the packaged `setup` command completes the developer journey.
 

@@ -153,14 +153,15 @@ it("requires LAN-scoped pairing and denies local tokens, management and remote a
   const management = JSON.parse(
     await readFile(join(f.directory, "state/code60/gateway/connection.json"), "utf8"),
   );
-  expect(
-    (
-      await f.raw(origin, "/management/status", {
-        method: "POST",
-        headers: { "X-Code60-Management": management.token },
-      })
-    ).status,
-  ).toBe(403);
+  for (const path of ["/management/status", "/management/prepare-database"])
+    expect(
+      (
+        await f.raw(origin, path, {
+          method: "POST",
+          headers: { "X-Code60-Management": management.token },
+        })
+      ).status,
+    ).toBe(403);
   expect((await f.raw(origin, "/private.map")).status).toBe(404);
   expect((await f.raw(origin, "/?import")).status).toBe(400);
   expect(

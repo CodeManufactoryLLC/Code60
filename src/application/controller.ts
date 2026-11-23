@@ -231,6 +231,7 @@ import { RelayFiles } from "./relay-files.js";
 import { ReviewStore } from "./reviews.js";
 import { summarizeRun } from "./run-summary.js";
 import { type PollOwner, ScopedPoller } from "./scoped-poller.js";
+import { inspectSetupDatabase, prepareSetupDatabase } from "./setup-database.js";
 import { captureTask, taskDelivery } from "./tactic-context.js";
 
 export interface DesktopDialogs {
@@ -4634,12 +4635,15 @@ export class ApplicationHost {
       }
       let path: string | undefined;
       try {
-        path = await this.storage.preferences.read();
+        path = this.storage.preferences.selection
+          ? (await this.storage.preferences.selection()).path
+          : await this.storage.preferences.read();
       } catch (error) {
         this.databaseError = `Could not read the saved database setting: ${message(error)}`;
       }
       if (path !== undefined) {
         try {
+          if (this.storage.preferences.selection) await inspectSetupDatabase(path);
           const database = this.storage.openDatabase(path, false);
           this.attach(database);
           emitLog(this.deps.log, {
@@ -4662,6 +4666,43 @@ export class ApplicationHost {
       this.changed();
       this.poller.context(this.active);
     });
+  }
+
+  /** Private management-only setup; never replaces a connected database or invokes browser dialogs. */
+  prepareInitialDatabase(): Promise<{ state: "ready" }> {
+    return this.exclusive(async () => {
+      const path = await prepareSetupDatabase(
+        this.env,
+        this.storage.preferences,
+        this.database?.path,
+      );
+      if (!this.database) {
+        const database = this.storage.openDatabase(path, false);
+        try {
+          this.projectHost.replaceDatabase();
+          this.projectHost.run(this.projectHost.fallback, () => {
+            this.attach(database);
+            this.changed();
+          });
+        } catch (error) {
+          database.close();
+          throw error;
+        }
+      }
+      return { state: "ready" as const };
+    });
+  }
+
+  async initialDatabaseStatus(): Promise<{ state: "ready" | "not-selected" | "unavailable" }> {
+    try {
+      const selected = await this.storage.preferences.selection?.();
+      if (!selected) return { state: "unavailable" };
+      if (!selected.path) return { state: "not-selected" };
+      await inspectSetupDatabase(selected.path);
+      return { state: this.database?.path === selected.path ? "ready" : "unavailable" };
+    } catch {
+      return { state: "unavailable" };
+    }
   }
 
   /** Connects to another database. On failure the current connection stays in use. */

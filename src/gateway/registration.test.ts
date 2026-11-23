@@ -142,3 +142,9 @@ it("retains a pinned runtime after partial enrollment and refuses an unowned liv
   await expect(backendControl(env, "repair", true)).rejects.toThrow("ownership");
   expect(fake.control).not.toHaveBeenCalled();
 });
+
+it("reports a same-version registration pointing to another runtime as conflicting without repair", async () => {
+  const { env } = await fixture(true);
+  expect(await backendControl(env, "status")).toMatchObject({ runtimeCurrent: false });
+  expect(fake.control).not.toHaveBeenCalled();
+});

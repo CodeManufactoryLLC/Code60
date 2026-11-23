@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, rmSync, statSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import {
@@ -144,7 +144,14 @@ function prepare(db: DatabaseSync, path: string): void {
 export const openProjectDatabase: OpenProjectDatabase = (path, create) => {
   const existed = existsSync(path);
   if (!existed && !create) throw new Error(`Database not found: ${path}`);
-  if (existed && !statSync(path).isFile()) throw new Error(`Not a database file: ${path}`);
+  if (existed) {
+    const info = lstatSync(path);
+    if (!info.isFile()) throw new Error(`Not a database file: ${path}`);
+    if (info.nlink !== 1 || info.uid !== process.getuid?.() || info.mode & 0o7022)
+      throw new Error(`Unsafe database file: ${path}`);
+    if (!create && info.size === 0)
+      throw new Error(`Existing empty file is not a Code60 database: ${path}`);
+  }
   const { DatabaseSync } = sqlite();
   let db: DatabaseSync | undefined;
   try {

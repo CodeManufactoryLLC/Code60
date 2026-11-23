@@ -34,6 +34,7 @@ jobs:
       - run: npm run test:installation -- --require-fish
       - run: npm run package:payload
       - run: npm run test:payload
+      - run: npm run test:setup
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: code60-darwin-payload
@@ -46,6 +47,7 @@ jobs:
           name: native-installation-evidence
           path: |
             test-results/installation/
+            test-results/setup/
             test-results/payload/
           retention-days: 7
           if-no-files-found: warn

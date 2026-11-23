@@ -12,3 +12,10 @@ Production keeps allocated loopback ports; forwarded development access must use
 the exact gateway origin. Never loosen Host/Origin validation for container access.
 
 Web Server Beta has separate origin/activation-bound mandatory pairing. Only the controlling localhost page manages LAN or issues codes; LAN cannot reach private management. Preserve local pairing policy, fixed host/origin checks and the shared single-controller model. Serve bundled manifested assets on LAN; never proxy Vite there. Revoke LAN views without stopping approved work.
+
+The private prepare-database management operation accepts no payload or browser
+Origin and requires the management token. Call ApplicationHost serialization;
+never initialize databases in ordinary startup or expose this route through the
+browser bridge. Management status reports bounded database/engine availability
+without provider probes, pairing codes or repair. Preserve XDG_DATA_HOME in the
+registered runtime so setup and the backend use the same data location.

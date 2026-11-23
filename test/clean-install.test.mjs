@@ -338,3 +338,48 @@ it("uses the same isolation and cleanup for explicit payload mode without npm in
     runCleanInstall(root, ["--payload", "release/payloads/linux-x64.json"], ports),
   ).rejects.toThrow("Build the platform payload");
 });
+
+it("setup mode keeps installed subtrees read-only and retains separate writable customer state", async () => {
+  const root = await fixture();
+  const path = join(root, "linux-x64.json");
+  const archive = {
+    name: "code60-0.4.1-linux-x64.tar.gz",
+    size: 37,
+    sha256: "a".repeat(64),
+    url: "https://github.com/CodeManufactoryLLC/Code60/releases/download/v0.4.1/code60-0.4.1-linux-x64.tar.gz",
+  };
+  await writeFile(join(root, archive.name), "synthetic payload");
+  await writeFile(
+    path,
+    JSON.stringify({
+      schemaVersion: 1,
+      version: "0.4.1",
+      commit: "a".repeat(40),
+      dirty: false,
+      os: "linux",
+      arch: "x64",
+      runtime: { node: ">=24.22.0 <25", libc: "glibc" },
+      archive,
+    }),
+  );
+  const ports = docker();
+  const result = await runCleanInstall(root, ["--setup", path], ports);
+  expect(result.status).toBe("passed");
+  expect(
+    result.isolation.mounts
+      .filter((item) =>
+        ["/installation/code60/releases", "/installation/code60/activations"].includes(
+          item.Destination,
+        ),
+      )
+      .every((item) => !item.RW),
+  ).toBe(true);
+  const invocations = ports.run.mock.calls.map((call) => call[1]);
+  expect(invocations.some((args) => args.includes("/harness/install-setup.mjs"))).toBe(true);
+  expect(
+    invocations.some((args) =>
+      args.some((value) => value.includes("volume-subpath=code60/databases")),
+    ),
+  ).toBe(true);
+  await expect(runCleanInstall(root, ["--setup"], ports)).rejects.toThrow("--setup");
+});

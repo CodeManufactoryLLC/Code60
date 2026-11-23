@@ -7,6 +7,8 @@ import {
   pairingControl,
 } from "../gateway/index.js";
 
+import { combinedStatus, runSetup } from "./setup.js";
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function confirmChange(description: string, flags: readonly string[]) {
   if (flags.includes("--yes")) return true;
@@ -25,9 +27,18 @@ export async function runManagement(args: readonly string[], env: NodeJS.Process
   if (Number(process.versions.node.split(".")[0]) !== 24)
     throw new Error("Code60 requires Node 24.");
   const [command = "open", action, ...flags] = args;
+  if (command === "setup") {
+    await runSetup(args.slice(1), env);
+    return;
+  }
+  if (command === "status") {
+    if (args.length !== 1) throw Error("Use code60 status.");
+    process.stdout.write(`${JSON.stringify(await combinedStatus(env))}\n`);
+    return;
+  }
   if (command === "--help" || command === "help") {
     process.stdout.write(
-      "code60 open\ncode60 service install|status|start|stop|repair|uninstall [--yes]\ncode60 pairing on|off|status [--yes]\n",
+      "code60 setup [--yes] [--no-open]\ncode60 status\ncode60 open\ncode60 service install|status|start|stop|repair|uninstall [--yes]\ncode60 pairing on|off|status [--yes]\n",
     );
     return;
   }
