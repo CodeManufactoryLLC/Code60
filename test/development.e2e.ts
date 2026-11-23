@@ -65,6 +65,7 @@ test("development: Fast Refresh preserves the backend and backend edits restart 
       }),
     );
     const gatewayPort = await freePort();
+    const origin = `http://127.0.0.1:${gatewayPort}`;
     let vitePort = await freePort();
     while (vitePort === gatewayPort) vitePort = await freePort();
     processHandle = await spawnOwnedProcess([process.execPath, "scripts/dev.mjs"], directory, {
@@ -87,13 +88,11 @@ test("development: Fast Refresh preserves the backend and backend edits restart 
         return null;
       }
     };
-    await expect
-      .poll(async () => (await connection())?.origin, { timeout: 45_000 })
-      .toBe(`http://127.0.0.1:${gatewayPort}`);
+    await expect.poll(async () => (await connection())?.origin, { timeout: 45_000 }).toBe(origin);
     const initial = await connection();
     if (!initial) throw new Error("Development backend never became ready");
     const page = await context.newPage();
-    await page.goto(initial.origin);
+    await page.goto(origin);
     await onboard(page);
     await page.getByRole("button", { name: "Start", exact: true }).click();
     const footer = page.getByRole("note", { name: "Running Code60 version" });
@@ -136,7 +135,7 @@ test("development: Fast Refresh preserves the backend and backend edits restart 
     expect(await viteNonce()).toBe(initialNonce);
     expect(
       (
-        await fetch(`${initial.origin}/api/connection`, {
+        await fetch(`${origin}/api/connection`, {
           headers: { Origin: "https://invalid.example" },
         })
       ).status,
