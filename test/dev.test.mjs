@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { expect, it, vi } from "vitest";
@@ -36,7 +36,7 @@ function session(pendingCommand, env = {}) {
     changed = callback;
     return watcher;
   });
-  const spawnOwnedProcess = async (command) => {
+  const spawnOwnedProcess = async (command, _directory, environment) => {
     let finish;
     let stopped;
     const exited = new Promise((resolve) => {
@@ -44,6 +44,7 @@ function session(pendingCommand, env = {}) {
     });
     const child = {
       command,
+      environment,
       exited,
       stdout: { pipe: vi.fn() },
       stderr: { pipe: vi.fn() },
@@ -71,6 +72,7 @@ function session(pendingCommand, env = {}) {
     scriptUrl,
     fileURLToPath,
     join,
+    isAbsolute,
     process,
     watch,
     spawnOwnedProcess,
@@ -144,6 +146,19 @@ it("retains ephemeral Vite selection without overrides", async () => {
   expect(dev.listeners).toEqual([[0, "127.0.0.1"]]);
   dev.signals.SIGTERM();
   await vi.waitFor(() => expect(dev.process.exitCode).toBe(143));
+});
+it("isolates development state only in an explicitly absolute QA root", async () => {
+  const dev = session(undefined, { CODE60_DEV_DATA_ROOT: "/owned-qa" });
+  await dev.done;
+  expect(dev.apps()[0].environment).toMatchObject({
+    XDG_CONFIG_HOME: "/owned-qa/config",
+    XDG_STATE_HOME: "/owned-qa/state",
+  });
+  dev.signals.SIGTERM();
+  await vi.waitFor(() => expect(dev.process.exitCode).toBe(143));
+  const invalid = session(undefined, { CODE60_DEV_DATA_ROOT: "relative" });
+  await expect(invalid.done).rejects.toThrow("must be absolute");
+  expect(invalid.children).toEqual([]);
 });
 it.each([
   { CODE60_VITE_PORT: "65536" },

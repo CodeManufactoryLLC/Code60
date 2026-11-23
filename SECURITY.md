@@ -293,3 +293,41 @@ does not log out the provider or erase credentials it has already issued. The
 persistent dev-container home retains both managed binaries and credentials;
 it must be treated as private user state, not a disposable cache. Custom commands
 and other providers require manual authentication in this release.
+
+
+## Web Server Beta
+
+An explicit localhost-only switch can publish the same Code60 application on the
+host's primary RFC1918 IPv4 address and existing gateway port. This is a scoped
+exception to loopback-only access; it does not bind wildcard/public addresses,
+configure a router/firewall or install another service. HTTP is unencrypted and
+intended only for trusted LANs. The switch is off by default and stores only the
+enabled preference in private gateway settings.
+
+LAN always requires a single-use 60-second pairing code, independently of local
+pairing policy. Codes belong to an exact LAN activation/origin; rotation, disable,
+address change and backend restart invalidate them. Ten pairing submissions per
+minute are permitted. Sessions are ingress/origin-bound, use the existing per-tab
+session storage and require explicit control takeover. A local session cannot be
+replayed on LAN, nor a LAN session on localhost. Only the controlling localhost
+page can change LAN policy or generate a code; codes never enter shared snapshots,
+diagnostics, transcripts, persistent settings or links. The LAN ingress rejects
+private management routes even with a management token. Host/Origin/schema checks,
+CSP and existing quotas remain enforced. Top-level LAN navigation serves only the
+bundled asset manifest, with no maps, Vite/HMR or development filesystem proxy.
+
+Paired devices receive the full application authority, including agent dispatch
+and backend-owned file choosers, subject to the same confirmations and single
+controller rules. Disabling LAN or losing its address cancels affected view reads
+and pending human/setup interactions and invalidates remote sessions, while
+approved execution and scheduled work continue. Local access remains available.
+
+For dev containers, the owned host launcher derives the host address/port and
+forwards to a separate loopback ingress in its own container. A private user-owned
+Unix socket and bounded stdio channel carry fixed address/publish/withdraw/heartbeat
+messages. No browser controls commands, ports, paths or environments. Protocol
+requests have ten-second deadlines; the host withdraws unrenewed publication after
+fifteen seconds and on backend/launcher loss. Cleanup uncertainty remains an error,
+not a claim that exposure stopped. Provider storage and approved execution records
+are independent of this policy. TLS, passwords, public hosting and automatic
+firewall changes are outside this beta.

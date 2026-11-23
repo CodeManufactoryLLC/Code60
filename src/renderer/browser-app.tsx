@@ -16,6 +16,7 @@ import {
   saveBrowserSession,
   savedBrowserSession,
 } from "./browser-client.js";
+import { randomId } from "./browser-platform.js";
 import { Modal } from "./modal.js";
 
 const HostPicker = lazy(() => import("./host-picker.js"));
@@ -268,7 +269,7 @@ export function BrowserApp() {
           type="button"
           onClick={() =>
             void browserRequest("/api/operation", session, {
-              id: crypto.randomUUID(),
+              id: randomId(),
               operation: "backend-stop",
             }).catch((cause) => setError(String(cause)))
           }

@@ -43,6 +43,7 @@ export async function browserApp(
   const env = {
     ...process.env,
     HOME: directory,
+    CODE60_DEV_CONTAINER: "0",
     SHELL: shell,
     XDG_CONFIG_HOME: join(directory, "config"),
     XDG_STATE_HOME: join(directory, "state"),

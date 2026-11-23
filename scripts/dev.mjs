@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { watch } from "node:fs";
 import { createServer } from "node:net";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { developmentPort } from "./dev-ports.mjs";
 
@@ -15,6 +15,11 @@ execFileSync(process.execPath, ["node_modules/typescript/bin/tsc", "-p", "tsconf
   stdio: "inherit",
   timeout: 120_000,
 });
+execFileSync(process.execPath, ["node_modules/vite/bin/vite.js", "build"], {
+  cwd: root,
+  stdio: "inherit",
+  timeout: 120_000,
+});
 const { spawnOwnedProcess } = await import("../dist/platform/index.js");
 const probe = createServer();
 await new Promise((resolve, reject) => {
@@ -23,10 +28,12 @@ await new Promise((resolve, reject) => {
 });
 const port = probe.address().port;
 await new Promise((resolve) => probe.close(resolve));
+const dataRoot = process.env.CODE60_DEV_DATA_ROOT ?? join(root, "test-results/dev");
+if (!isAbsolute(dataRoot)) throw new Error("Development data root must be absolute.");
 const env = {
   ...process.env,
-  XDG_STATE_HOME: join(root, "test-results/dev/state"),
-  XDG_CONFIG_HOME: join(root, "test-results/dev/config"),
+  XDG_STATE_HOME: join(dataRoot, "state"),
+  XDG_CONFIG_HOME: join(dataRoot, "config"),
   CODE60_DEV_ASSETS: `http://127.0.0.1:${port}`,
   CODE60_VITE_PORT: String(port),
 };

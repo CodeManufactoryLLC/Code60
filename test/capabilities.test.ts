@@ -370,3 +370,12 @@ describe("browser capability catalog", () => {
     });
   });
 });
+it("describes LAN beta as human-only and separate from local pairing policy", () => {
+  expect(PAGE_CAPABILITIES["web-server"]).toBe("web-server");
+  expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "web-server")).toMatchObject({
+    agentAccess: "human-only",
+    prerequisite: "none",
+    access: "Settings → Advanced → Web Server Beta",
+    limitations: expect.stringContaining("LAN always requires pairing"),
+  });
+});

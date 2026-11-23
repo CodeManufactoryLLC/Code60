@@ -126,7 +126,15 @@ it.each([false, true])(
       ["npm", "run", "prepare:models"],
     ]);
     expect(calls[2][2]).toMatchObject({ inherit: true, stdin: "ignore" });
-    expect(ports.develop).toHaveBeenCalledWith(root, "owned-container", { signal: undefined });
+    expect(ports.develop).toHaveBeenCalledWith(
+      root,
+      "owned-container",
+      expect.objectContaining({
+        signal: undefined,
+        gatewayPort: expect.any(Number),
+        budget: { active: 0 },
+      }),
+    );
     const config = JSON.parse(
       await readFile(join(root, ".devcontainer/local/compose.json"), "utf8"),
     );
@@ -138,7 +146,7 @@ it.each([false, true])(
         gateway: Number(env.CODE60_DEV_GATEWAY_PORT),
         vite: Number(env.CODE60_VITE_PORT),
       },
-      { signal: undefined },
+      expect.objectContaining({ signal: undefined, budget: { active: 0 } }),
     );
     expect(closed).toHaveBeenCalledOnce();
     expect(ports.run.mock.calls).toContainEqual(["docker", ["rm", "owned-container"]]);

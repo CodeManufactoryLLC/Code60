@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ApplicationClient, LogRecord } from "../bridge/index.js";
 import { parseLogQuery } from "../bridge/index.js";
+import { copyText } from "./browser-platform.js";
 import { DataTable, type RetainedTableQuery, type TableOptions } from "./data-table.js";
 import { Icon } from "./icons.js";
 import { LogViewer } from "./log-model.js";
@@ -260,7 +261,7 @@ export function LogsPage({
             onClick={async () => {
               const source = JSON.stringify(state.selected, null, 2);
               try {
-                await navigator.clipboard.writeText(source);
+                await copyText(source);
                 setCopied("Record copied.");
               } catch {
                 setCopied("Copy failed. Retry Copy record.");

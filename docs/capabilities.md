@@ -256,6 +256,20 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
+## Web Server Beta
+
+- ID: `web-server`
+- Status: shipped
+- Purpose: Enable paired access to Code60 from another device on the same trusted LAN.
+- Access: Settings → Advanced → Web Server Beta
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Turning the switch on explicitly enables trusted-LAN access. Pair each remote browser; take control explicitly. Server administration is localhost-only. Before provider setup, close the setup dialog and choose Web Server Beta on the start screen.
+- Limits: Off by default; remembers the enabled preference. Uses the current primary private IPv4 address and existing application port. Only the controlling localhost browser can toggle access or create single-use 60-second pairing codes; LAN always requires pairing, with ten attempts per minute. Paired devices use the full app with explicit single-browser control takeover. Disabling, address changes and backend restart revoke LAN sessions; approved work continues. HTTP is not encrypted. Native execution and the dev-container start launcher are supported; ordinary containers without the host controller report unavailable. LAN serves bundled assets without Vite/HMR or source maps. No custom ports, TLS, public hosting, router/firewall changes, passwords or separate service. Codes are private responses, never snapshots, diagnostics or saved storage.
+- Pages: `web-server`
+- Settings sections: none
+- Tools: none
+
 ## Providers
 
 - ID: `providers`

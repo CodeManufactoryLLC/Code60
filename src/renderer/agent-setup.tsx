@@ -7,6 +7,7 @@ import {
   type Snapshot,
 } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
+import { copyText } from "./browser-platform.js";
 import { Icon } from "./icons.js";
 import { DialogContent } from "./neobrutalism/dialog.js";
 
@@ -296,11 +297,9 @@ export function AgentSetupWizard({
                   <button
                     type="button"
                     onClick={() =>
-                      void navigator.clipboard
-                        .writeText(challenge.userCode)
-                        .catch(() =>
-                          setError("Could not copy the device code. Select and copy it instead."),
-                        )
+                      void copyText(challenge.userCode).catch(() =>
+                        setError("Could not copy the device code. Select and copy it instead."),
+                      )
                     }
                   >
                     Copy code

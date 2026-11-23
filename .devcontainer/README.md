@@ -40,11 +40,40 @@ If you own an earlier terminal/editor session, stop it and run
 container or forwarding session. A `start.lock` in `.devcontainer/local` prevents
 concurrent startup; preserve it after a forced kill until ownership is checked.
 
-Forwarding carries raw TCP over Docker exec stdio, bound to `127.0.0.1` on the
+Default forwarding carries raw TCP over Docker exec stdio, bound to `127.0.0.1` on the
 host and connected to `127.0.0.1` in the container. The existing exact Host/Origin,
 browser authentication, event streams and Fast Refresh WebSockets are preserved.
 No container ports are published and no app listener binds to a LAN interface.
 There is a shared limit of 64 forwarded connections for this command.
+
+## Optional LAN access
+
+With the standalone `start` command running, open **Settings → Advanced → Web
+Server Beta** through localhost. Enable it and use the displayed host LAN URL
+and single-use pairing code from the other device. LAN always requires pairing;
+only the controlling localhost browser manages the switch or creates codes.
+The preference persists with development state. Backend restart requires fresh
+pairing, while disabling access leaves approved work running.
+
+The host launcher owns an additional listener on the primary private IPv4 address,
+using this worktree's existing gateway port. It forwards only to a separate private
+gateway ingress; Docker ports remain unpublished. Its private control channel has
+bounded messages/deadlines and a renewable fifteen-second lease. Backend reload,
+launcher exit and lost leases withdraw forwarding. Local forwards are unchanged.
+Normal `up`/`exec` and editor sessions without the standalone controller report LAN
+unavailable rather than advertising a container address.
+
+LAN uses a bundled app built at development startup; it never exposes Vite/HMR,
+source maps or development filesystem routes. Restart the development command to
+rebuild renderer changes for LAN. The localhost browser keeps Fast Refresh.
+HTTP traffic is unencrypted; use a trusted network. No firewall/router settings
+are changed. If another listener owns the selected port, preserve it and resolve
+ownership before retrying; the helper will not silently remap ports.
+
+For isolated QA, a Node-only `CODE60_DEV_DATA_ROOT` absolute directory replaces
+the default ignored `test-results/dev` config/state root. It is not a browser
+operation. Use synthetic HOME/provider configuration and never point it at normal
+user state. No service is installed.
 
 ## Persistent providers
 

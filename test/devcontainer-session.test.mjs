@@ -20,7 +20,7 @@ async function session(source) {
     const child = spawn(process.execPath, [args[4]], {
       ...options,
       cwd: directory,
-      stdio: ["pipe", "ignore", "ignore"],
+      stdio: ["pipe", "pipe", "ignore"],
     });
     children.push(child);
     return child;

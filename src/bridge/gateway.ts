@@ -54,6 +54,7 @@ export const pairingPolicySchema = z.strictObject({ requirePairing: z.boolean() 
 export const gatewaySettingsSchema = z.strictObject({
   roots: z.array(z.string().min(1).max(4096)).min(1).max(32).optional(),
   requirePairing: z.boolean().optional(),
+  webServerEnabled: z.boolean().optional(),
 });
 export type GatewaySettings = z.infer<typeof gatewaySettingsSchema>;
 export const chooserRequestSchema = z.strictObject({

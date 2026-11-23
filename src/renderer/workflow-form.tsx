@@ -8,6 +8,7 @@ import {
   type WorkflowReview,
   workflowDraftReplySchema,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import { DialogContent } from "./neobrutalism/dialog.js";
 
 type Message = { id: string; role: "user" | "assistant"; text: string };
@@ -27,14 +28,14 @@ export function WorkflowForm({
   onCreated(record: WorkflowRecord): void;
   onClose(): void;
 }) {
-  const [formId] = useState(() => crypto.randomUUID());
+  const [formId] = useState(() => randomId());
   const revision = useRef(0);
-  const taskKeys = useRef<string[]>([crypto.randomUUID()]);
+  const taskKeys = useRef<string[]>([randomId()]);
   const alive = useRef(true);
   const generation = useRef<string | null>(null);
   const [draft, setDraft] = useState<WorkflowDraft>({
     name: "",
-    repositoryToken: crypto.randomUUID(),
+    repositoryToken: randomId(),
     tasks: [emptyTask()],
     repairs: 2,
     retries: 2,
@@ -104,11 +105,11 @@ export function WorkflowForm({
   };
   const generate = async () => {
     if (generating || !prompt.trim()) return;
-    const requestId = crypto.randomUUID();
+    const requestId = randomId();
     const ticket = revision.current;
     const conversation = [
       ...messages,
-      { id: crypto.randomUUID(), role: "user" as const, text: prompt },
+      { id: randomId(), role: "user" as const, text: prompt },
     ].slice(-20);
     setMessages(conversation);
     setPrompt("");
@@ -131,11 +132,11 @@ export function WorkflowForm({
       setMessages(
         [
           ...conversation,
-          { id: crypto.randomUUID(), role: "assistant" as const, text: result.message },
+          { id: randomId(), role: "assistant" as const, text: result.message },
         ].slice(-20),
       );
       if (result.draft) {
-        taskKeys.current = result.draft.tasks.map(() => crypto.randomUUID());
+        taskKeys.current = result.draft.tasks.map(() => randomId());
         change({ ...draft, ...result.draft });
       }
     } catch (cause) {
@@ -264,7 +265,7 @@ export function WorkflowForm({
           type="button"
           disabled={draft.tasks.length >= 100}
           onClick={() => {
-            taskKeys.current.push(crypto.randomUUID());
+            taskKeys.current.push(randomId());
             change({ ...draft, tasks: [...draft.tasks, emptyTask()] });
           }}
         >

@@ -194,6 +194,15 @@ export const pages = [
     icon: "flask",
   },
   {
+    id: "web-server",
+    label: "Web Server Beta",
+    group: "advanced",
+    order: 2,
+    initialOrder: 28,
+    database: false,
+    icon: "app-system-manager",
+  },
+  {
     id: "contributor-tools",
     initialOrder: 1,
     label: "Contributor Tools",

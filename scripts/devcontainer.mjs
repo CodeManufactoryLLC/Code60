@@ -73,6 +73,7 @@ export function containerConfiguration(root, common, uid = 1000, gid = 1000, pai
             NPM_CONFIG_PREFIX: "/home/node/.local",
             PATH: "/home/node/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             SHELL: "/bin/bash",
+            CODE60_DEV_CONTAINER: "1",
             CODE60_DEV_GATEWAY_PORT: String(pair.gateway),
             CODE60_VITE_PORT: String(pair.vite),
             PLAYWRIGHT_BROWSERS_PATH: volumeTargets.browsers,
@@ -363,13 +364,19 @@ export async function manageContainer(directory, action, args = [], ports = {}) 
         gateway: Number(env.CODE60_DEV_GATEWAY_PORT),
         vite: Number(env.CODE60_VITE_PORT),
       };
+      const budget = { active: 0 };
       closeForwarding = await (ports.forward ?? forwardContainerPorts)(root, running[0], pair, {
         signal: ports.signal,
+        budget,
       });
       write(
         `Browser forwarding: http://127.0.0.1:${pair.gateway}\nOpen this URL when Development Code60 is ready. Press Ctrl+C to stop and clean up.\n`,
       );
-      await (ports.develop ?? runContainerDevelopment)(root, running[0], { signal: ports.signal });
+      await (ports.develop ?? runContainerDevelopment)(root, running[0], {
+        signal: ports.signal,
+        gatewayPort: pair.gateway,
+        budget,
+      });
     } catch (error) {
       errors.push(error);
     } finally {

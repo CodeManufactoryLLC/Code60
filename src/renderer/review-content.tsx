@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { ApplicationClient, ProjectRequestIdentity, ReviewContent } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import type { PreviewViewState } from "./monaco-preview.js";
 
 const MonacoPreview = lazy(() => import("./monaco-preview.js"));
@@ -25,7 +26,7 @@ export function useReviewFile(
   useEffect(() => {
     if (!reviewId || !revisionId || !fileKey) return;
     let current = true;
-    const requestId = crypto.randomUUID();
+    const requestId = randomId();
     setResult(undefined);
     const read =
       conversationId && generation !== undefined && targetId

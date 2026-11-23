@@ -1,6 +1,7 @@
 export { resolveCommand } from "./command.js";
 export { DiagnosticTail, diagnosticMessage, diagnosticText } from "./diagnostics.js";
 export { environmentValue, mergeSearchPath, setEnvironmentPath, userHome } from "./environment.js";
+export { isPrivateIPv4, primaryPrivateIPv4 } from "./lan-address.js";
 export { containedPath, samePath } from "./paths.js";
 export {
   fileCode,

@@ -33,6 +33,7 @@ function render(
       onThemeChange={() => {}}
       onEnter={() => {}}
       onConnectDatabase={() => {}}
+      onOpenWebServer={() => {}}
     />,
   );
 }
@@ -133,6 +134,7 @@ describe("splash entry", () => {
     expect(html).toContain("Set up agents");
     expect(html).not.toContain("Recent projects");
     expect(html).not.toContain(">Start<");
+    expect(html).toContain(">Web Server Beta</button>");
   });
 
   it("preserves the database warning and permits entry without a database", () => {

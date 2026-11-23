@@ -29,7 +29,7 @@ flowchart LR
   Application --> Storage[Existing stores and Node sidecars]
 ```
 
-The gateway binds only 127.0.0.1 on an allocated port. Private connection metadata
+The gateway always binds 127.0.0.1 on an allocated port. The explicit Web Server Beta feature below can add a separate private-LAN ingress on the same port. Private connection metadata
 contains the local management token; it is never sent to browsers. Browsers connect
 without a pairing code by default through a same-origin JSON handshake that issues
 an ephemeral session token. code60 open opens the token-free URL. Local
@@ -112,7 +112,7 @@ installer gates are replaced by browser journeys and clean-prefix tarball checks
 
 ## Current exclusions
 
-No Electron shell, native window effects, automatic updater, bundled Node, remote/LAN
+No Electron shell, native window effects, automatic updater, bundled Node, public/internet
 hosting, multiple simultaneous controlling clients, automatic task replay or generic public
 agent-execution CLI. Storage consolidation and feature-module reorganization are separate work.
 
@@ -2961,3 +2961,39 @@ The application and gateway-owned scheduler select the discovered Codex executab
 for the standard ACP adapter through its documented `CODEX_PATH` override, so probes
 and normal work use the same managed or installed CLI as login. Explicit backend
 `CODEX_PATH` and custom launch commands remain authoritative and use manual setup.
+
+
+## Web Server Beta
+
+Settings → Advanced → Web Server Beta is an explicit, human-only LAN exception to
+the loopback default. It is off by default and persists only its enabled preference
+in private gateway settings. Only the controlling localhost browser may change it
+or issue single-use 60-second LAN pairing codes. LAN always requires pairing,
+independently of local pairing policy. Sessions and codes belong to an exact ingress,
+origin and activation generation; private management routes are never available on LAN.
+One browser controls the shared application/scheduler. Disabling or changing address
+revokes LAN views and pending interactions, not approved execution. Codes stay out
+of snapshots, storage, diagnostics and links. LAN pairing has a ten-per-minute budget.
+
+Bind the host's primary RFC1918 IPv4 address and existing gateway port; no wildcard,
+public address or silent port fallback. Monitor addresses every ten seconds. Failures
+leave localhost usable and report unavailability. HTTP is for trusted LANs; no TLS,
+firewall/router configuration, custom ports or independent login service is added.
+LAN serves only manifested bundled renderer assets, never Vite/HMR, filesystem routes
+or source maps. Local development keeps Vite Fast Refresh. Cryptographic browser IDs
+and user-initiated clipboard copying support non-secure HTTP origins.
+
+Native gateways own the second listener. The dev-container start controller instead
+owns a host LAN forward to a separate private gateway ingress inside the container.
+A private Unix socket plus bounded stdio control channel accepts only address, publish,
+withdraw and heartbeat operations. Development logs use stderr, not protocol stdout.
+The host derives its address and port; browser inputs contain neither. Requests have
+ten-second deadlines and the host withdraws forwarding on backend/launcher loss or
+a fifteen-second unrenewed lease. Ordinary container execution without this controller
+reports LAN unavailable. Cleanup preserves provider state and existing local forwarding.
+
+After an abrupt launcher/backend loss, gateway startup first acquires the exclusive
+private writer lock. It replaces previous connection metadata only after validating
+its shape/privacy and confirming its PID no longer exists, using private-storage
+compare-and-swap. Live, reused or unverifiable identities and outside changes remain
+errors; recovery never deletes history or grants old browser sessions authority.

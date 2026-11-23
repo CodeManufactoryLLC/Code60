@@ -6,6 +6,7 @@ import type {
   RelayReviewEntry,
   ReviewSummary,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import { type ReviewPreview, type ReviewScope, reviewRequest } from "./review-actions.js";
 import { statusSpec } from "./session-presentation.js";
 
@@ -202,8 +203,7 @@ export function useConversationRevisions({
         .slice(-30);
       for (const item of failed) {
         const scope = scopeFor(item);
-        if (scope)
-          await reviewRequest(api, scope, { type: "capture", requestId: crypto.randomUUID() });
+        if (scope) await reviewRequest(api, scope, { type: "capture", requestId: randomId() });
       }
       retry((value) => value + 1);
       setError("");

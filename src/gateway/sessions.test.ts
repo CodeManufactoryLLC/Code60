@@ -43,3 +43,22 @@ describe("browser session authority", () => {
     expect(next.generation).toBeGreaterThan(first.generation);
   });
 });
+it("binds LAN proofs and tokens to their exact activation/origin and leaves local sessions intact", () => {
+  const sessions = new Sessions();
+  const local = sessions.connect();
+  const scope = "lan:1:http://192.168.0.16:43160";
+  const code = sessions.proof(scope);
+  expect(() => sessions.pair(code)).toThrow();
+  const remote = sessions.pair(code, scope);
+  expect(remote.controlling).toBe(false);
+  expect(() => sessions.authenticate(local.token, scope)).toThrow();
+  expect(() => sessions.authenticate(remote.token)).toThrow();
+  expect(() => sessions.authenticate(remote.token, "lan:2:http://192.168.0.16:43160")).toThrow();
+  const pending = sessions.proof(scope);
+  sessions.clearProofs("lan:");
+  expect(() => sessions.pair(pending, scope)).toThrow();
+  expect(sessions.tokens("lan:")).toEqual([remote.token]);
+  sessions.revoke("lan:");
+  expect(() => sessions.authenticate(remote.token, scope)).toThrow();
+  expect(sessions.authenticate(local.token)).toBe(local.token);
+});

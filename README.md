@@ -37,6 +37,30 @@ Codex installation uses non-root npm with lifecycle scripts disabled and the off
 
  Create or select a database and open a project through the host-side chooser. Project workers require Git with an initial commit. Relay can explicitly target a direct folder. Accept the displayed plan to dispatch work, inspect the automatically integrated changes, and use message Undo to restore covered files and return the request unsent. Undo does not reverse external website effects.
 
+## LAN access (beta)
+
+Before setting up a provider, close provider setup and choose **Web Server Beta**
+on the start screen to open its settings directly. No database is required.
+
+Open **Settings → Advanced → Web Server Beta** from Code60's localhost browser
+and enable the switch. The page shows the current LAN URL, for example
+`http://192.168.0.16:47994`, and a single-use pairing code valid for sixty seconds.
+Open that URL on the other device and enter the code. **New code** replaces the
+previous code; **Take control** explicitly transfers control of the shared app.
+
+Only the controlling localhost browser can enable/disable LAN access or generate
+codes. LAN pairing is required even when localhost pairing is off. The enabled
+preference survives restart; browser sessions and codes do not. The address follows
+the current primary private IPv4 interface and uses the existing application port.
+Missing networks or occupied ports show Unavailable; no alternate port is chosen.
+Disabling access disconnects LAN views while approved agents and schedules continue.
+
+Use a trusted LAN: HTTP traffic is unencrypted. File choosers show files on the
+computer running Code60. There is no public hosting, TLS certificate setup or
+router/firewall configuration. This works with native Code60 and the standalone
+`npm run devcontainer -- start` launcher. Leave the localhost URL available for
+server administration and recovery.
+
 ## Backend management
 
 ```sh
