@@ -47,6 +47,11 @@ Status is read-only. Stop, repair and uninstall require consent and preserve his
 
 Workspace chooser roots default to the user's home directory. To add another root, stop the backend and edit private `gateway/settings.json` under the Code60 state directory with `{"roots":["/absolute/workspace/root"]}`, then start it again. Use only directories you intend Code60 to access. The chooser lists the backend computer's files; it is not an upload dialog.
 
+In the chooser, click a row to select it. Double-click or press Enter to open it, or select a folder and use **Open folder**. Back and Forward revisit locations; Up goes to the parent or the workspace roots. **Choose folder** accepts the selected folder or the current location. To create a database, navigate to its destination and enter the filename. **New folder** creates a directory inside the current location.
+
+In the chat File Explorer, click a row to select it. Use the chevron or Left and Right to collapse or expand folders. Double-click or press Enter on a file to open its read-only preview tab.
+
+
 ## Manual updates
 
 Stop the backend before replacing its package:

@@ -185,27 +185,34 @@ export function FilesPage({
             <Icon name="settings" />
           </button>
         </div>
-        {browser.root && (
-          <div className="files-controls">
-            <label>
-              Root
-              <select
-                aria-label="File root"
-                value={browser.root}
-                onChange={(event) => browser.setRoot?.(event.target.value)}
-              >
-                {!browser.roots.some((root) => root.path === browser.root) && (
-                  <option value={browser.root}>Unavailable · {browser.root}</option>
-                )}
-                {browser.roots.map((root) => (
-                  <option key={root.path} value={root.path}>
-                    {root.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        )}
+        {browser.root &&
+          (browser.setRoot &&
+          (browser.roots.length > 1 ||
+            !browser.roots.some((root) => root.path === browser.root)) ? (
+            <div className="files-controls">
+              <label>
+                Root
+                <select
+                  aria-label="File root"
+                  value={browser.root}
+                  onChange={(event) => browser.setRoot?.(event.target.value)}
+                >
+                  {!browser.roots.some((root) => root.path === browser.root) && (
+                    <option value={browser.root}>Unavailable · {browser.root}</option>
+                  )}
+                  {browser.roots.map((root) => (
+                    <option key={root.path} value={root.path}>
+                      {root.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          ) : (
+            <span className="file-root-name" title={browser.root}>
+              {browser.roots.find((root) => root.path === browser.root)?.label ?? browser.root}
+            </span>
+          ))}
       </header>
       {!browser.root && (
         <div className="files-status">
@@ -327,7 +334,10 @@ function FileTree({
           .map((entry) => entry.path),
     },
     onPrimaryAction: (item) => {
-      if (item.getItemData().kind === "file") onOpenFile(item.getId());
+      if (item.isFolder()) {
+        if (item.isExpanded()) item.collapse();
+        else item.expand();
+      } else if (item.getItemData().kind === "file") onOpenFile(item.getId());
     },
     features: [syncDataLoaderFeature, hotkeysCoreFeature],
   });
@@ -357,20 +367,39 @@ function FileTree({
             type="button"
             key={item.getId()}
             className="file-tree-item"
+            title={item.getItemName()}
+            onClick={(event) => {
+              item.setFocused();
+              if (!item.isFolder() && item.getItemData().kind !== "file") return;
+              browser.selectFile(item.getId());
+              if (
+                event.target instanceof Element &&
+                event.target.closest("[data-disclosure]") &&
+                event.detail === 1
+              )
+                item.primaryAction();
+            }}
+            onDoubleClick={(event) => {
+              if (!(event.target instanceof Element && event.target.closest("[data-disclosure]")))
+                item.primaryAction();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                if (!event.repeat) item.primaryAction();
+              }
+            }}
             style={{ paddingLeft: 12 + item.getItemMeta().level * 18 }}
             aria-selected={browser.selectedFile === item.getId()}
             aria-disabled={!["directory", "file"].includes(item.getItemData().kind)}
           >
-            <Icon
-              name={
-                item.isFolder()
-                  ? item.isExpanded()
-                    ? "chevron--down"
-                    : "chevron--right"
-                  : "document"
-              }
-            />
-            <span>{item.getItemName()}</span>
+            <span className="file-disclosure" data-disclosure={item.isFolder() || undefined}>
+              {item.isFolder() && (
+                <Icon name={item.isExpanded() ? "chevron--down" : "chevron--right"} />
+              )}
+            </span>
+            <Icon name={item.isFolder() ? "folder" : "document"} />
+            <span className="file-entry-name">{item.getItemName()}</span>
             {item.getItemData().kind === "symlink" && <span className="muted">Symbolic link</span>}
             {item.getItemData().kind === "other" && <span className="muted">Unsupported file</span>}
           </button>

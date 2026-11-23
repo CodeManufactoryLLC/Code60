@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
   type BrowserSession,
-  type Choices,
   connectionStatusSchema,
   GATEWAY_VERSION,
   type GatewayFrame,
@@ -19,6 +18,8 @@ import {
 } from "./browser-client.js";
 import { Modal } from "./modal.js";
 
+const HostPicker = lazy(() => import("./host-picker.js"));
+
 function BrowserInteraction({
   session,
   interaction,
@@ -28,42 +29,16 @@ function BrowserInteraction({
   interaction: Interaction;
   onDone(): void;
 }) {
-  const [choices, setChoices] = useState<Choices>();
-  const [filename, setFilename] = useState("code60.sqlite");
-  const [folderName, setFolderName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const load = useCallback(
-    async (directory?: string, createDirectory?: string) => {
-      setBusy(true);
-      setError("");
-      try {
-        setChoices(
-          await browserRequest<Choices>("/api/chooser", session, {
-            id: interaction.id,
-            directory,
-            createDirectory,
-          }),
-        );
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Could not list this folder.");
-      } finally {
-        setBusy(false);
-      }
-    },
-    [interaction.id, session],
-  );
-  useEffect(() => {
-    if (interaction.kind === "pick") void load();
-  }, [interaction.kind, load]);
-  const answer = async (accepted: boolean, choice?: string) => {
+  const answer = async (accepted: boolean, choice?: string, filename?: string) => {
     setBusy(true);
     setError("");
     const value: InteractionAnswer = {
       id: interaction.id,
       accepted,
       ...(choice ? { choice } : {}),
-      ...(accepted && interaction.picker === "database-create" ? { filename } : {}),
+      ...(filename ? { filename } : {}),
     };
     try {
       await browserRequest("/api/interaction", session, value);
@@ -74,76 +49,29 @@ function BrowserInteraction({
       setBusy(false);
     }
   };
-  const current = choices?.entries.find((entry) => entry.name === ".");
+  if (interaction.kind === "pick")
+    return (
+      <Suspense fallback={null}>
+        <HostPicker
+          session={session}
+          interaction={interaction}
+          busy={busy}
+          error={error}
+          answer={answer}
+        />
+      </Suspense>
+    );
   return (
     <Modal title={interaction.title} busy={busy} onClose={() => void answer(false)}>
       <p>{interaction.detail}</p>
-      {interaction.kind === "pick" && (
-        <>
-          <p>{choices?.directory ?? "Loading folders…"}</p>
-          <button type="button" disabled={busy} onClick={() => void load()}>
-            Workspace roots
-          </button>
-          <ul className="host-chooser" aria-label="Host folders and databases">
-            {choices?.entries
-              .filter((entry) => entry.name !== ".")
-              .map((entry) => (
-                <li key={entry.id}>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void (entry.directory ? load(entry.id) : answer(true, entry.id))}
-                  >
-                    {entry.directory ? `Open folder ${entry.name}` : `Open database ${entry.name}`}
-                  </button>
-                </li>
-              ))}
-          </ul>
-          {choices?.truncated && <p>Listing is limited. Open a folder to narrow the selection.</p>}
-          {current && (
-            <label>
-              New folder name
-              <input value={folderName} onChange={(event) => setFolderName(event.target.value)} />
-              <button
-                type="button"
-                disabled={busy || !folderName.trim()}
-                onClick={() => {
-                  void load(current.id, folderName);
-                  setFolderName("");
-                }}
-              >
-                Create folder
-              </button>
-            </label>
-          )}
-          {interaction.picker === "database-create" && (
-            <label>
-              Database filename
-              <input value={filename} onChange={(event) => setFilename(event.target.value)} />
-            </label>
-          )}
-        </>
-      )}
       {error && <p role="alert">{error}</p>}
       <div className="dialog-actions">
         <button type="button" disabled={busy} onClick={() => void answer(false)}>
           Cancel
         </button>
-        {interaction.kind === "confirm" ? (
-          <button type="button" disabled={busy} onClick={() => void answer(true)}>
-            Confirm
-          </button>
-        ) : (
-          interaction.picker !== "database-open" && (
-            <button
-              type="button"
-              disabled={busy || !current}
-              onClick={() => void answer(true, current?.id)}
-            >
-              {interaction.picker === "folder" ? "Select this folder" : "Create database here"}
-            </button>
-          )
-        )}
+        <button type="button" disabled={busy} onClick={() => void answer(true)}>
+          Confirm
+        </button>
       </div>
     </Modal>
   );

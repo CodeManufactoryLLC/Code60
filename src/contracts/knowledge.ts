@@ -295,7 +295,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "database",
     "read",
     "Opening or selecting a project is a human action; opening never initializes Git. Archiving the last displayed project chat returns to its home without a replacement. New Session explicitly creates a chat. Project chat auto-names are limited to 19 characters. Manual names and existing titles are unchanged. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.",
-    "The authenticated host folder chooser allows directory creation within locally configured roots. Confirm the full selected path to open; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.",
+    "The authenticated host folder chooser allows directory creation within locally configured roots. Click to select a folder, double-click or press Enter to browse, then choose the folder. Confirm the full selected path to open. Back, Forward and Up navigate the chooser; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.",
   ),
   feature(
     "workers",
@@ -348,7 +348,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
     "files",
     "Files",
-    "Browse files and bounded read-only previews in tabs owned by the individual chat or worker session. The Files view dropdown selects among open views; File Explorer, Changes and Memory Recall remain available alongside its + New Tab item. File/document views have Close current tab below the header.",
+    "Browse files and bounded read-only previews in tabs owned by the individual chat or worker session. Select a tree row with one click. Double-click or press Enter to open a file or toggle a folder; the chevron also toggles it. The Files view dropdown selects among open views; File Explorer, Changes and Memory Recall remain available alongside its + New Tab item. File/document views have Close current tab below the header.",
     "Chat → upper-right corner of main content card → Toggle files panel",
     "runtime",
     "read",

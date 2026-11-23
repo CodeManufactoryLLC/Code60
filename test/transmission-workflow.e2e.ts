@@ -94,9 +94,9 @@ function attachTransmissionBoundary(app: WorkflowBrowser) {
 }
 async function chooseRepository(page: Page, directory: string, name: string) {
   const chooser = page.getByRole("dialog", { name: "Choose folder", exact: true });
-  await chooser.getByRole("button", { name: `Open folder ${directory}`, exact: true }).click();
-  await chooser.getByRole("button", { name: `Open folder ${name}`, exact: true }).click();
-  await chooser.getByRole("button", { name: "Select this folder", exact: true }).click();
+  await chooser.getByRole("option", { name: directory, exact: true }).dblclick();
+  await chooser.getByRole("option", { name, exact: true }).dblclick();
+  await chooser.getByRole("button", { name: "Choose folder", exact: true }).click();
   await expect(chooser).toHaveCount(0);
 }
 
