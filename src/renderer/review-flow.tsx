@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { ApplicationClient, Review, TaskView } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Select as CarbonSelect } from "./carbon/fields.js";
 import { type ReviewScope, reviewRequest } from "./review-actions.js";
 import { ReviewPanel } from "./review-panel.js";
 import { reviewSession } from "./review-session.js";
@@ -47,30 +49,33 @@ function SavedChanges({ api, scope, active, hint }: Parameters<typeof ReviewFlow
       {error && (
         <p role="alert">
           {error}
-          <button type="button" onClick={() => retry((value) => value + 1)}>
+          <AppButton type="button" onClick={() => retry((value) => value + 1)}>
             Retry changes
-          </button>
+          </AppButton>
         </p>
       )}
       {!loaded && !error && <p role="status">Loading changes…</p>}
       {loaded && (
         <>
-          <label>
-            Snapshot
-            <select value={revisionId} onChange={(event) => select(event.target.value)}>
+          <div>
+            <CarbonSelect
+              labelText={<>Snapshot</>}
+              value={revisionId}
+              onChange={(event) => select(event.target.value)}
+            >
               {loaded.review.revisions.map((revision, index) => (
                 <option key={revision.id} value={revision.id}>
                   Snapshot {index + 1}
                 </option>
               ))}
-            </select>
-          </label>
+            </CarbonSelect>
+          </div>
           {loaded.task.operation &&
             ["applying", "undoing", "recovery"].includes(loaded.task.operation.status) && (
               <div role="alert">
                 A legacy file operation was interrupted. Recover it before starting another file
                 operation.
-                <button
+                <AppButton
                   type="button"
                   disabled={busy}
                   onClick={() => {
@@ -93,7 +98,7 @@ function SavedChanges({ api, scope, active, hint }: Parameters<typeof ReviewFlow
                   }}
                 >
                   Recover interrupted operation
-                </button>
+                </AppButton>
               </div>
             )}
           {revisionId && (

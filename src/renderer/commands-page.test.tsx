@@ -38,11 +38,9 @@ it("renders labelled fields and actions without treating a saved command's metad
   expect(html).toContain("with $name to use one.");
   expect(html).toContain('aria-invalid="false"');
   expect(html).not.toContain('aria-invalid="true"');
-  expect(html).toMatch(
-    /<h1[^>]*class="content-page-title"[^>]*>.*data-icon="app-megaphone".*Command Builder<\/span>.*<\/h1>/,
-  );
+  expect(html).toMatch(/<h1[^>]*class="content-page-title"[^>]*>.*Command Builder<\/span>.*<\/h1>/);
   const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
-  expect(header).toContain('aria-label="Command Builder actions"');
+  expect(html).toContain(">New command</button>");
   expect(header).not.toContain("New command");
   expect(html.indexOf('class="commands-scroll"')).toBeGreaterThan(html.indexOf("</header>"));
 });

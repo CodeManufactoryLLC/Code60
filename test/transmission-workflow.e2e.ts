@@ -150,16 +150,14 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
       await page.locator("#tab-apps").press("ArrowRight");
       await page.locator("#tab-workflows").click();
     };
-    const menu = async (label: string) => {
-      await page.getByRole("button", { name: "Workflows actions" }).click();
-      return page.getByRole("menuitem", { name: label, exact: true });
-    };
+    const menu = async (label: string) =>
+      page.locator(".workflows-page").getByRole("button", { name: label, exact: true });
     const headerAction = async (label: string) => (await menu(label)).click();
     const wizard = page.locator(".agent-setup-dialog");
     await wizard.getByRole("button", { name: "Claude", exact: true }).click();
     await expect(wizard.getByRole("status")).toHaveText("Claude connected");
     await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await openWorkflows();
     const workflows = page.locator(".workflows-page");
     await expect(page.getByRole("heading", { name: "Workflows", exact: true })).toBeVisible();
@@ -170,6 +168,10 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     }
     await attachTransmissionBoundary(application);
     await headerAction("Refresh");
+    await headerAction("Workflow sign-in");
+    const signIn = page.getByRole("dialog", { name: "Workflow sign-in" });
+    await expect(signIn).toContainText("code60 workflows login");
+    await signIn.getByRole("button", { name: "Done" }).click();
     await headerAction("New workflow");
     const form = workflows.getByRole("region", { name: "New workflow", exact: true });
     await form.getByRole("button", { name: "Choose repository", exact: true }).click();
@@ -258,7 +260,8 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     expect(alive(run.workerPid)).toBe(false);
     await page.reload();
     await openWorkflows();
-    await workflows.getByRole("button", { name: /Reviewed duration workflow/ }).click();
+    await workflows.getByRole("tab", { name: "Execution history", exact: true }).click();
+    await workflows.getByRole("button", { name: /^Reviewed duration workflow/ }).click();
     await expect(timer).toHaveText(pauseTime);
     await workflows.getByRole("button", { name: "Resume workflow" }).click();
     await expect(firstTask.locator("summary")).toContainText("Implementing");
@@ -296,7 +299,7 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     const rejected = page.getByRole("dialog", { name: "Task 1 results" });
     await expect(rejected).toContainText("Rejected");
     await expect(rejected).toContainText("Add the missing negative case");
-    await rejected.getByRole("button", { name: "Close" }).click();
+    await rejected.getByRole("button", { name: "Close", exact: true }).click();
     await firstTask.locator("summary").click();
     await workflows
       .getByLabel("Preserve negative zero?", { exact: true })
@@ -306,16 +309,29 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
       workflows.locator(".workflow-task-list").getByText("Repairing", { exact: true }),
     ).toBeVisible();
     await workflows.getByRole("button", { name: "Steer", exact: true }).click();
-    await workflows
+    await page
+      .getByRole("dialog", { name: "Steer workflow", exact: true })
       .getByLabel("Guidance for a subsequent turn", { exact: true })
       .fill("Keep the public API stable");
-    await workflows.getByRole("button", { name: "Queue guidance", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Steer workflow", exact: true })
+      .getByRole("button", { name: "Queue guidance", exact: true })
+      .click();
     await workflows.getByRole("button", { name: "Steer", exact: true }).click();
-    await workflows
+    await page
+      .getByRole("dialog", { name: "Steer workflow", exact: true })
       .getByLabel("Guidance for a subsequent turn", { exact: true })
       .fill("reject guidance");
-    await workflows.getByRole("button", { name: "Queue guidance", exact: true }).click();
-    await expect(workflows.getByRole("alert")).toContainText("Transmission rejected");
+    await page
+      .getByRole("dialog", { name: "Steer workflow", exact: true })
+      .getByRole("button", { name: "Queue guidance", exact: true })
+      .click();
+    await expect(
+      page
+        .getByRole("dialog", { name: "Steer workflow", exact: true })
+        .getByRole("alert")
+        .filter({ hasText: /\S/ }),
+    ).toContainText("Transmission rejected");
     await page.keyboard.press("Escape");
     await writeFile(join(engineRoot, "control"), "verifying");
     await expect(
@@ -332,6 +348,7 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     ).toBeVisible();
     await page.reload();
     await openWorkflows();
+    await workflows.getByRole("tab", { name: "Execution history", exact: true }).click();
     await workflows
       .getByRole("navigation", { name: "Workflow history" })
       .getByRole("button", { name: /Reviewed duration workflow/ })
@@ -351,10 +368,10 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
       workflows.locator(".workflow-task-list").getByText("Repairing", { exact: true }),
     ).toBeVisible();
     await headerAction("Reconnect engine…");
-    const reconnectDialog = page.getByRole("dialog", { name: "Reconnect engine" });
+    const reconnectDialog = page.getByRole("dialog", { name: "Reconnect engine?" });
     await expect(reconnectDialog).toContainText("unfinished approved workflows");
     await writeFile(join(engineRoot, "control"), "repairing");
-    await reconnectDialog.getByRole("button", { name: "Reconnect engine" }).click();
+    await reconnectDialog.getByRole("button", { name: "Reconnect engine", exact: true }).click();
     await writeFile(join(engineRoot, "control"), "repairing");
     await headerAction("Refresh");
     await writeFile(join(engineRoot, "control"), "repairing");
@@ -362,10 +379,11 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     await page.locator("#tab-home").click();
     await openWorkflows();
     await expect(
-      workflows.getByRole("heading", { name: "“Reviewed duration workflow”", exact: true }),
+      workflows.getByRole("heading", { name: "Execution status", exact: true }),
     ).toBeVisible();
     await page.reload();
     await openWorkflows();
+    await workflows.getByRole("tab", { name: "Execution history", exact: true }).click();
     await workflows
       .getByRole("navigation", { name: "Workflow history" })
       .getByRole("button", { name: /Reviewed duration workflow/ })
@@ -382,17 +400,14 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     await workflows.getByText("Accepted diff", { exact: true }).click();
     await workflows.getByRole("button", { name: "Load accepted diff" }).click();
     await expect(workflows.locator("pre").filter({ hasText: "workflow-result.txt" })).toBeVisible();
-    const theme = page.getByRole("button", { name: /^Color theme:/ });
+
     for (const width of [1400, 640]) {
       await page.setViewportSize({ width, height: width === 1400 ? 1100 : 900 });
       for (const mode of ["Dark", "Light"]) {
-        for (
-          let i = 0;
-          i < 3 && !(await theme.getAttribute("aria-label"))?.includes(`Color theme: ${mode}.`);
-          i++
-        )
-          await theme.click();
-        await expect(theme).toHaveAccessibleName(new RegExp(`Color theme: ${mode}`));
+        await page.getByRole("button", { name: "Workspace", exact: true }).click();
+        await page.getByLabel("Color theme", { exact: true }).selectOption(mode.toLowerCase());
+        await page.keyboard.press("Escape");
+        await expect(page.locator("html")).toHaveAttribute("data-color-scheme", mode.toLowerCase());
         const player = await workflows.locator(".workflow-player").boundingBox();
         expect(player?.width).toBeLessThanOrEqual(736);
         const controls = await workflows.locator(".workflow-player-left").boundingBox();
@@ -415,6 +430,7 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
         await page.screenshot({ path: test.info().outputPath(`workflow-${width}-${mode}.png`) });
       }
     }
+    await page.getByRole("button", { name: "Workspace", exact: true }).click();
     await page.getByRole("button", { name: "Stop Code60 Backend", exact: true }).click();
     const shutdown = page.getByRole("dialog", { name: "Stop Code60 Backend?", exact: true });
     await expect(shutdown).toContainText("Approved Transmission workflows keep running");
@@ -435,10 +451,11 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     application = await launchWorkflowBrowser(browser, directory);
     await attachTransmissionBoundary(application);
     page = await application.firstWindow();
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await openWorkflows();
     const reopened = page.locator(".workflows-page");
     await headerAction("Refresh");
+    await reopened.getByRole("tab", { name: "Execution history", exact: true }).click();
     await reopened
       .getByRole("navigation", { name: "Workflow history" })
       .getByRole("button", { name: /Reviewed duration workflow/ })
@@ -466,6 +483,8 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     expect(await readFile(join(repo, "source.txt"), "utf8")).toBe("saved unstaged\n");
     expect(git("rev-parse", "HEAD")).toBe(head);
     // Manual entry and terminal evidence use the same production approval path.
+    await headerAction("Workflow history");
+    await reopened.getByRole("tab", { name: "Definitions", exact: true }).click();
     await headerAction("New workflow");
     const manual = reopened.getByRole("region", { name: "New workflow", exact: true });
     await manual.getByLabel("Workflow name", { exact: true }).fill("Manual workflow");
@@ -485,7 +504,9 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     await reopened.locator(".workflow-task-list summary").click();
     await reopened.getByRole("button", { name: "View Results" }).click();
     await expect(
-      reopened.getByText("Independent fixture checks passed", { exact: true }),
+      page
+        .getByRole("dialog", { name: "Task 1 results", exact: true })
+        .getByText("Independent fixture checks passed", { exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(reopened.getByRole("button", { name: "View Results" })).toBeFocused();
@@ -623,21 +644,21 @@ test("workflow: Transmission staging.18 retained history and controls use its or
     await wizard.getByRole("button", { name: "Claude", exact: true }).click();
     await expect(wizard.getByRole("status")).toHaveText("Claude connected");
     await wizard.getByRole("button", { name: "Close provider setup" }).click();
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await page.locator("#tab-apps").press("ArrowRight");
     await page.locator("#tab-workflows").click();
     const view = page.locator(".workflows-page");
-    await view.getByRole("button", { name: /Retained legacy workflow/ }).click();
-    await expect(view.getByRole("heading", { name: "“Retained legacy workflow”" })).toBeVisible();
+    await view.getByRole("tab", { name: "Execution history", exact: true }).click();
+    await view.getByRole("button", { name: /^Retained legacy workflow/ }).click();
+    await expect(view.getByRole("heading", { name: "Execution status" })).toBeVisible();
     if (process.platform === "linux")
       await expect(view.getByText(/Transmission execution requires macOS/)).toBeVisible();
     await attachTransmissionBoundary(app);
-    await page.getByRole("button", { name: "Workflows actions" }).click();
-    await page.getByRole("menuitem", { name: "Refresh" }).click();
+    await page.locator(".workflows-page").getByRole("button", { name: "Refresh" }).click();
     await expect(view.getByRole("button", { name: "Pause workflow" })).toBeDisabled();
     await expect(view.getByRole("button", { name: "Resume workflow" })).toBeDisabled();
     await view.getByRole("button", { name: "Stop workflow" }).click();
-    const stop = view.getByRole("dialog", { name: "Stop workflow?" });
+    const stop = page.getByRole("dialog", { name: "Stop workflow?" });
     await expect(stop).not.toContainText("'Pause'");
     await stop.getByRole("button", { name: "Stop workflow", exact: true }).click();
     await expect(view.locator(".workflow-player > [role=status]")).toHaveText("Cancelled");

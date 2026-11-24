@@ -1,3 +1,4 @@
+import { Button as AppButton } from "./carbon/button.js";
 import { Icon } from "./icons.js";
 
 export function DatabaseNotice({
@@ -16,9 +17,9 @@ export function DatabaseNotice({
         <h2>No database connected</h2>
         {error && <p>{error}</p>}
       </div>
-      <button type="button" className="primary" disabled={busy} onClick={onConnect}>
+      <AppButton type="button" className="primary" disabled={busy} onClick={onConnect}>
         Connect to database
-      </button>
+      </AppButton>
     </section>
   );
 }

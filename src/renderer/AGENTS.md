@@ -1,3 +1,50 @@
+# Carbon application migration — current direction
+
+The user approved extending the Scheduled Jobs Carbon trial across the rest of
+the application. Upstream Carbon React components, White/G100, standard blue,
+productive typography and locally bundled IBM Plex Sans now supersede historical
+Neobrutalism colors, artwork sizing, shadows, rounded cards, custom control
+presentation and role-typography requirements below. Preserve stored appearance
+records, domain workflows, captured owners, native confirmation authority, refs,
+visibility cleanup, keyboard access and retained drafts. Prefer plain sections,
+rows and tables. See [migration ledger](../../docs/carbon-migration.md).
+Specialist code/diff/tree widgets may retain their functional implementation;
+standard actions, forms, navigation, menus, tables and modals should use Carbon.
+No comparison destination, preference or feature flag is introduced.
+
+## Carbon implementation boundaries
+
+- `carbon/application.scss` owns upstream styles and White/G100 tokens in the
+  `carbon-app` layer after existing feature styles and before accessibility.
+  Disable upstream reset/body/default type/font loading and use bundled Plex.
+  The product header, navigation, responsive 2x Grid and White/G100 themes serve all destinations. Keep global commands in the header and local actions with their objects. Scheduled Jobs owns its line tabs and operator workflows. Expanding a job reads details. Only View history applies a schedule filter. Evidence actions belong to their execution row.
+- Restore only a validated destination after pairing and provider verification. Keep
+  storage scoped to the active database or the database-independent workspace.
+  Preserve navigation handlers, availability checks and view ownership. Resume
+  must never dispatch a prompt, start a job or accept pending work.
+- Keep Work, Automation, Inspect and Manage as navigation groups. Keep enabled
+  projects and conversations directly reachable. Use Home and Apps as task indexes.
+  Use one descriptive heading per destination. Keep install, login, verification,
+  retry and cancel controls at the relevant provider step. Preserve saved decorative
+  appearance values and honor the shared interface text size and system color theme.
+- Use upstream Carbon controls through the small native-prop adapters in `carbon/`.
+  Keep specialist tree, Monaco, telemetry SVG and native transcript/scroll logic.
+  Color inputs use the browser's accessible native chooser.
+- Shared tables use HTML Carbon tables with ID selection, sort, bounded loaded-row
+  paging and search; preserve backend cursors, retained-log submissions and filters.
+  Table settings use visible column switches, width selects and Earlier/Later actions.
+  Do not restore a canvas grid, copied Neobrutalism or Tailwind components.
+- Standard dialogs use `Modal`; busy closure and captured-owner callbacks remain
+  authoritative. The modal body stops blur bubbling only after child handlers run,
+  avoiding Carbon 1.121's document-wide focus-centering click cancellation. Keep
+  bounded scrolling and verify pointer actions near the bottom as well as Escape.
+- Carbon owns menu/dropdown focus and keyboard selection. Keep only owner-change,
+  anchor-movement and visibility cleanup plus missing Home/End/typeahead adapters.
+  Preserve session-option values/source IDs and backend authority.
+- Toasts use Carbon notifications with existing pause/expiry/dismiss/action behavior.
+  Plan/provider progress uses upstream ProgressBar; keep counts, execution timing,
+  literal source and human acceptance independent from presentation.
+
 # Browser interface
 
 Web Server Beta is a database/provider-independent Settings → Advanced page, also
@@ -209,24 +256,8 @@ keyboard controls, drafts and domain ownership. Never put authentication in link
   Feature pages add no extra top padding. Align header contents to the top so
   small title sizes and taller actions do not shift titles. Put project-readiness
   notices below chat headers, not above them.
-- Scheduled Jobs uses local Neobrutalism accordions for jobs and a table for
-  Execution history. Use the shared Scheduled Jobs content header and chevron
-  actions for New scheduled job/Refresh; creation/editing stays inline. The
-  schedules region retains its own label and execution history its Card Titles role.
-  Order independent run/cancel, delete and disclosure controls in DOM and visually.
-  Use 24px transparent circles in 28px targets with black outlines, 2px hard
-  shadows, 1px press offsets and contrasting glyphs. Only the final chevron toggles
-  details; the noninteractive title labels the panel. Paint hover on the full
-  stationary header; skip generic header scaling. Fit 4px inner corners to the
-  outer 5px/1px frame and square lower corners while expanded without clipping focus.
-  Omit the agent/status/next-run subtitle; show `(Paused)` beside disabled schedules,
-  independently of manual execution. The live pause glyph retains Stop/cancel
-  behavior; its pulse is static for reduced motion and forced colors. Preserve
-  independent focus, narrow wrapping and system fills/outlines without shadows.
-  Load details only for an expanded active job. Keep recurrence enable/pause
-  independent, with original native deletion consent, active-run refusal,
-  revision checks, history and service ownership. Update self-knowledge for the
-  workflow; styling adds no further capability, setting, bridge or stored format.
+- Scheduled Jobs uses the operator workflow described in the Carbon implementation boundaries above. Preserve independent schedule and run state, backend confirmations, page visibility and stale-result guards. Keep cursor paging and clearable history scope, and leave saved legacy grid preferences intact.
+
 - Navigation cards use a fixed 224px width, 36px artwork, 18px default titles and
   32px gaps as columns wrap. Scale the independent Card Titles role by 9/11,
   with an 8px minimum; preserve saved text choices.
@@ -398,7 +429,7 @@ keyboard controls, drafts and domain ownership. Never put authentication in link
   window geometry, the chamfered wordmark and independent window-background transparency.
 
 - Give every independent icon action the shared `icon-button` class: no border, shadow or background fill in resting, hovered, pressed or disabled states; hover and focus highlight only the glyph, with no focus outline even when Focus highlight border is enabled. Preserve hit targets, accessible labels, disabled semantics and visible keyboard focus. Decorative icons in labeled buttons, rows and menus inherit their parent state, never their own hover. Close, add and drag actions remain separate controls even when visually inside a tab or row.
-- Use the 16px Carbon icons from `icons.tsx` (`Icon` in the DOM, `drawIcon` on canvas), except the Phosphor duotone sidebar icons from `navigation-icons.tsx`, animated conversation role icons and 8px static activity fallbacks, instead of text glyphs such as ×, ↑, or ▾. Write run states with `statusSpec` labels and, outside the left sidebar, icons; nothing blinks.
+- Use the 16px Carbon icons from `icons.tsx` (`Icon` in DOM/SVG controls; the canvas grid is retired), except the Phosphor duotone sidebar icons from `navigation-icons.tsx`, animated conversation role icons and 8px static activity fallbacks, instead of text glyphs such as ×, ↑, or ▾. Write run states with `statusSpec` labels and, outside the left sidebar, icons; nothing blinks.
 - Apply the seven text roles (table headings, buttons, agent messages, human messages, page titles, card titles, and normal text) through their CSS properties and the canvas table theme. Page titles default to Space Grotesk Bold (700) at 16px; card titles also use Space Grotesk Bold. Body/chat use IBM Plex Sans Regular (400); controls/table headings use IBM Plex Sans Semibold (600); card titles use 22px and independent settings, never page-title settings. All roles preserve sentence case by default. Offer Light (300) and bundle its normal and italic IBM Plex faces locally. Text sizes accept 8–64px. Left navigation labels default to 15px; other buttons retain their 13px default. An explicit Button Text size controls both, including an explicit 13px choice; resetting it restores the separate defaults. Preserve saved role choices and existing migration markers when changing defaults, without another appearance reset. Avoid hard-coded bold or selected-state weight changes. Keep code and diffs monospace and case-preserving. The shared Code60 wordmark uses D-DIN Regular independently of text-role choices; preserve its blue chamfered 60 block and the D-DIN splash subtitle. Bundle fonts locally and retain their licenses; keep `font-src 'self'`.
 - Get external data from snapshots and request reads with `poll`; do not start timers that fetch data. Use `useTicker` from `ticker.ts` for clock-only redraws, inside the smallest component that needs it, and report visibility with `setVisibility`.
 - Keep Glide Data Grid imports in the renderer. Import its bundled CSS and pass theme colors resolved from the app's CSS variables, since the grid draws on a canvas; do not inject styles or weaken the Content Security Policy. Preserve row selection by session ID across sorting and data updates, and support clicking a row or pressing Enter on a cell to open its chat. The Actions cell opens its session's actions menu instead; keep that menu keyboard reachable.
@@ -934,8 +965,7 @@ setting is described in the self-knowledge catalog.
 
 All Card shells now use a 1px border, including navigation/creation cards,
 conversation composers, approval and job-detail cards, Settings cards/groups,
-System Manager service cards and scheduled-job accordion items. Keep 1px
-internal accordion dividers and 4px inner header corners within 5px outer corners.
+and System Manager service cards. Use the shared product shell and Carbon tables described above.
 Retain existing fills, shadows, focus indicators, padding and borderless retained
 wrappers. This presentation change adds no capability or availability rule.
 

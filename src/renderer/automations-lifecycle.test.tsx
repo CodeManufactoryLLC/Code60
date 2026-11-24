@@ -9,9 +9,9 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ApplicationClient, AutomationSummary, AutomationUiRequest } from "../bridge/index.js";
 import { AutomationForm } from "./automation-form.js";
+import { AutomationHistory } from "./automation-history.js";
 import { AutomationJob } from "./automation-job.js";
 import { AutomationsPage } from "./automations.js";
-import { defaultTextStyles } from "./typography.js";
 
 type Slot = {
   value?: unknown;
@@ -53,7 +53,7 @@ function effect(run: EffectCallback, dependencies?: DependencyList) {
     });
   slot.dependencies = dependencies;
 }
-// Supporting lifecycle integration only; native focus/CSS/IPC use the Docker journeys.
+// Supporting lifecycle integration only; focus/CSS/HTTP use the headless browser journeys.
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
   useState: (initial: unknown) => {
@@ -136,10 +136,6 @@ function mount() {
         api: api as unknown as ApplicationClient,
         active,
         agents: [],
-        lines: { horizontal: false, vertical: false, heading: false },
-        density: "high",
-        fit: true,
-        textStyles: defaultTextStyles,
       });
       for (const run of hooks.effects) run();
       if (!hooks.dirty) return;
@@ -158,7 +154,7 @@ function mount() {
       (node) => node.type === AutomationJob && (node.props.job as AutomationSummary).id === id,
     ).props as ComponentProps<typeof AutomationJob>;
   const history = () =>
-    required(tree, (node) => node.props.tableId === "automation-history").props.rows as {
+    required(tree, (node) => node.type === AutomationHistory).props.rows as {
       id: string;
     }[];
   dispose = () => {
@@ -168,46 +164,27 @@ function mount() {
   return { api, render, settle, job, history, tree: () => tree };
 }
 
-it.each(["job", "creation"] as const)(
-  "refreshes the current history scope after a retained %s save and performs no hidden reads",
-  async (origin) => {
-    for (const hidden of [false, true]) {
-      const view = mount();
-      await view.settle();
-      view.job("a").onToggle();
-      view.render();
-      await view.settle();
-      let saved = view.job("a").onSaved;
-      if (origin === "creation") {
-        const title = required(view.tree(), (node) => node.props.page === "automations");
-        (title.props.actions as { run(): void }[])[0]?.run();
-        view.render();
-        saved = (
-          required(view.tree(), (node) => node.type === AutomationForm).props as ComponentProps<
-            typeof AutomationForm
-          >
-        ).onSaved;
-      }
-      view.job("b").onToggle();
-      view.render();
-      await view.settle();
-      if (hidden) view.render(false);
-      view.api.automation.mockClear();
-      saved();
-      await view.settle();
-      if (hidden) expect(view.api.automation).not.toHaveBeenCalled();
-      else
-        expect(
-          view.api.automation.mock.calls
-            .filter(([request]) => request.action === "history")
-            .map(([request]) => (request.action === "history" ? request.id : undefined)),
-        ).toEqual(["b"]);
-      expect(view.history()).toEqual([{ id: "b" }]);
-      dispose();
-    }
+it.each([false, true])(
+  "refreshes after a saved form only while the page is visible (hidden=%s)",
+  async (hidden) => {
+    const view = mount();
+    await view.settle();
+    const create = required(view.tree(), (node) => node.props.children === "New scheduled job");
+    (create.props.onClick as () => void)();
+    view.render();
+    const saved = (
+      required(view.tree(), (node) => node.type === AutomationForm).props as ComponentProps<
+        typeof AutomationForm
+      >
+    ).onSaved;
+    if (hidden) view.render(false);
+    view.api.automation.mockClear();
+    saved();
+    await view.settle();
+    if (hidden) expect(view.api.automation).not.toHaveBeenCalled();
+    else expect(view.api.automation).toHaveBeenCalledWith({ action: "list" });
   },
 );
-
 it.each([false, true])(
   "keeps mutation failures owned by page visibility rather than history selection (hidden=%s)",
   async (hidden) => {
@@ -223,25 +200,23 @@ it.each([false, true])(
     const action = view.job("a").onAction({ action: "runNow", id: "a" });
     view.render();
     view.job("b").onToggle();
+    view.job("b").onHistory();
     view.render();
     await view.settle();
     if (hidden) view.render(false);
     reject(new Error("Synthetic run rejection"));
     await action;
     await view.settle();
-    const alert = find(view.tree(), (node) => node.props.role === "alert");
-    expect(alert?.props.children).toBe(hidden ? undefined : "Synthetic run rejection");
+    const alert = find(view.tree(), (node) => node.props.kind === "error");
+    expect(alert?.props.subtitle).toBe(hidden ? undefined : "Synthetic run rejection");
     if (!hidden) {
-      const all = required(
-        view.tree(),
-        (node) => node.type === "button" && node.props.children === "Show all schedules",
-      );
+      const all = required(view.tree(), (node) => node.props.children === "Show all schedules");
       (all.props.onClick as () => void)();
       view.render();
       await view.settle();
       expect(view.job("b").open).toBe(true);
       expect(view.history()).toEqual([{ id: "all" }]);
-      expect(find(view.tree(), (node) => node.props.role === "alert")?.props.children).toBe(
+      expect(find(view.tree(), (node) => node.props.kind === "error")?.props.subtitle).toBe(
         "Synthetic run rejection",
       );
     }
@@ -254,13 +229,107 @@ it("changes history scope without closing the expanded details", async () => {
   view.job("b").onToggle();
   view.render();
   await view.settle();
-  const all = required(
-    view.tree(),
-    (node) => node.type === "button" && node.props.children === "Show all schedules",
-  );
+  expect(view.history()).toEqual([{ id: "all" }]);
+  view.job("b").onHistory();
+  await view.settle();
+  expect(view.history()).toEqual([{ id: "b" }]);
+  const all = required(view.tree(), (node) => node.props.children === "Show all schedules");
   (all.props.onClick as () => void)();
   view.render();
   await view.settle();
   expect(view.job("b").open).toBe(true);
+  expect(view.history()).toEqual([{ id: "all" }]);
+});
+
+it("keeps Older/Latest cursors bound to the selected job and clears the cursor for all schedules", async () => {
+  const view = mount();
+  await view.settle();
+  view.api.automation.mockImplementation((request) =>
+    request.action === "history"
+      ? Promise.resolve(
+          request.before
+            ? [{ id: "older", sequence: 50 }]
+            : Array.from({ length: 50 }, (_, index) => ({
+                id: `execution-${index}`,
+                sequence: 100 - index,
+              })),
+        )
+      : reply(request),
+  );
+  view.job("a").onToggle();
+  view.job("a").onHistory();
+  view.render();
+  await view.settle();
+  const click = (label: string) => {
+    const button = required(view.tree(), (node) => node.props.children === label);
+    (button.props.onClick as () => void)();
+    view.render();
+  };
+  click("Older");
+  await view.settle();
+  expect(view.api.automation).toHaveBeenCalledWith({ action: "history", id: "a", before: 51 });
+  expect(view.history()).toEqual([{ id: "older", sequence: 50 }]);
+  click("Latest");
+  await view.settle();
+  expect(view.history()).toHaveLength(50);
+  click("Older");
+  await view.settle();
+  click("Show all schedules");
+  await view.settle();
+  expect(view.api.automation).toHaveBeenLastCalledWith({ action: "history" });
+  expect(view.job("a").open).toBe(true);
+});
+
+it("rejects an old history response and refreshes the newly selected scope after its flight settles", async () => {
+  const view = mount();
+  await view.settle();
+  let finish!: (value: unknown) => void;
+  const delayed = new Promise<unknown>((resolve) => {
+    finish = resolve;
+  });
+  view.api.automation.mockImplementation((request) =>
+    request.action === "history" && request.id === "a" ? delayed : reply(request),
+  );
+  view.job("a").onToggle();
+  view.job("a").onHistory();
+  view.render();
+  view.job("b").onHistory();
+  view.render();
+  finish([{ id: "stale-a" }]);
+  await view.settle();
+  expect(view.history()).toEqual([{ id: "b" }]);
+});
+
+it("keeps saved history visible and reports scheduler failure when Refresh fails", async () => {
+  const view = mount();
+  await view.settle();
+  view.api.automation.mockRejectedValue(new Error("Synthetic scheduler unavailable"));
+  const refresh = required(view.tree(), (node) => node.props.children === "Refresh");
+  (refresh.props.onClick as () => void)();
+  view.render();
+  await view.settle();
+  expect(find(view.tree(), (node) => node.props.kind === "error")?.props.subtitle).toContain(
+    "Scheduler unavailable",
+  );
+  expect(view.history()).toEqual([{ id: "all" }]);
+});
+
+it("distinguishes the initial read from empty history and lets Retry recover the service", async () => {
+  const view = mount();
+  expect(
+    find(view.tree(), (node) => node.props.description === "Reading scheduled jobs…"),
+  ).toBeDefined();
+  expect(find(view.tree(), (node) => node.type === AutomationHistory)?.props.showEmpty).toBe(false);
+  await view.settle();
+  view.api.automation.mockRejectedValue(new Error("Service unavailable"));
+  (
+    required(view.tree(), (node) => node.props.children === "Refresh").props.onClick as () => void
+  )();
+  await view.settle();
+  expect(find(view.tree(), (node) => node.type === AutomationHistory)?.props.showEmpty).toBe(false);
+  view.api.automation.mockImplementation(reply);
+  (required(view.tree(), (node) => node.props.children === "Retry").props.onClick as () => void)();
+  await view.settle();
+  expect(find(view.tree(), (node) => node.props.kind === "error")).toBeUndefined();
   expect(view.history()).toEqual([{ id: "all" }]);
 });

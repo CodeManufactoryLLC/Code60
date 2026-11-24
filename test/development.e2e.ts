@@ -99,7 +99,8 @@ test("development: Fast Refresh preserves the backend and backend edits restart 
     const page = await context.newPage();
     await page.goto(origin);
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
+    await page.getByRole("button", { name: "Workspace", exact: true }).click();
     const footer = page.getByRole("note", { name: "Running Code60 version" });
     await expect(footer).toBeVisible();
     await page.evaluate(() => sessionStorage.setItem("code60-dev-journey", "retained"));

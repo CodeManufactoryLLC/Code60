@@ -1,3 +1,24 @@
+import { Add } from "@carbon/icons-react";
+import {
+  Button,
+  Column,
+  Grid,
+  InlineLoading,
+  InlineNotification,
+  Tab,
+  TabList,
+  Table,
+  TableBody,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableToolbar,
+  TableToolbarContent,
+  TabPanel,
+  TabPanels,
+  Tabs,
+} from "@carbon/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type {
   ApplicationClient,
@@ -8,28 +29,12 @@ import type {
   RendererAutomationDraft,
 } from "../bridge/index.js";
 import { AutomationForm } from "./automation-form.js";
+import { AutomationHistory } from "./automation-history.js";
 import { AutomationJob } from "./automation-job.js";
+import { AutomationModal } from "./automation-modal.js";
 import { AutomationTranscriptModal } from "./automation-transcript.js";
-import { DataTable, type TableOptions } from "./data-table.js";
-import { Modal } from "./modal.js";
-import { Accordion } from "./neobrutalism/accordion.js";
-import { PageTitle } from "./page-title.js";
 import { useDocumentVisible } from "./use-document-visible.js";
 
-const historyColumns = [
-  { key: "automationName", title: "Scheduled job", width: 160, filter: "text" },
-  { key: "status", title: "Turn outcome", width: 120, filter: "category" },
-  { key: "reason", title: "Reason", width: 180, filter: "category" },
-  { key: "scheduledFor", title: "Scheduled", width: 190, filter: "date" },
-  { key: "startedAt", title: "Started", width: 190, filter: "date" },
-  { key: "endedAt", title: "Ended", width: 190, filter: "date" },
-  { key: "denials", title: "Denied requests", width: 120, filter: "number" },
-] satisfies {
-  key: keyof AutomationHistoryEntry;
-  title: string;
-  width: number;
-  filter: "text" | "date" | "category" | "number";
-}[];
 const freshDraft = (agent: string): RendererAutomationDraft => ({
   name: "",
   prompt: "",
@@ -49,12 +54,11 @@ export function AutomationsPage({
   api,
   active,
   agents,
-  ...table
 }: {
   api: ApplicationClient;
   active: boolean;
   agents: string[];
-} & Pick<TableOptions, "lines" | "density" | "fit" | "textStyles">) {
+}) {
   const visible = useDocumentVisible() && active;
   const [automations, setAutomations] = useState<AutomationSummary[]>([]);
   const [history, setHistory] = useState<AutomationHistoryEntry[]>([]);
@@ -65,6 +69,7 @@ export function AutomationsPage({
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const pending = useRef(false);
   const [editor, setEditor] = useState<AutomationEditor>();
   const [evidence, setEvidence] = useState("");
@@ -72,19 +77,38 @@ export function AutomationsPage({
   const generation = useRef(0);
   const pageGeneration = useRef(0);
   const actionsTrigger = useRef<HTMLButtonElement>(null);
-  const hadEditor = useRef(false);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: API/visibility changes invalidate page-owned actions; history filters do not.
+  const changesTrigger = useRef<HTMLButtonElement>(null);
+  const [tab, setTab] = useState(0);
+  const focusAfterForm = useRef<string | undefined>(undefined);
+  const surfaceVersion = useRef(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a visibility or API change invalidates pending actions.
   useLayoutEffect(() => {
     pageGeneration.current++;
     return () => {
       pageGeneration.current++;
     };
   }, [api, visible]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the created row may mount after the form closes.
   useLayoutEffect(() => {
-    const closed = hadEditor.current && !editor;
-    hadEditor.current = !!editor;
-    if (closed && visible) actionsTrigger.current?.focus({ preventScroll: true });
-  }, [editor, visible]);
+    if (!visible || editor || !focusAfterForm.current) return;
+    const target = focusAfterForm.current;
+    const trigger =
+      target === "create"
+        ? actionsTrigger.current
+        : target.startsWith("job-row-")
+          ? document.getElementById(target)?.querySelector("button")
+          : document.getElementById(target);
+    if (trigger) {
+      trigger.focus({ preventScroll: true });
+      focusAfterForm.current = undefined;
+    }
+  }, [editor, visible, automations]);
+  useEffect(() => {
+    if (!visible) {
+      setEvidence("");
+      setTranscriptExecution(undefined);
+    }
+  }, [visible]);
   const dirty = useRef(false);
   const flight = useRef(false);
   const refreshLatest = useRef<() => Promise<void>>(async () => {});
@@ -92,6 +116,7 @@ export function AutomationsPage({
     dirty.current = true;
     if (!visible || flight.current) return;
     flight.current = true;
+    setLoading(true);
     const owner = generation.current;
     try {
       do {
@@ -117,6 +142,7 @@ export function AutomationsPage({
       }
     } finally {
       flight.current = false;
+      if (owner === generation.current) setLoading(false);
       if (dirty.current) void refreshLatest.current();
     }
   }, [visible, api, before, selected]);
@@ -138,8 +164,11 @@ export function AutomationsPage({
     const owner = pageGeneration.current;
     const readOwner = generation.current;
     const evidenceRequest = request.action === "transcript" || request.action === "diff";
+    const surface = surfaceVersion.current;
     const current = () =>
-      owner === pageGeneration.current && (!evidenceRequest || readOwner === generation.current);
+      owner === pageGeneration.current &&
+      (!evidenceRequest ||
+        (readOwner === generation.current && surface === surfaceVersion.current));
     setBusy(true);
     setActionError("");
     try {
@@ -155,150 +184,263 @@ export function AutomationsPage({
     }
   };
   const execution = history.find((value) => value.id === selectedExecution);
-  return (
-    <section className="automations-page" data-active={visible}>
-      <PageTitle
-        page="automations"
-        className="table-title"
-        actionsTrigger={actionsTrigger}
-        actions={[
-          {
-            id: "new-schedule",
-            label: "New scheduled job",
-            disabled: busy || !!editor,
-            run: () =>
-              setEditor({
-                id: "",
-                revision: 0,
-                repositoryLabel: "",
-                draft: freshDraft(agents[0] ?? ""),
-              }),
-          },
-          {
-            id: "refresh-schedules",
-            label: "Refresh",
-            disabled: busy || !!editor,
-            run: () => {
-              setActionError("");
-              void refreshLatest.current();
-            },
-          },
-        ]}
-      />
-
-      {(actionError || error) && <p role="alert">{actionError || error}</p>}
-      {editor && (
-        <AutomationForm
-          api={api}
-          editor={editor}
-          active={visible}
-          agents={agents}
-          onClose={() => setEditor(undefined)}
-          onSaved={() => {
-            setEditor(undefined);
-            void refreshLatest.current();
-          }}
-        />
-      )}
-      <section className="automation-schedules" aria-label="Schedules">
-        <Accordion>
-          {[...automations]
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map((job) => (
-              <AutomationJob
-                key={job.id}
-                job={job}
-                api={api}
-                agents={agents}
-                active={visible}
-                open={expanded === job.id}
-                busy={busy}
-                onToggle={() => {
-                  const next = expanded === job.id ? undefined : job.id;
-                  setExpanded(next);
-                  setSelected(next);
-                  setBefore(undefined);
-                }}
-                onAction={act}
-                onSaved={() => void refreshLatest.current()}
-              />
-            ))}
-        </Accordion>
-        {!automations.length && !error && <p className="automation-empty">No scheduled jobs.</p>}
-      </section>
-
-      <section
-        className="automation-grid automation-history-grid automation-table-card"
-        aria-label="Execution history"
+  function clearEvidence() {
+    surfaceVersion.current++;
+    setSelectedExecution(undefined);
+    setTranscriptExecution(undefined);
+    setEvidence("");
+  }
+  function historyScope(id?: string) {
+    clearEvidence();
+    if (id !== selected || before !== undefined) {
+      setHistory([]);
+      setLoading(true);
+    }
+    setSelected(id);
+    setBefore(undefined);
+    setTab(1);
+  }
+  async function editJob(job: AutomationSummary) {
+    if (pending.current) return;
+    pending.current = true;
+    setBusy(true);
+    setActionError("");
+    const owner = pageGeneration.current;
+    const surface = surfaceVersion.current;
+    try {
+      const result = await api.automation({ action: "get", id: job.id });
+      if (owner === pageGeneration.current && surface === surfaceVersion.current) {
+        focusAfterForm.current = `job-actions-${job.id}`;
+        setEditor(result as AutomationEditor);
+      }
+    } catch (cause) {
+      if (owner === pageGeneration.current)
+        setActionError(cause instanceof Error ? cause.message : "Could not open job.");
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
+  }
+  const evidenceActions = execution?.runId && (
+    <section
+      className="carbon-job-actions"
+      aria-label={`Evidence for ${execution.automationName}, execution ${execution.sequence}`}
+    >
+      <Button
+        kind="ghost"
+        size="sm"
+        disabled={busy}
+        onClick={() => setTranscriptExecution(execution.id)}
       >
-        <DataTable
-          {...table}
-          tableId="automation-history"
-          workspace="application"
-          rows={history}
-          selected={selectedExecution}
-          onSelect={setSelectedExecution}
-          columns={historyColumns}
-          initialSort="startedAt"
-          initialDescending
-          display={(row, key) => String(row[key] ?? "Not started")}
-        />
-      </section>
-      <div className="automation-history-footer">
-        <div className="automation-action-group">
-          {selected && (
-            <button
-              type="button"
-              className="small"
-              onClick={() => {
-                setSelected(undefined);
-                setBefore(undefined);
+        Transcript
+      </Button>
+      <Button
+        kind="ghost"
+        size="sm"
+        disabled={busy}
+        ref={changesTrigger}
+        onClick={() => void act({ action: "diff", executionId: execution.id })}
+      >
+        Changes
+      </Button>
+    </section>
+  );
+  return (
+    <section className="carbon-scheduled-jobs" data-active={visible}>
+      <Grid fullWidth>
+        <Column sm={4} md={8} lg={editor ? 10 : 16}>
+          {editor ? (
+            <AutomationForm
+              key={editor.id}
+              api={api}
+              editor={editor}
+              agents={agents}
+              active={visible}
+              onClose={() => setEditor(undefined)}
+              onSaved={(id) => {
+                focusAfterForm.current = id ? `job-row-${id}` : "create";
+                setEditor(undefined);
+                void refreshLatest.current();
               }}
-            >
-              Show all schedules
-            </button>
+            />
+          ) : (
+            <>
+              <h1 id="jobs-page-heading" tabIndex={-1}>
+                Scheduled Jobs
+              </h1>
+              {(actionError || error) && (
+                <section aria-label="Scheduler feedback">
+                  <InlineNotification
+                    kind="error"
+                    title={error ? "Scheduler unavailable" : "Job action failed"}
+                    subtitle={actionError || error}
+                    hideCloseButton
+                  />
+                  {error && (
+                    <Button kind="ghost" onClick={() => void refreshLatest.current()}>
+                      Retry
+                    </Button>
+                  )}
+                </section>
+              )}
+              <Tabs
+                selectedIndex={tab}
+                onChange={({ selectedIndex }) => {
+                  clearEvidence();
+                  setTab(selectedIndex);
+                }}
+              >
+                <TabList aria-label="Scheduled Jobs views">
+                  <Tab>Schedules</Tab>
+                  <Tab>Execution history</Tab>
+                </TabList>
+                <TabPanels>
+                  <TabPanel>
+                    <TableContainer>
+                      <TableToolbar aria-label="Scheduled job controls">
+                        <TableToolbarContent>
+                          <Button
+                            kind="ghost"
+                            disabled={busy}
+                            onClick={() => {
+                              setActionError("");
+                              void refreshLatest.current();
+                            }}
+                          >
+                            Refresh
+                          </Button>
+                          <Button
+                            ref={actionsTrigger}
+                            renderIcon={Add}
+                            disabled={busy}
+                            onClick={() => {
+                              focusAfterForm.current = "create";
+                              setEditor({
+                                id: "",
+                                revision: 0,
+                                repositoryLabel: "",
+                                draft: freshDraft(agents[0] ?? ""),
+                              });
+                            }}
+                          >
+                            New scheduled job
+                          </Button>
+                        </TableToolbarContent>
+                      </TableToolbar>
+                      {loading && !automations.length && (
+                        <InlineLoading description="Reading scheduled jobs…" />
+                      )}
+                      <div className="carbon-job-table-scroll">
+                        <Table size="lg" aria-label="Schedules">
+                          <TableHead>
+                            <TableRow>
+                              <TableHeader id="schedule-details-heading">
+                                <span className="cds--visually-hidden">Details</span>
+                              </TableHeader>
+                              {[
+                                "Job name",
+                                "Schedule status",
+                                "Next run",
+                                "Run status",
+                                "Agent",
+                                "Actions",
+                              ].map((label) => (
+                                <TableHeader key={label} scope="col">
+                                  {label}
+                                </TableHeader>
+                              ))}
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {[...automations]
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map((job) => (
+                                <AutomationJob
+                                  key={job.id}
+                                  job={job}
+                                  api={api}
+                                  active={visible && tab === 0}
+                                  open={expanded === job.id}
+                                  busy={busy}
+                                  onToggle={() =>
+                                    setExpanded(expanded === job.id ? undefined : job.id)
+                                  }
+                                  onAction={act}
+                                  onEdit={() => void editJob(job)}
+                                  onHistory={() => historyScope(job.id)}
+                                />
+                              ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      {!automations.length && !error && !loading && (
+                        <section className="carbon-job-empty">
+                          <h2>No scheduled jobs.</h2>
+                          <p>Create a scheduled job to run a saved prompt on a schedule.</p>
+                        </section>
+                      )}
+                    </TableContainer>
+                  </TabPanel>
+                  <TabPanel>
+                    {selected && (
+                      <div className="carbon-job-filter">
+                        <span>
+                          Schedule:{" "}
+                          {automations.find((job) => job.id === selected)?.name ??
+                            history[0]?.automationName ??
+                            "Deleted schedule"}
+                        </span>
+                        <Button kind="ghost" size="sm" onClick={() => historyScope()}>
+                          Show all schedules
+                        </Button>
+                      </div>
+                    )}
+                    {loading && !history.length && (
+                      <InlineLoading description="Reading executions…" />
+                    )}
+                    <AutomationHistory
+                      key={selected ?? "all"}
+                      rows={history}
+                      selected={selectedExecution}
+                      filtered={!!selected}
+                      showEmpty={!error && !loading}
+                      onSelect={(id) => {
+                        clearEvidence();
+                        setSelectedExecution(id);
+                      }}
+                      evidence={evidenceActions}
+                    />
+                    <div className="carbon-job-actions">
+                      {before !== undefined && (
+                        <Button
+                          kind="ghost"
+                          onClick={() => {
+                            clearEvidence();
+                            setBefore(undefined);
+                          }}
+                        >
+                          Latest
+                        </Button>
+                      )}
+                      {history.length >= 50 && (
+                        <Button
+                          kind="ghost"
+                          onClick={() => {
+                            clearEvidence();
+                            setBefore(history.at(-1)?.sequence);
+                          }}
+                        >
+                          Older
+                        </Button>
+                      )}
+                    </div>
+                  </TabPanel>
+                </TabPanels>
+              </Tabs>
+            </>
           )}
-          {before !== undefined && (
-            <button type="button" className="small" onClick={() => setBefore(undefined)}>
-              Latest
-            </button>
-          )}
-          {history.length >= 50 && (
-            <button
-              type="button"
-              className="small"
-              onClick={() => setBefore(history.at(-1)?.sequence)}
-            >
-              Older
-            </button>
-          )}
-        </div>
-      </div>
-      {execution?.runId && (
-        <section className="automation-evidence-actions" aria-label="Selected run evidence">
-          <span>
-            Selected run: {execution.automationName} · {execution.status}
-          </span>
-          <div className="automation-action-group">
-            <button
-              type="button"
-              className="small"
-              disabled={busy}
-              onClick={() => setTranscriptExecution(execution.id)}
-            >
-              Transcript
-            </button>
-            <button
-              type="button"
-              className="small"
-              disabled={busy}
-              onClick={() => void act({ action: "diff", executionId: execution.id })}
-            >
-              Changes
-            </button>
-          </div>
-        </section>
-      )}
+        </Column>
+      </Grid>
       {visible && transcriptExecution && (
         <AutomationTranscriptModal
           key={transcriptExecution}
@@ -307,15 +449,14 @@ export function AutomationsPage({
           onClose={() => setTranscriptExecution(undefined)}
         />
       )}
-      {evidence && (
-        <Modal
+      {visible && evidence && (
+        <AutomationModal
+          returnFocus={changesTrigger.current}
           title="Read-only execution evidence"
-          busy={false}
-          wide
           onClose={() => setEvidence("")}
         >
-          <pre className="automation-evidence">{evidence}</pre>
-        </Modal>
+          <pre className="carbon-job-evidence">{evidence}</pre>
+        </AutomationModal>
       )}
     </section>
   );

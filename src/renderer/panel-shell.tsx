@@ -7,9 +7,10 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { Button as AppButton } from "./carbon/button.js";
+import { Combobox } from "./carbon/combobox.js";
+import { Surface as Card } from "./carbon/surfaces.js";
 import { Icon, type IconName } from "./icons.js";
-import { Card } from "./neobrutalism/card.js";
-import { Combobox } from "./neobrutalism/combobox.js";
 
 export interface PanelTab {
   id: number;
@@ -94,7 +95,7 @@ export function PanelShell({
     setWidth(Math.max(120, Math.min(available - 300 - gap, value)));
   };
   const toggle = (
-    <button
+    <AppButton
       ref={toggleButton}
       type="button"
       className={`icon-button file-panel-toggle${open ? "" : " file-panel-open"}`}
@@ -108,7 +109,7 @@ export function PanelShell({
       }}
     >
       <Icon name={open ? "side-panel--close" : "side-panel--open"} />
-    </button>
+    </AppButton>
   );
   return (
     <>
@@ -164,7 +165,6 @@ export function PanelShell({
               <Combobox
                 label={`${name} view`}
                 preserveCase
-                listLabel={`Open ${name} tabs`}
                 placeholder="No open tabs"
                 value={selectedId === null ? "" : String(selectedId)}
                 options={[
@@ -194,7 +194,7 @@ export function PanelShell({
                   else pages.find((page) => page.id === id)?.select();
                 }}
                 onTriggerKeyDown={(event) => {
-                  if (event.currentTarget.getAttribute("aria-expanded") === "true" || !selected)
+                  if (selector.current?.getAttribute("aria-expanded") === "true" || !selected)
                     return;
                   if (event.key === "Delete") {
                     event.preventDefault();
@@ -226,7 +226,7 @@ export function PanelShell({
         >
           {selected && selected.closeButton !== false && (
             <div className="file-panel-view-actions">
-              <button
+              <AppButton
                 type="button"
                 className="icon-button file-tab-close"
                 aria-label="Close current tab"
@@ -235,7 +235,7 @@ export function PanelShell({
                 onClick={() => act({ type: "close", id: selected.id })}
               >
                 <Icon name="close" />
-              </button>
+              </AppButton>
             </div>
           )}
           {children(() => {

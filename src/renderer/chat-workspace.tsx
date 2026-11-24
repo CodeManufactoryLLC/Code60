@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { AppPagesProps } from "./app-page-props.js";
+import { Surface as Card } from "./carbon/surfaces.js";
 import { chatDraftKey } from "./chat-draft.js";
 import { ChatPage } from "./chat-page.js";
 import { chatEventKey, conversationTitle, isSelectedConversation, workerLabel } from "./chats.js";
@@ -8,8 +9,6 @@ import { showsProjectFiles } from "./file-navigation.js";
 import { FilePanel } from "./file-panel.js";
 import { GitReadinessNotice, GitSetupDialog } from "./git-setup.js";
 import { selectedRecallSource } from "./memory-recall-source.js";
-import { Card } from "./neobrutalism/card.js";
-import { observeBreadcrumbRightInset } from "./page-title-header.js";
 import { RelayPlansPanel } from "./relay-plans-panel.js";
 import { RetainedProjectPanels } from "./retained-project-panels.js";
 import type { ReviewPreview } from "./review-actions.js";
@@ -50,11 +49,6 @@ export function ChatWorkspace({
   setError,
   navigation,
 }: ChatWorkspaceProps) {
-  const body = useRef<HTMLDivElement>(null);
-  const visible = !splash && tabs.active === "chat";
-  useLayoutEffect(() => {
-    if (visible && body.current) return observeBreadcrumbRightInset(body.current);
-  }, [visible]);
   const snapshot = state?.snapshot;
   const selectionPending = navigation.projectPending || navigation.conversationPending;
   const conversationActive = tabs.active === "chat" && !selectionPending;
@@ -144,13 +138,13 @@ export function ChatWorkspace({
     ) : null;
   return (
     <div
-      ref={body}
       className="chat-workspace-body"
       data-file-panel-open={
         projectFiles ? explorerOpen : relayActive || relayWorkerActive ? relayPanelOpen : undefined
       }
     >
       <Card className="chat-conversations">
+        <div id="workspace-panel-actions" />
         <ContentHeaderSlot />
         {gitSetupProject === directory && gitSetupProject && (
           <GitSetupDialog

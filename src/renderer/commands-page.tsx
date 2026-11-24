@@ -1,6 +1,9 @@
 import { useId, useRef, useState } from "react";
 import type { ApplicationClient, Command, Snapshot } from "../bridge/index.js";
 import { COMMAND_LIMIT } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
+import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
 import {
   type CommandDraft,
   commandProblems,
@@ -87,22 +90,7 @@ export function CommandsPage({
   return (
     <main className="prompt-editor commands-page" aria-labelledby={`${id}-heading`}>
       <header className="table-controls">
-        <PageTitle
-          page="commands"
-          className="table-title"
-          id={`${id}-heading`}
-          actions={[
-            {
-              id: "commands-page-0",
-              label: "New command",
-              run: () => {
-                setSelected("new");
-                setError("");
-              },
-              disabled: busy || commands.length >= COMMAND_LIMIT,
-            },
-          ]}
-        />
+        <PageTitle page="commands" className="table-title" id={`${id}-heading`} />
         <ControlDescription>
           Reusable prompts shared across projects in this database. Start an orchestrator message
           with $name to use one.
@@ -111,8 +99,18 @@ export function CommandsPage({
       <div className="commands-scroll">
         <div className="prompt-editor-body">
           <nav className="prompt-editor-list" aria-label="Commands">
+            <AppButton
+              variant="primary"
+              disabled={busy || commands.length >= COMMAND_LIMIT}
+              onClick={() => {
+                setSelected("new");
+                setError("");
+              }}
+            >
+              New command
+            </AppButton>
             {commands.map((entry) => (
-              <button
+              <AppButton
                 type="button"
                 key={entry.id}
                 disabled={busy}
@@ -125,10 +123,10 @@ export function CommandsPage({
                 <span className="prompt-editor-name">${entry.name}</span>
                 <span className="prompt-editor-source">{entry.title}</span>
                 {drafts[entry.id] && <span className="prompt-editor-source">Unsaved changes</span>}
-              </button>
+              </AppButton>
             ))}
             {(selected === "new" || drafts.new) && (
-              <button
+              <AppButton
                 type="button"
                 disabled={busy}
                 aria-current={selected === "new" ? "true" : undefined}
@@ -138,7 +136,7 @@ export function CommandsPage({
                 }}
               >
                 New command (unsaved)
-              </button>
+              </AppButton>
             )}
           </nav>
           <form
@@ -176,12 +174,12 @@ export function CommandsPage({
                   </label>
                   {field === "prompt" ? (
                     <div className="prompt-editor-input">
-                      <textarea {...control} spellCheck={false} maxLength={100_000} />
+                      <CarbonTextArea {...control} spellCheck={false} maxLength={100_000} />
                     </div>
                   ) : (
                     <div className={field === "name" ? "command-name-input" : undefined}>
                       {field === "name" && <span aria-hidden="true">$</span>}
-                      <input
+                      <CarbonTextInput
                         {...control}
                         maxLength={field === "title" ? 120 : field === "name" ? 64 : 500}
                         autoCapitalize={field === "name" ? "none" : undefined}
@@ -200,15 +198,15 @@ export function CommandsPage({
               </p>
             )}
             <div className="button-group">
-              <button type="submit" className="primary" disabled={busy || !dirty || !valid}>
+              <AppButton type="submit" className="primary" disabled={busy || !dirty || !valid}>
                 <Icon name="checkmark" /> Save
-              </button>
-              <button type="button" disabled={busy || !dirty} onClick={discard}>
+              </AppButton>
+              <AppButton type="button" disabled={busy || !dirty} onClick={discard}>
                 Discard changes
-              </button>
-              <button type="button" disabled={busy || !saved} onClick={() => void perform(true)}>
+              </AppButton>
+              <AppButton type="button" disabled={busy || !saved} onClick={() => void perform(true)}>
                 Delete
-              </button>
+              </AppButton>
             </div>
           </form>
         </div>

@@ -230,7 +230,7 @@ for (const saved of [undefined, "0.1.0-staging.18", "0.1.0-staging.20"] as const
       await wizard.getByRole("button", { name: "Claude", exact: true }).click();
       await expect(wizard.getByRole("status")).toHaveText("Claude connected");
       await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
-      await page.getByRole("button", { name: "Start", exact: true }).click();
+      await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
       await page.locator("#tab-apps").press("ArrowRight");
       await page.locator("#tab-workflows").click();
       const view = page.locator(".workflows-page");
@@ -259,10 +259,14 @@ for (const saved of [undefined, "0.1.0-staging.18", "0.1.0-staging.20"] as const
       const suspended = join(engineRoot, "endpoint.fixture-disconnected.json");
       await rename(endpoint, suspended);
       try {
-        await page.getByRole("button", { name: "Workflows actions" }).click();
-        await page.getByRole("menuitem", { name: "Refresh", exact: true }).click();
-        await page.getByRole("button", { name: "Workflows actions" }).click();
-        await page.getByRole("menuitem", { name: "Reconnect engine…", exact: true }).click();
+        await page
+          .locator(".workflows-page")
+          .getByRole("button", { name: "Refresh", exact: true })
+          .click();
+        await page
+          .locator(".workflows-page")
+          .getByRole("button", { name: "Reconnect engine…", exact: true })
+          .click();
         await expect(
           page.getByRole("dialog", { name: "Reconnect engine", exact: true }),
         ).toBeVisible();

@@ -1,5 +1,8 @@
+import { ProgressBar } from "@carbon/react";
 import { useEffect, useId, useState } from "react";
 import type { ApplicationClient, Plan, PlanAction, PlanSummary } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Checkbox as CarbonCheckbox } from "./carbon/choices.js";
 import { durationText } from "./chat-presentation.js";
 import { useTicker } from "./ticker.js";
 
@@ -83,42 +86,45 @@ export function PlanPanel({
         >
           Execution time: {executionTime}
         </div>
-        <progress
-          aria-label="Tasks completed"
-          aria-valuetext={`${percentage}% (${completed} out of ${total} tasks completed)`}
+        <ProgressBar
+          label={`Tasks completed: ${percentage}% (${completed} out of ${total} tasks completed)`}
+          hideLabel
           value={completed}
           max={total}
+          status={
+            plan.state === "completed" ? "finished" : plan.state === "failed" ? "error" : "active"
+          }
         />
         <div className="plan-actions">
           {plan.state === "draft" && (
-            <button
+            <AppButton
               type="button"
               className="primary plan-action"
               disabled={!available}
               onClick={() => void action("accept")}
             >
               Accept
-            </button>
+            </AppButton>
           )}
           {(["paused", "failed"] as string[]).includes(plan.state) && (
-            <button
+            <AppButton
               type="button"
               className="primary plan-action"
               disabled={!available}
               onClick={() => void action("resume")}
             >
               Resume plan
-            </button>
+            </AppButton>
           )}
           {!["running", "completed", "dismissed"].includes(plan.state) && (
-            <button
+            <AppButton
               type="button"
               className="plan-action"
               disabled={!current || pending}
               onClick={() => void action("dismiss")}
             >
               Dismiss
-            </button>
+            </AppButton>
           )}
         </div>
         {plan.project !== project && (
@@ -144,9 +150,8 @@ export function PlanPanel({
           {plan.tasks.map((task) => (
             <li className="plan-task" key={task.id} data-state={task.state}>
               <span className="plan-task-check">
-                <input
+                <CarbonCheckbox
                   id={`${id}-task-${task.id}`}
-                  type="checkbox"
                   checked={task.state === "completed"}
                   disabled
                   readOnly
@@ -209,9 +214,9 @@ export function PlanPanelLoader({
     return (
       <div role="alert">
         {error}{" "}
-        <button type="button" onClick={() => setRetry((value) => value + 1)}>
+        <AppButton type="button" onClick={() => setRetry((value) => value + 1)}>
           Retry
-        </button>
+        </AppButton>
       </div>
     );
   if (!plan || plan.id !== summary.id) return <p role="status">Loading plan…</p>;

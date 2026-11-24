@@ -42,7 +42,7 @@ function render(phase: AgentSetupSession["phase"], detected = false) {
 it("starts with connector buttons and no confirmation or review controls", () => {
   const html = render("select");
   expect(html).toContain("Select your Primary Provider");
-  expect(html).toContain('class="agent-choice"');
+  expect(html).toContain('class="agent-choice');
   expect(html).not.toMatch(/Continue|Finish setup|Review agents|Yes,|No,/);
 });
 

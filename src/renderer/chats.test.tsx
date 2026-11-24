@@ -313,9 +313,9 @@ describe("conversation hierarchy", () => {
       expect(section).toContain(`aria-label="Close Project: ${project?.path}"`);
       expect(section).toContain('title="Close Project"');
       expect(section).toContain('data-tooltip="Close Project"');
-      expect(section).toContain('class="sidebar-card-stop"');
+      expect(section).toContain('class="sidebar-card-stop');
       const stopButton = section.match(
-        /<button[^>]*class="icon-button project-folder-stop"[^>]*>/,
+        /<button[^>]*class="icon-button project-folder-stop[^"]*"[^>]*>/,
       )?.[0];
       expect(stopButton).not.toContain('aria-haspopup="menu"');
       expect(section).not.toContain("Toggle chats");
@@ -323,9 +323,8 @@ describe("conversation hierarchy", () => {
       expect(section).toContain('aria-hidden="false"');
       const folder = section.match(/<span class="project-chat-label">([\s\S]*?)<\/span>/)?.[0];
       expect(folder).toContain('data-icon="app-folder"');
-      expect(folder).toContain("folder.png");
-      expect(folder).toContain('data-animated="true"');
-      expect(folder).toContain('alt="" aria-hidden="true" draggable="false"');
+      expect(folder).toContain("<svg");
+      expect(folder).toContain('aria-hidden="true"');
     });
     expect(sections[0]).toContain('id="conversation-one"');
     expect(sections[1]).not.toContain('id="conversation-one"');
@@ -474,9 +473,9 @@ describe("conversation hierarchy", () => {
     expect(html).toContain('data-role="worker"');
     expect(html).toContain('aria-label="Workers for Chat 1"');
     expect(html).toContain('aria-label="Chat 1 workers"');
-    expect(html).not.toContain('class="chat-unread"');
+    expect(html).not.toContain('class="chat-unread');
     expect(html).toContain("Worker. Failed");
-    expect(html).not.toContain('class="chat-sidebar-status"');
+    expect(html).not.toContain('class="chat-sidebar-status');
     expect(html).toContain('<span class="sr-only">Worker. Failed</span>');
     for (const action of ["Rename chat: Chat 1", "Archive chat: Chat 1", "Workers for Chat 1"]) {
       const button = html.match(
@@ -485,7 +484,8 @@ describe("conversation hierarchy", () => {
       expect(button).toContain('class="icon-button');
       expect(button?.match(/<svg/g)).toHaveLength(1);
     }
-    const entries = html.match(/<button[^>]*class="chat-sidebar-entry"[\s\S]*?<\/button>/g) ?? [];
+    const entries =
+      html.match(/<button[^>]*class="chat-sidebar-entry[^"]*"[\s\S]*?<\/button>/g) ?? [];
     expect(entries).toHaveLength(3);
     for (const entry of entries) {
       if (entry.includes('data-role="orchestrator"')) {
@@ -493,10 +493,10 @@ describe("conversation hierarchy", () => {
         expect(entry).not.toContain('data-icon="app-communication"');
       } else {
         expect(entry).toContain('data-icon="app-down-right"');
-        expect(entry).toContain('alt="" aria-hidden="true" draggable="false"');
+        expect(entry).toContain('aria-hidden="true"');
       }
     }
-    expect(html.match(/<img/g)).toHaveLength(2);
+    expect(html).not.toContain("<img");
     expect(html).not.toContain('role="dialog"');
   });
   it.each(["claude", "codex", "droid", "custom-provider"])(
@@ -560,7 +560,7 @@ describe("conversation hierarchy", () => {
         onSelect={() => {}}
       />,
     );
-    expect(html).not.toContain('class="chat-sidebar-status"');
+    expect(html).not.toContain('class="chat-sidebar-status');
     expect(html).toContain(
       'aria-description="Orchestrator. Connection failed. 1 approvals waiting"',
     );
@@ -672,15 +672,14 @@ describe("embedded worker chat", () => {
         ],
         orchestrated,
       );
-      expect(html).toContain('class="mcp-badge"');
+      expect(html).toContain('class="mcp-badge');
       expect(html).toContain('aria-label="MCP server: playwright"');
     },
   );
   it("keeps conversation controls and allow-all identity without popup window controls", () => {
     const html = render(run("one"));
-    expect(html).toContain('class="orchestration-chat-page worker-chat-page"');
-    expect(html).toContain('class="content-page-title"');
-    expect(html).toContain('data-icon="app-down-right"');
+    expect(html).toContain('class="orchestration-chat-page worker-chat-page');
+    expect(html).toContain('class="content-page-title');
     expect(html).toContain("Orchestrator worker");
     expect(html).toContain('aria-label="Code60 auto-approval" aria-pressed="true"');
     expect(html).toContain('aria-label="Worker composer"');
@@ -702,9 +701,9 @@ describe("embedded worker chat", () => {
     const html = render(worker, events);
     expect(html).toContain(">Stop</button>");
     expect(html).toContain(">Allow once</button>");
-    expect(html).toContain('class="chat-activity"');
-    expect(html).toContain('class="turn-timer"');
-    expect(html).not.toContain('class="turn-separator"');
+    expect(html).toContain('class="chat-activity');
+    expect(html).toContain('class="turn-timer');
+    expect(html).not.toContain('class="turn-separator');
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
   });
   it("shows the actual worker title and keeps its navigation icon", () => {

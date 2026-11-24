@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type ApplicationClient,
   DEFAULT_EPISODIC_MEMORY_PROMPT,
@@ -6,6 +6,9 @@ import {
   type MemoryExtractionResult,
 } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
+import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
 import { PageTitle } from "./page-title.js";
 import { TranscriptNotice, type Transcripts } from "./transcripts.js";
 
@@ -180,7 +183,7 @@ export function EpisodicMemoryPage({
         hidden={!editing}
       >
         <label htmlFor="memory-prompt">Extraction prompt</label>
-        <textarea
+        <CarbonTextArea
           ref={editor}
           className="memory-prompt-input"
           id="memory-prompt"
@@ -190,22 +193,22 @@ export function EpisodicMemoryPage({
           onChange={(event) => setPrompt(event.target.value)}
         />
         <div>
-          <button
+          <AppButton
             type="button"
             disabled={busy || prompt === DEFAULT_EPISODIC_MEMORY_PROMPT}
             onClick={() => setPrompt(DEFAULT_EPISODIC_MEMORY_PROMPT)}
           >
             Reset prompt
-          </button>
+          </AppButton>
         </div>
       </section>
       <TranscriptNotice data={data} />
       <div className="memory-content" data-results={!!result}>
         <div className="memory-extract">
           <div className="memory-extraction-controls">
-            <label className="memory-event-limit" htmlFor="memory-event-limit">
-              Maximum events
-              <input
+            <div className="memory-event-limit">
+              <CarbonTextInput
+                labelText={<>Maximum events</>}
                 id="memory-event-limit"
                 type="number"
                 min={1}
@@ -217,17 +220,17 @@ export function EpisodicMemoryPage({
                 aria-describedby={limitError ? "memory-event-limit-error" : undefined}
                 onChange={(event) => setEventLimit(event.target.value)}
               />
-            </label>
+            </div>
             {busy ? (
-              <button
+              <AppButton
                 type="button"
                 onClick={() => void cancel()}
                 disabled={status === "Cancelling…"}
               >
                 Cancel extraction
-              </button>
+              </AppButton>
             ) : (
-              <button
+              <AppButton
                 ref={extractButton}
                 type="button"
                 className="primary"
@@ -235,7 +238,7 @@ export function EpisodicMemoryPage({
                 onClick={() => void extract()}
               >
                 Extract from {count.toLocaleString()} events
-              </button>
+              </AppButton>
             )}
           </div>
           {limitError && (
@@ -258,54 +261,11 @@ export function EpisodicMemoryPage({
         {result && result.statements.length > 0 && (
           <ul className="memory-statements" aria-label="Extracted statements">
             {result.statements.map((statement) => (
-              <MemoryCloud key={statement} statement={statement} />
+              <li key={statement}>{statement}</li>
             ))}
           </ul>
         )}
       </div>
     </main>
-  );
-}
-
-function MemoryCloud({ statement }: { statement: string }) {
-  const id = useId();
-  const gradient = `${id}-gradient`;
-  const shape = `${id}-shape`;
-  const thinBorder = `${id}-thin-border`;
-  const thickBorder = `${id}-thick-border`;
-  return (
-    <li>
-      <svg className="memory-cloud-shape" aria-hidden="true" focusable="false">
-        <defs>
-          <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#ffffff" />
-            <stop offset="1" stopColor="#d9eeff" />
-          </linearGradient>
-          <mask id={shape} maskUnits="userSpaceOnUse" x="0" y="0" width="100%" height="100%">
-            <rect x="0" y="16" width="100%" height="calc(100% - 16px)" rx="30" fill="white" />
-            <ellipse cx="48" cy="20" rx="24" ry="16" fill="white" />
-            <ellipse cx="92" cy="20" rx="32" ry="20" fill="white" />
-          </mask>
-          <filter id={thinBorder}>
-            <feMorphology in="SourceAlpha" operator="erode" radius="1.5" result="interior" />
-            <feComposite in="SourceGraphic" in2="interior" operator="out" />
-          </filter>
-          <filter id={thickBorder}>
-            <feMorphology in="SourceAlpha" operator="erode" radius="4" result="interior" />
-            <feComposite in="SourceGraphic" in2="interior" operator="out" />
-          </filter>
-        </defs>
-        <g className="memory-cloud-light">
-          <rect width="100%" height="100%" fill={`url(#${gradient})`} mask={`url(#${shape})`} />
-          <g filter={`url(#${thinBorder})`}>
-            <rect width="100%" height="100%" fill="var(--control-border)" mask={`url(#${shape})`} />
-          </g>
-        </g>
-        <g className="memory-cloud-dark" filter={`url(#${thickBorder})`}>
-          <rect width="100%" height="100%" fill={`url(#${gradient})`} mask={`url(#${shape})`} />
-        </g>
-      </svg>
-      {statement}
-    </li>
   );
 }

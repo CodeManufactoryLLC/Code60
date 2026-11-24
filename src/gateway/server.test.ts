@@ -26,6 +26,10 @@ async function fixture(
   const assets = join(directory, "assets");
   await mkdir(assets);
   await writeFile(join(assets, "index.html"), "<!doctype html><title>Code60</title>");
+  await writeFile(
+    join(assets, "icon.gif"),
+    Buffer.from("R0lGODlhAQABAIABAP///wAAACwAAAAAAQABAAACAkQBADs=", "base64"),
+  );
   const env = {
     ...process.env,
     HOME: directory,
@@ -356,6 +360,30 @@ it("persists local pairing changes, revokes old sessions and never grants a brow
     ).status,
   ).toBe(400);
   expect((await post("/api/connect", { version: 1 })).status).toBe(200);
+});
+
+it("serves only bounded GIF replay keys on manifested assets and keeps other production queries rejected", async () => {
+  const { gateway } = await fixture();
+  const plain = await fetch(`${gateway.origin}/icon.gif`);
+  const replay = await fetch(`${gateway.origin}/icon.gif?play=_r_2_-1`);
+  expect(replay.status).toBe(200);
+  expect(replay.headers.get("content-type")).toBe("image/gif");
+  expect(Buffer.from(await replay.arrayBuffer())).toEqual(Buffer.from(await plain.arrayBuffer()));
+  for (const path of [
+    "/icon.gif?play=",
+    "/icon.gif?play=x-0",
+    "/icon.gif?play=x-1&play=x-2",
+    "/icon.gif?play=x-1&token=secret",
+    `/icon.gif?play=${"x".repeat(100)}-1`,
+    "/icon.gif?play=../path-1",
+    "/missing.gif?play=x-1",
+    "/index.html?play=x-1",
+    "/api/connection?play=x-1",
+    "/management/status?play=x-1",
+    "/icon.gif?v=1",
+  ])
+    expect((await fetch(`${gateway.origin}${path}`)).status).toBe(400);
+  expect((await fetch(`${gateway.origin}/icon.gif?play=x-1`, { method: "POST" })).status).toBe(400);
 });
 
 it("proxies Vite asset query strings only in development and rejects API query strings", async () => {

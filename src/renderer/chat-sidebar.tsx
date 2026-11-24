@@ -3,6 +3,7 @@ import type { DesktopRun, OrchestrationChat, OrchestrationChatAction } from "../
 import type { RunEvent } from "../core/index.js";
 import { activityLabel } from "./activity-display.js";
 import { AgentLogo } from "./agent-logo.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { ChatMenu } from "./chat-menu.js";
 import { RenameChat } from "./chat-name.js";
 import { sessionStatus } from "./chat-presentation.js";
@@ -217,7 +218,7 @@ export function ChatSidebar({
     const projectWorkers = chat?.kind === "project" && children.length > 0;
     const expanded = !collapsed.has(entry.id);
     const workerToggle = children.length > 0 && (
-      <button
+      <AppButton
         type="button"
         className={`icon-button chat-workers-toggle${projectWorkers ? " chat-workers-toggle-leading" : ""}`}
         aria-label={`Workers for ${entry.label}`}
@@ -246,13 +247,13 @@ export function ChatSidebar({
         }}
       >
         {projectWorkers ? <AgentLogo id={chat?.run?.agent ?? ""} /> : <Icon name="ai-agent" />}
-      </button>
+      </AppButton>
     );
     return (
       <div className="chat-sidebar-group" key={entry.id} data-conversation-id={entry.id}>
         <div className="chat-sidebar-row" data-nav-active={open && entry.id === selectedId}>
           {projectWorkers && workerToggle}
-          <button
+          <AppButton
             type="button"
             id={`conversation-${entry.id}`}
             className="chat-sidebar-entry"
@@ -325,10 +326,10 @@ export function ChatSidebar({
               </span>
             )}
             <span className="sr-only">{description}</span>
-          </button>
+          </AppButton>
           {entry.role === "orchestrator" && chat?.kind !== "relay" && (
             <>
-              <button
+              <AppButton
                 type="button"
                 className="icon-button chat-sidebar-action"
                 aria-label={`Rename chat: ${entry.label}`}
@@ -339,8 +340,8 @@ export function ChatSidebar({
                 <span className="sidebar-card-action" aria-hidden="true">
                   <Icon name="edit" />
                 </span>
-              </button>
-              <button
+              </AppButton>
+              <AppButton
                 type="button"
                 className="icon-button chat-sidebar-action"
                 aria-label={`Archive chat: ${entry.label}`}
@@ -351,7 +352,7 @@ export function ChatSidebar({
                 <span className="sidebar-card-action" aria-hidden="true">
                   <Icon name="archive" />
                 </span>
-              </button>
+              </AppButton>
             </>
           )}
           {!projectWorkers && workerToggle}

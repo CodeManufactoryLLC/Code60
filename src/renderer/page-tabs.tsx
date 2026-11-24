@@ -1,11 +1,15 @@
+import { Button, Header, HeaderMenuButton, HeaderName, SideNav, SideNavLink } from "@carbon/react";
 import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DesktopRun, OpenProject, OrchestrationChat } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import type { Theme } from "./appearance.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Select as CarbonSelect } from "./carbon/fields.js";
+import { Surface as Card } from "./carbon/surfaces.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { conversationId } from "./chats.js";
-import { IconAnimationToggle } from "./icon-animation-toggle.js";
 import { Icon } from "./icons.js";
+import { Modal } from "./modal.js";
 import {
   isSettingsSection,
   pageAvailable,
@@ -24,18 +28,16 @@ import {
   sidebarPageElementId,
   staticChildren,
 } from "./navigation-tree.js";
-import { Card } from "./neobrutalism/card.js";
 import { ProjectChatSidebar } from "./project-chat-sidebar.js";
 import type { ProviderManagement } from "./provider-management.js";
 import { ProvidersSidebar } from "./providers-sidebar.js";
-import { observeSidebarCardEdges, observeWorkspaceInset } from "./sidebar-layout.js";
+
 import type { PageId, PageTabs, SettingsSectionId } from "./tabs.js";
-import { ThemeToggle } from "./theme-toggle.js";
 
 export function PageTabBar({
-  iconAnimations,
-  iconAnimationsSaved = true,
-  onIconAnimationsChange,
+  commands,
+  workspace,
+  connected,
   theme,
   onThemeChange,
   tabs,
@@ -62,9 +64,9 @@ export function PageTabBar({
   onBack = () => {},
   onForward = () => {},
 }: {
-  iconAnimations: boolean;
-  iconAnimationsSaved?: boolean;
-  onIconAnimationsChange(enabled: boolean): void;
+  commands?(): void;
+  workspace?(close: () => void): import("react").ReactNode;
+  connected?: boolean | undefined;
   theme: Theme;
   onThemeChange(theme: Theme): void;
   canGoBack?: boolean;
@@ -91,81 +93,78 @@ export function PageTabBar({
   openProjects?: readonly OpenProject[] | undefined;
   selectedProjectId?: string | null | undefined;
 }) {
-  const sidebar = useRef<HTMLElement>(null);
-  const toggle = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(() => localStorage.getItem("code60.sidebarOpen") !== "false");
-  const [width, setWidth] = useState(() => {
-    const saved = Number(localStorage.getItem("code60.sidebarWidth"));
-    return Number.isFinite(saved) && saved >= 180 && saved <= 480 ? saved : 220;
-  });
-  useLayoutEffect(() => {
-    sidebar.current
-      ?.closest<HTMLElement>(".app")
-      ?.style.setProperty("--sidebar-width", `${width}px`);
-    localStorage.setItem("code60.sidebarWidth", String(width));
-  }, [width]);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [utilities, setUtilities] = useState(false);
+  const closeNavigation = () => setMobileOpen(false);
   useEffect(() => {
-    localStorage.setItem("code60.sidebarOpen", String(open));
-  }, [open]);
-  useLayoutEffect(() => {
-    if (sidebar.current) return observeSidebarCardEdges(sidebar.current);
+    const wide = window.matchMedia("(min-width: 66rem)");
+    const resize = () => {
+      if (wide.matches) setMobileOpen(false);
+    };
+    wide.addEventListener("change", resize);
+    return () => wide.removeEventListener("change", resize);
   }, []);
-  useLayoutEffect(() => {
-    const workspace = sidebar.current?.closest<HTMLElement>(".app-workspace");
-    if (!workspace) return;
-    const notice = database ? null : workspace.parentElement?.querySelector(".database-notice");
-    return observeWorkspaceInset(workspace, notice ?? null);
-  }, [database]);
-  const sidebarInset = () =>
-    sidebar.current ? Number.parseFloat(getComputedStyle(sidebar.current).paddingLeft) || 0 : 0;
-  const resize = (value: number) => {
-    const available = sidebar.current?.parentElement?.clientWidth ?? 840;
-    setWidth(Math.max(180, Math.min(480, available - 360, value)));
-  };
   return (
     <>
-      <nav
-        ref={sidebar}
-        id="navigation-sidebar"
-        className="sidebar"
-        aria-label="Sidebar"
-        aria-busy={navigation.busy || undefined}
-        data-open={open}
-        inert={!open}
-        aria-hidden={!open}
-      >
-        <button
-          type="button"
-          className="sidebar-resize"
-          aria-label="Resize navigation sidebar"
-          title="Resize navigation sidebar (Left/Right arrows)"
-          onKeyDown={(event) => {
-            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-            event.preventDefault();
-            resize(
-              (sidebar.current?.getBoundingClientRect().width ?? width) -
-                sidebarInset() +
-                (event.key === "ArrowRight" ? 20 : -20),
-            );
-          }}
-          onPointerDown={(event) => {
-            if (event.button !== 0) return;
-            event.currentTarget.setPointerCapture(event.pointerId);
-          }}
-          onPointerMove={(event) => {
-            if (event.currentTarget.hasPointerCapture(event.pointerId) && sidebar.current)
-              resize(event.clientX - sidebar.current.getBoundingClientRect().left - sidebarInset());
-          }}
-          onPointerUp={(event) => {
-            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-            if (sidebar.current)
-              resize(event.clientX - sidebar.current.getBoundingClientRect().left - sidebarInset());
-            event.currentTarget.releasePointerCapture(event.pointerId);
-          }}
+      <Header aria-label="Code60" className="product-header">
+        <HeaderMenuButton
+          aria-label={mobileOpen ? "Close product navigation" : "Open product navigation"}
+          isActive={mobileOpen}
+          aria-expanded={mobileOpen}
+          aria-controls="navigation-sidebar"
+          onClick={() => setMobileOpen(!mobileOpen)}
         />
-        <div id="navigation-sidebar-content" className="sidebar-content">
+        <HeaderName
+          prefix=""
+          href="#panel-home"
+          onClick={(event) => {
+            event.preventDefault();
+            closeNavigation();
+            onSelect("home");
+          }}
+        >
+          Code60
+        </HeaderName>
+        <HistoryControls
+          canGoBack={canGoBack}
+          canGoForward={canGoForward}
+          onBack={onBack}
+          onForward={onForward}
+        />
+        <div className="product-utilities">
+          {connected !== undefined && (
+            <span role="status">
+              {connected ? "Backend connected" : "Reconnecting to backend…"}
+            </span>
+          )}
+          <Button size="md" kind="ghost" onClick={commands}>
+            Commands
+          </Button>
+          <Button size="md" kind="ghost" aria-haspopup="dialog" onClick={() => setUtilities(true)}>
+            Workspace
+          </Button>
+        </div>
+      </Header>
+      <SideNav
+        id="navigation-sidebar"
+        aria-busy={navigation.busy || undefined}
+        className="product-navigation"
+        aria-label="Product navigation"
+        expanded={mobileOpen}
+        onOverlayClick={closeNavigation}
+        onSideNavBlur={closeNavigation}
+        onClick={(event) => {
+          if (
+            (event.target as HTMLElement).closest(
+              '[role="tab"], .chat-sidebar-entry, .project-home-link',
+            )
+          )
+            closeNavigation();
+        }}
+      >
+        <div id="navigation-sidebar-content">
           <PageTabList
-            sidebarOpen={open}
+            sidebarOpen={true}
             onOpenProject={database ? onOpenProject : (onConnectDatabase ?? onOpenProject)}
             projectDisabled={projectDisabled}
             tabs={tabs}
@@ -186,43 +185,24 @@ export function PageTabBar({
             selectedProjectId={selectedProjectId}
           />
         </div>
-      </nav>
-      <header className="workspace-header">
-        <Card className="workspace-breadcrumbs">
-          <HistoryControls
-            canGoBack={canGoBack}
-            canGoForward={canGoForward}
-            onBack={onBack}
-            onForward={onForward}
-          />
-          <div className="breadcrumb-appearance-controls">
-            <IconAnimationToggle
-              enabled={iconAnimations}
-              saved={iconAnimationsSaved}
-              onChange={onIconAnimationsChange}
-            />
-            <ThemeToggle theme={theme} onChange={onThemeChange} />
+      </SideNav>
+      {utilities && (
+        <Modal busy={false} title="Workspace" onClose={() => setUtilities(false)}>
+          <div className="product-workspace-actions">
+            <CarbonSelect
+              labelText="Color theme"
+              aria-label="Color theme"
+              value={theme}
+              onChange={(e) => onThemeChange(e.target.value as Theme)}
+            >
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </CarbonSelect>
+            {workspace?.(() => setUtilities(false))}
           </div>
-        </Card>
-      </header>
-      <div className="workspace-panel-controls">
-        <button
-          ref={toggle}
-          type="button"
-          className="icon-button sidebar-toggle"
-          aria-label={open ? "Close navigation sidebar" : "Open navigation sidebar"}
-          title={open ? "Close navigation sidebar" : "Open navigation sidebar"}
-          aria-controls="navigation-sidebar"
-          aria-expanded={open}
-          onClick={() => {
-            if (sidebar.current?.contains(document.activeElement)) toggle.current?.focus();
-            setOpen((current) => !current);
-          }}
-        >
-          <Icon name={open ? "side-panel--close" : "side-panel--open"} />
-        </button>
-        <div id="workspace-panel-actions" />
-      </div>
+        </Modal>
+      )}
     </>
   );
 }
@@ -264,7 +244,7 @@ function HistoryControls({
   return (
     // biome-ignore lint/a11y/useSemanticElements: a toolbar of two buttons, not a form fieldset.
     <div className="sidebar-history" role="group" aria-label="Navigation history">
-      <button
+      <AppButton
         ref={back}
         type="button"
         className="icon-button"
@@ -273,13 +253,9 @@ function HistoryControls({
         disabled={!canGoBack}
         onClick={press("back", onBack)}
       >
-        {canGoBack ? (
-          <NavigationIcon name="app-history-back" />
-        ) : (
-          <span className="history-placeholder" aria-hidden="true" />
-        )}
-      </button>
-      <button
+        <Icon name="arrow--left" />
+      </AppButton>
+      <AppButton
         ref={forward}
         type="button"
         className="icon-button"
@@ -288,12 +264,8 @@ function HistoryControls({
         disabled={!canGoForward}
         onClick={press("forward", onForward)}
       >
-        {canGoForward ? (
-          <NavigationIcon name="app-history-forward" />
-        ) : (
-          <span className="history-placeholder" aria-hidden="true" />
-        )}
-      </button>
+        <Icon name="arrow--right" />
+      </AppButton>
     </div>
   );
 }
@@ -438,9 +410,11 @@ function PageTabList({
   type StaticParent = keyof typeof disclosures;
   const isParent = (id: string): id is StaticParent => Object.hasOwn(disclosures, id);
   const childIds = (parent: StaticParent) =>
-    staticChildren(parent, database).flatMap(({ target }) =>
-      target.kind === "page" || target.kind === "settings" ? [target.id] : [],
-    );
+    staticChildren(parent, database)
+      .filter(({ id }) => parent !== "apps" || !["automations", "workflows", "tables"].includes(id))
+      .flatMap(({ target }) =>
+        target.kind === "page" || target.kind === "settings" ? [target.id] : [],
+      );
   const setDisclosure = (id: StaticParent, open: boolean) => {
     const disclosure = disclosures[id];
     if (!("set" in disclosure)) return;
@@ -460,6 +434,10 @@ function PageTabList({
       ? [...(relay && !chatPending ? ["relay" as const] : []), "custom-agents" as const]
       : []),
     "chat",
+    "automations",
+    "workflows",
+    "tables",
+    ...(expanded ? descendants("tables") : []),
     "providers",
     "apps",
     ...(appsExpanded ? descendants("apps") : []),
@@ -688,7 +666,6 @@ function PageTabList({
     moveTo(visible[next]);
   }
   function page(id: PageId, first: boolean) {
-    const icon = pageDefinitions[id].icon;
     return (
       <div
         className="page-tab"
@@ -703,11 +680,12 @@ function PageTabList({
           (id === "home" && tabs.active === "search" && !homeExpanded)
         }
       >
-        <button
+        <SideNavLink
+          as="button"
           type="button"
           role="tab"
-          id={`tab-${id}`}
-          className={id === "apps" ? "page-group-toggle" : undefined}
+          id={sidebarPageElementId(id)}
+          className={id === "apps" ? "page-group-toggle" : ""}
           aria-controls={
             id === "custom-agents" ? "panel-custom-agents custom-agent-pages" : `panel-${id}`
           }
@@ -729,6 +707,10 @@ function PageTabList({
               : -1
           }
           onClick={() => {
+            if (id === "tables") {
+              activateParent("tables");
+              return;
+            }
             if (id === "custom-agents") {
               if (tabs.active === id) setCustomExpanded((v) => !v);
               else {
@@ -744,11 +726,10 @@ function PageTabList({
             }
             onSelect(id);
           }}
-          onKeyDown={(event) => navigate(event, id)}
+          onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => navigate(event, id)}
         >
-          {icon && <NavigationIcon name={icon} />}
           <span className="page-tab-label">{pageDefinitions[id].label}</span>
-        </button>
+        </SideNavLink>
       </div>
     );
   }
@@ -756,7 +737,8 @@ function PageTabList({
     const selected = tabs.active === "settings" && settingsSection === id;
     return (
       <div className="page-tab" role="presentation" key={id} data-nav-active={selected}>
-        <button
+        <SideNavLink
+          as="button"
           type="button"
           role="tab"
           id={`tab-settings-${id}`}
@@ -768,11 +750,11 @@ function PageTabList({
             onSettingsSectionSelect(id);
             onSelect("settings");
           }}
-          onKeyDown={(event) => navigate(event, id)}
+          onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => navigate(event, id)}
         >
           <NavigationIcon name={settingsIcons[id]} />
           <span className="page-tab-label">{settingsLabels[id]}</span>
-        </button>
+        </SideNavLink>
       </div>
     );
   }
@@ -796,7 +778,7 @@ function PageTabList({
             return (
               <div key={id}>
                 <div className="page-tab" data-nav-active={active}>
-                  <button
+                  <AppButton
                     type="button"
                     id={sidebarPageElementId(id)}
                     className="page-group-toggle"
@@ -807,9 +789,8 @@ function PageTabList({
                     onClick={() => activateParent(id)}
                     onKeyDown={(event) => navigate(event, id)}
                   >
-                    {pageDefinitions[id].icon && <NavigationIcon name={pageDefinitions[id].icon} />}
                     <span className="page-tab-label">{pageDefinitions[id].label}</span>
-                  </button>
+                  </AppButton>
                 </div>
                 {staticChildrenPanel(id)}
               </div>
@@ -821,6 +802,7 @@ function PageTabList({
   }
   return (
     <div className="page-tabs">
+      <h2 className="product-nav-group">Work</h2>
       <Card size="sm" className="sidebar-navigation-card sidebar-section">
         <div
           className="sidebar-card-header"
@@ -951,7 +933,7 @@ function PageTabList({
                   />
                 ) : (
                   <div key={agent.id} className="chat-sidebar-row">
-                    <button
+                    <AppButton
                       type="button"
                       className="chat-sidebar-entry"
                       disabled={chatPending}
@@ -961,7 +943,7 @@ function PageTabList({
                         <NavigationIcon name="app-custom-agents" />
                       </span>
                       <span className="chat-sidebar-label">{agent.name}</span>
-                    </button>
+                    </AppButton>
                   </div>
                 );
               })}
@@ -981,7 +963,7 @@ function PageTabList({
             aria-label="Projects page"
             aria-orientation="vertical"
           >
-            <button
+            <AppButton
               type="button"
               role="tab"
               aria-selected={tabs.active === "projects"}
@@ -999,10 +981,10 @@ function PageTabList({
                 <NavigationIcon name={pageDefinitions.projects.icon} />
               )}
               <span className="page-tab-label">{pageDefinitions.projects.label}</span>
-            </button>
+            </AppButton>
           </div>
         </div>
-        <button
+        <AppButton
           type="button"
           className="icon-button project-sidebar-open"
           aria-label="Add Project"
@@ -1014,7 +996,7 @@ function PageTabList({
           <span className="sidebar-card-add" aria-hidden="true">
             <Icon name="add" />
           </span>
-        </button>
+        </AppButton>
         {chatError && (
           <p className="error-banner" role="alert">
             {chatError}
@@ -1097,6 +1079,17 @@ function PageTabList({
           )}
         </div>
       </Card>
+      <h2 className="product-nav-group">Automation</h2>
+      <div role="tablist" aria-label="Automation">
+        {page("automations", true)}
+        {page("workflows", true)}
+      </div>
+      <h2 className="product-nav-group">Inspect</h2>
+      <div role="tablist" aria-label="Inspect">
+        {page("tables", true)}
+        {staticChildrenPanel("tables")}
+      </div>
+      <h2 className="product-nav-group">Manage</h2>
       <ProvidersSidebar
         menuScope={`${sidebarOpen}:${tabs.active}:${tabs.providerId ?? ""}`}
         sidebarOpen={sidebarOpen}

@@ -26,8 +26,6 @@ export interface AppPagesProps {
     showConversationFiles?(): void;
   };
   preferences: ReturnType<typeof useAppPreferences>;
-  sidebarBlurError: string;
-  appearance: { sidebarBlurSupported: boolean; customWindowControls: boolean };
   updates: ReturnType<typeof useUpdates>;
   tabs: PageTabs;
   settingsSection: SettingsSectionId | null;

@@ -6,6 +6,11 @@ import type {
   MemorySettings,
   MemorySnapshot,
 } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Checkbox as CarbonCheckbox } from "./carbon/choices.js";
+import { Select as CarbonSelect } from "./carbon/fields.js";
+import { Switch as CarbonSwitch } from "./carbon/switch.js";
+import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
 import { ControlDescription } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
@@ -131,18 +136,15 @@ export function MemoryPage({
       ) : (
         <>
           <SettingsCard title="Memory">
-            <label className="settings-row">
-              Memory
-              <input
-                type="checkbox"
-                role="switch"
+            <div className="settings-row">
+              <CarbonSwitch
+                labelText={<>Memory</>}
                 aria-describedby={helpId}
                 checked={settings.enabled}
-                aria-checked={settings.enabled}
                 disabled={busy}
-                onChange={(event) => configure({ enabled: event.target.checked })}
+                onChange={(checked) => configure({ enabled: checked })}
               />
-            </label>
+            </div>
             {!settings.enabled && (
               <div className="settings-row" role="status">
                 Memory is off. Saved memories and ordinary transcripts are kept. Information already
@@ -160,20 +162,20 @@ export function MemoryPage({
                   conflicts, share or delete records. Turning Memory off does not delete them.
                 </ControlDescription>
               </span>
-              <button type="button" onClick={onManage}>
+              <AppButton type="button" onClick={onManage}>
                 Manage memories
-              </button>
+              </AppButton>
             </div>
             {snapshot?.indexFailed && settings.enabled && (
               <div className="settings-row">
                 <span>Semantic search needs repair. Keyword recall remains available.</span>
-                <button
+                <AppButton
                   type="button"
                   disabled={busy}
                   onClick={() => void action({ type: "reindex" })}
                 >
                   Repair search
-                </button>
+                </AppButton>
               </div>
             )}
           </SettingsCard>
@@ -190,7 +192,7 @@ export function MemoryPage({
                   confirmation.
                 </ControlDescription>
               </span>
-              <select
+              <CarbonSelect
                 id="memory-retention"
                 aria-describedby="memory-retention-tip"
                 value={settings.retentionDays}
@@ -205,7 +207,7 @@ export function MemoryPage({
                 <option value={30}>30 days</option>
                 <option value={90}>90 days</option>
                 <option value={365}>1 year</option>
-              </select>
+              </CarbonSelect>
             </div>
           </SettingsCard>
         </>
@@ -299,15 +301,19 @@ export function MemoryInspector({
         {m.correction && <li className="memory-tag">Correction</li>}
         {m.pinned && <li className="memory-tag">Pinned</li>}
       </ul>
-      <label className="memory-edit">
-        <span className="field-label">Memory text</span>
-        <textarea
+      <div className="memory-edit">
+        <CarbonTextArea
+          labelText={
+            <>
+              <span className="field-label">Memory text</span>
+            </>
+          }
           aria-label="Memory text"
           maxLength={2000}
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-      </label>
+      </div>
       {m.condition && (
         <p className="memory-condition">
           <span className="field-label">Applies when</span>
@@ -378,52 +384,51 @@ export function MemoryInspector({
         </details>
       )}
       <div className="memory-actions">
-        <button
+        <AppButton
           type="button"
           className="danger-text"
           disabled={busy}
           onClick={() => onAction({ type: "forget", ...identity })}
         >
           Forget
-        </button>
+        </AppButton>
         <span className="memory-actions-end">
           <span className="memory-pin">
-            <label>
-              <input
-                type="checkbox"
+            <div>
+              <CarbonCheckbox
+                labelText={<>Pinned</>}
                 checked={pinned}
                 onChange={(e) => setPinned(e.target.checked)}
               />
-              Pinned
-            </label>
+            </div>
             <ControlDescription>
               Pinned memories are never replaced automatically.
             </ControlDescription>
           </span>
           {m.state === "disputed" && (
-            <button
+            <AppButton
               type="button"
               disabled={busy}
               onClick={() => onAction({ type: "resolve", ...identity })}
             >
               Keep and pin this claim
-            </button>
+            </AppButton>
           )}
-          <button
+          <AppButton
             type="button"
             disabled={busy || m.scope === "global"}
             onClick={() => onAction({ type: "promote", ...identity })}
           >
             Promote to global
-          </button>
-          <button
+          </AppButton>
+          <AppButton
             type="button"
             className="primary"
             disabled={busy || !changed || !text.trim()}
             onClick={() => onAction({ type: "edit", ...identity, text, pinned })}
           >
             Save changes
-          </button>
+          </AppButton>
         </span>
       </div>
     </div>

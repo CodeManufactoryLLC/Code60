@@ -30,13 +30,16 @@ describe("project confirmation", () => {
     expect(html).toContain('role="alert">Cannot open &lt;folder&gt;</div>');
     const buttons = html.match(/<button[^>]*>/g) ?? [];
     expect(buttons).toHaveLength(3);
-    for (const button of buttons) expect(button).toContain("disabled");
+    expect(html).toContain('aria-busy="true"');
+    // Carbon owns the close button; runtime synchronization disables it during busy state.
+    for (const button of buttons.filter((button) => !button.includes('aria-label="Close')))
+      expect(button).toContain("disabled");
   });
 
   it("blocks opening, but still allows cancellation, if project runs become active", () => {
     const html = render(false, true);
     expect(html).toContain("Finish or stop all runs before switching projects.");
-    expect(html).toContain('<button type="button">Cancel</button>');
-    expect(html.match(/<button[^>]*class="primary"[^>]*>/)?.[0]).toContain("disabled");
+    expect(html).toMatch(/<button[^>]*type="button"[^>]*>Cancel<\/button>/);
+    expect(html.match(/<button[^>]*class="primary[^"]*"[^>]*>/)?.[0]).toContain("disabled");
   });
 });

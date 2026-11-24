@@ -1,3 +1,4 @@
+import { Button as AppButton } from "./carbon/button.js";
 import { Modal } from "./modal.js";
 import { pathLabel } from "./path-label.js";
 
@@ -27,12 +28,12 @@ export function ProjectConfirmation({
         </div>
       )}
       <div className="modal-footer">
-        <button type="button" disabled={busy} onClick={onCancel}>
+        <AppButton type="button" disabled={busy} onClick={onCancel}>
           Cancel
-        </button>
-        <button type="button" className="primary" disabled={busy || blocked} onClick={onConfirm}>
+        </AppButton>
+        <AppButton type="button" className="primary" disabled={busy || blocked} onClick={onConfirm}>
           Open project
-        </button>
+        </AppButton>
       </div>
     </Modal>
   );

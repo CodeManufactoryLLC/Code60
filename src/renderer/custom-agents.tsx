@@ -6,6 +6,9 @@ import type {
   CustomAgentSummary,
 } from "../bridge/index.js";
 import { AnchoredMenu } from "./anchored-menu.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
+import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
 import { Icon } from "./icons.js";
 import { Modal } from "./modal.js";
 import { NavigationCards } from "./navigation-cards.js";
@@ -93,7 +96,7 @@ export function CustomAgentsPage({
           else void onOpen(a.id);
         }}
         renderActions={(a) => (
-          <button
+          <AppButton
             type="button"
             className="icon-button home-card-actions"
             aria-label={`More actions for ${a.name}`}
@@ -106,7 +109,7 @@ export function CustomAgentsPage({
             }}
           >
             <Icon name="overflow-menu--horizontal" />
-          </button>
+          </AppButton>
         )}
       />
       {menuVisible && menu && (
@@ -196,7 +199,7 @@ export function AgentEditor({
         }}
       >
         <label htmlFor={`${id}-name`}>Name</label>
-        <input
+        <CarbonTextInput
           id={`${id}-name`}
           required
           maxLength={120}
@@ -205,7 +208,7 @@ export function AgentEditor({
           onChange={(e) => setName(e.target.value)}
         />
         <label htmlFor={`${id}-instructions`}>Special instructions</label>
-        <textarea
+        <CarbonTextArea
           id={`${id}-instructions`}
           required
           rows={12}
@@ -216,12 +219,15 @@ export function AgentEditor({
         />
         {error && <p role="alert">{error}</p>}
         <div className="dialog-actions">
-          <button type="button" disabled={busy} onClick={onClose}>
+          <AppButton type="button" disabled={busy} onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" disabled={busy || !changed || !name.trim() || !instructions.trim()}>
+          </AppButton>
+          <AppButton
+            type="submit"
+            disabled={busy || !changed || !name.trim() || !instructions.trim()}
+          >
             Save
-          </button>
+          </AppButton>
         </div>
       </form>
     </Modal>

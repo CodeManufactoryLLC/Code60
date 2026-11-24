@@ -1,11 +1,14 @@
+import { ComposedModal, FeatureFlags, ModalBody } from "@carbon/react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import type { ApplicationClient, Snapshot } from "../bridge/index.js";
 import { AgentSetupWizard } from "./agent-setup.js";
 import type { Theme } from "./appearance.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { hasOrchestrationProvider } from "./snapshot-state.js";
 
 export function Splash({
+  onSetupChange,
   windowControls,
   ready,
   snapshot,
@@ -18,6 +21,7 @@ export function Splash({
   onConnectDatabase,
   onOpenWebServer,
 }: {
+  onSetupChange?(open: boolean): void;
   windowControls?: ReactNode;
   ready: boolean;
   snapshot: Snapshot | undefined;
@@ -30,16 +34,15 @@ export function Splash({
   onConnectDatabase(): void;
   onOpenWebServer?(): void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
   const setupButton = useRef<HTMLButtonElement>(null);
   const id = useId();
   const configured = hasOrchestrationProvider(snapshot);
   const providerLoaded = snapshot !== undefined;
   const [setup, setSetup] = useState(false);
-  // Keep the workspace behind the splash inert; nested native modals remain usable.
   useEffect(() => {
-    dialog.current?.showModal();
-  }, []);
+    onSetupChange?.(setup);
+  }, [setup, onSetupChange]);
   useEffect(() => {
     if (!ready || setup) return;
     if (configured && !snapshot?.database)
@@ -57,71 +60,82 @@ export function Splash({
   };
   return (
     <>
-      <dialog
-        ref={dialog}
-        className="splash"
-        data-theme={theme}
-        data-ready={ready}
-        aria-labelledby={`${id}-title`}
-        aria-describedby={`${id}-subtitle`}
-        onCancel={(event) => {
-          if (event.target !== event.currentTarget) return;
-          event.preventDefault();
-          if (configured) enter();
-        }}
-      >
-        {!setup && windowControls}
-        <div className="splash-brand">
-          {ready && snapshot && !snapshot.database && (
-            <DatabaseNotice
-              busy={busy}
-              error={snapshot.databaseError}
-              onConnect={onConnectDatabase}
-            />
-          )}
-          <div className="splash-logo">
-            <div className="splash-lockup">
-              <span id={`${id}-title`} className="wordmark splash-title">
-                Code<b>60</b>
-              </span>
-              <p id={`${id}-subtitle`} className="splash-subtitle">
-                v0.2 Paddock (Beta)
-              </p>
-              {ready && (
-                <>
-                  {error && (
-                    <p className="error-banner" role="alert">
-                      {error}
-                    </p>
-                  )}
-                  {!configured && onOpenWebServer && (
-                    <button type="button" disabled={busy} onClick={onOpenWebServer}>
-                      Web Server Beta
-                    </button>
-                  )}
-                  {configured ? (
-                    <button type="button" className="splash-enter" disabled={busy} onClick={enter}>
-                      Start
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="splash-enter"
-                      ref={setupButton}
-                      disabled={busy}
-                      onClick={enter}
-                    >
-                      Set up agents
-                    </button>
-                  )}
-                </>
+      <FeatureFlags flags={{ "enable-dialog-element": true }}>
+        <ComposedModal
+          open
+          preventCloseOnClickOutside
+          isFullWidth
+          className="splash-overlay"
+          containerClassName="splash"
+          data-theme={theme}
+          data-ready={ready}
+          aria-labelledby={`${id}-title`}
+          aria-describedby={`${id}-subtitle`}
+          onClose={() => {
+            if (configured) enter();
+            return false;
+          }}
+        >
+          <ModalBody ref={dialog} className="splash-body">
+            {!setup && windowControls}
+            <div className="splash-brand">
+              {ready && snapshot && !snapshot.database && (
+                <DatabaseNotice
+                  busy={busy}
+                  error={snapshot.databaseError}
+                  onConnect={onConnectDatabase}
+                />
               )}
+              <div className="splash-logo">
+                <div className="splash-lockup">
+                  <span id={`${id}-title`} className="wordmark splash-title">
+                    Code60
+                  </span>
+                  <p id={`${id}-subtitle`} className="splash-subtitle">
+                    {configured ? "Workspace setup" : "Connect a provider to start working"}
+                  </p>
+                  {ready && (
+                    <>
+                      {error && (
+                        <p className="error-banner" role="alert">
+                          {error}
+                        </p>
+                      )}
+                      {!configured && onOpenWebServer && (
+                        <AppButton type="button" disabled={busy} onClick={onOpenWebServer}>
+                          Web Server Beta
+                        </AppButton>
+                      )}
+                      {configured ? (
+                        <AppButton
+                          type="button"
+                          className="splash-enter"
+                          disabled={busy}
+                          onClick={enter}
+                        >
+                          Start
+                        </AppButton>
+                      ) : (
+                        <AppButton
+                          type="button"
+                          className="splash-enter"
+                          ref={setupButton}
+                          disabled={busy}
+                          onClick={enter}
+                        >
+                          Set up agents
+                        </AppButton>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="window-drag-strip" aria-hidden="true" />
-        {ready && <SplashThemeToggle theme={theme} onChange={onThemeChange} />}
-      </dialog>
+            <div className="window-drag-strip" aria-hidden="true" />
+            {ready && <SplashThemeToggle theme={theme} onChange={onThemeChange} />}
+          </ModalBody>
+        </ComposedModal>
+      </FeatureFlags>
       {setup && snapshot && (
         <AgentSetupWizard
           snapshot={snapshot}
@@ -152,22 +166,22 @@ function SplashThemeToggle({ theme, onChange }: { theme: Theme; onChange(theme: 
   return (
     // biome-ignore lint/a11y/useSemanticElements: These buttons select appearance, not form inputs.
     <div className="button-group splash-theme-toggle" role="group" aria-label="Color theme">
-      <button
+      <AppButton
         type="button"
         aria-label="Light mode"
         aria-pressed={!dark}
         onClick={() => onChange("light")}
       >
         Light
-      </button>
-      <button
+      </AppButton>
+      <AppButton
         type="button"
         aria-label="Dark mode"
         aria-pressed={dark}
         onClick={() => onChange("dark")}
       >
         Dark
-      </button>
+      </AppButton>
     </div>
   );
 }

@@ -89,10 +89,8 @@ describe("Home destinations", () => {
         "Apps",
         "Sessions",
       ]);
-      expect(html.match(/class="home-card"/g)).toHaveLength(6);
-      expect(html.match(/Welcome to Code60/g)).toHaveLength(1);
-      expect(html).toContain('<p class="home-welcome">Welcome to Code60</p>');
-      expect(html.indexOf("Welcome to Code60")).toBeLessThan(html.indexOf('class="home-cards"'));
+      expect(html.match(/class="navigation-list-row"/g)).toHaveLength(6);
+      expect(html).not.toContain("Welcome to Code60");
       expect(html).toContain('id="home-title" class="content-page-title"');
       expect(html).not.toContain("home-card-description");
       for (const [id, icon, available] of [
@@ -106,8 +104,8 @@ describe("Home destinations", () => {
         const card = html.match(
           new RegExp(`<button[^>]*data-feature="${id}"[\\s\\S]*?</button>`),
         )?.[0];
-        expect(card).toContain(`data-icon="${icon}"`);
-        expect(card).toContain('alt="" aria-hidden="true"');
+        expect(card).not.toContain(`data-icon="${icon}"`);
+        expect(card).not.toContain("<img");
         expect(card?.includes('disabled=""')).toBe(!available);
         if (!available)
           expect(card).toContain(

@@ -1,4 +1,5 @@
-import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
+import { ProgressBar } from "@carbon/react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   type ApplicationClient,
   type ProviderLoginChallenge,
@@ -11,8 +12,10 @@ import {
 } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { copyText } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Select, TextInput } from "./carbon/fields.js";
 import { Icon } from "./icons.js";
-import { DialogContent } from "./neobrutalism/dialog.js";
+import { Modal } from "./modal.js";
 
 export function AgentSetupWizard({
   windowControls,
@@ -27,10 +30,8 @@ export function AgentSetupWizard({
   mode: SetupBegin["mode"];
   onClose(): void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const title = useRef<HTMLHeadingElement>(null);
   const started = useRef(false);
-  const id = useId();
+  const closing = useRef(false);
   const attemptInFlight = useRef(false);
   const [pending, setPending] = useState<{ provider: string; revision: number } | null>(null);
   const [connected, setConnected] = useState<string | null>(null);
@@ -97,20 +98,13 @@ export function AgentSetupWizard({
     }
   }, [api, session?.id, session?.candidate]);
   useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    dialog.current?.showModal();
-    return () => previous?.focus();
-  }, []);
-  useEffect(() => {
-    if (title.current?.textContent === heading) title.current.focus();
-  }, [heading]);
-  useEffect(() => {
     if (pending && snapshot.revision > pending.revision && session?.candidate === pending.provider)
       setPending(null);
   }, [pending, snapshot.revision, session?.candidate]);
   useEffect(() => {
-    if (session) started.current = true;
-    if (started.current || connected || saving) return;
+    // A reopened dialog can briefly see the previous session's retiring snapshot.
+    // Only our own begin request consumes this dialog's one-time startup guard.
+    if (session || started.current || closing.current || connected || saving) return;
     started.current = true;
     void api.beginAgentSetup({ mode }).catch((cause: unknown) => setError(String(cause)));
   }, [api, mode, session, connected, saving]);
@@ -172,11 +166,16 @@ export function AgentSetupWizard({
     }
   }
   async function close() {
-    if (saveInFlight.current) return;
-    await invoke(async () => {
-      if (session && !connected) await api.abandonAgentSetup({ sessionId: session.id });
-      onClose();
-    });
+    if (saveInFlight.current || closing.current) return;
+    closing.current = true;
+    try {
+      await invoke(async () => {
+        if (session && !connected) await api.abandonAgentSetup({ sessionId: session.id });
+        onClose();
+      });
+    } finally {
+      closing.current = false;
+    }
   }
   async function attempt(provider: string) {
     if (!session || !provider || busy || attemptInFlight.current) return;
@@ -258,30 +257,15 @@ export function AgentSetupWizard({
     setSaving(false);
   }
   return (
-    <DialogContent
-      ref={dialog}
-      className="setup-dialog agent-setup-dialog"
-      aria-labelledby={id}
-      onCancel={(event) => {
-        event.preventDefault();
-        void close();
-      }}
+    <Modal
+      title={heading}
+      className="agent-setup-dialog"
+      busy={saving}
+      onClose={() => void close()}
+      closeLabel="Close provider setup"
+      focusHeading
     >
       {windowControls}
-      <div className="modal-heading">
-        <h2 id={id} ref={title} tabIndex={-1}>
-          {heading}
-        </h2>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Close provider setup"
-          disabled={saving}
-          onClick={() => void close()}
-        >
-          <Icon name="close" />
-        </button>
-      </div>
       <div className="agent-setup-body">
         {choosing && (
           <fieldset className="agent-choices" disabled={!session || saving}>
@@ -289,7 +273,7 @@ export function AgentSetupWizard({
             {providers
               .filter((p) => !session?.verified.includes(p.id))
               .map((p) => (
-                <button
+                <AppButton
                   key={p.id}
                   type="button"
                   className="agent-choice"
@@ -318,7 +302,7 @@ export function AgentSetupWizard({
                 >
                   <AgentLogo id={p.logo} />
                   <span>{p.name}</span>
-                </button>
+                </AppButton>
               ))}
           </fieldset>
         )}
@@ -365,7 +349,7 @@ export function AgentSetupWizard({
                     )}
                     <div>
                       {challenge.kind === "device" && (
-                        <button
+                        <AppButton
                           type="button"
                           onClick={() =>
                             void copyText(challenge.userCode).catch(() =>
@@ -376,7 +360,7 @@ export function AgentSetupWizard({
                           }
                         >
                           Copy code
-                        </button>
+                        </AppButton>
                       )}
                       <a href={challenge.verificationUrl} target="_blank" rel="noopener noreferrer">
                         Open sign-in page
@@ -392,20 +376,18 @@ export function AgentSetupWizard({
                       void submitLogin();
                     }}
                   >
-                    <label>
-                      Authorization code
-                      <input
-                        aria-label="Authorization code"
-                        value={authorizationCode}
-                        onChange={(event) => setAuthorizationCode(event.target.value)}
-                        autoComplete="off"
-                        spellCheck={false}
-                        maxLength={4096}
-                      />
-                    </label>
-                    <button type="submit" disabled={submitting || !authorizationCode.trim()}>
+                    <TextInput
+                      labelText="Authorization code"
+                      aria-label="Authorization code"
+                      value={authorizationCode}
+                      onChange={(event) => setAuthorizationCode(event.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                      maxLength={4096}
+                    />
+                    <AppButton type="submit" disabled={submitting || !authorizationCode.trim()}>
                       Complete sign-in
-                    </button>
+                    </AppButton>
                     <p>Sign in on the provider’s page, then paste its authorization code here.</p>
                   </form>
                 ) : challenge.kind === "confirmation" ? (
@@ -414,20 +396,20 @@ export function AgentSetupWizard({
                       The system keychain is unavailable. Save your Copilot login in a private file
                       on the computer running Code60?
                     </p>
-                    <button
+                    <AppButton
                       type="button"
                       disabled={submitting}
                       onClick={() => void submitLogin(true)}
                     >
                       Save login
-                    </button>
-                    <button
+                    </AppButton>
+                    <AppButton
                       type="button"
                       disabled={submitting}
                       onClick={() => void submitLogin(false)}
                     >
                       Don’t save
-                    </button>
+                    </AppButton>
                   </>
                 ) : (
                   <section aria-label="Sign-in help">
@@ -442,8 +424,9 @@ export function AgentSetupWizard({
               </section>
             )}
             {busy && (
-              <progress
-                aria-label={
+              <ProgressBar
+                hideLabel
+                label={
                   session?.phase === "detecting" ? "Detecting provider" : "Connecting provider"
                 }
               />
@@ -462,7 +445,7 @@ export function AgentSetupWizard({
       </div>
       <div className="modal-footer">
         {busy && !saving ? (
-          <button
+          <AppButton
             type="button"
             onClick={() =>
               session &&
@@ -482,32 +465,32 @@ export function AgentSetupWizard({
             }
           >
             Cancel attempt
-          </button>
+          </AppButton>
         ) : success ? (
           <>
-            <button
+            <AppButton
               type="button"
               className="primary"
               disabled={saving}
               onClick={() => void close()}
             >
               Close
-            </button>
-            <button
+            </AppButton>
+            <AppButton
               type="button"
               disabled={saving || providers.every((p) => setup?.enabled.includes(p.id))}
               onClick={() => void addAnother()}
             >
               Add another provider
-            </button>
+            </AppButton>
           </>
         ) : session?.phase === "failed" || (session?.phase === "success" && error) ? (
           <>
-            <button type="button" onClick={() => void close()}>
+            <AppButton type="button" onClick={() => void close()}>
               Close
-            </button>
+            </AppButton>
             {session.phase === "failed" && (
-              <button
+              <AppButton
                 type="button"
                 onClick={() =>
                   void invoke(async () => {
@@ -516,7 +499,7 @@ export function AgentSetupWizard({
                 }
               >
                 Choose another provider
-              </button>
+              </AppButton>
             )}
             {candidate &&
               (session.setupAction || session.codexAction) &&
@@ -524,30 +507,28 @@ export function AgentSetupWizard({
                 (candidate.id === "codex" && api.installCodexForSetup)) && (
                 <>
                   {(candidate.loginMethods?.length ?? 0) > 1 && (
-                    <label>
-                      Sign-in method
-                      <select
-                        aria-label="Sign-in method"
-                        value={method}
-                        onChange={(event) => setMethod(event.target.value as ProviderLoginMethod)}
-                      >
-                        {candidate.loginMethods?.map((item) => (
-                          <option key={item} value={item}>
+                    <Select
+                      labelText="Sign-in method"
+                      aria-label="Sign-in method"
+                      value={method}
+                      onChange={(event) => setMethod(event.target.value as ProviderLoginMethod)}
+                    >
+                      {candidate.loginMethods?.map((item) => (
+                        <option key={item} value={item}>
+                          {
                             {
-                              {
-                                "claude-subscription": "Claude subscription",
-                                "claude-console": "Anthropic Console",
-                                chatgpt: "ChatGPT",
-                                "github-copilot": "GitHub Copilot",
-                                default: "Browser sign-in",
-                              }[item]
-                            }
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                              "claude-subscription": "Claude subscription",
+                              "claude-console": "Anthropic Console",
+                              chatgpt: "ChatGPT",
+                              "github-copilot": "GitHub Copilot",
+                              default: "Browser sign-in",
+                            }[item]
+                          }
+                        </option>
+                      ))}
+                    </Select>
                   )}
-                  <button
+                  <AppButton
                     type="button"
                     className="primary"
                     onClick={() =>
@@ -557,10 +538,10 @@ export function AgentSetupWizard({
                     {(session.setupAction ?? session.codexAction) === "install"
                       ? `Install ${candidate.name} and sign in`
                       : `Sign in to ${candidate.name}`}
-                  </button>
+                  </AppButton>
                 </>
               )}
-            <button
+            <AppButton
               type="button"
               className="primary"
               onClick={() => {
@@ -569,14 +550,14 @@ export function AgentSetupWizard({
               }}
             >
               Retry
-            </button>
+            </AppButton>
           </>
         ) : (
-          <button type="button" disabled={saving} onClick={() => void close()}>
+          <AppButton type="button" disabled={saving} onClick={() => void close()}>
             {saving ? "Saving…" : "Close"}
-          </button>
+          </AppButton>
         )}
       </div>
-    </DialogContent>
+    </Modal>
   );
 }

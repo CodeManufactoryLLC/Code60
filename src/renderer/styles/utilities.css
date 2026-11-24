@@ -3,10 +3,10 @@
 .app
   :is(button, input, select, textarea):is(:disabled, [aria-disabled="true"]):not(
     .icon-button,
-    .gdg-search-bar-inner button,
-    .plan-task input
+    .plan-task input,
+    .carbon-scheduled-jobs *
   ),
-.app [aria-disabled="true"]:not(.icon-button, .gdg-search-bar-inner button, .plan-task input) {
+.app [aria-disabled="true"]:not(.icon-button, .plan-task input, .carbon-scheduled-jobs *) {
   background-color: var(--disabled-fill);
   background-image: none;
   color: var(--muted);
@@ -65,9 +65,9 @@
 
 /* Independent icon actions highlight the glyph for hover, press and focus.
    Decorative icons inherit the enclosing control's state. */
-:root :is(button.icon-button, .gdg-search-bar-inner button),
+:root button.icon-button,
 :root
-  :is(button.icon-button, .gdg-search-bar-inner button):is(
+  button.icon-button:is(
     :hover,
     :active,
     :focus,
@@ -82,12 +82,10 @@
 }
 
 :root
-  :is(button.icon-button, .gdg-search-bar-inner button):is(
-    :hover,
-    :active,
-    :focus,
-    [aria-pressed="true"]
-  ):not(:disabled, [aria-disabled="true"]) {
+  button.icon-button:is(:hover, :active, :focus, [aria-pressed="true"]):not(
+    :disabled,
+    [aria-disabled="true"]
+  ) {
   color: var(--accent);
 }
 

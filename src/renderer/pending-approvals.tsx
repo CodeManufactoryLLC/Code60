@@ -2,8 +2,8 @@ import { useState } from "react";
 import type { Action } from "../bridge/index.js";
 import type { PendingPermission } from "../core/index.js";
 
-import { Button } from "./neobrutalism/button.js";
-import { Card } from "./neobrutalism/card.js";
+import { Button } from "./carbon/button.js";
+import { Surface as Card } from "./carbon/surfaces.js";
 
 export function PendingApprovals({
   requests,

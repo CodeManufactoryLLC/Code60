@@ -117,13 +117,14 @@ it("shows a safe title, no empty menu, and an accessible chevron for commands", 
   expect(commands).toContain('aria-haspopup="menu"');
   expect(commands).not.toContain(">Refresh</button>");
   expect(run).not.toHaveBeenCalled();
-  expect(
-    renderToStaticMarkup(<ContentHeaderSlot fallback="Sessions" icon="app-table" />),
-  ).toContain("content-page-header-fallback");
+  expect(renderToStaticMarkup(<ContentHeaderSlot fallback="Sessions" />)).toContain(
+    "content-page-header-fallback",
+  );
 });
 
-it("includes navigation artwork even when an unavailable page uses its fallback header", () => {
-  const html = renderToStaticMarkup(<ContentHeaderSlot fallback="Logs" icon="app-table" />);
-  expect(html).toContain('data-icon="app-table"');
+it("keeps a named heading when an unavailable page uses its fallback header", () => {
+  const html = renderToStaticMarkup(<ContentHeaderSlot fallback="Logs" />);
+  expect(html).toContain("<h1");
+  expect(html).not.toContain("<img");
   expect(html).toContain('<span class="page-title-text">Logs</span>');
 });

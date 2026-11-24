@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { DatabaseMode, ProjectEntry } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { Icon } from "./icons.js";
 import { pathLabel } from "./path-label.js";
 
@@ -34,19 +35,19 @@ export function ProjectSelector({
           <p className="muted">No database connected.</p>
           {/* biome-ignore lint/a11y/useSemanticElements: This group contains actions, not form inputs. */}
           <div className="button-group" role="group" aria-label="Database connection">
-            <button type="button" disabled={busy} onClick={() => onConnect("open")}>
+            <AppButton type="button" disabled={busy} onClick={() => onConnect("open")}>
               Open existing database…
-            </button>
-            <button type="button" disabled={busy} onClick={() => onConnect("create")}>
+            </AppButton>
+            <AppButton type="button" disabled={busy} onClick={() => onConnect("create")}>
               Create database…
-            </button>
+            </AppButton>
           </div>
         </>
       ) : projects.length > 0 ? (
         <ul className="project-list" aria-label="Recent projects">
           {projects.map((project) => (
             <li key={project.path} className="project-row">
-              <button
+              <AppButton
                 type="button"
                 className="project-item"
                 disabled={busy}
@@ -54,8 +55,8 @@ export function ProjectSelector({
               >
                 <strong>{pathLabel(project.path)}</strong>
                 <span className="path">{project.path}</span>
-              </button>
-              <button
+              </AppButton>
+              <AppButton
                 type="button"
                 className="icon-button project-remove"
                 aria-label={`Remove ${pathLabel(project.path)} from history`}
@@ -64,14 +65,14 @@ export function ProjectSelector({
                 onClick={() => onRemove(project.path)}
               >
                 <Icon name="close" />
-              </button>
+              </AppButton>
             </li>
           ))}
         </ul>
       ) : (
         <p className="muted">No recent projects.</p>
       )}
-      <button
+      <AppButton
         type="button"
         className="project-open-folder"
         disabled={busy || !database}
@@ -79,7 +80,7 @@ export function ProjectSelector({
       >
         <Icon name="add" />
         <span>Open Folder</span>
-      </button>
+      </AppButton>
       {error && (
         <div className="error-banner" role="alert">
           {error}

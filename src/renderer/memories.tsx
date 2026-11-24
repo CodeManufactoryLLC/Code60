@@ -7,6 +7,7 @@ import {
   type MemoryDetail,
   type MemoryRecord,
 } from "../bridge/index.js";
+import { Select as CarbonSelect } from "./carbon/fields.js";
 import { DataTable, type TableOptions } from "./data-table.js";
 import { MemoriesModel } from "./memories-model.js";
 import { MemoryInspector } from "./memory.js";
@@ -125,7 +126,7 @@ export function MemoriesPage({
   };
   const scope = (
     <>
-      <select
+      <CarbonSelect
         aria-label="Memory project"
         value={query.projectId ?? ""}
         onChange={(e) => filter({ ...query, projectId: e.target.value || undefined })}
@@ -136,8 +137,8 @@ export function MemoriesPage({
             {pathLabel(project.label)}
           </option>
         ))}
-      </select>
-      <select
+      </CarbonSelect>
+      <CarbonSelect
         aria-label="Memory type"
         value={query.type ?? ""}
         onChange={(e) =>
@@ -148,8 +149,8 @@ export function MemoriesPage({
         {MEMORY_TYPES.map((type) => (
           <option key={type}>{type}</option>
         ))}
-      </select>
-      <select
+      </CarbonSelect>
+      <CarbonSelect
         aria-label="Memory status"
         value={query.state ?? ""}
         onChange={(e) =>
@@ -160,7 +161,7 @@ export function MemoriesPage({
         {["active", "disputed", "stale", "superseded"].map((status) => (
           <option key={status}>{status}</option>
         ))}
-      </select>
+      </CarbonSelect>
     </>
   );
   return (

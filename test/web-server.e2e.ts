@@ -1,3 +1,4 @@
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
@@ -43,11 +44,12 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     local.page.on("pageerror", (error) => errors.push(error.message));
     await onboard(local.page);
     await createDatabase(local.page, fixture.directory);
-    await local.page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(local.page.getByRole("banner", { name: "Code60" })).toBeVisible();
     const settings = await serverPage(local.page);
     const toggle = settings.getByRole("switch", { name: "Enable Web Server Beta", exact: true });
     await expect(toggle).not.toBeChecked();
-    await toggle.click();
+    await toggle.focus();
+    await local.page.keyboard.press("Space");
     await expect(settings.locator("p[role=status]")).toHaveText("Listening");
     const url = await settings.getByRole("link").getAttribute("href");
     expect(url).toMatch(/^http:\/\/(?:10\.|172\.|192\.168\.)/);
@@ -85,11 +87,14 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     );
     await page.getByLabel("Pairing code", { exact: true }).fill(previous ?? "");
     await page.getByRole("button", { name: "Connect to Code60", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText("invalid or expired");
+    await expect(page.getByRole("alert").filter({ hasText: "invalid or expired" })).toContainText(
+      "invalid or expired",
+    );
     await page.getByLabel("Pairing code", { exact: true }).fill(activeCode?.replace("-", "") ?? "");
     await page.getByRole("button", { name: "Connect to Code60", exact: true }).click();
     await page.getByRole("button", { name: "Take control", exact: true }).click();
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
+    await expandNavigation(page, "Manage");
     // MCP management also runs on paired HTTP, without secure-context UUID/clipboard APIs.
     const beforeMcp = await readdir(fixture.processLog);
     await page.getByRole("tab", { name: "Apps", exact: true }).click();
@@ -156,7 +161,8 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     await local.page.getByRole("button", { name: "Take control", exact: true }).click();
     const localSettings = await serverPage(local.page);
     await expect(localSettings.getByRole("switch")).toBeEnabled();
-    await localSettings.getByRole("switch").click();
+    await localSettings.getByRole("switch").focus();
+    await local.page.keyboard.press("Space");
     await expect(localSettings.locator("p[role=status]")).toHaveText("Off");
     expect(await readdir(fixture.processLog)).toEqual(launches);
     await writeFile(gate, "continue\n");

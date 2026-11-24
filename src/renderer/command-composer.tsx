@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { availableCommands, type Command, leadingCommand } from "../bridge/index.js";
-import { Textarea } from "./neobrutalism/textarea.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Textarea } from "./carbon/textarea.js";
 
 export function matchingCommands(commands: readonly Command[], text: string, cursor: number) {
   const token = /^\$([^\s]*)/.exec(text);
@@ -68,7 +69,7 @@ export function CommandComposer({
         <div className="command-picker">
           <div role="listbox" id={listId} aria-label="Commands">
             {matches.map((command, position) => (
-              <button
+              <AppButton
                 type="button"
                 role="option"
                 tabIndex={-1}
@@ -81,7 +82,7 @@ export function CommandComposer({
                 <span>${command.name}</span>
                 <span>{command.title}</span>
                 {command.description && <small>{command.description}</small>}
-              </button>
+              </AppButton>
             ))}
           </div>
           <p className="muted">Up/Down to choose, Enter or Tab to insert, Escape to close.</p>

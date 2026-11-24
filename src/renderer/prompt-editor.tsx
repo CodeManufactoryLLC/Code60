@@ -6,6 +6,9 @@ import {
   type PromptTemplate,
   type PromptTemplateState,
 } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Select as CarbonSelect } from "./carbon/fields.js";
+import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
 import { Icon } from "./icons.js";
 import { PageTitle } from "./page-title.js";
 import {
@@ -81,40 +84,11 @@ export function PromptEditorPage({
   return (
     <main className="prompt-editor" aria-labelledby={`${id}-title`}>
       <div className="table-controls">
-        <PageTitle
-          page="prompts"
-          className="table-title"
-          id={`${id}-title`}
-          actions={[
-            {
-              id: "prompt-editor-0",
-              label: "Save",
-              run: async () => {
-                if (await onSave(selected.id, text)) setDraft(undefined);
-              },
-              disabled: busy || !dirty || !preview.ok,
-            },
-            {
-              id: "prompt-editor-1",
-              label: "Discard changes",
-              run: () => setDraft(undefined),
-              disabled: busy || !dirty,
-            },
-            {
-              id: "prompt-editor-2",
-              label: "Reset to default",
-              reason: `Reset to the ${restores} template`,
-              run: async () => {
-                if (await onReset(selected.id)) setDraft(undefined);
-              },
-              disabled: busy || selected.source !== "database",
-            },
-          ]}
-        />
+        <PageTitle page="prompts" className="table-title" id={`${id}-title`} />
       </div>
       <div className="prompt-editor-body">
         <nav className="prompt-editor-list" aria-label="Prompt templates">
-          <button
+          <AppButton
             type="button"
             className="prompt-system-toggle"
             aria-expanded={systemExpanded}
@@ -123,12 +97,12 @@ export function PromptEditorPage({
           >
             <Icon name={systemExpanded ? "chevron--down" : "chevron--right"} />
             System
-          </button>
+          </AppButton>
           <div className="prompt-system-list" id={`${id}-system`} hidden={!systemExpanded}>
             {prompts.map((entry) => {
               const changed = isDirty(drafts, entry.id, entry.template);
               return (
-                <button
+                <AppButton
                   key={entry.id}
                   type="button"
                   aria-current={entry.id === selected.id ? "true" : undefined}
@@ -136,7 +110,7 @@ export function PromptEditorPage({
                 >
                   <span className="prompt-editor-name">{promptLabels[entry.id]}</span>
                   {changed && <span className="prompt-editor-source">Unsaved changes</span>}
-                </button>
+                </AppButton>
               );
             })}
           </div>
@@ -149,13 +123,13 @@ export function PromptEditorPage({
             {dirty ? " Unsaved changes." : ""}
           </p>
           <div className="prompt-editor-view-toggle">
-            <button
+            <AppButton
               type="button"
               aria-controls={`${id}-template-view`}
               onClick={() => setPreviewVisible((current) => !current)}
             >
               {previewVisible ? "Edit template" : "Preview"}
-            </button>
+            </AppButton>
           </div>
           {previewVisible ? (
             <section
@@ -185,7 +159,7 @@ export function PromptEditorPage({
                   <label className="field-label" htmlFor={`${id}-fields`}>
                     Insert merge field
                   </label>
-                  <select
+                  <CarbonSelect
                     id={`${id}-fields`}
                     value=""
                     disabled={busy}
@@ -201,7 +175,7 @@ export function PromptEditorPage({
                         {`{{${field}}}`}
                       </option>
                     ))}
-                  </select>
+                  </CarbonSelect>
                 </div>
               )}
               {typeof text !== "string" ? (
@@ -215,7 +189,7 @@ export function PromptEditorPage({
                         className="prompt-editor-input"
                         data-invalid={preview.ok ? undefined : "true"}
                       >
-                        <textarea
+                        <CarbonTextArea
                           id={`${id}-clause-${key}`}
                           value={text[key]}
                           disabled={busy}
@@ -237,7 +211,7 @@ export function PromptEditorPage({
                     className="prompt-editor-input"
                     data-invalid={preview.ok ? undefined : "true"}
                   >
-                    <textarea
+                    <CarbonTextArea
                       id={`${id}-template`}
                       ref={input}
                       value={text}
@@ -255,6 +229,30 @@ export function PromptEditorPage({
               </p>
             </div>
           )}
+          <div className="workflow-actions">
+            <AppButton
+              variant="primary"
+              disabled={busy || !dirty || !preview.ok}
+              onClick={async () => {
+                if (await onSave(selected.id, text)) setDraft(undefined);
+              }}
+            >
+              Save
+            </AppButton>
+            <AppButton disabled={busy || !dirty} onClick={() => setDraft(undefined)}>
+              Discard changes
+            </AppButton>
+            <AppButton
+              variant="quiet"
+              title={`Reset to the ${restores} template`}
+              disabled={busy || selected.source !== "database"}
+              onClick={async () => {
+                if (await onReset(selected.id)) setDraft(undefined);
+              }}
+            >
+              Reset to default
+            </AppButton>
+          </div>
         </section>
       </div>
     </main>

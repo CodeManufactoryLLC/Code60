@@ -609,12 +609,6 @@
   box-shadow: inset 3px 0 var(--accent);
 }
 
-/* Reserve native table gutters before row counts or wrapping require a thumb. */
-.dvn-scroller,
-.gdg-clip-region {
-  scrollbar-gutter: stable;
-}
-
 .workspace-heading {
   display: flex;
   align-items: baseline;

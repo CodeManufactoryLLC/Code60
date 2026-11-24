@@ -1,28 +1,11 @@
 export const rowDensities = [
-  { id: "high", label: "High", height: 24 },
-  { id: "medium", label: "Medium", height: 32 },
-  { id: "low", label: "Low", height: 44 },
+  { id: "high", label: "High", height: 32 },
+  { id: "medium", label: "Medium", height: 48 },
+  { id: "low", label: "Low", height: 64 },
 ] as const;
 export type RowDensity = (typeof rowDensities)[number]["id"];
 export function parseRowDensity(value: string | null): RowDensity {
   return rowDensities.find((density) => density.id === value)?.id ?? "low";
-}
-export function rowHeight(density: RowDensity): number {
-  return rowDensities.find((entry) => entry.id === density)?.height ?? 44;
-}
-/** `heading` is the pair of lines directly above and below the column headings. */
-/**
- * Scales column widths to fill `available` pixels, keeping their proportions. Widths are whole
- * pixels, the last column takes the rounding remainder, and none goes below `min`.
- */
-export function fitWidths(widths: readonly number[], available: number, min = 20): number[] {
-  const total = widths.reduce((sum, width) => sum + width, 0);
-  if (!widths.length || total <= 0) return [...widths];
-  if (available <= min * widths.length) return widths.map(() => min);
-  const fitted = widths.map((width) => Math.max(min, Math.floor((width / total) * available)));
-  const used = fitted.reduce((sum, width) => sum + width, 0);
-  fitted[fitted.length - 1] = Math.max(min, (fitted.at(-1) ?? min) + available - used);
-  return fitted;
 }
 export function parseFitColumns(value: string | null): boolean {
   return value === "true";

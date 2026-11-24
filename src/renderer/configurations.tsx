@@ -1,7 +1,7 @@
-import type { Rectangle } from "@glideapps/glide-data-grid";
 import { useMemo } from "react";
 import type { RunConfiguration } from "../bridge/index.js";
 import { DataTable, type TableOptions } from "./data-table.js";
+import type { Rectangle } from "./table-types.js";
 
 export function agentCount(configuration: RunConfiguration): number {
   return configuration.settings.agents.length === 1
