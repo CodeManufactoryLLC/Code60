@@ -1,0 +1,11 @@
+name: Prepare private Node runtime
+description: Copy the selected Node executable to runner-owned storage for installation checks.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        bin="$RUNNER_TEMP/code60-private-node/bin"
+        install -d -m 700 "$bin"
+        install -m 700 "$(node -p 'process.execPath')" "$bin/node"
+        echo "$bin" >> "$GITHUB_PATH"
