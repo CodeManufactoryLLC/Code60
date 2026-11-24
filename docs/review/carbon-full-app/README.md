@@ -17,6 +17,18 @@ The [Carbon interaction audit](carbon-audit.md) records the subsequent review of
 
 The [dark mode gallery](dark-mode.md) covers 15 desktop views across the operator workflows.
 
+## Page spacing and alignment
+
+Every destination uses a full-span column in the shared Carbon grid. At the default text size the first content edge sits 16px inside the workspace on small screens, 32px at the medium through extra-large breakpoints, and 40px at the maximum breakpoint. The heading and first action, field group, or table share that edge. Editors and settings retain a bounded reading width. Carbon controls keep their internal padding. [Carbon 2x Grid](https://carbondesignsystem.com/building-blocks/foundations/2x-grid/overview/)
+
+Code60 uses 24px above a small-screen title and 16px below its heading row. From the medium breakpoint those spaces grow to 32px and 24px. Settings sections have 32px between groups and the command form has 24px between fields. These are application choices from the [Carbon spacing scale](https://carbondesignsystem.com/building-blocks/foundations/spacing/overview/).
+
+| View | Screenshots |
+| --- | --- |
+| Mobile Projects | [Earlier layout](spacing-projects-before.png) · [Aligned heading and action](spacing-projects-mobile.png) |
+| Desktop Scheduled Jobs | [Light](spacing-jobs-desktop.png) · [Dark](dark/schedules.png) |
+| Desktop builders | [Command form](dark/commands.png) · [Prompt editor](dark/prompts.png) |
+
 ## Sidebar review
 
 The Carbon homepage uses UI Shell submenu buttons for its section navigation. The four Code60 sections use that same React component. The current route opens its section, and each section can be toggled without leaving the page. At the default text size, the section uses 16px semibold Plex and destinations use 14px regular Plex. A collapsed section containing the current page retains Carbon’s active indicator. [Carbon homepage](https://carbondesignsystem.com/) · [UI Shell left panel](https://carbondesignsystem.com/building-blocks/core/components/ui-shell-left-panel/accessibility/)

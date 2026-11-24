@@ -8,6 +8,8 @@
 @use '@carbon/react/scss/theme';
 @use '@carbon/react/scss/themes';
 @use '@carbon/react/scss/type';
+@use '@carbon/react/scss/spacing' as space;
+@use '@carbon/react/scss/breakpoint' as bp;
 @use '@carbon/react/scss/utilities/layout' as carbon-layout;
 @use '@carbon/styles/scss/layer/layer-tokens' as carbon-layer;
 
@@ -251,28 +253,57 @@
     background: var(--cds-background);
     .app-workspace { display: block; min-inline-size: 0; margin: 0; overflow: hidden; }
     .product-page-grid {height:100%; grid-template-rows:minmax(0,1fr);}
-    .product-page-grid:has(#panel-automations:not([hidden])) {padding-inline:0;}
-    .page-panel {grid-column:1 / -1;grid-row:1;height:100%;margin:0;border:0;padding:0;}
+    --page-heading-inset: #{space.$spacing-06};
+    --page-heading-gap: #{space.$spacing-05};
+    @include bp.breakpoint(md) {
+      --page-heading-inset: #{space.$spacing-07};
+      --page-heading-gap: #{space.$spacing-06};
+    }
+    .page-panel {
+      grid-row: 1;
+      grid-column-start: 1;
+      height: 100%;
+      margin-block: 0;
+      border: 0;
+      padding: 0;
+    }
+    // Carbon columns establish the horizontal grid. Each active panel stacks
+    // its heading and lets the scrollable body fill the remaining height.
+    .page-panel:not([hidden]) { display: flex; }
     .task-index-label {display:flex;flex-direction:column;gap:.25rem;align-items:flex-start;}
     .task-index-label small { @include type.type-style('body-compact-01'); color:var(--cds-text-secondary); }
     .home-content:has(.task-index-label) .navigation-destination {padding-block:.75rem;}
 
-    #panel-automations {padding:0;}
     .database-notice {position:static; margin:0;}
     .content-page-header-slot {margin:0; min-block-size:0;}
-    .content-page-heading {justify-content:flex-start; padding:1.5rem 0 1rem; min-height:0;}
+    .content-page-heading {justify-content:flex-start; padding:var(--page-heading-inset) 0 var(--page-heading-gap); min-height:0;}
     .content-page-title { @include type.type-style('heading-05'); justify-content:flex-start; text-align:start; font-family:inherit; text-transform:none; }
     .content-page-title .navigation-icon, .navigation-destination-icon:has(.navigation-icon) {display:none;}
     .home-content,.settings-section,.workflow-content {margin-inline:0; align-items:flex-start;}
-    .home-content {padding-inline:0;}
+    .home-content, .provider-detail-content, .system-manager-page,
+    .prompt-editor-body, .rag-page, .web-server-page, .contributor-tools {
+      padding: 0 0 space.$spacing-07;
+    }
+    .home-content { scrollbar-gutter: stable; }
+    .provider-identity, .provider-detail-content > .settings-card,
+    .providers-page .home-content > .settings-card, .system-manager-page { margin-inline: 0; }
+    .provider-detail-content > .settings-card { margin-block: space.$spacing-07 0; }
+    .table-controls:has(> .page-title-placeholder):not(:has(> :not(.page-title-placeholder, [hidden], .sr-only))) {
+      display: contents;
+    }
+    .prompt-editor-body { gap: space.$spacing-07; }
+    .settings-section .settings-card { margin-block: 0 space.$spacing-07; }
+    .settings-section .settings-card-title { padding-block: 0 space.$spacing-03; }
+    .search-content { padding-block-start: space.$spacing-06; }
+    .memory-heading, .memory-prompt, .memory-statements { padding-inline: 0; }
     .settings-card {margin-inline:0; width:min(100%,46rem); border:0; background:transparent; padding-inline:0;}
     .settings-card-title { @include type.type-style('heading-03'); }
-    .workflows-page {padding:0 0 2rem;}
+    .workflows-page {padding:0 0 space.$spacing-07;}
     .workflow-content {max-width:72rem;}
     .workflow-form,.workflow-player {max-width:46rem;}
-    .chat-conversations {position:relative; border:0; background:var(--cds-background);}
+    .chat-conversations {position:relative; border:0; padding:0; background:var(--cds-background);}
     .chat-conversations .content-page-heading {padding-inline-end:3rem;}
-    #workspace-panel-actions {position:absolute;z-index:3;inset-inline-end:0;inset-block-start:1.5rem;}
+    #workspace-panel-actions {position:absolute;z-index:3;inset-inline-end:0;inset-block-start:var(--page-heading-inset);}
     .file-panel {--right-panel-rise:0px; margin-block-start:0; box-shadow:none;}
   }
   .carbon-app .product-header {
@@ -346,7 +377,7 @@
     .product-header .product-utilities span {position:absolute;clip-path:inset(50%);}
     .product-header .product-utilities button {min-width:0;padding-inline:.5rem;}
     .app[data-product-screen] .chat-workspace-body[data-file-panel-open=true] {
-      .chat-conversations { flex:0 0 auto; min-height:3.5rem; max-height:3.5rem;overflow:hidden;}
+      .chat-conversations { flex:0 0 auto; min-height:0; }
       .chat-conversations > :not(#workspace-panel-actions,.content-page-header-slot) {display:none;}
       .file-panel:not([data-minimized=true]) {flex:1;min-height:0;margin:0;}
     }
@@ -357,10 +388,10 @@
   .carbon-app {
     .agent-choices .agent-choice { display: flex; align-items: center; gap: 1rem; min-block-size: 4rem; }
     .agent-setup-dialog .modal-footer:empty { display: none; }
-    .workflow-empty { padding-block: 2rem; }
+    .workflow-empty { padding-block: space.$spacing-07; }
     .workflow-empty h2 { @include type.type-style('heading-03'); margin: 0; }
     .workflow-empty p { @include type.type-style('body-01'); margin-block: .5rem 1rem; }
-    .command-form { max-inline-size: 40rem; gap: 1.5rem; }
+    .command-form { max-inline-size: 40rem; gap: space.$spacing-06; }
     .command-form-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
     .prompt-editor-list .cds--btn { max-inline-size: 100%; inline-size: 100%; }
     .prompt-editor-list .cds--btn[aria-current=true] {

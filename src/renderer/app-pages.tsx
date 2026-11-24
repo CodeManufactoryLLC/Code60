@@ -1,4 +1,4 @@
-import { Grid } from "@carbon/react";
+import { Column, Grid } from "@carbon/react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectSearchOpened } from "../bridge/index.js";
@@ -695,7 +695,11 @@ export function AppPages(props: AppPagesProps) {
         {renderedPages.map(({ id }) => {
           const Shell = id === "chat" ? "div" : Card;
           return (
-            <Shell
+            <Column
+              as={Shell}
+              sm={4}
+              md={8}
+              lg={16}
               key={id}
               className="page-panel"
               role="tabpanel"
@@ -720,7 +724,7 @@ export function AppPages(props: AppPagesProps) {
                 />
               )}
               {views[id]}
-            </Shell>
+            </Column>
           );
         })}
       </Grid>

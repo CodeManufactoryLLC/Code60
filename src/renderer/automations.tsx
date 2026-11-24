@@ -1,8 +1,6 @@
 import { Add } from "@carbon/icons-react";
 import {
   Button,
-  Column,
-  Grid,
   InlineLoading,
   InlineNotification,
   Tab,
@@ -247,200 +245,192 @@ export function AutomationsPage({
   );
   return (
     <section className="carbon-scheduled-jobs" data-active={visible}>
-      <Grid fullWidth>
-        <Column sm={4} md={8} lg={editor ? 10 : 16}>
-          {editor ? (
-            <AutomationForm
-              key={editor.id}
-              api={api}
-              editor={editor}
-              agents={agents}
-              active={visible}
-              onClose={() => setEditor(undefined)}
-              onSaved={(id) => {
-                focusAfterForm.current = id ? `job-row-${id}` : "create";
-                setEditor(undefined);
-                void refreshLatest.current();
-              }}
-            />
-          ) : (
-            <>
-              <h1 id="jobs-page-heading" tabIndex={-1}>
-                Scheduled Jobs
-              </h1>
-              {(actionError || error) && (
-                <section aria-label="Scheduler feedback">
-                  <InlineNotification
-                    kind="error"
-                    title={error ? "Scheduler unavailable" : "Job action failed"}
-                    subtitle={actionError || error}
-                    hideCloseButton
-                  />
-                  {error && (
-                    <Button kind="ghost" onClick={() => void refreshLatest.current()}>
-                      Retry
+      {editor ? (
+        <AutomationForm
+          key={editor.id}
+          api={api}
+          editor={editor}
+          agents={agents}
+          active={visible}
+          onClose={() => setEditor(undefined)}
+          onSaved={(id) => {
+            focusAfterForm.current = id ? `job-row-${id}` : "create";
+            setEditor(undefined);
+            void refreshLatest.current();
+          }}
+        />
+      ) : (
+        <>
+          <h1 id="jobs-page-heading" tabIndex={-1}>
+            Scheduled Jobs
+          </h1>
+          {(actionError || error) && (
+            <section aria-label="Scheduler feedback">
+              <InlineNotification
+                kind="error"
+                title={error ? "Scheduler unavailable" : "Job action failed"}
+                subtitle={actionError || error}
+                hideCloseButton
+              />
+              {error && (
+                <Button kind="ghost" onClick={() => void refreshLatest.current()}>
+                  Retry
+                </Button>
+              )}
+            </section>
+          )}
+          <Tabs
+            selectedIndex={tab}
+            onChange={({ selectedIndex }) => {
+              clearEvidence();
+              setTab(selectedIndex);
+            }}
+          >
+            <TabList aria-label="Scheduled Jobs views">
+              <Tab>Schedules</Tab>
+              <Tab>Execution history</Tab>
+            </TabList>
+            <TabPanels>
+              <TabPanel>
+                <TableContainer>
+                  <TableToolbar aria-label="Scheduled job controls">
+                    <TableToolbarContent>
+                      <Button
+                        kind="ghost"
+                        disabled={busy}
+                        onClick={() => {
+                          setActionError("");
+                          void refreshLatest.current();
+                        }}
+                      >
+                        Refresh
+                      </Button>
+                      <Button
+                        ref={actionsTrigger}
+                        renderIcon={Add}
+                        disabled={busy}
+                        onClick={() => {
+                          focusAfterForm.current = "create";
+                          setEditor({
+                            id: "",
+                            revision: 0,
+                            repositoryLabel: "",
+                            draft: freshDraft(agents[0] ?? ""),
+                          });
+                        }}
+                      >
+                        New scheduled job
+                      </Button>
+                    </TableToolbarContent>
+                  </TableToolbar>
+                  {loading && !automations.length && (
+                    <InlineLoading description="Reading scheduled jobs…" />
+                  )}
+                  <div className="carbon-job-table-scroll">
+                    <Table size="lg" aria-label="Schedules">
+                      <TableHead>
+                        <TableRow>
+                          <TableHeader id="schedule-details-heading">
+                            <span className="cds--visually-hidden">Details</span>
+                          </TableHeader>
+                          {[
+                            "Job name",
+                            "Schedule status",
+                            "Next run",
+                            "Run status",
+                            "Agent",
+                            "Actions",
+                          ].map((label) => (
+                            <TableHeader key={label} scope="col">
+                              {label}
+                            </TableHeader>
+                          ))}
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {[...automations]
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map((job) => (
+                            <AutomationJob
+                              key={job.id}
+                              job={job}
+                              api={api}
+                              active={visible && tab === 0}
+                              open={expanded === job.id}
+                              busy={busy}
+                              onToggle={() => setExpanded(expanded === job.id ? undefined : job.id)}
+                              onAction={act}
+                              onEdit={() => void editJob(job)}
+                              onHistory={() => historyScope(job.id)}
+                            />
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {!automations.length && !error && !loading && (
+                    <section className="carbon-job-empty">
+                      <h2>No scheduled jobs.</h2>
+                      <p>Create a scheduled job to run a saved prompt on a schedule.</p>
+                    </section>
+                  )}
+                </TableContainer>
+              </TabPanel>
+              <TabPanel>
+                {selected && (
+                  <div className="carbon-job-filter">
+                    <span>
+                      Schedule:{" "}
+                      {automations.find((job) => job.id === selected)?.name ??
+                        history[0]?.automationName ??
+                        "Deleted schedule"}
+                    </span>
+                    <Button kind="ghost" size="sm" onClick={() => historyScope()}>
+                      Show all schedules
+                    </Button>
+                  </div>
+                )}
+                {loading && !history.length && <InlineLoading description="Reading executions…" />}
+                <AutomationHistory
+                  key={selected ?? "all"}
+                  rows={history}
+                  selected={selectedExecution}
+                  filtered={!!selected}
+                  showEmpty={!error && !loading}
+                  onSelect={(id) => {
+                    clearEvidence();
+                    setSelectedExecution(id);
+                  }}
+                  evidence={evidenceActions}
+                />
+                <div className="carbon-job-actions">
+                  {before !== undefined && (
+                    <Button
+                      kind="ghost"
+                      onClick={() => {
+                        clearEvidence();
+                        setBefore(undefined);
+                      }}
+                    >
+                      Latest
                     </Button>
                   )}
-                </section>
-              )}
-              <Tabs
-                selectedIndex={tab}
-                onChange={({ selectedIndex }) => {
-                  clearEvidence();
-                  setTab(selectedIndex);
-                }}
-              >
-                <TabList aria-label="Scheduled Jobs views">
-                  <Tab>Schedules</Tab>
-                  <Tab>Execution history</Tab>
-                </TabList>
-                <TabPanels>
-                  <TabPanel>
-                    <TableContainer>
-                      <TableToolbar aria-label="Scheduled job controls">
-                        <TableToolbarContent>
-                          <Button
-                            kind="ghost"
-                            disabled={busy}
-                            onClick={() => {
-                              setActionError("");
-                              void refreshLatest.current();
-                            }}
-                          >
-                            Refresh
-                          </Button>
-                          <Button
-                            ref={actionsTrigger}
-                            renderIcon={Add}
-                            disabled={busy}
-                            onClick={() => {
-                              focusAfterForm.current = "create";
-                              setEditor({
-                                id: "",
-                                revision: 0,
-                                repositoryLabel: "",
-                                draft: freshDraft(agents[0] ?? ""),
-                              });
-                            }}
-                          >
-                            New scheduled job
-                          </Button>
-                        </TableToolbarContent>
-                      </TableToolbar>
-                      {loading && !automations.length && (
-                        <InlineLoading description="Reading scheduled jobs…" />
-                      )}
-                      <div className="carbon-job-table-scroll">
-                        <Table size="lg" aria-label="Schedules">
-                          <TableHead>
-                            <TableRow>
-                              <TableHeader id="schedule-details-heading">
-                                <span className="cds--visually-hidden">Details</span>
-                              </TableHeader>
-                              {[
-                                "Job name",
-                                "Schedule status",
-                                "Next run",
-                                "Run status",
-                                "Agent",
-                                "Actions",
-                              ].map((label) => (
-                                <TableHeader key={label} scope="col">
-                                  {label}
-                                </TableHeader>
-                              ))}
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {[...automations]
-                              .sort((a, b) => a.name.localeCompare(b.name))
-                              .map((job) => (
-                                <AutomationJob
-                                  key={job.id}
-                                  job={job}
-                                  api={api}
-                                  active={visible && tab === 0}
-                                  open={expanded === job.id}
-                                  busy={busy}
-                                  onToggle={() =>
-                                    setExpanded(expanded === job.id ? undefined : job.id)
-                                  }
-                                  onAction={act}
-                                  onEdit={() => void editJob(job)}
-                                  onHistory={() => historyScope(job.id)}
-                                />
-                              ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      {!automations.length && !error && !loading && (
-                        <section className="carbon-job-empty">
-                          <h2>No scheduled jobs.</h2>
-                          <p>Create a scheduled job to run a saved prompt on a schedule.</p>
-                        </section>
-                      )}
-                    </TableContainer>
-                  </TabPanel>
-                  <TabPanel>
-                    {selected && (
-                      <div className="carbon-job-filter">
-                        <span>
-                          Schedule:{" "}
-                          {automations.find((job) => job.id === selected)?.name ??
-                            history[0]?.automationName ??
-                            "Deleted schedule"}
-                        </span>
-                        <Button kind="ghost" size="sm" onClick={() => historyScope()}>
-                          Show all schedules
-                        </Button>
-                      </div>
-                    )}
-                    {loading && !history.length && (
-                      <InlineLoading description="Reading executions…" />
-                    )}
-                    <AutomationHistory
-                      key={selected ?? "all"}
-                      rows={history}
-                      selected={selectedExecution}
-                      filtered={!!selected}
-                      showEmpty={!error && !loading}
-                      onSelect={(id) => {
+                  {history.length >= 50 && (
+                    <Button
+                      kind="ghost"
+                      onClick={() => {
                         clearEvidence();
-                        setSelectedExecution(id);
+                        setBefore(history.at(-1)?.sequence);
                       }}
-                      evidence={evidenceActions}
-                    />
-                    <div className="carbon-job-actions">
-                      {before !== undefined && (
-                        <Button
-                          kind="ghost"
-                          onClick={() => {
-                            clearEvidence();
-                            setBefore(undefined);
-                          }}
-                        >
-                          Latest
-                        </Button>
-                      )}
-                      {history.length >= 50 && (
-                        <Button
-                          kind="ghost"
-                          onClick={() => {
-                            clearEvidence();
-                            setBefore(history.at(-1)?.sequence);
-                          }}
-                        >
-                          Older
-                        </Button>
-                      )}
-                    </div>
-                  </TabPanel>
-                </TabPanels>
-              </Tabs>
-            </>
-          )}
-        </Column>
-      </Grid>
+                    >
+                      Older
+                    </Button>
+                  )}
+                </div>
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
+        </>
+      )}
       {visible && transcriptExecution && (
         <AutomationTranscriptModal
           key={transcriptExecution}

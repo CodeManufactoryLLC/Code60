@@ -18,6 +18,7 @@ No comparison destination, preference or feature flag is introduced.
   `carbon-app` layer after existing feature styles and before accessibility.
   Disable upstream reset/body/default type/font loading and use bundled Plex.
   The product header, navigation, responsive 2x Grid and White/G100 themes serve all destinations. Keep global commands in the header and local actions with their objects. Scheduled Jobs owns its line tabs and operator workflows. Expanding a job reads details. Only View history applies a schedule filter. Evidence actions belong to their execution row.
+- Each retained destination is a full-span Carbon Column in the product Grid. Let that column own the outer margins and gutters. Align page titles, tabs, lists, form groups and table edges to its start. Bound reading widths from that edge. Keep component padding inside toolbars, rows and fields. Use the shared responsive heading inset and gap, with Carbon spacing tokens between related controls and larger tokens between sections.
 - Keep the start screen a full-page landmark. Provider setup owns its modal focus and backdrop. Place a skip link before shell controls and target the active retained page. Anchor settings to the page heading. Use Carbon field validation after interaction, with one primary action per form.
 - Restore only a validated destination after pairing and provider verification. Keep
   storage scoped to the active database or the database-independent workspace.

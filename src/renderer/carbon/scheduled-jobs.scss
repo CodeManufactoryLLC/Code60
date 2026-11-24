@@ -13,8 +13,8 @@
     color: var(--cds-text-primary);
     background: var(--cds-background);
     flex: 1; min-height: 0; min-width: 0; overflow: auto;
-    padding-block: space.$spacing-07 space.$spacing-09;
-    h1 { @include type.type-style('heading-05'); margin: 0 0 space.$spacing-06; }
+    padding-block: var(--page-heading-inset) space.$spacing-09;
+    h1 { @include type.type-style('heading-05'); margin: 0 0 var(--page-heading-gap); }
     h2 { @include type.type-style('heading-03'); margin: 0; }
     h3 { @include type.type-style('heading-compact-02'); margin: 0; }
     .cds--tab-content { padding: space.$spacing-06 0 0; }

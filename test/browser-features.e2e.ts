@@ -185,6 +185,28 @@ test("browser: Carbon application navigation, appearance controls and retained d
       path: test.info().outputPath("carbon-apps-light.png"),
       animations: "disabled",
     });
+    // Compare the visible content with the workspace edge, including Carbon's
+    // breakpoint margin and the column's half gutter.
+    async function expectPageAlignment(heading: string, content: string) {
+      for (const [width, inset] of [
+        [390, 16],
+        [768, 32],
+        [1600, 40],
+      ] as const) {
+        await page.setViewportSize({ width, height: 1000 });
+        const workspace = page.locator(".app-workspace");
+        const title = page.locator(heading).filter({ visible: true }).first();
+        const body = page.locator(content).filter({ visible: true }).first();
+        await expect
+          .poll(async () => {
+            const left = (element: Element) => element.getBoundingClientRect().left;
+            const edge = await workspace.evaluate(left);
+            return [(await title.evaluate(left)) - edge, (await body.evaluate(left)) - edge];
+          })
+          .toEqual([inset, inset]);
+      }
+    }
+    await expectPageAlignment("#panel-apps .content-page-title", "#panel-apps .navigation-list");
     const nav = page.getByRole("navigation", { name: "Product navigation" });
     const group = (name: string) => nav.getByRole("button", { name, exact: true });
     const manage = group("Manage");
@@ -213,8 +235,13 @@ test("browser: Carbon application navigation, appearance controls and retained d
     );
     await page.getByRole("link", { name: "Skip to main content" }).press("Enter");
     await expect(page.locator("#panel-automations")).toBeFocused();
+    await expectPageAlignment("#jobs-page-heading", "#panel-automations .cds--tabs");
     await app(page, "Command Builder");
     const form = page.locator("#panel-commands form");
+    await expectPageAlignment(
+      "#panel-commands .content-page-title",
+      "#panel-commands .prompt-editor-list",
+    );
     await expect(form.locator("[aria-invalid=true]")).toHaveCount(0);
     await expect(form.getByRole("button", { name: "Discard changes" })).toBeDisabled();
     const name = form.getByLabel("Name", { exact: true });
@@ -253,6 +280,18 @@ test("browser: Carbon application navigation, appearance controls and retained d
       .locator(".orchestration-chat-page:visible")
       .getByRole("combobox", { name: "Message to orchestrator", exact: true });
     await expect(composer).toBeEditable();
+    await expect
+      .poll(() =>
+        page
+          .locator(".chat-workspace-body")
+          .evaluate((body) =>
+            Math.round(
+              body.getBoundingClientRect().height -
+                (body.parentElement?.getBoundingClientRect().height ?? 0),
+            ),
+          ),
+      )
+      .toBe(0);
     await composer.fill("Unsent Carbon migration draft");
     await app(page, "Memory");
     await page.getByRole("button", { name: "Relay", exact: true }).click();
