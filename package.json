@@ -66,10 +66,9 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^2.4.0",
+    "@carbon/icons-react": "11.92.0",
+    "@carbon/react": "1.121.0",
     "@fontsource/ibm-plex-sans": "5.3.0",
-    "@fontsource/ibm-plex-serif": "5.3.0",
-    "@fontsource/roboto": "5.3.0",
-    "@glideapps/glide-data-grid": "6.0.4-alpha24",
     "@headless-tree/core": "1.8.0",
     "@headless-tree/react": "1.8.0",
     "@huggingface/transformers": "4.3.2",
@@ -84,28 +83,22 @@
     "zod": "4.6.7"
   },
   "overrides": {
-    "@linaria/react": {
-      "minimatch@>=7 <11.0.1": "11.0.1"
-    },
-    "@wyw-in-js/shared": {
-      "minimatch@>=7 <11.0.1": "11.0.1"
-    },
     "monaco-editor": {
       "dompurify": "3.4.17"
     }
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.5",
+    "@carbon/styles": "1.120.0",
     "@devcontainers/cli": "0.91.0",
     "@playwright/test": "^1.64.1",
-    "@tailwindcss/vite": "4.3.5",
     "@types/node": "^24.0.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
     "@vitest/coverage-v8": "5.1.0",
     "knip": "6.44.2",
-    "tailwindcss": "4.3.5",
+    "sass": "1.108.2",
     "typescript": "7.0.2",
     "vite": "^8.3.6",
     "vitest": "5.1.0",

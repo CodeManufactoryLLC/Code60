@@ -415,7 +415,7 @@ kbd {
   box-shadow: var(--segmented-selection, 0 0 transparent), var(--focus-inset-shadow);
 }
 
-/* Status label, matching the grid's canvas drawing for chat titles and palette hints. */
+/* Shared status labels for chat titles and palette hints. */
 .status-label {
   display: inline-flex;
   align-items: center;

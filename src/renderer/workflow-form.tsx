@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type ApplicationClient,
   type WorkflowDraft,
@@ -9,12 +9,17 @@ import {
   workflowDraftReplySchema,
 } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
-import { DialogContent } from "./neobrutalism/dialog.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Checkbox as CarbonCheckbox } from "./carbon/choices.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
+import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
+import { Modal } from "./modal.js";
 
 type Message = { id: string; role: "user" | "assistant"; text: string };
 const emptyTask = () => ({ name: "", instructions: "", verify: "", checks: [] as string[] });
 export function WorkflowForm({
   api,
+  initialDefinition,
   providerReady,
   active,
   onProvider,
@@ -22,6 +27,7 @@ export function WorkflowForm({
   onClose,
 }: {
   api: ApplicationClient;
+  initialDefinition?: WorkflowRecord["definition"] | undefined;
   providerReady: boolean;
   active: boolean;
   onProvider(): void;
@@ -30,17 +36,21 @@ export function WorkflowForm({
 }) {
   const [formId] = useState(() => randomId());
   const revision = useRef(0);
-  const taskKeys = useRef<string[]>([randomId()]);
+  const [initialKeys] = useState(() =>
+    Array.from({ length: initialDefinition?.tasks.length ?? 1 }, () => randomId()),
+  );
+  const taskKeys = useRef(initialKeys);
   const alive = useRef(true);
   const generation = useRef<string | null>(null);
-  const [draft, setDraft] = useState<WorkflowDraft>({
+  const [draft, setDraft] = useState<WorkflowDraft>(() => ({
     name: "",
     repositoryToken: randomId(),
     tasks: [emptyTask()],
     repairs: 2,
     retries: 2,
     autoApprove: true,
-  });
+    ...structuredClone(initialDefinition),
+  }));
   const [repository, setRepository] = useState<WorkflowRepository | null>(null);
   const [review, setReview] = useState<WorkflowReview | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -49,7 +59,6 @@ export function WorkflowForm({
   const [generating, setGenerating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const dialog = useRef<HTMLDialogElement>(null);
   const cancelDraft = () => {
     const requestId = generation.current;
     generation.current = null;
@@ -73,10 +82,6 @@ export function WorkflowForm({
       void api.workflow({ action: "cancelDraft", formId }).catch(() => {});
     }
   }, [active, providerReady, api, formId]);
-  useLayoutEffect(() => {
-    if (chat && active) dialog.current?.showModal();
-    else dialog.current?.close();
-  }, [chat, active]);
   const change = (next: WorkflowDraft) => {
     revision.current++;
     setDraft(next);
@@ -156,25 +161,24 @@ export function WorkflowForm({
   return (
     <section className="workflow-form" aria-label="New workflow">
       <div className="workflow-actions">
-        <h2>New workflow</h2>
-        <button type="button" disabled={busy} onClick={() => setChat(true)}>
+        <AppButton type="button" disabled={busy} onClick={() => setChat(true)}>
           Create with prompt
-        </button>
-        <button type="button" disabled={busy} onClick={onClose}>
+        </AppButton>
+        <AppButton type="button" disabled={busy} onClick={onClose}>
           Close form
-        </button>
+        </AppButton>
       </div>
       <fieldset disabled={busy}>
-        <label>
-          Workflow name
-          <input
+        <div>
+          <CarbonTextInput
+            labelText={<>Workflow name</>}
             value={draft.name}
             maxLength={160}
             onChange={(event) => change({ ...draft, name: event.target.value })}
           />
-        </label>
+        </div>
         <div className="workflow-actions">
-          <button
+          <AppButton
             type="button"
             onClick={() =>
               void perform(async () => {
@@ -191,47 +195,47 @@ export function WorkflowForm({
             }
           >
             Choose repository
-          </button>
+          </AppButton>
           <span>{repository?.label ?? "No repository selected"}</span>
         </div>
         <ol className="workflow-task-editor">
           {draft.tasks.map((task, index) => (
             <li key={taskKeys.current[index]}>
-              <label>
-                Task name
-                <input
+              <div>
+                <CarbonTextInput
+                  labelText={<>Task name</>}
                   value={task.name}
                   maxLength={65_536}
                   onChange={(event) => taskChange(index, { name: event.target.value })}
                 />
-              </label>
-              <label>
-                Implementation instructions
-                <textarea
+              </div>
+              <div>
+                <CarbonTextArea
+                  labelText={<>Implementation instructions</>}
                   value={task.instructions}
                   maxLength={65_536}
                   onChange={(event) => taskChange(index, { instructions: event.target.value })}
                 />
-              </label>
-              <label>
-                Verification criteria
-                <textarea
+              </div>
+              <div>
+                <CarbonTextArea
+                  labelText={<>Verification criteria</>}
                   value={task.verify}
                   maxLength={65_536}
                   onChange={(event) => taskChange(index, { verify: event.target.value })}
                 />
-              </label>
-              <label>
-                Check commands (one per line)
-                <textarea
+              </div>
+              <div>
+                <CarbonTextArea
+                  labelText={<>Check commands (one per line)</>}
                   value={task.checks?.join("\n") ?? ""}
                   onChange={(event) =>
                     taskChange(index, { checks: event.target.value.split("\n").filter(Boolean) })
                   }
                 />
-              </label>
+              </div>
               <div className="workflow-actions">
-                <button
+                <AppButton
                   type="button"
                   disabled={index === 0}
                   onClick={() => {
@@ -247,8 +251,8 @@ export function WorkflowForm({
                   }}
                 >
                   Move up
-                </button>
-                <button
+                </AppButton>
+                <AppButton
                   type="button"
                   onClick={() => {
                     taskKeys.current.splice(index, 1);
@@ -256,12 +260,12 @@ export function WorkflowForm({
                   }}
                 >
                   Remove task
-                </button>
+                </AppButton>
               </div>
             </li>
           ))}
         </ol>
-        <button
+        <AppButton
           type="button"
           disabled={draft.tasks.length >= 100}
           onClick={() => {
@@ -270,38 +274,37 @@ export function WorkflowForm({
           }}
         >
           Add task
-        </button>
+        </AppButton>
         <div className="workflow-actions">
-          <label>
-            Repairs per worker
-            <input
+          <div>
+            <CarbonTextInput
+              labelText={<>Repairs per worker</>}
               type="number"
               min={0}
               max={30}
               value={draft.repairs}
               onChange={(event) => change({ ...draft, repairs: Number(event.target.value) })}
             />
-          </label>
-          <label>
-            Fresh-session retries
-            <input
+          </div>
+          <div>
+            <CarbonTextInput
+              labelText={<>Fresh-session retries</>}
               type="number"
               min={0}
               max={30}
               value={draft.retries}
               onChange={(event) => change({ ...draft, retries: Number(event.target.value) })}
             />
-          </label>
+          </div>
         </div>
-        <label className="workflow-check">
-          <input
-            type="checkbox"
+        <div className="workflow-check">
+          <CarbonCheckbox
+            labelText={<>Automatically approve harness permissions</>}
             checked={draft.autoApprove}
             onChange={(event) => change({ ...draft, autoApprove: event.target.checked })}
           />
-          Automatically approve harness permissions
-        </label>
-        <button
+        </div>
+        <AppButton
           type="button"
           disabled={!repository}
           onClick={() =>
@@ -318,7 +321,7 @@ export function WorkflowForm({
           }
         >
           Review workflow
-        </button>
+        </AppButton>
       </fieldset>
       {review && (
         <section aria-label="Workflow approval" className="workflow-review">
@@ -353,7 +356,7 @@ export function WorkflowForm({
               </li>
             ))}
           </ol>
-          <button
+          <AppButton
             type="button"
             disabled={busy}
             onClick={() =>
@@ -369,72 +372,67 @@ export function WorkflowForm({
             }
           >
             {busy ? "Starting…" : "Start workflow"}
-          </button>
+          </AppButton>
         </section>
       )}
       {error && !chat && <p role="alert">{error}</p>}
-      <DialogContent
-        ref={dialog}
-        aria-labelledby={`${formId}-chat-title`}
-        onCancel={(event) => {
-          event.preventDefault();
-          closeChat();
-        }}
-      >
-        <div className="workflow-actions">
-          <h2 id={`${formId}-chat-title`}>Create with prompt</h2>
-          <button type="button" onClick={closeChat}>
-            Close chat
-          </button>
-        </div>
-        <div className="workflow-draft-chat" role="log" aria-live="polite">
-          {messages.map((message) => (
-            <div key={message.id}>
-              <strong>{message.role === "user" ? "You" : "Assistant"}</strong>
-              <p>{message.text}</p>
-            </div>
-          ))}
-        </div>
-        {error && <p role="alert">{error}</p>}
-        {!providerReady ? (
-          <button
-            type="button"
-            onClick={() => {
-              closeChat();
-              onProvider();
-            }}
-          >
-            Connect a provider
-          </button>
-        ) : (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void generate();
-            }}
-          >
-            <label>
-              Describe the workflow
-              <textarea
-                value={prompt}
-                maxLength={16_000}
-                onChange={(event) => setPrompt(event.target.value)}
-              />
-            </label>
-            <div className="workflow-actions">
-              <button type="submit" disabled={generating || !prompt.trim()}>
-                {generating ? "Drafting…" : "Send"}
-              </button>
-              {generating && (
-                <button type="button" onClick={cancelDraft}>
-                  Cancel generation
-                </button>
-              )}
-            </div>
-          </form>
-        )}
-        {error && !chat && <p role="alert">{error}</p>}
-      </DialogContent>
+      {chat && active && (
+        <Modal
+          title="Create with prompt"
+          busy={false}
+          onClose={closeChat}
+          closeLabel="Close chat"
+          initialFocus="textarea"
+        >
+          <div className="workflow-draft-chat" role="log" aria-live="polite">
+            {messages.map((message) => (
+              <div key={message.id}>
+                <strong>{message.role === "user" ? "You" : "Assistant"}</strong>
+                <p>{message.text}</p>
+              </div>
+            ))}
+          </div>
+          {error && <p role="alert">{error}</p>}
+          {!providerReady ? (
+            <AppButton
+              type="button"
+              onClick={() => {
+                closeChat();
+                onProvider();
+              }}
+            >
+              Connect a provider
+            </AppButton>
+          ) : (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void generate();
+              }}
+            >
+              <div>
+                <CarbonTextArea
+                  labelText={<>Describe the workflow</>}
+                  value={prompt}
+                  maxLength={16_000}
+                  onChange={(event) => setPrompt(event.target.value)}
+                />
+              </div>
+              <div className="workflow-actions">
+                <AppButton type="submit" disabled={generating || !prompt.trim()}>
+                  {generating ? "Drafting…" : "Send"}
+                </AppButton>
+                {generating && (
+                  <AppButton type="button" onClick={cancelDraft}>
+                    Cancel generation
+                  </AppButton>
+                )}
+              </div>
+            </form>
+          )}
+          {error && !chat && <p role="alert">{error}</p>}
+        </Modal>
+      )}
     </section>
   );
 }

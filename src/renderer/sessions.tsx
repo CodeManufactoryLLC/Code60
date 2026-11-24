@@ -1,9 +1,9 @@
-import type { DataEditor, Rectangle } from "@glideapps/glide-data-grid";
-import { type ComponentProps, useCallback, useMemo } from "react";
+import { useCallback, useId, useMemo } from "react";
 import type { RunEvent } from "../core/index.js";
-import { DataTable, type TableOptions, useCssColors } from "./data-table.js";
-import { drawIcon } from "./icons.js";
+import { DataTable, type TableOptions } from "./data-table.js";
+import { Icon } from "./icons.js";
 import { type SessionRow, statusSpec } from "./session-presentation.js";
+import type { Rectangle } from "./table-types.js";
 import { useTableView } from "./table-view.js";
 import {
   bucketCount,
@@ -17,7 +17,6 @@ import {
   telemetry,
 } from "./telemetry.js";
 import { useTicker } from "./ticker.js";
-import { resolveText } from "./typography.js";
 
 const started = new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" });
 
@@ -86,133 +85,78 @@ function display(row: ChartRow, key: Key): string {
 const sessionAlign = (key: Key) =>
   key === "turns" || key === "approvals" || key === "pid" ? ("right" as const) : ("left" as const);
 
-type Paint = (
-  args: Parameters<NonNullable<ComponentProps<typeof DataEditor>["drawCell"]>>[0],
-) => void;
-
-/** Status as the guide draws it: a 16px icon and a 12px label, emphasis without color alone. */
-function paintStatus(
-  paint: Parameters<Paint>[0],
-  row: SessionRow,
-  color: (name: string) => string,
-  font: string,
-) {
-  const { ctx, rect } = paint;
-  const spec = statusSpec[row.status];
-  const height = Math.min(20, rect.height - 4);
-  const x = rect.x + 6;
-  const y = rect.y + (rect.height - height) / 2;
-  let text = color("--muted");
-  if (spec.emphasis === "active") {
-    text = color("--text");
-  } else if (spec.emphasis === "decision") {
-    ctx.fillStyle = color("--text");
-    ctx.fillRect(x, y, Math.min(128, rect.width - 12), height);
-    text = color("--bg");
-  } else if (spec.emphasis === "abnormal") {
-    text = color("--danger");
-    ctx.fillStyle = text;
-    ctx.fillRect(x, y, 3, height);
-  }
-  ctx.fillStyle = text;
-  drawIcon(ctx, spec.icon, x + 6, rect.y + rect.height / 2 - 8);
-  ctx.font = `400 12px ${font}`;
-  ctx.textBaseline = "middle";
-  ctx.textAlign = "left";
-  ctx.letterSpacing = "0px";
-  ctx.fillText(row.statusLabel, x + 28, rect.y + rect.height / 2, rect.width - 40);
-}
-
-const plotWidth = 84;
-function paintChart(
-  paint: Parameters<Paint>[0],
-  row: ChartRow,
-  key: "turnTime" | "activity" | "history",
-  scales: { turns: number; events: number },
-  color: (name: string) => string,
-  font: string,
-) {
-  const { ctx, rect } = paint;
+/** Small domain telemetry plots accompany, rather than replace, the recorded values. */
+function SessionChart({
+  row,
+  kind,
+  scales,
+}: {
+  row: ChartRow;
+  kind: "turnTime" | "activity" | "history";
+  scales: { turns: number; events: number };
+}) {
+  const pattern = useId();
   const data = row.telemetry;
-  const x = rect.x + 8;
-  const middle = rect.y + rect.height / 2;
-  ctx.font = `400 12px ${font}`;
-  ctx.textBaseline = "middle";
-  ctx.textAlign = "left";
-  ctx.letterSpacing = "0px";
-  const unavailable = () => {
-    ctx.fillStyle = color("--muted");
-    ctx.fillText("Unavailable", x, middle, rect.width - 16);
-  };
-  if (key === "history") {
-    if (!data.history?.length) return unavailable();
-    const width = Math.min(168, rect.width - 16);
-    const top = middle - 6;
-    ctx.fillStyle = color("--surface-band");
-    ctx.fillRect(x, top, width, 12);
-    ctx.lineWidth = 1;
-    for (const span of data.history) {
-      const left = x + 1 + (span.start / historySeconds) * (width - 2);
-      const spanWidth = (span.seconds / historySeconds) * (width - 2);
-      if (span.status === "running") {
-        ctx.fillStyle = color("--text");
-        ctx.fillRect(left, top + 1, spanWidth, 10);
-      } else if (span.status === "waiting") {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(left, top + 1, spanWidth, 10);
-        ctx.clip();
-        ctx.fillStyle = color("--surface");
-        ctx.fillRect(left, top + 1, spanWidth, 10);
-        ctx.strokeStyle = color("--muted");
-        for (let stripe = left - 10; stripe < left + spanWidth; stripe += 4) {
-          ctx.beginPath();
-          ctx.moveTo(stripe, top + 11);
-          ctx.lineTo(stripe + 10, top + 1);
-          ctx.stroke();
-        }
-        ctx.restore();
-      }
-    }
-    return;
-  }
-  const samples = key === "turnTime" ? data.turns : data.buckets;
-  if (!samples) return unavailable();
-  const scale = key === "turnTime" ? scales.turns : scales.events;
-  const top = middle - 8;
-  ctx.strokeStyle = color("--control-border");
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(x, top + 15.5);
-  ctx.lineTo(x + plotWidth, top + 15.5);
-  ctx.stroke();
-  const level = (value: number) => top + 15 - (Math.min(value, scale) / scale) * 14;
-  ctx.fillStyle = ctx.strokeStyle = color("--text");
-  if (key === "activity") {
-    const step = (plotWidth - 2) / bucketCount;
-    samples.forEach((value, index) => {
-      const y = level(value);
-      ctx.fillRect(x + 1 + index * step, y, step - 2, top + 15 - y);
-    });
-  } else {
-    const step = samples.length > 1 ? (plotWidth - 2) / (samples.length - 1) : 0;
-    ctx.lineWidth = 1.5;
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    samples.forEach((value, index) => {
-      const px = x + 1 + (samples.length > 1 ? index * step : (plotWidth - 2) / 2);
-      if (index) ctx.lineTo(px, level(value));
-      else ctx.moveTo(px, level(value));
-    });
-    if (samples.length === 1)
-      ctx.arc(x + plotWidth / 2, level(samples[0] ?? 0), 1.5, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.textAlign = "right";
-  ctx.fillText(
-    key === "turnTime" ? latestTurn(data) : eventTotal(data),
-    rect.x + rect.width - 8,
-    middle,
+  const description = display(row, kind);
+  if (kind === "history")
+    return (
+      <svg
+        className="carbon-history-chart"
+        viewBox="0 0 168 16"
+        role="img"
+        aria-label={description}
+      >
+        <defs>
+          <pattern id={pattern} width="4" height="4" patternUnits="userSpaceOnUse">
+            <path d="M-1 1L1 -1M0 4L4 0M3 5L5 3" stroke="currentColor" />
+          </pattern>
+        </defs>
+        <rect x="0" y="2" width="168" height="12" fill="var(--cds-layer-02)" />
+        {data.history?.map((span) => (
+          <rect
+            key={`${span.start}-${span.status}`}
+            x={(span.start / historySeconds) * 168}
+            y="3"
+            width={(span.seconds / historySeconds) * 168}
+            height="10"
+            fill={span.status === "running" ? "currentColor" : `url(#${pattern})`}
+          />
+        ))}
+        <title>{description}</title>
+      </svg>
+    );
+  const samples = kind === "turnTime" ? data.turns : data.buckets;
+  if (!samples) return <span>Unavailable</span>;
+  const scale = kind === "turnTime" ? scales.turns : scales.events;
+  const points = samples
+    .map(
+      (value, index) =>
+        `${samples.length > 1 ? (index * 82) / (samples.length - 1) + 1 : 42},${19 - (Math.min(value, scale) / scale) * 18}`,
+    )
+    .join(" ");
+  return (
+    <span className="carbon-chart-value">
+      <svg viewBox="0 0 84 22" role="img" aria-label={description}>
+        <path d="M0 20H84" stroke="var(--cds-border-strong-01)" />
+        {kind === "turnTime" ? (
+          <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.5" />
+        ) : (
+          samples.map((value, index) => (
+            <rect
+              // biome-ignore lint/suspicious/noArrayIndexKey: Fixed telemetry bucket positions are their identity, with no per-bar state.
+              key={index}
+              x={(index * 82) / bucketCount + 1}
+              y={19 - (Math.min(value, scale) / scale) * 18}
+              width={82 / bucketCount - 2}
+              height={(Math.min(value, scale) / scale) * 18}
+              fill="currentColor"
+            />
+          ))
+        )}
+        <title>{description}</title>
+      </svg>
+      <span>{kind === "turnTime" ? latestTurn(data) : eventTotal(data)}</span>
+    </span>
   );
 }
 
@@ -257,20 +201,20 @@ export function SessionsTable(
     }),
     [chartRows],
   );
-  const color = useCssColors();
-  const font = useMemo(
-    () => resolveText(props.textStyles, "normalText").family,
-    [props.textStyles],
-  );
-  const paint = useCallback(
-    (args: Parameters<Paint>[0], row: ChartRow, key: Key) => {
-      if (key === "statusLabel") paintStatus(args, row, color, font);
-      else if (key === "turnTime" || key === "activity" || key === "history")
-        paintChart(args, row, key, scales, color, font);
-      else return false;
-      return true;
+  const renderCell = useCallback(
+    (row: ChartRow, key: Key) => {
+      if (key === "statusLabel")
+        return (
+          <span className="carbon-status" data-emphasis={statusSpec[row.status].emphasis}>
+            <Icon name={statusSpec[row.status].icon} />
+            {row.statusLabel}
+          </span>
+        );
+      if (key === "turnTime" || key === "activity" || key === "history")
+        return <SessionChart row={row} kind={key} scales={scales} />;
+      return undefined;
     },
-    [color, font, scales],
+    [scales],
   );
   return (
     <DataTable
@@ -285,7 +229,7 @@ export function SessionsTable(
       initialDescending
       display={display}
       align={sessionAlign}
-      paint={paint}
+      renderCell={renderCell}
     />
   );
 }

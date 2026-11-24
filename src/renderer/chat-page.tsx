@@ -16,6 +16,9 @@ import type {
 } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import { ActivityDisplay } from "./activity-display.js";
+import { Button } from "./carbon/button.js";
+import { ScrollArea } from "./carbon/scroll-area.js";
+import { Surface as Card } from "./carbon/surfaces.js";
 import { chatDraftKey, useChatDraft } from "./chat-draft.js";
 import { ChatMessage } from "./chat-message.js";
 import { ChatMessageLayout } from "./chat-message-layout.js";
@@ -32,9 +35,6 @@ import { CommandComposer, CommandMessage, invokedCommand } from "./command-compo
 import { revisionSlot, useConversationRevisions } from "./conversation-revisions.js";
 import { Icon } from "./icons.js";
 import { TurnTimer } from "./message-controls.js";
-import { Button } from "./neobrutalism/button.js";
-import { Card } from "./neobrutalism/card.js";
-import { ScrollArea } from "./neobrutalism/scroll-area.js";
 import { useOrchestratorActions } from "./orchestrator-actions.js";
 import { PageTitle } from "./page-title.js";
 import { PendingApprovals } from "./pending-approvals.js";

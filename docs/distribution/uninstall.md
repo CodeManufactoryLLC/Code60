@@ -55,11 +55,15 @@ separately inspected maintenance customer owns the writable removal operation.
 the isolated supervisor fixture. `npm run test:installation` additionally exercises
 real shell startup before and after separately consented profile removal.
 These tests do not establish native login/reboot lifecycle behavior.
+Installed CLI commands share the caller's finite journey deadline: twenty minutes
+for native acceptance and nine minutes for Linux maintenance. Full receipt scans
+retain every ownership check; there is no shorter nested command deadline.
+`uninstall-commands.jsonl` retains synthetic command timings and failure diagnostics.
 Linux concurrent acceptance runs two complete installed journeys and independently
 verifies the survivor's exact backend identity and usable assets after the first
 run removes its resources. Both runs must finish their shutdown, negative fault
 checks and run-owned cleanup. Cleanup is verified on each Docker engine used;
 success elsewhere cannot resolve an unavailable engine's resource inventory.
-Fresh browser tabs use Start and the existing project history after reinstall;
-they do not inherit a previous tab's presentation state. Acceptance checks provider
+Fresh browser tabs reopen the retained project through its existing history after
+reinstall; they do not inherit a previous tab's presentation state. Acceptance checks provider
 request counts to detect repeated work without logging prompt contents.

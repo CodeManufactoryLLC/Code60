@@ -8,8 +8,7 @@ class Control {
   copy = false;
   iconOnly = false;
   accordion = false;
-  neoVariant: "quiet" | "neutral" | undefined;
-  jobControl = false;
+  carbon = false;
   sidebar = false;
   raised = false;
   isConnected = true;
@@ -36,11 +35,8 @@ class Control {
     if (selector.includes(".home-card"))
       return (
         this.raised ||
-        (selector.includes(".neo-accordion-trigger") && this.accordion) ||
-        (selector.includes(".automation-job-controls") && this.jobControl) ||
-        (this.neoVariant !== undefined &&
-          selector.includes(".neo-button") &&
-          (!selector.includes("[data-variant='quiet']") || this.neoVariant !== "quiet"))
+        (selector.includes(".cds--accordion__heading") && this.accordion) ||
+        (selector.includes(".cds--btn") && this.carbon)
       );
     if (selector.includes(".icon-button")) return this.iconOnly;
     return selector === this.kind;
@@ -158,20 +154,12 @@ it("keeps accordion headers stationary and leaves feedback to disclosure rotatio
   expect(control.icon.animate).not.toHaveBeenCalled();
 });
 
-it.each(["quiet", "neutral"] as const)(
-  "keeps the appropriate press feedback for %s native buttons",
-  (variant) => {
-    const { control, emit } = fixture();
-    control.neoVariant = variant;
-    emit("pointerdown");
-    expect(control.animate).toHaveBeenCalledTimes(variant === "quiet" ? 1 : 0);
-  },
-);
-it("leaves custom job control feedback to its circular CSS face", () => {
+it("leaves Carbon control feedback to the upstream component states", () => {
   const { control, emit } = fixture();
-  control.neoVariant = "quiet";
-  control.jobControl = true;
+  control.carbon = true;
   emit("pointerdown");
+  emit("pointerup");
+  vi.advanceTimersByTime(100);
   expect(control.animate).not.toHaveBeenCalled();
 });
 

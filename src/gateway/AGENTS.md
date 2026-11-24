@@ -134,6 +134,7 @@ Changing its byte format requires an explicit versioned ownership/migration path
 and old/new-definition tests. Preserve outside edits; do not bypass ownership
 checks to accommodate a new formatter.
 
+
 Provider installation/authentication operations accept strict catalog/session/attempt
 identities and bounded code/confirmation inputs only. Derive the controlling-page owner
 server-side. Do not retain provider progress responses in request-receipt caches; never
@@ -149,3 +150,8 @@ ports, never browser/CLI/environment overrides. Isolated provider tests must own
 their PATH and environment; production path recovery can discover installed host
 tools even when HOME is temporary. Keep real detection and ACP verification in
 those journeys while restricting their external tools to the fixture.
+
+Animation replay URLs may carry one bounded `play` key on GET requests for an
+existing manifested GIF only. Reject other production queries, duplicate/extra
+keys, missing assets, non-GIF files, non-GET and all API/management queries.
+Replay keys change no authority, path selection or bytes; never put credentials in them.

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { AgentSetupSnapshot } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { ProviderDropdown } from "./carbon/provider-controls.js";
 import { Icon } from "./icons.js";
-import { ProviderDropdown } from "./neobrutalism/provider-controls.js";
 import { type ProviderManagement, providerActionReasons } from "./provider-management.js";
 
 export function ProviderMenu({
@@ -27,7 +28,7 @@ export function ProviderMenu({
   const reasons = providerActionReasons(setup, provider, management.pending);
   return (
     <>
-      <button
+      <AppButton
         ref={trigger}
         type="button"
         className="icon-button"
@@ -42,7 +43,7 @@ export function ProviderMenu({
         }}
       >
         <Icon name="overflow-menu--horizontal" />
-      </button>
+      </AppButton>
       {position && active && connected && (
         <ProviderDropdown
           anchor={trigger.current}

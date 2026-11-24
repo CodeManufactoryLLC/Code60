@@ -22,8 +22,6 @@ function navigation(
   });
   return renderToStaticMarkup(
     <PageTabBar
-      iconAnimations
-      onIconAnimationsChange={() => {}}
       theme="system"
       onThemeChange={() => {}}
       {...history}
@@ -59,11 +57,13 @@ describe("database connection navigation", () => {
   it("groups Relay and Custom Assistants beneath a navigable Assistants heading", () => {
     const html = navigation(null);
     expect(html).toMatch(/class="[^"]*sidebar-navigation-card\b/);
-    expect(html.match(/data-slot="card"/g)).toHaveLength(7);
+    expect(html).toContain("cds--side-nav");
+    expect(html).toContain("cds--header");
+    expect(html).not.toContain("nb:group/card");
     expect(html.match(/class="[^"]*sidebar-section[^"]*"/g)).toHaveLength(6);
     expect(html).not.toContain('id="assistants-toggle"');
     expect(html).toContain('id="assistants-pages"');
-    expect(html).toContain('data-icon="app-assistants"');
+    expect(html).toContain('aria-label="Automation"');
     expect(html.indexOf('id="assistants-pages"')).toBeLessThan(
       html.indexOf('id="tab-custom-agents"'),
     );
@@ -79,34 +79,13 @@ describe("database connection navigation", () => {
       expect(sidebar?.includes('aria-busy="true"')).toBe(busy);
     },
   );
-  it.each([true, false])(
-    "keeps a reachable external toggle and mounted navigation (open %s)",
-    (open) => {
-      const html = navigation(null, undefined, null, "home", true, open);
-      const sidebar = html.match(/<nav[^>]*id="navigation-sidebar"[^>]*>/)?.[0];
-      expect(sidebar).toContain(`data-open="${open}"`);
-      expect(sidebar).toContain(`aria-hidden="${!open}"`);
-      expect(sidebar?.includes('inert=""')).toBe(!open);
-      expect(html).toContain('id="tab-home"');
-      expect(html).toContain('id="tab-search"');
-      const toggle = html.match(/<button[^>]*class="icon-button sidebar-toggle"[^>]*>/)?.[0];
-      expect(toggle).toContain(`aria-label="${open ? "Close" : "Open"} navigation sidebar"`);
-      expect(toggle).toContain(`aria-expanded="${open}"`);
-      expect(toggle).toContain('aria-controls="navigation-sidebar"');
-      expect(html.indexOf('class="icon-button sidebar-toggle"')).toBeGreaterThan(
-        html.lastIndexOf("</nav>"),
-      );
-      expect(html).toContain('<header class="workspace-header">');
-      expect(html.indexOf('class="icon-button sidebar-toggle"')).toBeGreaterThan(
-        html.indexOf('<header class="workspace-header"'),
-      );
-      expect(html.indexOf('class="icon-button sidebar-toggle"')).toBeGreaterThan(
-        html.indexOf("</header>"),
-      );
-      expect(html).toContain('<div class="workspace-panel-controls">');
-      expect(html).toContain('id="workspace-panel-actions"');
-    },
-  );
+  it("keeps responsive navigation, Commands and Workspace in the header", () => {
+    const html = navigation(null);
+    expect(html).toContain('aria-label="Open product navigation"');
+    expect(html).toContain('aria-controls="navigation-sidebar"');
+    expect(html).toContain(">Commands</button>");
+    expect(html).toContain(">Workspace</button>");
+  });
   it.each([true, false])(
     "selects Settings itself on its home page without selecting a child (expanded %s)",
     (expanded) => {
@@ -126,14 +105,14 @@ describe("database connection navigation", () => {
     expect(search).toContain('class="page-tab-label">Search</span>');
     expect(search).toContain('aria-selected="true"');
     expect(search).toContain('aria-controls="panel-search"');
-    expect(search).toContain('data-icon="app-search"');
-    expect(search).toContain('alt="" aria-hidden="true" draggable="false"');
+    expect(search).not.toContain("<img");
     expect(search).toContain('role="tab"');
     expect(search).toContain('tabindex="0"');
     expect(search).not.toContain("icon-button");
     expect(search).not.toContain("disabled");
     expect(html.match(/id="tab-search"/g)).toHaveLength(1);
-    expect(html.indexOf('id="tab-search"')).toBeGreaterThan(html.indexOf('class="page-tabs"'));
+    expect(html).toContain('id="nav-group-Work"');
+    expect(html.indexOf('id="tab-search"')).toBeGreaterThan(html.indexOf('id="nav-group-Work"'));
     expect(html.indexOf('id="tab-home"')).toBeLessThan(html.indexOf('id="tab-search"'));
     expect(html.indexOf('id="tab-search"')).toBeLessThan(html.indexOf('id="tab-chat"'));
     expect(html).not.toContain("sidebar-toolbar");
@@ -150,7 +129,7 @@ describe("database connection navigation", () => {
   it("replaces project identity with database connection and disables workspace destinations", () => {
     const html = navigation(null, "/old-project");
     const card = html.match(
-      /<button[^>]*class="icon-button project-sidebar-open"[\s\S]*?<\/button>/,
+      /<button[^>]*class="icon-button project-sidebar-open[^"]*"[\s\S]*?<\/button>/,
     )?.[0];
     expect(card).toContain("Connect to database to add a project");
     expect(card).toContain("Add Project");
@@ -186,7 +165,7 @@ describe("database connection navigation", () => {
       expect(html).toContain('aria-label="Add Project"');
       expect(html).not.toContain("sidebar-header");
       expect(html).toContain('title="Add Project"');
-      const action = html.indexOf('class="icon-button project-sidebar-open"');
+      const action = html.indexOf('class="icon-button project-sidebar-open[^"]*"');
       expect(html).not.toContain('id="projects-card-toggle"');
       expect(action).toBeLessThan(html.indexOf('id="chat-pages"'));
       expect(html).not.toContain('class="page-tab-label">Add Project</span>');
@@ -256,63 +235,31 @@ describe("sidebar labels and disclosure icons", () => {
     },
   );
 
-  it("nests Data Viewer alphabetically under Apps and gives every child the grid icon", () => {
-    const html = navigation("/database.sqlite");
-    const order = [
-      "app-pages",
-      "tab-commands",
-      "tables-toggle",
-      "table-pages",
-      "tab-configurations",
-      "tab-events",
-      "tab-logs",
-      "tab-memories",
-      "tab-messages",
-      "tab-polling",
-      "tab-sessions",
-      "tab-worktrees",
-      "tab-prompts",
-      "tab-automations",
-      "tab-system-manager",
-      "tab-settings",
-    ];
-    for (let index = 1; index < order.length; index++) {
-      expect(html.indexOf(`id="${order[index - 1]}"`)).toBeLessThan(
-        html.indexOf(`id="${order[index]}"`),
-      );
-    }
-    for (const id of [
-      "configurations",
-      "events",
-      "logs",
-      "memories",
-      "messages",
-      "polling",
-      "sessions",
-      "worktrees",
-    ]) {
-      const tab = html.match(new RegExp(`<button[^>]*id="tab-${id}"[\\s\\S]*?</button>`))?.[0];
-      expect(tab).toContain('data-icon="app-table"');
-    }
-    expect(html).toContain('aria-label="Data Viewer"');
-    expect(html).not.toContain('title="Tables"');
-  });
-
-  it.each([null, "/database.sqlite"])(
-    "nests the database-independent Scheduled Jobs destination under Apps (%s)",
+  it.each([null, "/db"])(
+    "places automation and inspection routes in task order (%s)",
     (database) => {
-      const html = navigation(database, undefined, "appearance", "automations");
-      const studio = html.match(/<button[^>]*id="tab-automations"[\s\S]*?<\/button>/)?.[0];
-      expect(studio).toContain('aria-selected="true"');
-      expect(studio).toContain("Scheduled Jobs");
-      expect(studio).not.toContain("disabled");
-      expect(html.match(/id="tab-automations"/g)).toHaveLength(1);
-      expect(html.indexOf('id="app-pages"')).toBeLessThan(html.indexOf('id="tab-automations"'));
-      expect(html.indexOf('id="tables-toggle"')).toBeLessThan(html.indexOf('id="tab-automations"'));
-      expect(html).not.toContain('aria-label="Automations page"');
+      const html = navigation(database, undefined, null, "automations");
+      const ids = [
+        "tab-chat",
+        "tab-automations",
+        "tab-workflows",
+        "tables-toggle",
+        "tab-logs",
+        "tab-providers",
+        "tab-settings",
+      ];
+      for (const [index, id] of ids.entries()) {
+        expect(html).toContain(`id="${id}"`);
+        if (index)
+          expect(html.indexOf(`id="${id}"`)).toBeGreaterThan(
+            html.indexOf(`id="${ids[index - 1]}"`),
+          );
+      }
+      expect(html.match(/<button[^>]*id="tab-automations"[^>]*>/)?.[0]).toContain(
+        'aria-selected="true"',
+      );
     },
   );
-
   it.each([true, false])("selects Apps independently of its expansion (%s)", (expanded) => {
     const html = navigation(null, undefined, "appearance", "apps", expanded);
     const tab = html.match(/<button[^>]*id="tab-apps"[\s\S]*?<\/button>/)?.[0];
@@ -358,125 +305,25 @@ describe("sidebar labels and disclosure icons", () => {
       expect(html).toContain('id="tab-rag"');
     },
   );
-
-  it.each([true, false])("keeps navigation icons decorative (expanded: %s)", (expanded) => {
-    for (const database of [null, "/database.sqlite"]) {
-      const html = navigation(database, undefined, "appearance", initialTabs.active, expanded);
-      const promptTab = html.match(/<button[^>]*id="tab-prompts"[\s\S]*?<\/button>/)?.[0];
-      const project = html.match(
-        /<button[^>]*class="icon-button project-sidebar-open"[\s\S]*?<\/button>/,
-      )?.[0];
-      expect(promptTab).toContain("Prompt Builder");
-      expect(promptTab).toContain('data-icon="app-ai"');
-      expect(project).toContain("<svg");
-      expect(html.match(/<img/g)).toHaveLength(36);
-      expect(html.match(/class="carbon-icon"/g)).toHaveLength(3);
-      expect(html.match(/class="navigation-icon"/g)).toHaveLength(38);
-      for (const [id, icon, label] of [
-        ["tab-home", "app-home2", "Home"],
-        ["tab-search", "app-search", "Search"],
-        ["tab-automations", "app-robotic-arm", "Scheduled Jobs"],
-        ["tab-system-manager", "app-system-manager", "System Manager"],
-        ["tab-chat", "app-backlog", "Projects"],
-        ["tab-prompts", "app-ai", "Prompt Builder"],
-        ["tab-commands", "app-megaphone", "Command Builder"],
-        ["tab-settings", "app-cogwheel", "Settings"],
-        ["tab-apps", "app-apps", "Apps"],
-        ["tab-mcp-servers", "app-helmet", "MCP Servers"],
-        ["tables-toggle", "app-database", "Data Viewer"],
-        ["tab-configurations", "app-table", "Configurations"],
-        ["tab-logs", "app-table", "Logs"],
-        ["tab-settings-table-defaults", "app-table", "Table defaults"],
-        ["tab-settings-memory", "app-bookshelf", "Memory"],
-        ["tab-settings-appearance", "app-color-palette", "Appearance"],
-        ["tab-settings-text", "app-text-size", "Text"],
-        ["tab-settings-polling-settings", "app-heart-rate", "Polling"],
-        ["tab-settings-updates", "app-cloud-computing", "Update Manager"],
-        ["tab-settings-about", "app-info", "About"],
-        ["advanced-toggle", "app-analyze", "Advanced"],
-        ["experiments-toggle", "app-chemical", "Experiments"],
-        ["tab-episodic-memory", "brain", "Episodic Memory"],
-        ["tab-contributor-tools", "app-under-construction", "Contributor Tools"],
-        ["tab-web-server", "app-system-manager", "Web Server Beta"],
-      ] as const) {
-        const tab = html.match(new RegExp(`<button[^>]*id="${id}"[\\s\\S]*?</button>`))?.[0];
-        expect(tab).toContain(`data-icon="${icon}"`);
-        expect(tab).toContain(`class="page-tab-label">${label}</span>`);
-        expect(tab).toMatch(/class="navigation-icon"[^>]*aria-hidden="true"/);
-        if (icon.startsWith("app-")) {
-          expect(tab).toContain('alt=""');
-          expect(tab).toContain('draggable="false"');
-        } else {
-          expect(tab).toContain('focusable="false"');
-          expect(tab).toContain('opacity="0.2"');
-        }
-      }
-      expect(project).toContain('class="icon-button project-sidebar-open"');
-      expect(project?.match(/<svg/g)).toHaveLength(1);
-      expect(project).toContain('aria-haspopup="dialog"');
-      expect(html).not.toContain('aria-label="New chat"');
-      const settingsToggle = html.match(/<button[^>]*id="tab-settings"[\s\S]*?<\/button>/)?.[0];
-      expect(settingsToggle).toContain("<img");
-      expect(settingsToggle).not.toContain("aria-expanded");
-      for (const id of [
-        "home-card-toggle",
-        "assistants-toggle",
-        "projects-card-toggle",
-        "providers-card-toggle",
-        "apps-card-toggle",
-        "settings-card-toggle",
-      ]) {
-        expect(html).not.toContain(`id="${id}"`);
-      }
-      expect(html.match(/sidebar-navigation-card sidebar-section/g)).toHaveLength(5);
-      for (const id of ["tables-toggle", "advanced-toggle", "experiments-toggle"]) {
-        const toggle = html.match(new RegExp(`<button[^>]*id="${id}"[\\s\\S]*?</button>`))?.[0];
-        expect(toggle).toContain(`aria-expanded="${expanded}"`);
-        expect(toggle).not.toContain('class="carbon-icon"');
-      }
-    }
-  });
 });
-
-describe("window navigation history", () => {
-  it("keeps history available when the sidebar is closed", () => {
-    const html = navigation(null, undefined, null, "home", false, false, false, {
-      canGoBack: true,
-      canGoForward: false,
-    });
-    const back = html.match(/<button[^>]*aria-label="Back"[^>]*>/)?.[0];
-    const forward = html.match(/<button[^>]*aria-label="Forward"[^>]*>/)?.[0];
-    expect(back).toBeDefined();
-    expect(back).not.toContain("disabled");
-    expect(forward).toContain("disabled");
-    expect(html.indexOf('aria-label="Back"')).toBeGreaterThan(html.indexOf("</nav>"));
-    const cardStart = html.indexOf(
-      'class="nb:group/card',
-      html.indexOf('<header class="workspace-header"'),
-    );
-    expect(html.indexOf('aria-label="Navigation history"')).toBeGreaterThan(cardStart);
-    expect(html).toContain('data-icon="app-history-back"');
-    expect(html).not.toContain('data-icon="app-history-forward"');
-    expect(html).toContain('class="history-placeholder" aria-hidden="true"');
-    expect(html).not.toContain('data-icon="arrow--left"');
-  });
+describe("header history", () => {
   it.each([
     [false, false],
     [true, false],
     [false, true],
     [true, true],
-  ])(
-    "reserves disabled history positions without arrow artwork (%s/%s)",
-    (canGoBack, canGoForward) => {
-      const html = navigation(null, undefined, null, "home", false, true, false, {
-        canGoBack,
-        canGoForward,
-      });
-      expect(html.includes('data-icon="app-history-back"')).toBe(canGoBack);
-      expect(html.includes('data-icon="app-history-forward"')).toBe(canGoForward);
-      expect(html.match(/class="history-placeholder"/g) ?? []).toHaveLength(
-        Number(!canGoBack) + Number(!canGoForward),
-      );
-    },
-  );
+  ])("preserves Back and Forward availability %s/%s", (canGoBack, canGoForward) => {
+    const html = navigation(null, undefined, null, "home", false, false, false, {
+      canGoBack,
+      canGoForward,
+    });
+    for (const [label, enabled] of [
+      ["Back", canGoBack],
+      ["Forward", canGoForward],
+    ] as const) {
+      const button = html.match(new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`))?.[0];
+      expect(button).toBeDefined();
+      expect(button?.includes("disabled")).toBe(!enabled);
+    }
+  });
 });

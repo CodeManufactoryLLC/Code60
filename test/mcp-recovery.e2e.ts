@@ -5,11 +5,13 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import type { McpConfigurationStore as StoreType } from "../src/application/index.js";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
 
 const original =
   '{"version":1,"servers":{"docs":{"label":"Private definition","enabled":false,"type":"stdio","command":"never-run","args":[],"env":{"PRIVATE_TOKEN":{"credentialRef":"private-reference"}}}}}\n';
 async function app(page: Page) {
+  await expandNavigation(page, "Manage");
   await page.getByRole("tab", { name: "Apps", exact: true }).click();
   await page.getByRole("button", { name: "Open MCP Servers", exact: true }).click();
   await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
@@ -36,7 +38,7 @@ for (const direction of ["complete", "roll back", "conflict"] as const) {
       const { page } = await fixture.open();
       await onboard(page);
       await createDatabase(page, fixture.directory);
-      await page.getByRole("button", { name: "Start", exact: true }).click();
+      await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
       await openProject(page, fixture.directory, "project");
       await fixture.gateway.stop();
       const { McpConfigurationStore } = (await import(
@@ -73,11 +75,11 @@ for (const direction of ["complete", "roll back", "conflict"] as const) {
       const pendingBytes = [await fs.readFile(userFile), await fs.readFile(projectFile)];
       await fixture.restart();
       const { page: recovered } = await fixture.open();
-      await recovered.getByRole("button", { name: "Start", exact: true }).click();
+      await expect(recovered.getByRole("banner", { name: "Code60" })).toBeVisible();
       await app(recovered);
       expect(await fs.readFile(userFile)).toEqual(pendingBytes[0]);
       expect(await fs.readFile(projectFile)).toEqual(pendingBytes[1]);
-      await recovered.getByRole("button", { name: "JSON", exact: true }).click();
+      await recovered.getByRole("tab", { name: "JSON", exact: true }).click();
       await edit(recovered, original.replace("Private definition", "Retained recovery draft"));
       await expect(
         recovered.getByRole("button", { name: "Save configuration", exact: true }),
@@ -151,7 +153,7 @@ test("MCP troubleshooting: review/copy allowlisted report and explicit cleanup w
     await fs.writeFile(file, original, { mode: 0o600 });
     const { page } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
     await page.getByRole("button", { name: "Review troubleshooting report", exact: true }).click();
     const dialog = page.getByRole("dialog", {
@@ -211,9 +213,9 @@ test("MCP troubleshooting: jump to malformed JSON, repair, and preserve draft af
     await fs.writeFile(file, malformed, { mode: 0o600 });
     const { page } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
-    await page.getByRole("button", { name: "JSON", exact: true }).click();
+    await page.getByRole("tab", { name: "JSON", exact: true }).click();
     const issues = page.getByRole("list", { name: "Configuration issues", exact: true });
     await expect(issues).toBeVisible();
     await expect(issues).not.toContainText("PRIVATE_UNKNOWN");
@@ -227,6 +229,7 @@ test("MCP troubleshooting: jump to malformed JSON, repair, and preserve draft af
     await page.getByRole("button", { name: "Save configuration", exact: true }).click();
     await expect(page.locator('.mcp-json-actions [role="status"]')).toHaveText("Saved");
     await expect.poll(() => fs.readFile(file, "utf8")).toBe(original);
+    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
     const backups = (await fs.readdir(storage)).filter((f) => f.endsWith(".backup"));
     expect(backups.length).toBe(1);
     expect(await fs.readFile(join(storage, backups[0]!), "utf8")).toContain(
@@ -264,7 +267,7 @@ test("MCP recovery: interrupted combined reset rolls back exact malformed preima
     const { page } = await fixture.open();
     await onboard(page);
     await createDatabase(page, fixture.directory);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await openProject(page, fixture.directory, "project");
     await fixture.gateway.stop();
     const { McpConfigurationStore } = (await import(
@@ -305,7 +308,7 @@ test("MCP recovery: interrupted combined reset rolls back exact malformed preima
     expect(await fs.readFile(projectFile, "utf8")).toBe(original);
     await fixture.restart();
     const { page: recovered } = await fixture.open();
-    await recovered.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(recovered.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(recovered);
     await recovered.getByRole("button", { name: "Configuration recovery", exact: true }).click();
     const dialog = recovered.getByRole("dialog", {
@@ -344,7 +347,7 @@ test("MCP troubleshooting: launch-stage warning and explicit bounded discovery r
     await fs.writeFile(file, bytes, { mode: 0o600 });
     const { page } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
     for (let attempt = 0; attempt < 2; attempt++) {
       await page.getByRole("button", { name: "Test connection", exact: true }).click();
@@ -442,7 +445,7 @@ test("MCP troubleshooting: uncertain HTTP cleanup stays revoked until explicit v
     await fs.writeFile(file, bytes, { mode: 0o600 });
     const { page } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
     await page.getByRole("button", { name: "Test connection", exact: true }).click();
     await expect(page.getByLabel("MCP connection controls")).toContainText(

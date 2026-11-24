@@ -88,7 +88,7 @@ test("browser: fresh Codex install, private device login, ACP verification, save
     );
     await stopped(fixture.processLog, true);
     await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Relay", exact: true })).toBeVisible();
     const states = await readFile(join(fixture.directory, "state/code60/desktop.json"), "utf8");
     expect(JSON.parse(states).agentSetup.version).toBe(1);

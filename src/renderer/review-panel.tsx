@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { ApplicationClient, Review, ReviewSummary } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { attachToChat } from "./chat-draft.js";
 import { useReviewFile } from "./review-content.js";
 
@@ -69,7 +70,7 @@ export function ReviewPanel({
         <div className="review-workspace">
           <nav className="review-files" aria-label="Changed files">
             {files.map((entry) => (
-              <button
+              <AppButton
                 key={entry.key}
                 type="button"
                 aria-current={entry.key === file.key ? "true" : undefined}
@@ -79,7 +80,7 @@ export function ReviewPanel({
                 <span>
                   {label(entry.runId)} · {entry.status}
                 </span>
-              </button>
+              </AppButton>
             ))}
           </nav>
           <div className="review-file">
@@ -87,9 +88,9 @@ export function ReviewPanel({
             {content.error ? (
               <div role="alert">
                 {content.error}
-                <button type="button" onClick={content.retry}>
+                <AppButton type="button" onClick={content.retry}>
                   Retry file
-                </button>
+                </AppButton>
               </div>
             ) : !content.content ? (
               <p role="status">Loading file…</p>
@@ -169,9 +170,9 @@ export function ReviewPanelLoader({
     return (
       <div role="alert">
         {error}
-        <button type="button" onClick={() => setAttempt((value) => value + 1)}>
+        <AppButton type="button" onClick={() => setAttempt((value) => value + 1)}>
           Retry review
-        </button>
+        </AppButton>
       </div>
     );
   if (

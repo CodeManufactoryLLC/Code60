@@ -1,10 +1,11 @@
 import type { KeyboardEvent } from "react";
 import type { AgentSetupSnapshot } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { PrimaryProviderMark } from "./carbon/provider-controls.js";
+import { Surface as Card } from "./carbon/surfaces.js";
 import { Icon } from "./icons.js";
 import { NavigationIcon } from "./navigation-icons.js";
-import { Card } from "./neobrutalism/card.js";
-import { PrimaryProviderMark } from "./neobrutalism/provider-controls.js";
 import type { ProviderManagement } from "./provider-management.js";
 import { ProviderMenu } from "./provider-menu.js";
 
@@ -44,7 +45,7 @@ export function ProvidersSidebar({
         aria-orientation="vertical"
       >
         <div className="page-tab" role="presentation" data-nav-active={active && !selectedId}>
-          <button
+          <AppButton
             type="button"
             role="tab"
             id="tab-providers"
@@ -57,10 +58,10 @@ export function ProvidersSidebar({
           >
             <NavigationIcon name="app-helmet" />
             <span className="page-tab-label">Providers</span>
-          </button>
+          </AppButton>
         </div>
       </div>
-      <button
+      <AppButton
         type="button"
         className="icon-button provider-sidebar-add"
         aria-label="Add Provider"
@@ -72,7 +73,7 @@ export function ProvidersSidebar({
         <span className="sidebar-card-add" aria-hidden="true">
           <Icon name="add" />
         </span>
-      </button>
+      </AppButton>
       {management?.error && (
         <p role="alert" className="error-banner">
           {management.error}
@@ -112,7 +113,7 @@ export function ProvidersSidebar({
               className="chat-sidebar-row provider-sidebar-row"
               data-nav-active={active && selectedId === id}
             >
-              <button
+              <AppButton
                 type="button"
                 id={`provider-${id}`}
                 className="chat-sidebar-entry"
@@ -124,7 +125,7 @@ export function ProvidersSidebar({
                   <AgentLogo id={provider.logo} />
                 </span>
                 <span className="chat-sidebar-label">{provider.name}</span>
-              </button>
+              </AppButton>
               {id === setup.primary && <PrimaryProviderMark compact />}
               {management && (
                 <ProviderMenu

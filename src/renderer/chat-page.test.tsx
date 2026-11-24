@@ -101,7 +101,7 @@ describe("orchestration activity presentation", () => {
     expect(main).toContain('data-navigation-pending="true"');
     expect(main).toContain('aria-busy="true"');
     expect(main).not.toContain("hidden=");
-    expect(html).toContain('class="transcript"');
+    expect(html).toContain('class="transcript');
     expect(html).toMatch(/class="[^"]*composer"/);
   });
   it("omits the stale PID warning in restored chats but preserves actual failures", () => {
@@ -122,7 +122,7 @@ describe("orchestration activity presentation", () => {
         },
       );
       expect(html).not.toContain(reason);
-      expect(html).not.toContain('class="error-banner"');
+      expect(html).not.toContain('class="error-banner');
       expect(html).toMatch(/class="[^"]*composer"/);
     }
     expect(
@@ -165,7 +165,7 @@ describe("orchestration activity presentation", () => {
         expect(html).not.toContain("Saved chat is stopped");
         expect(html).not.toContain("Previous workers are history only");
         expect(html.match(/<textarea[^>]*>/)?.[0]).not.toContain("disabled");
-        expect(html).toMatch(/class="[^"]*primary composer-send"/);
+        expect(html).toMatch(/class="[^"]*primary composer-send[^"]*"/);
         expect(html).toContain(">Send ");
       }
     },
@@ -219,7 +219,7 @@ describe("orchestration activity presentation", () => {
     );
     expect(html).toContain('<span class="page-title-text">Relay</span>');
     expect(html).not.toContain("Rename chat: Relay");
-    expect(html).not.toContain('class="chat-title"');
+    expect(html).not.toContain('class="chat-title');
   });
   it("keeps project notices below the page heading", () => {
     const html = render("idle", [], []);
@@ -260,28 +260,28 @@ describe("orchestration activity presentation", () => {
         runs={[]}
       />,
     );
-    expect(html).not.toContain('class="chat-plans"');
+    expect(html).not.toContain('class="chat-plans');
     expect(html).not.toContain('aria-label="Plans"');
     expect(html).not.toContain("Plan · A new plan");
-    expect(html).toContain('class="orchestration-chat-heading"');
+    expect(html).toContain('class="orchestration-chat-heading');
   });
 
   it("centers connection artwork and hides the empty prompt until the session is ready", () => {
     for (const status of ["queued", "running"] as const) {
       const html = render(status, [], [], [], [], "/db", 0);
-      expect(html).toContain('class="chat-connection-frame"');
-      expect(html).toContain('class="chat-connecting" role="status"');
+      expect(html).toContain('class="chat-connection-frame');
+      expect(html).toContain('class="chat-connecting" role="status');
       expect(html.match(/<div class="chat-connecting"[\s\S]*?<\/div>/)?.[0]).not.toContain("<img");
       expect(html).toContain(">Connecting...</span>");
       expect(html).toContain('aria-haspopup="menu"');
       expect(html).not.toContain(">Cancel</button>");
       expect(html).not.toContain("Give Code60 a task.");
-      expect(html).not.toContain('class="chat-progress activity-display"');
-      expect(html).not.toContain('class="activity-timer"');
+      expect(html).not.toContain('class="chat-progress activity-display');
+      expect(html).not.toContain('class="activity-timer');
     }
     const ready = render("idle", [], [], [], [], "/db", 0);
     expect(ready).toContain("Give Code60 a task.");
-    expect(ready).not.toContain('class="chat-connecting"');
+    expect(ready).not.toContain('class="chat-connecting');
     expect(render("idle", [], [], [], [], "/db", 0, { modeChanging: true })).toContain(
       "Give Code60 a task.",
     );
@@ -329,7 +329,7 @@ describe("orchestration activity presentation", () => {
       expect(html.match(/<textarea[^>]*>/)?.[0]).toContain("disabled");
       expect(html).not.toContain("page-selector-rename");
       expect(html).toContain('aria-haspopup="menu"');
-      const action = html.match(/<button[^>]*class="[^"]*composer-send"[^>]*>/)?.[0];
+      const action = html.match(/<button[^>]*class="[^"]*composer-send[^"]*"[^>]*>/)?.[0];
       expect(action).toContain("disabled");
       expect(html).not.toContain(">Connect to database</button>");
       expect(capturedHeader.actions.find((action) => action.id === "rename")?.disabled).toBe(true);
@@ -375,10 +375,10 @@ describe("orchestration activity presentation", () => {
     ];
     const active = render("running", [], [], events);
     expect(active).toContain('data-activity="working"');
-    expect(active).toContain('class="activity-timer"');
-    expect(active).not.toContain('class="turn-timer"');
+    expect(active).toContain('class="activity-timer');
+    expect(active).not.toContain('class="turn-timer');
     expect(active).not.toContain("Working for");
-    expect(active).not.toContain('class="turn-separator"');
+    expect(active).not.toContain('class="turn-separator');
     const completed = render(
       "idle",
       [],
@@ -396,7 +396,7 @@ describe("orchestration activity presentation", () => {
     );
     expect(completed).toContain("Worked for 12s (finished)");
     expect(completed).toContain('<hr class="turn-separator"/>');
-    expect(completed).not.toContain('class="activity-timer"');
+    expect(completed).not.toContain('class="activity-timer');
   });
   it("uses the status as the live disclosure and timing as the historical disclosure", () => {
     const events: RunEvent[] = [
@@ -415,10 +415,12 @@ describe("orchestration activity presentation", () => {
       },
     ];
     const active = render("running", [], [], events);
-    expect(active).not.toContain('class="chat-activity"');
-    expect(active).toContain('class="chat-progress activity-display" aria-expanded="false"');
+    expect(active).not.toContain('class="chat-activity');
+    expect(active).toMatch(
+      /<button[^>]*aria-expanded="false"[^>]*class="chat-progress activity-display[^"]*"/,
+    );
     expect(active).toContain("aria-controls=");
-    expect(active).toContain('class="activity-details"');
+    expect(active).toContain('class="activity-details');
     expect(active).toContain('data-expanded="false" aria-hidden="true" inert=""');
     expect(active).toContain("Checking evidence");
     const completed = render(
@@ -436,12 +438,12 @@ describe("orchestration activity presentation", () => {
         },
       ],
     );
-    expect(completed).toContain('class="turn-timer activity-history-toggle"');
+    expect(completed).toContain('class="turn-timer activity-history-toggle');
     expect(completed).toMatch(
       /Worked for 12s \(finished\)<\/span><\/button><hr class="turn-separator"/,
     );
     expect(completed).toContain("Checking evidence");
-    expect(completed).not.toContain('class="chat-progress activity-display"');
+    expect(completed).not.toContain('class="chat-progress activity-display');
   });
   it("does not attach a reconnected review to coincident turn numbers in another chat", () => {
     const review: ReviewSummary = {
@@ -483,7 +485,7 @@ describe("orchestration activity presentation", () => {
     const delivered = render("idle", [], [], events, [review]);
     expect(delivered).toContain('aria-label="Your review feedback"');
     expect(delivered).toContain("View submitted feedback");
-    expect(delivered).not.toContain('class="chat-reviews"');
+    expect(delivered).not.toContain('class="chat-reviews');
   });
   it("shows concurrent owned workers while updates are paused without changing own controls", () => {
     const html = render(
@@ -491,7 +493,7 @@ describe("orchestration activity presentation", () => {
       ["one", "two"],
       [worker("one", "running"), worker("two", "waiting"), worker("unrelated", "running")],
     );
-    expect(html).not.toContain('class="chat-loader"');
+    expect(html).not.toContain('class="chat-loader');
     expect(html).toContain("2 subagents: waiting for approval");
     expect(html).not.toContain("Automatic worker updates are paused");
     expect(html).not.toContain("Resume updates");
@@ -500,14 +502,14 @@ describe("orchestration activity presentation", () => {
   });
   it("removes delegated activity after failure, cancellation or idle, and isolates selection", () => {
     const runs = [worker("one", "failed"), worker("two", "cancelled"), worker("three", "idle")];
-    expect(render("idle", ["one", "two", "three"], runs)).not.toContain('class="chat-loader"');
+    expect(render("idle", ["one", "two", "three"], runs)).not.toContain('class="chat-loader');
     expect(render("idle", [], [worker("other-chat", "running")])).not.toContain(
       'class="chat-loader"',
     );
   });
   it("keeps the own approval wait active with its own Stop action", () => {
     const html = render("waiting", [], []);
-    expect(html).not.toContain('class="chat-loader"');
+    expect(html).not.toContain('class="chat-loader');
     expect(html).toContain("Waiting for approval");
     expect(html).toContain("Stop</button>");
   });
@@ -526,7 +528,7 @@ describe("orchestration activity presentation", () => {
     const html = renderToStaticMarkup(<MessageCopy text="exact source" at={at} />);
     expect(html).toMatch(/<time[^>]*datetime="[^"]+"[^>]*aria-live="off"[^>]*>3m ago<\/time>/i);
     expect(html.indexOf("<time")).toBeLessThan(html.indexOf("<button"));
-    expect(html).toContain('class="message-copy-glyph"');
+    expect(html).toContain('class="message-copy-glyph');
     expect(html).not.toContain("data-clicked");
   });
   it("keeps missing or invalid message times explicit instead of inventing a receipt time", () => {
@@ -567,14 +569,14 @@ describe("orchestration activity presentation", () => {
     expect(html).toMatch(
       /<div class="chat-markdown"><p>assistant source<\/p><\/div><\/div><div class="message-copy">/,
     );
-    expect(html).toContain('class="event prompt automatic"');
+    expect(html).toContain('class="event prompt automatic');
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
   });
   it("places provider metadata inside the main composer", () => {
     const html = render("idle", [], []);
     expect(html).toContain('aria-label="Current provider: fake"');
-    expect(html).toContain('class="composer-footer session-info"');
-    expect(html).not.toContain('class="chat-provider"');
+    expect(html).toContain('class="composer-footer session-info');
+    expect(html).not.toContain('class="chat-provider');
     expect(html.slice(0, html.indexOf("</header>"))).not.toContain("fake");
   });
 });

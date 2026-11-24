@@ -149,8 +149,6 @@ afterEach(() => {
 
 function tabList(overrides: Partial<ComponentProps<typeof PageTabBar>> = {}) {
   const props: ComponentProps<typeof PageTabBar> = {
-    iconAnimations: true,
-    onIconAnimationsChange: vi.fn(),
     theme: "system",
     onThemeChange: vi.fn(),
     ...chatProps,
@@ -240,7 +238,9 @@ it("keeps an unidentified failed custom assistant reachable through its definiti
   });
   const entry = find(
     view.tree(),
-    (element) => element.type === "button" && element.props.className === "chat-sidebar-entry",
+    (element) =>
+      typeof element.props.onClick === "function" &&
+      element.props.className === "chat-sidebar-entry",
   );
   expect(
     find(

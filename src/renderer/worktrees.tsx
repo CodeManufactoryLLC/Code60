@@ -1,8 +1,8 @@
-import type { Rectangle } from "@glideapps/glide-data-grid";
 import { useMemo } from "react";
 import type { PollState, WorktreeListing } from "../bridge/index.js";
 import { DataTable, type TableOptions } from "./data-table.js";
 import { PageTitle } from "./page-title.js";
+import type { Rectangle } from "./table-types.js";
 
 type GitWorktree = WorktreeListing["worktrees"][number];
 

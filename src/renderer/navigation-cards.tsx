@@ -1,16 +1,11 @@
+import { Button } from "./carbon/button.js";
 import { Icon } from "./icons.js";
-import { NavigationIcon, type NavigationIconName } from "./navigation-icons.js";
-import {
-  CardAction,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Card as NeoCard,
-} from "./neobrutalism/card.js";
+import type { NavigationIconName } from "./navigation-icons.js";
 
 interface NavigationCard {
   id: string;
   label: string;
+  task?: string | undefined;
   icon?: NavigationIconName | undefined;
   available: boolean;
   reason?: string;
@@ -25,6 +20,7 @@ export interface NavigationCardAction {
   onClick(): void;
 }
 
+/** Destination rows keep open/actions as siblings, never nested interactive tiles. */
 export function NavigationCards<Card extends NavigationCard>({
   cards,
   create,
@@ -49,62 +45,58 @@ export function NavigationCards<Card extends NavigationCard>({
   return (
     <div className="home-content">
       {intro}
-      <div className="home-cards">
-        {create && (
-          <NeoCard size="sm" className="navigation-card">
-            <button
-              type="button"
-              className="home-card home-card-create"
-              aria-label={create.ariaLabel ?? create.label}
-              disabled={pending || create.disabled}
-              title={pending ? "Wait for the current action to finish" : create.title}
-              onClick={create.onClick}
+      {create && (
+        <div className="navigation-create">
+          <Button
+            variant="primary"
+            aria-label={create.ariaLabel ?? create.label}
+            disabled={pending || create.disabled}
+            title={pending ? "Wait for the current action to finish" : create.title}
+            onClick={create.onClick}
+          >
+            {create.label}
+            <Icon name="add" />
+          </Button>
+        </div>
+      )}
+      <ul className="navigation-list">
+        {cards.map((card) => (
+          <li key={card.id} className="navigation-list-row">
+            <Button
+              variant="quiet"
+              className="navigation-destination"
+              data-feature={card.id}
+              aria-label={`Open ${card.label}`}
+              disabled={!card.available || pending}
+              title={
+                pending
+                  ? "Wait for the current action to finish"
+                  : !card.available
+                    ? (card.reason ?? "Connect to a database first")
+                    : card.title
+              }
+              onClick={() => onOpen(card)}
             >
-              <CardTitle as="span" className="home-card-name">
-                <Icon name="add" />
-                {create.label}
-              </CardTitle>
-            </button>
-          </NeoCard>
-        )}
-        {cards.map((card) => {
-          return (
-            <NeoCard key={card.id} size="sm" className="navigation-card">
-              <button
-                type="button"
-                className="home-card"
-                data-feature={card.id}
-                aria-label={`Open ${card.label}`}
-                disabled={!card.available || pending}
-                title={
-                  pending
-                    ? "Wait for the current action to finish"
-                    : !card.available
-                      ? (card.reason ?? "Connect to a database first")
-                      : card.title
-                }
-                onClick={() => onOpen(card)}
-              >
-                <CardHeader as="span" className="home-card-art" aria-hidden="true">
-                  {renderArtwork
-                    ? renderArtwork(card)
-                    : card.icon && <NavigationIcon name={card.icon} />}
-                </CardHeader>
-                <CardContent as="span" className="home-card-copy">
-                  <CardTitle as="span" className="home-card-name">
-                    {card.label}
-                  </CardTitle>
-                </CardContent>
-                <Icon name="arrow--left" className="carbon-icon home-card-arrow" />
-              </button>
-              {renderStatus?.(card)}
-              {renderActions && (
-                <CardAction className="home-card-action">{renderActions(card)}</CardAction>
+              {renderArtwork && (
+                <span className="navigation-destination-icon" aria-hidden="true">
+                  {renderArtwork(card)}
+                </span>
               )}
-            </NeoCard>
-          );
-        })}
-      </div>
+              {card.task ? (
+                <span className="task-index-label">
+                  <span>{card.label}</span>
+                  <small>{card.task}</small>
+                </span>
+              ) : (
+                <span>{card.label}</span>
+              )}
+              <Icon name="arrow--right" />
+            </Button>
+            {renderStatus?.(card)}
+            {renderActions && <div className="navigation-row-actions">{renderActions(card)}</div>}
+          </li>
+        ))}
+      </ul>
       {children}
     </div>
   );

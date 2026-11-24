@@ -1,9 +1,12 @@
+import { Column, Grid } from "@carbon/react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectSearchOpened } from "../bridge/index.js";
 import type { AppPagesProps } from "./app-page-props.js";
 import { AppsPage } from "./apps-page.js";
 import { AutomationsPage } from "./automations.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Surface as Card } from "./carbon/surfaces.js";
 import { ChatWorkspace } from "./chat-workspace.js";
 import { builtinRelayId, conversationId } from "./chats.js";
 import { CommandsPage } from "./commands-page.js";
@@ -23,12 +26,10 @@ import {
   pageDefinitions,
   type RenderedPageId,
   renderedPages,
-  settingsIcons,
   settingsLabels,
 } from "./navigation.js";
 import { NavigationHomePage } from "./navigation-home-page.js";
 import { sidebarPageElementId, staticChildren } from "./navigation-tree.js";
-import { Card } from "./neobrutalism/card.js";
 import { PageTitle, PageTitleNavigationContext } from "./page-title.js";
 import { usePageTransition } from "./page-transition.js";
 import { PollingControls, PollingPage } from "./polling.js";
@@ -56,7 +57,6 @@ export function AppPages(props: AppPagesProps) {
     state,
     project,
     preferences,
-    appearance,
     tabs,
     settingsSection,
     navigation,
@@ -119,16 +119,9 @@ export function AppPages(props: AppPagesProps) {
   const directory = scope.project;
   const workspace = scope.workspace;
   const databaseKey = JSON.stringify([database, state?.databaseGeneration ?? 0]);
-  const { sidebarBlurSupported } = appearance;
   const {
     theme,
     setTheme,
-    iconAppearance,
-    setIconAppearance,
-    iconAppearanceSaved,
-    sidebarAppearance,
-    setSidebarAppearance,
-    sidebarAppearanceSaved,
     textStyles,
     setTextStyles,
     lines,
@@ -289,10 +282,6 @@ export function AppPages(props: AppPagesProps) {
         api={api}
         active={!splash && tabs.active === "automations"}
         agents={snapshot?.agents ?? []}
-        lines={lines}
-        density={density}
-        fit={fit}
-        textStyles={textStyles}
       />
     ),
     memories: (
@@ -375,14 +364,6 @@ export function AppPages(props: AppPagesProps) {
           }
           theme={theme}
           onTheme={setTheme}
-          iconAppearance={iconAppearance}
-          iconAppearanceSaved={iconAppearanceSaved}
-          onIconAppearance={setIconAppearance}
-          sidebarAppearance={sidebarAppearance}
-          sidebarAppearanceSaved={sidebarAppearanceSaved}
-          sidebarBlurSupported={sidebarBlurSupported}
-          sidebarBlurError={props.sidebarBlurError}
-          onSidebarAppearance={setSidebarAppearance}
           textStyles={textStyles}
           onTextStyles={setTextStyles}
           lines={lines}
@@ -434,14 +415,14 @@ export function AppPages(props: AppPagesProps) {
         ) : (
           <section className="welcome">
             <p>Connect to a database to manage run configurations.</p>
-            <button
+            <AppButton
               type="button"
               className="primary"
               disabled={busy || !snapshot}
               onClick={() => showPicker("database")}
             >
               Connect to database
-            </button>
+            </AppButton>
           </section>
         )}
       </>
@@ -475,14 +456,14 @@ export function AppPages(props: AppPagesProps) {
         ) : (
           <section className="welcome">
             <p>Connect to a database to edit prompt templates.</p>
-            <button
+            <AppButton
               type="button"
               className="primary"
               disabled={busy || !snapshot}
               onClick={() => showPicker("database")}
             >
               Connect to database
-            </button>
+            </AppButton>
           </section>
         )}
       </>
@@ -613,6 +594,8 @@ export function AppPages(props: AppPagesProps) {
           provider={snapshot?.orchestration.provider ?? null}
           database={database}
           databaseEpoch={snapshot?.databaseEpoch ?? 0}
+          hasProjects={Boolean(snapshot?.projects.length)}
+          onProjects={() => void navigation.open({ kind: "page", id: "projects" })}
           onOpen={setSearchTarget}
         />
       </>
@@ -622,9 +605,9 @@ export function AppPages(props: AppPagesProps) {
         {error && (
           <div className="error-banner" role="alert">
             <span>{error}</span>
-            <button type="button" aria-label="Dismiss error" onClick={() => setError("")}>
+            <AppButton type="button" aria-label="Dismiss error" onClick={() => setError("")}>
               Dismiss
-            </button>
+            </AppButton>
           </div>
         )}
         {snapshot?.databaseError && (
@@ -693,14 +676,14 @@ export function AppPages(props: AppPagesProps) {
           </main>
         ) : (
           <section className="welcome">
-            <button
+            <AppButton
               type="button"
               className="primary"
               disabled={busy || !snapshot}
               onClick={() => showPicker("database")}
             >
               Connect to database
-            </button>
+            </AppButton>
           </section>
         )}
       </>
@@ -708,41 +691,43 @@ export function AppPages(props: AppPagesProps) {
   } satisfies Record<RenderedPageId, ReactNode>;
   return (
     <PageTitleNavigationContext.Provider value={titleNavigation}>
-      {renderedPages.map(({ id }) => {
-        const Shell = id === "chat" ? "div" : Card;
-        return (
-          <Shell
-            key={id}
-            className="page-panel"
-            role="tabpanel"
-            id={`panel-${id}`}
-            aria-labelledby={
-              id === "settings" && settingsSection
-                ? `tab-settings-${settingsSection}`
-                : id === "chat" && snapshot
-                  ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
-                  : sidebarPageElementId(id, tabs.projectId, tabs.providerId)
-            }
-            hidden={tabs.active !== id}
-          >
-            {id !== "chat" && (
-              <ContentHeaderSlot
-                icon={
-                  id === "settings" && settingsSection
-                    ? settingsIcons[settingsSection]
-                    : pageDefinitions[id].icon
-                }
-                fallback={
-                  id === "settings" && settingsSection
-                    ? settingsLabels[settingsSection]
-                    : pageDefinitions[id].label
-                }
-              />
-            )}
-            {views[id]}
-          </Shell>
-        );
-      })}
+      <Grid fullWidth className="product-page-grid">
+        {renderedPages.map(({ id }) => {
+          const Shell = id === "chat" ? "div" : Card;
+          return (
+            <Column
+              as={Shell}
+              sm={4}
+              md={8}
+              lg={16}
+              key={id}
+              className="page-panel"
+              role="tabpanel"
+              tabIndex={-1}
+              id={`panel-${id}`}
+              aria-labelledby={
+                id === "settings" && settingsSection
+                  ? `tab-settings-${settingsSection}`
+                  : id === "chat" && snapshot
+                    ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
+                    : sidebarPageElementId(id, tabs.projectId, tabs.providerId)
+              }
+              hidden={tabs.active !== id}
+            >
+              {id !== "chat" && id !== "automations" && (
+                <ContentHeaderSlot
+                  fallback={
+                    id === "settings" && settingsSection
+                      ? settingsLabels[settingsSection]
+                      : pageDefinitions[id].label
+                  }
+                />
+              )}
+              {views[id]}
+            </Column>
+          );
+        })}
+      </Grid>
     </PageTitleNavigationContext.Provider>
   );
 }

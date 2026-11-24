@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { DialogContent } from "./neobrutalism/dialog.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
+import { Modal } from "./modal.js";
 
 export function RenameChat({
   title,
@@ -11,21 +12,15 @@ export function RenameChat({
   onSave(title: string): Promise<boolean>;
   onClose(): void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const input = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState(title);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
-    const previous = document.activeElement;
-    dialog.current?.showModal();
-    dialog.current?.querySelector("input")?.select();
-    return () => {
-      dialog.current?.close();
-      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
-    };
+    input.current?.select();
   }, []);
-  return createPortal(
-    <DialogContent ref={dialog} aria-label="Rename chat" onCancel={onClose}>
+  return (
+    <Modal title="Rename chat" busy={pending} onClose={onClose}>
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -40,28 +35,27 @@ export function RenameChat({
           }
         }}
       >
-        <h2>Rename chat</h2>
-        <label>
-          Chat name
-          <input
+        <div>
+          <CarbonTextInput
+            ref={input}
+            labelText={<>Chat name</>}
             value={value}
             maxLength={120}
             required
             disabled={pending}
             onChange={(event) => setValue(event.target.value)}
           />
-        </label>
+        </div>
         {error && <p role="alert">{error}</p>}
         <div className="button-group">
-          <button type="button" onClick={onClose} disabled={pending}>
+          <AppButton type="button" onClick={onClose} disabled={pending}>
             Cancel
-          </button>
-          <button type="submit" disabled={pending || !value.trim()}>
+          </AppButton>
+          <AppButton type="submit" disabled={pending || !value.trim()}>
             Save
-          </button>
+          </AppButton>
         </div>
       </form>
-    </DialogContent>,
-    document.body,
+    </Modal>
   );
 }

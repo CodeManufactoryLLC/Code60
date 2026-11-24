@@ -39,16 +39,6 @@ export function PageTitle({
   actionsTrigger?: RefObject<HTMLButtonElement | null> | undefined;
 }) {
   const navigation = useContext(PageTitleNavigationContext);
-  const icon =
-    page === "relay"
-      ? "app-steering-wheel"
-      : page === "orchestrator"
-        ? "app-communication"
-        : page === "worker"
-          ? "app-down-right"
-          : isSettingsSection(page)
-            ? settingsIcons[page]
-            : pageDefinitions[page].icon;
   const label =
     page === "relay"
       ? "Relay"
@@ -62,7 +52,6 @@ export function PageTitle({
   if (!breadcrumbs)
     return (
       <Heading id={id} className={className ? `page-title ${className}` : "page-title"}>
-        {icon && <NavigationIcon name={icon} />}
         <span className="page-title-text">{children ?? label}</span>
       </Heading>
     );
@@ -80,7 +69,6 @@ export function PageTitle({
     <>
       <ContentPageHeader
         title={contentLabel}
-        icon={icon}
         id={id}
         as={Heading}
         ownerKey={currentId}

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { ApplicationClient, PlanSummary, Snapshot } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { FilePanel } from "./file-panel.js";
 import { emptyFileTabs, type FileTabAction, updateFileTabs } from "./file-tabs.js";
 import type { RecallSource } from "./memory-recall.js";
@@ -161,23 +162,23 @@ export function RelayPlansPanel({
         }
         emptyContent={
           <>
-            <button
+            <AppButton
               type="button"
               className="file-open-link"
               onClick={() => act({ type: "changes" })}
             >
               Open Changes
-            </button>
+            </AppButton>
             {plans.length > 0 && (
               <nav className="file-panel-saved-plans" aria-label="Saved Relay plans">
                 {plans.map((plan) => (
-                  <button
+                  <AppButton
                     key={plan.id}
                     type="button"
                     onClick={() => act({ type: "plan", planId: plan.id, title: plan.title })}
                   >
                     {plan.title}
-                  </button>
+                  </AppButton>
                 ))}
               </nav>
             )}

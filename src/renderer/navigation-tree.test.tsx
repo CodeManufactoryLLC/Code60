@@ -229,7 +229,7 @@ describe("navigation tree", () => {
           onOpenProject={onOpenProject}
         />,
       );
-      expect(pending).toContain('aria-label="New Project" disabled=""');
+      expect(pending).toMatch(/<button[^>]*aria-label="New Project"[^>]*disabled=""/);
     },
   );
 
@@ -251,7 +251,7 @@ describe("navigation tree", () => {
       expect(header).not.toContain('class="icon-button"');
       expect(html).toContain("New Session");
       if (id === "a")
-        expect(html.indexOf("home-card-create")).toBeLessThan(html.indexOf('data-feature="one"'));
+        expect(html.indexOf("navigation-create")).toBeLessThan(html.indexOf('data-feature="one"'));
       expect(page.props.hidden).toBe(id !== "b");
       page.props.create?.onClick();
       expect(chatAction).toHaveBeenLastCalledWith({ type: "new", projectId: id });

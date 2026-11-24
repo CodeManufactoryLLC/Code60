@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import type { ApplicationClient, LogRecord } from "../bridge/index.js";
 import { parseLogQuery } from "../bridge/index.js";
 import { copyText } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Checkbox as CarbonCheckbox } from "./carbon/choices.js";
+import { Select as CarbonSelect } from "./carbon/fields.js";
 import { DataTable, type RetainedTableQuery, type TableOptions } from "./data-table.js";
 import { Icon } from "./icons.js";
 import { LogViewer } from "./log-model.js";
@@ -115,7 +118,7 @@ export function LogsPage({
     await operation();
     if (viewer.snapshot().error) return;
     requestAnimationFrame(() => {
-      root.current?.querySelector(".dvn-scroller")?.scrollTo({ top: 0 });
+      root.current?.querySelector(".carbon-table-scroll")?.scrollTo({ top: 0 });
       viewer.setFollowing(true);
     });
   }
@@ -127,7 +130,7 @@ export function LogsPage({
       aria-label="Logs"
       onScrollCapture={(event) => {
         const target = event.target;
-        if (target instanceof HTMLElement && target.classList.contains("dvn-scroller"))
+        if (target instanceof HTMLElement && target.classList.contains("carbon-table-scroll"))
           viewer.setFollowing(target.scrollTop === 0);
       }}
     >
@@ -145,9 +148,9 @@ export function LogsPage({
       {state.error && (
         <p role="alert">
           {state.error}{" "}
-          <button type="button" onClick={() => void viewer.retry()}>
+          <AppButton type="button" onClick={() => void viewer.retry()}>
             Retry logs
-          </button>
+          </AppButton>
         </p>
       )}
       {clearError && <p role="alert">{clearError}</p>}
@@ -155,9 +158,9 @@ export function LogsPage({
       {page?.state === "expired-cursor" && (
         <p role="status">
           This page expired after retention, clearing or an app restart.{" "}
-          <button type="button" onClick={() => void navigate(() => viewer.refresh())}>
+          <AppButton type="button" onClick={() => void navigate(() => viewer.refresh())}>
             Show latest logs
-          </button>
+          </AppButton>
         </p>
       )}
       <DataTable
@@ -174,23 +177,22 @@ export function LogsPage({
         onRetainedQuery={queryChanged}
         scope={
           <>
-            <select
+            <CarbonSelect
               aria-label="Log project scope"
               value={scope}
               onChange={(event) => setScope(event.target.value as typeof scope)}
             >
               <option value="current">Current project</option>
               <option value="all">All projects</option>
-            </select>
-            <label className="table-scope-check">
-              <input
-                type="checkbox"
+            </CarbonSelect>
+            <div className="table-scope-check">
+              <CarbonCheckbox
+                labelText={<>Current launch only</>}
                 checked={launchOnly}
                 disabled={!page}
                 onChange={(event) => setLaunchOnly(event.target.checked)}
               />
-              Current launch only
-            </label>
+            </div>
           </>
         }
         pageActions={[
@@ -256,7 +258,7 @@ export function LogsPage({
               </div>
             ))}
           </dl>
-          <button
+          <AppButton
             type="button"
             onClick={async () => {
               const source = JSON.stringify(state.selected, null, 2);
@@ -270,7 +272,7 @@ export function LogsPage({
           >
             <Icon name="copy" />
             Copy record
-          </button>
+          </AppButton>
           {copied && <p role="status">{copied}</p>}
         </Modal>
       )}

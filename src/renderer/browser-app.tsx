@@ -8,6 +8,7 @@ import {
   type InteractionAnswer,
 } from "../bridge/index.js";
 import { App } from "./app.js";
+import { useAppPreferences } from "./app-preferences.js";
 import {
   browserRequest,
   connectBrowser,
@@ -17,6 +18,8 @@ import {
   savedBrowserSession,
 } from "./browser-client.js";
 import { randomId } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { Modal } from "./modal.js";
 
 const HostPicker = lazy(() => import("./host-picker.js"));
@@ -67,18 +70,19 @@ function BrowserInteraction({
       <p>{interaction.detail}</p>
       {error && <p role="alert">{error}</p>}
       <div className="dialog-actions">
-        <button type="button" disabled={busy} onClick={() => void answer(false)}>
+        <AppButton type="button" disabled={busy} onClick={() => void answer(false)}>
           Cancel
-        </button>
-        <button type="button" disabled={busy} onClick={() => void answer(true)}>
+        </AppButton>
+        <AppButton type="button" disabled={busy} onClick={() => void answer(true)}>
           Confirm
-        </button>
+        </AppButton>
       </div>
     </Modal>
   );
 }
 
 export function BrowserApp() {
+  const preferences = useAppPreferences();
   const lanPairing = window.location.hostname !== "127.0.0.1";
   const [session, setSession] = useState<BrowserSession | null>(null);
   const [ready, setReady] = useState(false);
@@ -187,20 +191,25 @@ export function BrowserApp() {
   if (!ready)
     return (
       <main className="browser-pairing">
-        <h1>Code60</h1>
-        <p role="status">{error ? "Code60 could not connect." : "Connecting to Code60…"}</p>
+        <h1>{error ? "Backend unavailable" : "Connecting to Code60"}</h1>
         {error && <p role="alert">{error}</p>}
         {error && (
-          <button type="button" disabled={busy} onClick={() => void bootstrap()}>
+          <AppButton type="button" disabled={busy} onClick={() => void bootstrap()}>
             Retry connection
-          </button>
+          </AppButton>
         )}
       </main>
     );
   if (!session?.controlling)
     return (
       <main className="browser-pairing">
-        <h1>Code60</h1>
+        <h1>
+          {session
+            ? "Take control of Code60"
+            : requirePairing
+              ? "Pair this browser"
+              : "Connect to Code60"}
+        </h1>
         {!session && requirePairing ? (
           <form
             onSubmit={(event) => {
@@ -217,21 +226,21 @@ export function BrowserApp() {
                 </>
               )}
             </p>
-            <label>
-              Pairing code
-              <input
+            <div>
+              <CarbonTextInput
+                labelText={<>Pairing code</>}
                 autoComplete="off"
                 inputMode={lanPairing ? "numeric" : "text"}
-                placeholder={lanPairing ? "123-456" : undefined}
+                placeholder={lanPairing ? "123-456" : ""}
                 pattern={lanPairing ? "[0-9]{3}-?[0-9]{3}" : undefined}
                 maxLength={lanPairing ? 7 : undefined}
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
               />
-            </label>
-            <button type="submit" disabled={busy || !code.trim()}>
+            </div>
+            <AppButton variant="primary" type="submit" disabled={busy || !code.trim()}>
               Connect to Code60
-            </button>
+            </AppButton>
           </form>
         ) : session ? (
           <>
@@ -239,10 +248,15 @@ export function BrowserApp() {
               Code60 is controlled by another browser window. Taking control keeps approved work
               running and dismisses its pending dialogs.
             </p>
-            <button type="button" disabled={busy} onClick={() => void takeControl()}>
+            <AppButton
+              variant="primary"
+              type="button"
+              disabled={busy}
+              onClick={() => void takeControl()}
+            >
               Take control
-            </button>
-            <button
+            </AppButton>
+            <AppButton
               type="button"
               onClick={() => {
                 establish(null);
@@ -250,45 +264,57 @@ export function BrowserApp() {
               }}
             >
               Reconnect
-            </button>
+            </AppButton>
           </>
         ) : (
-          <button type="button" disabled={busy} onClick={() => void bootstrap()}>
+          <AppButton type="button" disabled={busy} onClick={() => void bootstrap()}>
             Connect to Code60
-          </button>
+          </AppButton>
         )}
         {error && <p role="alert">{error}</p>}
       </main>
     );
   return (
     <>
-      {client && <App api={client.api} />}
-      <div className="backend-controls">
-        <span role="status">{connected ? "Backend connected" : "Reconnecting to backend…"}</span>
-        {!connected && (
-          <button
-            type="button"
-            onClick={() => {
-              establish(null);
-              void bootstrap();
-            }}
-          >
-            Reconnect
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() =>
-            void browserRequest("/api/operation", session, {
-              id: randomId(),
-              operation: "backend-stop",
-            }).catch((cause) => setError(String(cause)))
+      {client && (
+        <App
+          api={client.api}
+          preferences={preferences}
+          connected={connected}
+          backendControls={
+            <div className="backend-controls">
+              <span role="status">
+                {connected ? "Backend connected" : "Reconnecting to backend…"}
+              </span>
+              {!connected && (
+                <AppButton
+                  className="small ghost"
+                  type="button"
+                  onClick={() => {
+                    establish(null);
+                    void bootstrap();
+                  }}
+                >
+                  Reconnect
+                </AppButton>
+              )}
+              <AppButton
+                className="small ghost"
+                type="button"
+                onClick={() =>
+                  void browserRequest("/api/operation", session, {
+                    id: randomId(),
+                    operation: "backend-stop",
+                  }).catch((cause) => setError(String(cause)))
+                }
+              >
+                Stop Code60 Backend
+              </AppButton>
+              {error && <span role="alert">{error}</span>}
+            </div>
           }
-        >
-          Stop Code60 Backend
-        </button>
-        {error && <span role="alert">{error}</span>}
-      </div>
+        />
+      )}
       {interactions[0] && (
         <BrowserInteraction
           key={interactions[0].id}

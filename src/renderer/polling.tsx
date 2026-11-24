@@ -1,4 +1,3 @@
-import type { Rectangle } from "@glideapps/glide-data-grid";
 import { useEffect, useId, useMemo, useState } from "react";
 import {
   type ApplicationClient,
@@ -9,13 +8,16 @@ import {
   pollKeys,
   pollRanges,
 } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { DataTable, type TableOptions } from "./data-table.js";
-import { drawIcon, Icon } from "./icons.js";
+import { Icon } from "./icons.js";
 import { MessageAge } from "./message-controls.js";
 import { Modal } from "./modal.js";
 import { ControlDescription } from "./overlays.js";
 import { pollRequestIdentity } from "./poll-identity.js";
 import { SettingsHeader } from "./settings-layout.js";
+import type { Rectangle } from "./table-types.js";
 import { useTicker } from "./ticker.js";
 
 export const labels: Record<PollKey, string> = {
@@ -72,7 +74,7 @@ export function PollingWidget({
   };
   return (
     <section className="footer-polling" aria-label="Polling controls">
-      <button
+      <AppButton
         type="button"
         className="poll-timestamp"
         aria-label="Open polling controls"
@@ -82,7 +84,7 @@ export function PollingWidget({
       >
         <Icon name="view" />
         <MessageAge at={messageAt} scope={messageScope} />
-      </button>
+      </AppButton>
       {open && (
         <Modal
           title="Polling controls"
@@ -92,7 +94,7 @@ export function PollingWidget({
         >
           <div className="polling-dialog-body">
             <div className="button-group">
-              <button
+              <AppButton
                 type="button"
                 aria-label={polling.paused ? "Start polling" : "Pause polling"}
                 disabled={busy}
@@ -100,8 +102,8 @@ export function PollingWidget({
               >
                 <Icon name={polling.paused ? "play--filled" : "pause"} />
                 {polling.paused ? "Start" : "Pause"}
-              </button>
-              <button
+              </AppButton>
+              <AppButton
                 type="button"
                 aria-label="Refresh project data"
                 disabled={
@@ -120,7 +122,7 @@ export function PollingWidget({
               >
                 <Icon name="renew" />
                 Refresh
-              </button>
+              </AppButton>
             </div>
           </div>
           {error && (
@@ -162,13 +164,17 @@ function IntervalForm({
       }}
     >
       {(["active", "idle"] as const).map((mode) => (
-        <label key={mode} className="settings-field settings-field-number">
-          {mode === "active"
-            ? source.key === "worktrees" || source.key === "files"
-              ? "Visible tab seconds"
-              : "Active seconds"
-            : "Idle seconds"}
-          <input
+        <div key={mode} className="settings-field settings-field-number">
+          <CarbonTextInput
+            labelText={
+              <>
+                {mode === "active"
+                  ? source.key === "worktrees" || source.key === "files"
+                    ? "Visible tab seconds"
+                    : "Active seconds"
+                  : "Idle seconds"}
+              </>
+            }
             type="number"
             min={min / 1000}
             max={max / 1000}
@@ -181,11 +187,11 @@ function IntervalForm({
             value={mode === "active" ? active : idle}
             onChange={(event) => (mode === "active" ? setActive : setIdle)(event.target.value)}
           />
-        </label>
+        </div>
       ))}
-      <button type="submit" disabled={busy}>
+      <AppButton type="submit" disabled={busy}>
         Apply
-      </button>
+      </AppButton>
     </form>
   );
 }
@@ -239,7 +245,7 @@ export function PollingControls({
       {polling.sources.map((source) => (
         <fieldset key={source.key} className="settings-group">
           <legend className="settings-group-title">{labels[source.key]}</legend>
-          <button
+          <AppButton
             type="button"
             className="settings-group-reset"
             aria-label={`Reset ${labels[source.key].toLowerCase()}`}
@@ -247,7 +253,7 @@ export function PollingControls({
             onClick={() => void attempt(() => api.setPollSettings({ [source.key]: null }))}
           >
             Reset
-          </button>
+          </AppButton>
           <IntervalForm
             key={`${source.key}:${source.setting.intervalMs}:${source.setting.idleIntervalMs}`}
             source={source}
@@ -270,23 +276,27 @@ export function PollingControls({
       ))}
       <fieldset className="settings-group">
         <legend className="settings-group-title">Charts</legend>
-        <button
+        <AppButton
           type="button"
           className="settings-group-reset"
           aria-label="Reset chart ticker"
           onClick={() => onChartTick(5000)}
         >
           Reset
-        </button>
+        </AppButton>
         <div className="settings-controls">
-          <label className="settings-field settings-field-number">
-            <span className="settings-label">
-              <span id={tickerId}>Chart ticker seconds</span>
-              <ControlDescription>
-                Redraws the sessions table charts on the local clock. It reads no data.
-              </ControlDescription>
-            </span>
-            <input
+          <div className="settings-field settings-field-number">
+            <CarbonTextInput
+              labelText={
+                <>
+                  <span className="settings-label">
+                    <span id={tickerId}>Chart ticker seconds</span>
+                    <ControlDescription>
+                      Redraws the sessions table charts on the local clock. It reads no data.
+                    </ControlDescription>
+                  </span>
+                </>
+              }
               aria-labelledby={tickerId}
               type="number"
               min="1"
@@ -299,7 +309,7 @@ export function PollingControls({
                   onChartTick(seconds * 1000);
               }}
             />
-          </label>
+          </div>
         </div>
       </fieldset>
     </section>
@@ -470,101 +480,72 @@ export function PollingPage({
         return String(row[key]);
     }
   };
-  const paint: Parameters<typeof DataTable<PollRow, PollColumn>>[0]["paint"] = (
-    { ctx, rect, theme },
-    row,
-    key,
-  ) => {
-    const style = getComputedStyle(document.documentElement);
-    const color = (name: string) => style.getPropertyValue(name).trim();
-    const middle = rect.y + rect.height / 2;
+  const renderCell = (row: PollRow, key: PollColumn) => {
     const { source, result } = row;
-    ctx.textBaseline = "middle";
-    ctx.textAlign = "left";
-    if (key === "name") {
-      ctx.font = `${theme.baseFontStyle} ${theme.fontFamily}`;
-      if (result) {
-        // A guide line ties each result to its source above.
-        ctx.fillStyle = color("--border");
-        ctx.fillRect(rect.x + 13, rect.y, 1, rect.height);
-        ctx.fillStyle = color("--muted");
-        ctx.fillText(row.name, rect.x + 28, middle, rect.width - 36);
-        return true;
-      }
-      ctx.fillStyle = theme.textDark;
-      drawIcon(
-        ctx,
-        expanded.has(source.key) ? "chevron--down" : "chevron--right",
-        rect.x + 6,
-        middle - 8,
+    if (key === "name" && !result)
+      return (
+        <AppButton
+          variant="quiet"
+          className="small"
+          aria-label={`${expanded.has(source.key) ? "Collapse" : "Expand"} ${row.name}`}
+          aria-expanded={expanded.has(source.key)}
+          onClick={() => choose(row.id)}
+        >
+          <Icon name={expanded.has(source.key) ? "chevron--down" : "chevron--right"} />
+          {row.name}
+        </AppButton>
       );
-      ctx.fillText(row.name, rect.x + 28, middle, rect.width - 64);
-      const count = String(source.history.length);
-      ctx.fillStyle = color("--muted");
-      ctx.textAlign = "right";
-      ctx.fillText(count, rect.x + rect.width - 8, middle);
-      return true;
-    }
-    if (key === "status") {
-      const failed = row.status === "failed";
-      const strong = row.status === "healthy" || row.status === "success";
-      ctx.fillStyle = failed ? color("--danger") : strong ? color("--text") : color("--muted");
-      if (failed)
-        ctx.fillRect(
-          rect.x + 6,
-          middle - Math.min(10, rect.height / 2 - 2),
-          3,
-          Math.min(20, rect.height - 4),
-        );
-      const icon = failed
-        ? "warning--alt--filled"
-        : row.status === "polling"
-          ? "renew"
-          : row.status === "paused"
-            ? "pause"
-            : strong
-              ? "checkmark"
-              : "time";
-      drawIcon(ctx, icon, rect.x + 14, middle - 8);
-      ctx.font = `400 12px ${theme.fontFamily}`;
-      ctx.fillText(display(row, "status"), rect.x + 36, middle, rect.width - 44);
-      return true;
-    }
-    if (key !== "recent" || !source.history.length) return false;
+    if (key === "status")
+      return (
+        <span className="carbon-status">
+          <Icon
+            name={
+              row.status === "failed"
+                ? "warning--alt--filled"
+                : row.status === "polling"
+                  ? "renew"
+                  : row.status === "paused"
+                    ? "pause"
+                    : row.status === "healthy" || row.status === "success"
+                      ? "checkmark"
+                      : "time"
+            }
+          />
+          {display(row, key)}
+        </span>
+      );
+    if (key !== "recent" || !source.history.length) return undefined;
     const max = Math.max(1, ...source.history.map((item) => item.durationMs));
-    const height = Math.max(4, rect.height - 8);
-    ctx.lineWidth = 1;
-    const bar = (x: number, width: number, value: PollResult, barHeight: number, y: number) => {
-      if (value.ok) {
-        ctx.fillStyle = color("--human-text");
-        ctx.fillRect(x, y, width, barHeight);
-      } else {
-        ctx.strokeStyle = color("--accent");
-        ctx.strokeRect(x + 0.5, y + 0.5, Math.max(1, width - 1), Math.max(1, barHeight - 1));
-      }
-    };
-    if (result) {
-      // One horizontal bar on the source's scale, so results compare down the column.
-      const width = Math.max(1, (result.durationMs / max) * (rect.width - 72));
-      bar(rect.x + 8, width, result, 8, middle - 4);
-      ctx.fillStyle = color("--muted");
-      ctx.font = `12px ${theme.fontFamily}`;
-      ctx.textAlign = "right";
-      ctx.fillText(`${result.durationMs} ms`, rect.x + rect.width - 8, middle);
-      return true;
-    }
-    const slot = (rect.width - 16) / 50;
-    source.history.forEach((item, index) => {
-      const barHeight = Math.max(1, (item.durationMs / max) * height);
-      bar(
-        rect.x + 8 + index * slot,
-        Math.max(1, slot - 1),
-        item,
-        barHeight,
-        rect.y + rect.height - 4 - barHeight,
-      );
-    });
-    return true;
+    return (
+      <span className="carbon-chart-value">
+        <svg viewBox="0 0 150 24" role="img" aria-label={display(row, key)}>
+          {result ? (
+            <rect
+              x="1"
+              y="8"
+              width={Math.max(1, (result.durationMs / max) * 148)}
+              height="8"
+              fill={result.ok ? "currentColor" : "none"}
+              stroke="currentColor"
+            />
+          ) : (
+            source.history.map((item, index) => (
+              <rect
+                key={item.id}
+                x={index * 3}
+                y={23 - Math.max(1, (item.durationMs / max) * 22)}
+                width="2"
+                height={Math.max(1, (item.durationMs / max) * 22)}
+                fill={item.ok ? "currentColor" : "none"}
+                stroke="currentColor"
+              />
+            ))
+          )}
+          <title>{display(row, key)}</title>
+        </svg>
+        {result && <span>{result.durationMs} ms</span>}
+      </span>
+    );
   };
   return (
     <main
@@ -585,7 +566,7 @@ export function PollingPage({
         parent={parentOf}
         hasActions={actionable}
         align={(key) => (key === "failures" ? "right" : "left")}
-        paint={paint}
+        renderCell={renderCell}
       />
     </main>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Button as AppButton } from "./carbon/button.js";
 import { fileLanguage, monaco, useMonacoTheme } from "./monaco-runtime.js";
 import { monospaceFont } from "./typography.js";
 
@@ -114,13 +115,13 @@ export default function MonacoDiff({
     <>
       {onAddToChat && selection?.address === address && (
         <div className="diff-selection-actions">
-          <button
+          <AppButton
             type="button"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onAddToChat(selection)}
           >
             Add to chat
-          </button>
+          </AppButton>
           <span>
             {selection.side} lines {selection.start}-{selection.end}
           </span>

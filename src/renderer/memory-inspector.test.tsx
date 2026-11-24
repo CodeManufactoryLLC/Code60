@@ -81,7 +81,7 @@ it("presents readable memory facts, highlighted evidence and history without raw
   expect(html).not.toContain(ids.source);
   expect(html).not.toContain(at);
   expect(html).not.toContain("prompt v");
-  expect(html).toMatch(/<button[^>]*class="primary"[^>]*disabled=""[^>]*>Save changes/);
+  expect(html).toMatch(/<button[^>]*class="primary[^"]*"[^>]*disabled=""[^>]*>Save changes/);
 });
 
 it("labels unknown names instead of showing identifiers", () => {

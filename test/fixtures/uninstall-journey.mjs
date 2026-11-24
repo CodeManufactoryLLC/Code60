@@ -2,8 +2,16 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { lstat, readdir, readFile, readlink, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import {
+  appendFile,
+  lstat,
+  readdir,
+  readFile,
+  readlink,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
+import { basename, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
@@ -77,14 +85,38 @@ export async function uninstallJourney({
   output,
   signal,
 }) {
-  const command = (file, args, timeout = 8 * 60_000) =>
-    execute(file, args, {
-      env,
-      cwd: "/",
-      signal,
-      timeout,
-      maxBuffer: 2 * 1024 ** 2,
-    });
+  // The caller owns the finite whole-journey deadline (20 minutes natively,
+  // nine minutes in the Linux maintenance customer). Repeated full receipt
+  // scans of the native payload can outlive an arbitrary per-command cap.
+  assert.ok(signal instanceof AbortSignal, "A bounded journey signal is required");
+  const command = async (file, args) => {
+    const started = performance.now();
+    let failure;
+    try {
+      return await execute(file, args, {
+        env,
+        cwd: "/",
+        signal,
+        maxBuffer: 2 * 1024 ** 2,
+      });
+    } catch (error) {
+      failure = {
+        code: error.code ?? null,
+        signal: error.signal ?? null,
+        killed: error.killed ?? null,
+        stdout: error.stdout ?? "",
+        stderr: error.stderr ?? "",
+      };
+      throw error;
+    } finally {
+      // Only synthetic installed-CLI evidence: no management tokens or providers.
+      await appendFile(
+        join(output, "uninstall-commands.jsonl"),
+        `${JSON.stringify({ command: basename(file), args, durationMs: Math.round(performance.now() - started), ...(failure ? { failure } : { status: "PASS" }) })}\n`,
+        { mode: 0o600 },
+      );
+    }
+  };
   const cli = (args) => command(launcher, args);
   const original = await connection();
   assert.ok(Number.isSafeInteger(original.pid) && original.pid > 1);

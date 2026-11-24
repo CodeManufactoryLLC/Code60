@@ -411,9 +411,22 @@ export async function startGateway(options: GatewayOptions = {}) {
           return;
         }
         const url = new URL(request.url ?? "/", origin);
+        const parameters = [...url.searchParams];
+        // Animation replay keys select the same manifested GIF bytes, never a route,
+        // file path or credential. Keep all other production query strings rejected.
+        const replayAsset =
+          request.method === "GET" &&
+          assets.has(url.pathname) &&
+          extname(url.pathname) === ".gif" &&
+          !url.pathname.startsWith("/api/") &&
+          !url.pathname.startsWith("/management/") &&
+          parameters.length === 1 &&
+          parameters[0]?.[0] === "play" &&
+          /^[A-Za-z0-9_:.-]{1,96}-[1-9]\d{0,9}$/.test(parameters[0][1]);
         if (
           url.hash ||
           (url.search &&
+            !replayAsset &&
             (remote ||
               !options.developmentAssets ||
               url.pathname.startsWith("/api/") ||

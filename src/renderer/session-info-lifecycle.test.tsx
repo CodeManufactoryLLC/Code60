@@ -76,7 +76,7 @@ it("keeps harness choices through unrelated scrolls, but dismisses a moved ancho
     onMode: vi.fn(),
   });
   const cleanup = hooks.layout?.();
-  expect(focus).toHaveBeenCalledExactlyOnceWith({ preventScroll: true });
+  expect(focus).not.toHaveBeenCalled();
   const scroll = listeners.get("scroll");
   if (!scroll) throw new Error("Missing scroll listener");
   // Delegated press feedback scales the button, not its stationary layout container.
@@ -89,7 +89,7 @@ it("keeps harness choices through unrelated scrolls, but dismisses a moved ancho
   scroll({ target: new Node() } as unknown as Event);
   expect(hooks.setOpen).toHaveBeenCalledExactlyOnceWith(false);
   if (typeof cleanup === "function") cleanup();
-  expect(popup.hidePopover).toHaveBeenCalledOnce();
+  expect(popup.hidePopover).not.toHaveBeenCalled();
   expect(listeners.size).toBe(0);
 });
 

@@ -1,16 +1,36 @@
-import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  Button,
+  Header,
+  HeaderMenuButton,
+  HeaderName,
+  SideNav,
+  SideNavItems,
+  SideNavLink,
+  SideNavMenu,
+  SkipToContent,
+} from "@carbon/react";
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { DesktopRun, OpenProject, OrchestrationChat } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
 import type { Theme } from "./appearance.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Select as CarbonSelect } from "./carbon/fields.js";
+import { Surface as Card } from "./carbon/surfaces.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { conversationId } from "./chats.js";
-import { IconAnimationToggle } from "./icon-animation-toggle.js";
 import { Icon } from "./icons.js";
+import { Modal } from "./modal.js";
 import {
   isSettingsSection,
   pageAvailable,
   pageDefinitions,
-  pageGroup,
   settingsIcons,
   settingsLabels,
   settingsParents,
@@ -24,18 +44,16 @@ import {
   sidebarPageElementId,
   staticChildren,
 } from "./navigation-tree.js";
-import { Card } from "./neobrutalism/card.js";
 import { ProjectChatSidebar } from "./project-chat-sidebar.js";
 import type { ProviderManagement } from "./provider-management.js";
 import { ProvidersSidebar } from "./providers-sidebar.js";
-import { observeSidebarCardEdges, observeWorkspaceInset } from "./sidebar-layout.js";
+
 import type { PageId, PageTabs, SettingsSectionId } from "./tabs.js";
-import { ThemeToggle } from "./theme-toggle.js";
 
 export function PageTabBar({
-  iconAnimations,
-  iconAnimationsSaved = true,
-  onIconAnimationsChange,
+  commands,
+  workspace,
+  connected,
   theme,
   onThemeChange,
   tabs,
@@ -62,9 +80,9 @@ export function PageTabBar({
   onBack = () => {},
   onForward = () => {},
 }: {
-  iconAnimations: boolean;
-  iconAnimationsSaved?: boolean;
-  onIconAnimationsChange(enabled: boolean): void;
+  commands?(): void;
+  workspace?(close: () => void): import("react").ReactNode;
+  connected?: boolean | undefined;
   theme: Theme;
   onThemeChange(theme: Theme): void;
   canGoBack?: boolean;
@@ -91,81 +109,85 @@ export function PageTabBar({
   openProjects?: readonly OpenProject[] | undefined;
   selectedProjectId?: string | null | undefined;
 }) {
-  const sidebar = useRef<HTMLElement>(null);
-  const toggle = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(() => localStorage.getItem("code60.sidebarOpen") !== "false");
-  const [width, setWidth] = useState(() => {
-    const saved = Number(localStorage.getItem("code60.sidebarWidth"));
-    return Number.isFinite(saved) && saved >= 180 && saved <= 480 ? saved : 220;
-  });
-  useLayoutEffect(() => {
-    sidebar.current
-      ?.closest<HTMLElement>(".app")
-      ?.style.setProperty("--sidebar-width", `${width}px`);
-    localStorage.setItem("code60.sidebarWidth", String(width));
-  }, [width]);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [utilities, setUtilities] = useState(false);
+  const closeNavigation = () => setMobileOpen(false);
   useEffect(() => {
-    localStorage.setItem("code60.sidebarOpen", String(open));
-  }, [open]);
-  useLayoutEffect(() => {
-    if (sidebar.current) return observeSidebarCardEdges(sidebar.current);
+    const wide = window.matchMedia("(min-width: 66rem)");
+    const resize = () => {
+      if (wide.matches) setMobileOpen(false);
+    };
+    wide.addEventListener("change", resize);
+    return () => wide.removeEventListener("change", resize);
   }, []);
-  useLayoutEffect(() => {
-    const workspace = sidebar.current?.closest<HTMLElement>(".app-workspace");
-    if (!workspace) return;
-    const notice = database ? null : workspace.parentElement?.querySelector(".database-notice");
-    return observeWorkspaceInset(workspace, notice ?? null);
-  }, [database]);
-  const sidebarInset = () =>
-    sidebar.current ? Number.parseFloat(getComputedStyle(sidebar.current).paddingLeft) || 0 : 0;
-  const resize = (value: number) => {
-    const available = sidebar.current?.parentElement?.clientWidth ?? 840;
-    setWidth(Math.max(180, Math.min(480, available - 360, value)));
-  };
   return (
     <>
-      <nav
-        ref={sidebar}
-        id="navigation-sidebar"
-        className="sidebar"
-        aria-label="Sidebar"
-        aria-busy={navigation.busy || undefined}
-        data-open={open}
-        inert={!open}
-        aria-hidden={!open}
-      >
-        <button
-          type="button"
-          className="sidebar-resize"
-          aria-label="Resize navigation sidebar"
-          title="Resize navigation sidebar (Left/Right arrows)"
-          onKeyDown={(event) => {
-            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      <Header aria-label="Code60" className="product-header">
+        <SkipToContent
+          href={`#panel-${tabs.active}`}
+          onClick={(event) => {
             event.preventDefault();
-            resize(
-              (sidebar.current?.getBoundingClientRect().width ?? width) -
-                sidebarInset() +
-                (event.key === "ArrowRight" ? 20 : -20),
-            );
-          }}
-          onPointerDown={(event) => {
-            if (event.button !== 0) return;
-            event.currentTarget.setPointerCapture(event.pointerId);
-          }}
-          onPointerMove={(event) => {
-            if (event.currentTarget.hasPointerCapture(event.pointerId) && sidebar.current)
-              resize(event.clientX - sidebar.current.getBoundingClientRect().left - sidebarInset());
-          }}
-          onPointerUp={(event) => {
-            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-            if (sidebar.current)
-              resize(event.clientX - sidebar.current.getBoundingClientRect().left - sidebarInset());
-            event.currentTarget.releasePointerCapture(event.pointerId);
+            document.getElementById(`panel-${tabs.active}`)?.focus();
           }}
         />
-        <div id="navigation-sidebar-content" className="sidebar-content">
+        <HeaderMenuButton
+          aria-label={mobileOpen ? "Close product navigation" : "Open product navigation"}
+          isActive={mobileOpen}
+          aria-expanded={mobileOpen}
+          aria-controls="navigation-sidebar"
+          onClick={() => setMobileOpen(!mobileOpen)}
+        />
+        <HeaderName
+          prefix=""
+          href="#panel-home"
+          onClick={(event) => {
+            event.preventDefault();
+            closeNavigation();
+            onSelect("home");
+          }}
+        >
+          Code60
+        </HeaderName>
+        <HistoryControls
+          canGoBack={canGoBack}
+          canGoForward={canGoForward}
+          onBack={onBack}
+          onForward={onForward}
+        />
+        <div className="product-utilities">
+          {connected !== undefined && (
+            <span role="status">
+              {connected ? "Backend connected" : "Reconnecting to backend…"}
+            </span>
+          )}
+          <Button size="md" kind="ghost" onClick={commands}>
+            Commands
+          </Button>
+          <Button size="md" kind="ghost" aria-haspopup="dialog" onClick={() => setUtilities(true)}>
+            Workspace
+          </Button>
+        </div>
+      </Header>
+      <SideNav
+        id="navigation-sidebar"
+        aria-busy={navigation.busy || undefined}
+        className="product-navigation"
+        aria-label="Product navigation"
+        expanded={mobileOpen}
+        onOverlayClick={closeNavigation}
+        onSideNavBlur={closeNavigation}
+        onClick={(event) => {
+          if (
+            (event.target as HTMLElement).closest(
+              '[role="tab"], .chat-sidebar-entry, .project-home-link',
+            )
+          )
+            closeNavigation();
+        }}
+      >
+        <div id="navigation-sidebar-content">
           <PageTabList
-            sidebarOpen={open}
+            sidebarOpen={true}
             onOpenProject={database ? onOpenProject : (onConnectDatabase ?? onOpenProject)}
             projectDisabled={projectDisabled}
             tabs={tabs}
@@ -186,43 +208,24 @@ export function PageTabBar({
             selectedProjectId={selectedProjectId}
           />
         </div>
-      </nav>
-      <header className="workspace-header">
-        <Card className="workspace-breadcrumbs">
-          <HistoryControls
-            canGoBack={canGoBack}
-            canGoForward={canGoForward}
-            onBack={onBack}
-            onForward={onForward}
-          />
-          <div className="breadcrumb-appearance-controls">
-            <IconAnimationToggle
-              enabled={iconAnimations}
-              saved={iconAnimationsSaved}
-              onChange={onIconAnimationsChange}
-            />
-            <ThemeToggle theme={theme} onChange={onThemeChange} />
+      </SideNav>
+      {utilities && (
+        <Modal busy={false} title="Workspace" onClose={() => setUtilities(false)}>
+          <div className="product-workspace-actions">
+            <CarbonSelect
+              labelText="Color theme"
+              aria-label="Color theme"
+              value={theme}
+              onChange={(e) => onThemeChange(e.target.value as Theme)}
+            >
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </CarbonSelect>
+            {workspace?.(() => setUtilities(false))}
           </div>
-        </Card>
-      </header>
-      <div className="workspace-panel-controls">
-        <button
-          ref={toggle}
-          type="button"
-          className="icon-button sidebar-toggle"
-          aria-label={open ? "Close navigation sidebar" : "Open navigation sidebar"}
-          title={open ? "Close navigation sidebar" : "Open navigation sidebar"}
-          aria-controls="navigation-sidebar"
-          aria-expanded={open}
-          onClick={() => {
-            if (sidebar.current?.contains(document.activeElement)) toggle.current?.focus();
-            setOpen((current) => !current);
-          }}
-        >
-          <Icon name={open ? "side-panel--close" : "side-panel--open"} />
-        </button>
-        <div id="workspace-panel-actions" />
-      </div>
+        </Modal>
+      )}
     </>
   );
 }
@@ -264,7 +267,7 @@ function HistoryControls({
   return (
     // biome-ignore lint/a11y/useSemanticElements: a toolbar of two buttons, not a form fieldset.
     <div className="sidebar-history" role="group" aria-label="Navigation history">
-      <button
+      <AppButton
         ref={back}
         type="button"
         className="icon-button"
@@ -273,13 +276,9 @@ function HistoryControls({
         disabled={!canGoBack}
         onClick={press("back", onBack)}
       >
-        {canGoBack ? (
-          <NavigationIcon name="app-history-back" />
-        ) : (
-          <span className="history-placeholder" aria-hidden="true" />
-        )}
-      </button>
-      <button
+        <Icon name="arrow--left" />
+      </AppButton>
+      <AppButton
         ref={forward}
         type="button"
         className="icon-button"
@@ -288,13 +287,73 @@ function HistoryControls({
         disabled={!canGoForward}
         onClick={press("forward", onForward)}
       >
-        {canGoForward ? (
-          <NavigationIcon name="app-history-forward" />
-        ) : (
-          <span className="history-placeholder" aria-hidden="true" />
-        )}
-      </button>
+        <Icon name="arrow--right" />
+      </AppButton>
     </div>
+  );
+}
+
+type NavigationGroup = "Work" | "Automation" | "Inspect" | "Manage";
+
+function productGroup(page: PageId): NavigationGroup {
+  if (page === "automations" || page === "workflows") return "Automation";
+  if (inNavigationBranch(page, "tables")) return "Inspect";
+  if (
+    [
+      "home",
+      "search",
+      "assistants",
+      "custom-agents",
+      "projects",
+      "project",
+      "chat",
+      "files",
+    ].includes(page)
+  )
+    return "Work";
+  return "Manage";
+}
+
+function NavigationSection({
+  title,
+  destination,
+  children,
+}: {
+  title: NavigationGroup;
+  destination: string | undefined;
+  children: ReactNode;
+}) {
+  const button = useRef<HTMLButtonElement>(null);
+  // Carbon owns disclosure state. Reveal an externally selected route through
+  // its toggle, preserving mounted project rows and any other open menus.
+  useLayoutEffect(() => {
+    if (destination && button.current?.getAttribute("aria-expanded") === "false")
+      button.current.click();
+  }, [destination]);
+  return (
+    <SideNavMenu
+      id={`nav-group-${title}`}
+      title={title}
+      ref={button}
+      defaultExpanded={Boolean(destination)}
+      isActive={Boolean(destination)}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !event.defaultPrevented) button.current?.focus();
+      }}
+    >
+      <li
+        className="product-nav-destinations"
+        onKeyDown={(event) => {
+          // Portal events bubble through React. Let a sidebar dialog handle its
+          // own Escape without also closing the menu behind it.
+          if (event.key === "Escape" && !event.currentTarget.contains(event.target as Node))
+            event.stopPropagation();
+        }}
+      >
+        {children}
+      </li>
+    </SideNavMenu>
   );
 }
 
@@ -395,7 +454,17 @@ function PageTabList({
       : undefined;
   const appActive = inNavigationBranch(tabs.active, "apps") || sectionParent === "apps";
   const settingsActive = (tabs.active === "settings" && sectionParent !== "apps") || advancedActive;
-  const activeGroup = sectionParent ?? pageGroup(tabs.active);
+  const currentGroup = productGroup(tabs.active);
+  const destinationFor = (group: NavigationGroup) =>
+    group === currentGroup
+      ? JSON.stringify([
+          tabs.active,
+          settingsSection,
+          tabs.projectId,
+          tabs.providerId,
+          tabs.active === "chat" && selectedId,
+        ])
+      : undefined;
   useLayoutEffect(() => {
     if (tableActive) setExpanded(true);
     if (advancedActive) setAdvancedExpanded(true);
@@ -438,9 +507,11 @@ function PageTabList({
   type StaticParent = keyof typeof disclosures;
   const isParent = (id: string): id is StaticParent => Object.hasOwn(disclosures, id);
   const childIds = (parent: StaticParent) =>
-    staticChildren(parent, database).flatMap(({ target }) =>
-      target.kind === "page" || target.kind === "settings" ? [target.id] : [],
-    );
+    staticChildren(parent, database)
+      .filter(({ id }) => parent !== "apps" || !["automations", "workflows", "tables"].includes(id))
+      .flatMap(({ target }) =>
+        target.kind === "page" || target.kind === "settings" ? [target.id] : [],
+      );
   const setDisclosure = (id: StaticParent, open: boolean) => {
     const disclosure = disclosures[id];
     if (!("set" in disclosure)) return;
@@ -460,6 +531,10 @@ function PageTabList({
       ? [...(relay && !chatPending ? ["relay" as const] : []), "custom-agents" as const]
       : []),
     "chat",
+    "automations",
+    "workflows",
+    "tables",
+    ...(expanded ? descendants("tables") : []),
     "providers",
     "apps",
     ...(appsExpanded ? descendants("apps") : []),
@@ -500,6 +575,17 @@ function PageTabList({
     void navigation.open({ kind: "conversation", id });
   };
   function moveTo(target: (typeof visible)[number] | undefined, activate = true) {
+    if (!target) return;
+    const group = isSettingsSection(target)
+      ? "Manage"
+      : target === "relay"
+        ? "Work"
+        : productGroup(target);
+    const toggle = document.getElementById(`nav-group-${group}`)?.firstElementChild;
+    if (toggle?.getAttribute("aria-expanded") === "false" && toggle instanceof HTMLElement) {
+      toggle.focus();
+      return;
+    }
     if (target === "assistants") {
       if (activate) onSelect("assistants");
       document.getElementById("tab-assistants")?.focus();
@@ -687,8 +773,7 @@ function PageTabList({
     event.preventDefault();
     moveTo(visible[next]);
   }
-  function page(id: PageId, first: boolean) {
-    const icon = pageDefinitions[id].icon;
+  function page(id: PageId) {
     return (
       <div
         className="page-tab"
@@ -703,11 +788,12 @@ function PageTabList({
           (id === "home" && tabs.active === "search" && !homeExpanded)
         }
       >
-        <button
+        <SideNavLink
+          as="button"
           type="button"
           role="tab"
-          id={`tab-${id}`}
-          className={id === "apps" ? "page-group-toggle" : undefined}
+          id={sidebarPageElementId(id)}
+          className={id === "apps" ? "page-group-toggle" : ""}
           aria-controls={
             id === "custom-agents" ? "panel-custom-agents custom-agent-pages" : `panel-${id}`
           }
@@ -722,13 +808,12 @@ function PageTabList({
           }
           title={pageDefinitions[id].label}
           disabled={!pageAvailable(id, database)}
-          tabIndex={
-            (tabs.active === id && (id !== "settings" || settingsActive)) ||
-            (first && activeGroup !== pageGroup(id))
-              ? 0
-              : -1
-          }
+          tabIndex={0}
           onClick={() => {
+            if (id === "tables") {
+              activateParent("tables");
+              return;
+            }
             if (id === "custom-agents") {
               if (tabs.active === id) setCustomExpanded((v) => !v);
               else {
@@ -744,11 +829,10 @@ function PageTabList({
             }
             onSelect(id);
           }}
-          onKeyDown={(event) => navigate(event, id)}
+          onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => navigate(event, id)}
         >
-          {icon && <NavigationIcon name={icon} />}
           <span className="page-tab-label">{pageDefinitions[id].label}</span>
-        </button>
+        </SideNavLink>
       </div>
     );
   }
@@ -756,23 +840,24 @@ function PageTabList({
     const selected = tabs.active === "settings" && settingsSection === id;
     return (
       <div className="page-tab" role="presentation" key={id} data-nav-active={selected}>
-        <button
+        <SideNavLink
+          as="button"
           type="button"
           role="tab"
           id={`tab-settings-${id}`}
           aria-controls={`panel-settings-${id}`}
           aria-selected={selected}
           title={settingsLabels[id]}
-          tabIndex={selected ? 0 : -1}
+          tabIndex={0}
           onClick={() => {
             onSettingsSectionSelect(id);
             onSelect("settings");
           }}
-          onKeyDown={(event) => navigate(event, id)}
+          onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => navigate(event, id)}
         >
           <NavigationIcon name={settingsIcons[id]} />
           <span className="page-tab-label">{settingsLabels[id]}</span>
-        </button>
+        </SideNavLink>
       </div>
     );
   }
@@ -789,14 +874,14 @@ function PageTabList({
         <div role="tablist" aria-label={pageDefinitions[parent].label} aria-orientation="vertical">
           {childIds(parent).map((id) => {
             if (isSettingsSection(id)) return settingsPage(id);
-            if (!isParent(id)) return page(id, true);
+            if (!isParent(id)) return page(id);
             const child = disclosures[id];
             const active =
               tabs.active === id || (inNavigationBranch(tabs.active, id) && !child.open);
             return (
               <div key={id}>
                 <div className="page-tab" data-nav-active={active}>
-                  <button
+                  <AppButton
                     type="button"
                     id={sidebarPageElementId(id)}
                     className="page-group-toggle"
@@ -807,9 +892,8 @@ function PageTabList({
                     onClick={() => activateParent(id)}
                     onKeyDown={(event) => navigate(event, id)}
                   >
-                    {pageDefinitions[id].icon && <NavigationIcon name={pageDefinitions[id].icon} />}
                     <span className="page-tab-label">{pageDefinitions[id].label}</span>
-                  </button>
+                  </AppButton>
                 </div>
                 {staticChildrenPanel(id)}
               </div>
@@ -820,328 +904,344 @@ function PageTabList({
     );
   }
   return (
-    <div className="page-tabs">
-      <Card size="sm" className="sidebar-navigation-card sidebar-section">
-        <div
-          className="sidebar-card-header"
-          role="tablist"
-          aria-label="Home page"
-          aria-orientation="vertical"
-        >
-          {page("home", true)}
-        </div>
-        <div
-          id="home-pages"
-          className="page-group-pages sidebar-home-pages"
-          role="tablist"
-          aria-label="Search page"
-          aria-orientation="vertical"
-          hidden={!homeExpanded}
-          inert={!homeExpanded}
-          aria-hidden={!homeExpanded}
-        >
-          {page("search", false)}
-        </div>
-      </Card>
-      <Card size="sm" className="sidebar-navigation-card sidebar-section">
-        <div
-          className="sidebar-card-header"
-          role="tablist"
-          aria-label="Assistants page"
-          aria-orientation="vertical"
-        >
-          {page("assistants", true)}
-        </div>
-        {/* biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset. */}
-        <div
-          role="group"
-          aria-label="Assistants"
-          id="assistants-pages"
-          className="page-group-pages"
-          hidden={!assistantsExpanded}
-          inert={!assistantsExpanded}
-          aria-hidden={!assistantsExpanded}
-        >
-          {relay && (
-            <ChatSidebar
-              relayNavigation
-              chats={[relay]}
-              runs={runs.filter((run) => run.relay?.conversationId === relay.conversationId)}
-              selectedId={selectedId}
-              navigationSerial={navigationSerial}
-              database={database}
-              eventsByRun={eventsByRun}
-              open={tabs.active === "chat"}
-              conversationVisible={tabs.active === "chat" && !navigation.projectPending}
-              pending={chatPending}
-              ancestorsExpanded={assistantsExpanded}
-              onSelect={selectConversation}
+    <SideNavItems className="page-tabs">
+      <NavigationSection title="Work" destination={destinationFor("Work")}>
+        <Card size="sm" className="sidebar-navigation-card sidebar-section">
+          <div
+            className="sidebar-card-header"
+            role="tablist"
+            aria-label="Home page"
+            aria-orientation="vertical"
+          >
+            {page("home")}
+          </div>
+          <div
+            id="home-pages"
+            className="page-group-pages sidebar-home-pages"
+            role="tablist"
+            aria-label="Search page"
+            aria-orientation="vertical"
+            hidden={!homeExpanded}
+            inert={!homeExpanded}
+            aria-hidden={!homeExpanded}
+          >
+            {page("search")}
+          </div>
+        </Card>
+        <Card size="sm" className="sidebar-navigation-card sidebar-section">
+          <div
+            className="sidebar-card-header"
+            role="tablist"
+            aria-label="Assistants page"
+            aria-orientation="vertical"
+          >
+            {page("assistants")}
+          </div>
+          {/* biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset. */}
+          <div
+            role="group"
+            aria-label="Assistants"
+            id="assistants-pages"
+            className="page-group-pages"
+            hidden={!assistantsExpanded}
+            inert={!assistantsExpanded}
+            aria-hidden={!assistantsExpanded}
+          >
+            {relay && (
+              <ChatSidebar
+                relayNavigation
+                chats={[relay]}
+                runs={runs.filter((run) => run.relay?.conversationId === relay.conversationId)}
+                selectedId={selectedId}
+                navigationSerial={navigationSerial}
+                database={database}
+                eventsByRun={eventsByRun}
+                open={tabs.active === "chat"}
+                conversationVisible={tabs.active === "chat" && !navigation.projectPending}
+                pending={chatPending}
+                ancestorsExpanded={assistantsExpanded}
+                onSelect={selectConversation}
+                onKeyDown={(event) => {
+                  if (event.defaultPrevented) return;
+                  const buttons = relayButtons();
+                  const index = buttons.indexOf(event.target as HTMLButtonElement);
+                  if (index < 0) return;
+                  if (event.key === "ArrowLeft" && index === 0) {
+                    event.preventDefault();
+                    moveTo("assistants", false);
+                  } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                    event.preventDefault();
+                    const next = buttons[index + (event.key === "ArrowDown" ? 1 : -1)];
+                    if (next) next.focus();
+                    else moveTo(event.key === "ArrowDown" ? afterRelay : "assistants");
+                  } else if (event.key === "Home" || event.key === "End") {
+                    event.preventDefault();
+                    moveTo(event.key === "Home" ? visible[0] : visible.at(-1));
+                  }
+                }}
+              />
+            )}
+            <div role="tablist" aria-label="Custom Assistants page" aria-orientation="vertical">
+              {page("custom-agents")}
+            </div>
+            {/* biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset. */}
+            <div
+              role="group"
+              aria-label="Custom assistant conversations"
+              id="custom-agent-pages"
+              aria-hidden={!customExpanded}
+              className="page-group-pages"
+              hidden={!customExpanded}
+              inert={!customExpanded}
               onKeyDown={(event) => {
                 if (event.defaultPrevented) return;
-                const buttons = relayButtons();
+                const buttons = [
+                  ...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:enabled"),
+                ].filter((button) => !button.closest("[hidden]"));
                 const index = buttons.indexOf(event.target as HTMLButtonElement);
                 if (index < 0) return;
-                if (event.key === "ArrowLeft" && index === 0) {
+                if (event.key === "ArrowLeft" || (event.key === "ArrowUp" && index === 0)) {
                   event.preventDefault();
-                  moveTo("assistants", false);
+                  if (event.key === "ArrowLeft") setCustomExpanded(false);
+                  document.getElementById("tab-custom-agents")?.focus();
                 } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
                   event.preventDefault();
                   const next = buttons[index + (event.key === "ArrowDown" ? 1 : -1)];
                   if (next) next.focus();
-                  else moveTo(event.key === "ArrowDown" ? afterRelay : "assistants");
+                  else moveTo("chat");
                 } else if (event.key === "Home" || event.key === "End") {
                   event.preventDefault();
                   moveTo(event.key === "Home" ? visible[0] : visible.at(-1));
                 }
               }}
-            />
-          )}
-          <div role="tablist" aria-label="Custom Assistants page" aria-orientation="vertical">
-            {page("custom-agents", false)}
+            >
+              {customAgents
+                .filter((agent) => !agent.archived)
+                .map((agent) => {
+                  const chat = chats.find((chat) => chat.customAgentId === agent.id);
+                  return chat && conversationId(chat) ? (
+                    <ChatSidebar
+                      key={agent.id}
+                      chats={[chat]}
+                      runs={runs.filter((run) => run.relay?.conversationId === chat.conversationId)}
+                      selectedId={selectedId}
+                      navigationSerial={navigationSerial}
+                      database={database}
+                      eventsByRun={eventsByRun}
+                      open={tabs.active === "chat"}
+                      pending={chatPending}
+                      conversationVisible={tabs.active === "chat" && !navigation.projectPending}
+                      onSelect={selectConversation}
+                      ancestorsExpanded={assistantsExpanded && customExpanded}
+                    />
+                  ) : (
+                    <div key={agent.id} className="chat-sidebar-row">
+                      <AppButton
+                        type="button"
+                        className="chat-sidebar-entry"
+                        disabled={chatPending}
+                        onClick={() => void navigation.open({ kind: "custom-agent", id: agent.id })}
+                      >
+                        <span className="chat-sidebar-artwork" aria-hidden="true">
+                          <NavigationIcon name="app-custom-agents" />
+                        </span>
+                        <span className="chat-sidebar-label">{agent.name}</span>
+                      </AppButton>
+                    </div>
+                  );
+                })}
+            </div>
           </div>
+        </Card>
+        <Card size="sm" className="sidebar-navigation-card sidebar-section">
+          <div
+            className="chat-page-heading sidebar-card-header"
+            data-nav-active={
+              tabs.active === "projects" || (tabs.active === "project" && !chatExpanded)
+            }
+          >
+            <div
+              className="page-tab"
+              role="tablist"
+              aria-label="Projects page"
+              aria-orientation="vertical"
+            >
+              <AppButton
+                type="button"
+                role="tab"
+                aria-selected={tabs.active === "projects"}
+                title="Projects"
+                id="tab-chat"
+                className="page-group-toggle"
+                aria-controls="panel-projects"
+                data-active={
+                  tabs.active === "projects" || (tabs.active === "project" && !chatExpanded)
+                }
+                onClick={() => onSelect("projects")}
+                onKeyDown={(event) => navigate(event, "chat")}
+              >
+                {pageDefinitions.projects.icon && (
+                  <NavigationIcon name={pageDefinitions.projects.icon} />
+                )}
+                <span className="page-tab-label">{pageDefinitions.projects.label}</span>
+              </AppButton>
+            </div>
+          </div>
+          <AppButton
+            type="button"
+            className="icon-button project-sidebar-open"
+            aria-label="Add Project"
+            title={database ? "Add Project" : "Connect to database to add a project"}
+            aria-haspopup="dialog"
+            disabled={projectDisabled}
+            onClick={onOpenProject}
+          >
+            <span className="sidebar-card-add" aria-hidden="true">
+              <Icon name="add" />
+            </span>
+          </AppButton>
+          {chatError && (
+            <p className="error-banner" role="alert">
+              {chatError}
+            </p>
+          )}
           {/* biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset. */}
           <div
+            id="chat-pages"
             role="group"
-            aria-label="Custom assistant conversations"
-            id="custom-agent-pages"
-            aria-hidden={!customExpanded}
+            aria-label="Chat conversations"
             className="page-group-pages"
-            hidden={!customExpanded}
-            inert={!customExpanded}
+            hidden={!chatExpanded}
+            inert={!chatExpanded}
+            aria-hidden={!chatExpanded}
             onKeyDown={(event) => {
-              if (event.defaultPrevented) return;
               const buttons = [
-                ...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:enabled"),
+                ...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
               ].filter((button) => !button.closest("[hidden]"));
               const index = buttons.indexOf(event.target as HTMLButtonElement);
               if (index < 0) return;
               if (event.key === "ArrowLeft" || (event.key === "ArrowUp" && index === 0)) {
                 event.preventDefault();
-                if (event.key === "ArrowLeft") setCustomExpanded(false);
-                document.getElementById("tab-custom-agents")?.focus();
-              } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                document.getElementById("tab-chat")?.focus();
+              } else if (
+                event.key === "ArrowDown" ||
+                event.key === "ArrowUp" ||
+                event.key === "Home" ||
+                event.key === "End"
+              ) {
                 event.preventDefault();
-                const next = buttons[index + (event.key === "ArrowDown" ? 1 : -1)];
-                if (next) next.focus();
-                else moveTo("chat");
-              } else if (event.key === "Home" || event.key === "End") {
-                event.preventDefault();
-                moveTo(event.key === "Home" ? visible[0] : visible.at(-1));
+                if (event.key === "Home") {
+                  moveTo(visible[0]);
+                  return;
+                }
+                if (event.key === "End") {
+                  moveTo(visible.at(-1));
+                  return;
+                }
+                const next = index + (event.key === "ArrowDown" ? 1 : -1);
+                if (next >= buttons.length) moveTo(afterChat);
+                else buttons[next]?.focus();
               }
             }}
           >
-            {customAgents
-              .filter((agent) => !agent.archived)
-              .map((agent) => {
-                const chat = chats.find((chat) => chat.customAgentId === agent.id);
-                return chat && conversationId(chat) ? (
-                  <ChatSidebar
-                    key={agent.id}
-                    chats={[chat]}
-                    runs={runs.filter((run) => run.relay?.conversationId === chat.conversationId)}
-                    selectedId={selectedId}
-                    navigationSerial={navigationSerial}
-                    database={database}
-                    eventsByRun={eventsByRun}
-                    open={tabs.active === "chat"}
-                    pending={chatPending}
-                    conversationVisible={tabs.active === "chat" && !navigation.projectPending}
-                    onSelect={selectConversation}
-                    ancestorsExpanded={assistantsExpanded && customExpanded}
-                  />
-                ) : (
-                  <div key={agent.id} className="chat-sidebar-row">
-                    <button
-                      type="button"
-                      className="chat-sidebar-entry"
-                      disabled={chatPending}
-                      onClick={() => void navigation.open({ kind: "custom-agent", id: agent.id })}
-                    >
-                      <span className="chat-sidebar-artwork" aria-hidden="true">
-                        <NavigationIcon name="app-custom-agents" />
-                      </span>
-                      <span className="chat-sidebar-label">{agent.name}</span>
-                    </button>
-                  </div>
-                );
-              })}
+            {openProjects ? (
+              <ProjectChatSidebar
+                ancestorsExpanded={chatExpanded}
+                projects={openProjects}
+                selectedProjectId={selectedProjectId}
+                onProjectAction={projectAction}
+                homeProjectId={tabs.active === "project" ? tabs.projectId : undefined}
+                onProjectOpen={(id) => void navigation.open({ kind: "project", id })}
+                onAction={chatAction}
+                chats={chats}
+                runs={runs}
+                selectedId={selectedId}
+                navigationSerial={navigationSerial}
+                database={database}
+                eventsByRun={eventsByRun}
+                open={tabs.active === "chat"}
+                conversationVisible={tabs.active === "chat" && !navigation.projectPending}
+                pending={chatPending}
+                onSelect={selectConversation}
+              />
+            ) : (
+              <ChatSidebar
+                ancestorsExpanded={chatExpanded}
+                onAction={chatAction}
+                chats={chats.filter((chat) => chat.kind !== "relay")}
+                runs={runs.filter((run) => !run.relay)}
+                selectedId={selectedId}
+                navigationSerial={navigationSerial}
+                database={database}
+                eventsByRun={eventsByRun}
+                open={tabs.active === "chat"}
+                conversationVisible={tabs.active === "chat" && !navigation.projectPending}
+                pending={chatPending}
+                onSelect={selectConversation}
+              />
+            )}
           </div>
+        </Card>
+      </NavigationSection>
+      <NavigationSection title="Automation" destination={destinationFor("Automation")}>
+        <div role="tablist" aria-label="Automation">
+          {page("automations")}
+          {page("workflows")}
         </div>
-      </Card>
-      <Card size="sm" className="sidebar-navigation-card sidebar-section">
-        <div
-          className="chat-page-heading sidebar-card-header"
-          data-nav-active={
-            tabs.active === "projects" || (tabs.active === "project" && !chatExpanded)
-          }
-        >
+      </NavigationSection>
+      <NavigationSection title="Inspect" destination={destinationFor("Inspect")}>
+        <div role="tablist" aria-label="Inspect">
+          {page("tables")}
+          {staticChildrenPanel("tables")}
+        </div>
+      </NavigationSection>
+      <NavigationSection title="Manage" destination={destinationFor("Manage")}>
+        <ProvidersSidebar
+          menuScope={`${sidebarOpen}:${tabs.active}:${tabs.providerId ?? ""}`}
+          sidebarOpen={sidebarOpen}
+          setup={providerSetup}
+          management={providerManagement}
+          selectedId={tabs.active === "provider" ? tabs.providerId : undefined}
+          active={tabs.active === "providers" || tabs.active === "provider"}
+          onHome={() => onSelect("providers")}
+          onOpen={(id) => void navigation.open({ kind: "provider", id })}
+          onKeyDown={(event) => navigate(event, "providers")}
+          onNext={() => moveTo("apps")}
+          onFirst={() => moveTo(visible[0])}
+          onLast={() => moveTo(visible.at(-1))}
+        />
+        <Card size="sm" className="sidebar-navigation-card sidebar-section">
           <div
-            className="page-tab"
+            className="sidebar-card-header"
             role="tablist"
-            aria-label="Projects page"
+            aria-label="Apps page"
             aria-orientation="vertical"
           >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tabs.active === "projects"}
-              title="Projects"
-              id="tab-chat"
-              className="page-group-toggle"
-              aria-controls="panel-projects"
-              data-active={
-                tabs.active === "projects" || (tabs.active === "project" && !chatExpanded)
-              }
-              onClick={() => onSelect("projects")}
-              onKeyDown={(event) => navigate(event, "chat")}
+            {page("apps")}
+          </div>
+          {staticChildrenPanel("apps")}
+        </Card>
+        <Card
+          size="sm"
+          className="page-tab-list sidebar-settings sidebar-navigation-card sidebar-section"
+        >
+          <div
+            className="sidebar-settings-heading sidebar-card-header"
+            data-active={settingsActive && !settingsExpanded}
+            data-nav-active={settingsActive && !settingsExpanded}
+          >
+            <div
+              className="page-tab-list"
+              role="tablist"
+              aria-label="Settings page"
+              aria-orientation="vertical"
             >
-              {pageDefinitions.projects.icon && (
-                <NavigationIcon name={pageDefinitions.projects.icon} />
-              )}
-              <span className="page-tab-label">{pageDefinitions.projects.label}</span>
-            </button>
+              {page("settings")}
+            </div>
           </div>
-        </div>
-        <button
-          type="button"
-          className="icon-button project-sidebar-open"
-          aria-label="Add Project"
-          title={database ? "Add Project" : "Connect to database to add a project"}
-          aria-haspopup="dialog"
-          disabled={projectDisabled}
-          onClick={onOpenProject}
-        >
-          <span className="sidebar-card-add" aria-hidden="true">
-            <Icon name="add" />
-          </span>
-        </button>
-        {chatError && (
-          <p className="error-banner" role="alert">
-            {chatError}
-          </p>
-        )}
-        {/* biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset. */}
-        <div
-          id="chat-pages"
-          role="group"
-          aria-label="Chat conversations"
-          className="page-group-pages"
-          hidden={!chatExpanded}
-          inert={!chatExpanded}
-          aria-hidden={!chatExpanded}
-          onKeyDown={(event) => {
-            const buttons = [
-              ...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
-            ].filter((button) => !button.closest("[hidden]"));
-            const index = buttons.indexOf(event.target as HTMLButtonElement);
-            if (index < 0) return;
-            if (event.key === "ArrowLeft" || (event.key === "ArrowUp" && index === 0)) {
-              event.preventDefault();
-              document.getElementById("tab-chat")?.focus();
-            } else if (
-              event.key === "ArrowDown" ||
-              event.key === "ArrowUp" ||
-              event.key === "Home" ||
-              event.key === "End"
-            ) {
-              event.preventDefault();
-              if (event.key === "Home") {
-                moveTo(visible[0]);
-                return;
-              }
-              if (event.key === "End") {
-                moveTo(visible.at(-1));
-                return;
-              }
-              const next = index + (event.key === "ArrowDown" ? 1 : -1);
-              if (next >= buttons.length) moveTo(afterChat);
-              else buttons[next]?.focus();
-            }
-          }}
-        >
-          {openProjects ? (
-            <ProjectChatSidebar
-              ancestorsExpanded={chatExpanded}
-              projects={openProjects}
-              selectedProjectId={selectedProjectId}
-              onProjectAction={projectAction}
-              homeProjectId={tabs.active === "project" ? tabs.projectId : undefined}
-              onProjectOpen={(id) => void navigation.open({ kind: "project", id })}
-              onAction={chatAction}
-              chats={chats}
-              runs={runs}
-              selectedId={selectedId}
-              navigationSerial={navigationSerial}
-              database={database}
-              eventsByRun={eventsByRun}
-              open={tabs.active === "chat"}
-              conversationVisible={tabs.active === "chat" && !navigation.projectPending}
-              pending={chatPending}
-              onSelect={selectConversation}
-            />
-          ) : (
-            <ChatSidebar
-              ancestorsExpanded={chatExpanded}
-              onAction={chatAction}
-              chats={chats.filter((chat) => chat.kind !== "relay")}
-              runs={runs.filter((run) => !run.relay)}
-              selectedId={selectedId}
-              navigationSerial={navigationSerial}
-              database={database}
-              eventsByRun={eventsByRun}
-              open={tabs.active === "chat"}
-              conversationVisible={tabs.active === "chat" && !navigation.projectPending}
-              pending={chatPending}
-              onSelect={selectConversation}
-            />
-          )}
-        </div>
-      </Card>
-      <ProvidersSidebar
-        menuScope={`${sidebarOpen}:${tabs.active}:${tabs.providerId ?? ""}`}
-        sidebarOpen={sidebarOpen}
-        setup={providerSetup}
-        management={providerManagement}
-        selectedId={tabs.active === "provider" ? tabs.providerId : undefined}
-        active={tabs.active === "providers" || tabs.active === "provider"}
-        onHome={() => onSelect("providers")}
-        onOpen={(id) => void navigation.open({ kind: "provider", id })}
-        onKeyDown={(event) => navigate(event, "providers")}
-        onNext={() => moveTo("apps")}
-        onFirst={() => moveTo(visible[0])}
-        onLast={() => moveTo(visible.at(-1))}
-      />
-      <Card size="sm" className="sidebar-navigation-card sidebar-section">
-        <div
-          className="sidebar-card-header"
-          role="tablist"
-          aria-label="Apps page"
-          aria-orientation="vertical"
-        >
-          {page("apps", true)}
-        </div>
-        {staticChildrenPanel("apps")}
-      </Card>
-      <Card
-        size="sm"
-        className="page-tab-list sidebar-settings sidebar-navigation-card sidebar-section"
-      >
-        <div
-          className="sidebar-settings-heading sidebar-card-header"
-          data-active={settingsActive && !settingsExpanded}
-          data-nav-active={settingsActive && !settingsExpanded}
-        >
-          <div
-            className="page-tab-list"
-            role="tablist"
-            aria-label="Settings page"
-            aria-orientation="vertical"
-          >
-            {page("settings", true)}
-          </div>
-        </div>
-        {staticChildrenPanel("settings")}
-      </Card>
-    </div>
+          {staticChildrenPanel("settings")}
+        </Card>
+      </NavigationSection>
+    </SideNavItems>
   );
 }

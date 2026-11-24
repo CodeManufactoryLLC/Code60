@@ -10,10 +10,10 @@ it.each([
   expect(html).toBe(`<h2 class="table-card-title">${title}</h2>`);
 });
 
-it("retains content title icons on ordinary tables", () => {
+it("gives ordinary tables a single text heading", () => {
   const html = renderToStaticMarkup(<TableHeading tableId="polling" />);
   expect(html).not.toContain('aria-label="Page navigation"');
   expect(html).toContain('<h1 class="content-page-title"');
-  expect(html).toContain('data-icon="app-table"');
+  expect(html).not.toContain("data-icon=");
   expect(html).toContain('<span class="page-title-text">Polling</span>');
 });

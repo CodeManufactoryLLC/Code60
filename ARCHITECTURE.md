@@ -8,6 +8,25 @@ The detailed checkpoint, authority, storage, provider and execution safeguards s
 
 Short explanations of major choices live in [Architectural Views](docs/architectural-views/README.md).
 
+## Carbon application presentation
+
+The approved Carbon migration extends the Scheduled Jobs trial across the app.
+Upstream `@carbon/react` owns standard controls, headers/navigation, menus,
+select-only dropdowns, sortable HTML tables and composed dialogs. App-scoped
+White/G100 tokens follow Light/Dark/System; bundled IBM Plex Sans supplies fonts.
+No Carbon reset, font-face or vendor body styling is loaded. This supersedes the
+historical Neobrutalism/card/canvas-grid presentation specifications below.
+
+The shared table uses bounded loaded-row pages rather than a virtual canvas.
+Selection remains ID-based; server cursor paging and retained-log queries keep
+their established scopes. Saved filters, line/density/column records remain
+compatible. Column order and widths use named settings controls, with a real
+Carbon preview. `@glideapps/glide-data-grid`, its styling/compiler dependencies
+and Tailwind are retired. Renderer-only Carbon imports are boundary-enforced.
+Code/diff/tree widgets retain specialist implementations; native transcript and
+scroll boundaries preserve text, drafts and ownership. Domain operations,
+confirmations, revisions, visibility/stale guards and backend authority are unchanged.
+
 ## Browser runtime
 
 One per-user login backend owns ApplicationHost and a scheduler runtime. React connects
@@ -52,6 +71,13 @@ be replaced by Create database. Confirmations use expiring, single-use backend i
 IDs bound to the controlling page. Agent gateways never receive this human API.
 
 ## Browser security
+
+Manifested GIF assets accept one bounded animation replay `play` key on GET.
+The renderer uses this cache key to restart local icon playback. It returns the
+same manifested bytes and grants no authority; other production query strings,
+duplicate/extra keys and API/management queries remain rejected. No capability
+catalog change is needed for this asset-transport correction.
+
 
 The security contract is the authenticated loopback transport described above and
 in [SECURITY.md](SECURITY.md). Browser confirmation and chooser decisions belong
@@ -203,6 +229,37 @@ Same-host Linux acceptance additionally verifies one run's cleanup leaves the
 other's exact backend and browser assets usable before both finish their fault
 checks and cleanup. Native login/reboot certification remains a separate release
 gate; these distribution candidates are not published.
+
+## Application-wide Carbon migration
+
+The user-approved extension of the Scheduled Jobs trial replaces the remaining
+browser presentation with upstream Carbon React. This direction supersedes
+historical visual-only Neobrutalism/card/artwork/typography rules below. Carbon
+White/G100 follows the existing resolved scheme, with local IBM Plex Sans,
+productive controls and standard blue. No appearance records are erased. Domain
+operations, backend confirmations, visibility ownership and retained state remain
+authoritative. Standard controls and dialogs use Carbon; specialist code/diff/tree
+widgets keep their functional integration. See the [migration ledger](docs/carbon-migration.md)
+for implementation and validation completion, rather than treating a partial
+migration as the finished application.
+
+## Product shell and resume
+
+The product header owns browser history, connection status, commands and workspace
+controls. The responsive panel uses Carbon UI Shell submenus for Work, Automation, Inspect and Manage. Opening a destination reveals its group. Toggling a group preserves the current view and its nested disclosures.
+The start screen occupies the viewport and hides the retained workspace until entry. Provider setup opens one native modal above it. The header skip link focuses the active panel. The application grid retains inactive destinations and their drafts. Startup pairs
+the controlling browser and verifies a provider before restoring a destination.
+Each browser stores a route identity per active database and a separate identity for
+database-independent work. Restoration validates the identity against the current
+snapshot and uses the existing navigation handlers. Its fallback is Relay. Opening
+a saved view never starts, submits, approves or replays work.
+
+Scheduled Jobs shares this shell. Its Schedules table exposes the next run and
+independent schedule and execution states. Only View history scopes the execution
+list. Create and edit occupy a dedicated form. Evidence belongs to the selected
+execution. Workflows separates definition reuse from execution playback and recovery.
+Backend confirmations, repository choosers, revisions and execution policies retain
+their authority.
 
 ## Current exclusions
 
@@ -674,7 +731,7 @@ before Command Builder in both display and keyboard order. Its Apps home card op
 the same page and remains enabled without a database. The quit dialog explains that
 background automations continue. Apps → System Manager owns the Scheduling Service
 status, install/repair/start/stop/uninstall, resume and recovery controls,
-separate from Scheduled Jobs's schedule accordions and history table. System Manager
+separate from the schedule list and execution-history tab in Scheduled Jobs. System Manager
 has its own Apps card, sits alphabetically after Prompt Builder, and remains
 available without a database. Both pages defer hidden reads, refresh from pushed
 service notices and preserve native consent for service changes.
@@ -2312,34 +2369,23 @@ ownership, never the globally selected project. Relay remains application-owned.
 Secondary section headings, file-panel headings and embedded table history are not
 separate page breadcrumbs. Keep rename controls independent and never nest buttons.
 
-Scheduled Jobs lists schedules as local MIT Neobrutalism accordions. Its shared
-content header is titled Scheduled Jobs; its adjacent chevron menu offers New
-scheduled job and Refresh, preserving inline creation/editing and trigger focus.
-The schedules section remains separately labelled Schedules. Execution history
-retains its icon-free Card Titles heading and its table tools.
+Scheduled Jobs uses the [shared product shell](#product-shell-and-resume).
+The schedule list exposes the next run and independent enabled/run states. Run and Stop are direct row actions. The overflow menu owns Edit, Enable/Pause, View history and Delete. Disclosure loads the saved prompt, cadence and execution settings while the row is active. Create and edit have dedicated form views with validation and occurrence previews.
 
-Each collapsed job header has independent run/cancel, delete and disclosure
-buttons in DOM and visual order. Use 24px transparent circles in 28px targets,
-black outlines, 2px hard shadows, 1px press offsets and contrasting glyphs over
-the blue fill. Paint hover on the full stationary header, without generic press
-scaling. Its 4px inner corners fit the outer 5px radius and 1px border; square
-lower corners while expanded. The noninteractive job heading labels the details
-panel; only the final chevron toggles it. Omit agent/runtime/next-run subtitles;
-append `(Paused)` beside disabled schedules, independently of manual execution.
-Preserve visible keyboard focus, narrow wrapping, reduced motion and system
-fills/outlines without shadows in forced colors.
+Run starts one turn independently of recurrence; Stop cancels that execution.
+Enable/Pause controls recurrence separately. The service list's ephemeral live
+ownership remains authoritative: older services without that field need a restart
+before run controls become available. Never persist it or infer it from unfinished
+history. Backend deletion consent, active-run refusal, revision checks and retained
+evidence remain unchanged.
 
-Run starts one turn. The live pause glyph retains the Stop label and cancels
-that run; its pulse is static for reduced motion/forced colors. The service list
-adds optional ephemeral live ownership, independently of recurrence and history
-paging. Older services without that field require a restart before run controls
-are available. Never persist it or infer it from unfinished history. Expanded
-jobs load their saved prompt, schedule, next run, repository, agent, branch,
-timeout and permissions. Enable/pause remains a separate recurrence action.
-Native delete confirmation, active-run refusal, revision checks and retained
-evidence remain authoritative. Update the capability catalog for this workflow;
-its presentation refinements introduce no additional capability, setting,
-bridge method or stored format.
+The Carbon history table defaults to descending Started order, with sortable
+headers, current-page search and one selected execution. Retain schedule scope,
+Show all schedules and Older/Latest paging. Transcript and Changes open bounded,
+page-owned Carbon composed dialogs with Escape dismissal and focus restoration.
+Saved filters, column customization and grid appearance controls do not appear
+here; their stored records remain intact for other tables. Shared repository
+choosers and confirmations retain their existing ownership and presentation.
 
 Navigation cards keep their 224px width and 32px gaps when rows wrap rather than
 stretching remaining columns.
@@ -2987,8 +3033,7 @@ setting is described in the self-knowledge catalog.
 
 All Card shells now use a 1px border, including navigation/creation cards,
 conversation composers, approval and job-detail cards, Settings cards/groups,
-System Manager service cards and scheduled-job accordion items. Keep 1px
-internal accordion dividers and 4px inner header corners within 5px outer corners.
+and System Manager service cards. Use the shared Carbon product shell and table guidance above.
 Retain existing fills, shadows, focus indicators, padding and borderless retained
 wrappers. This presentation change adds no capability or availability rule.
 

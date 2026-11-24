@@ -93,7 +93,7 @@ export const textRoles = [
   },
 ] as const;
 export type TextRole = (typeof textRoles)[number]["id"];
-export const fontWeights = [
+const fontWeights = [
   { value: 300, label: "Light" },
   { value: 400, label: "Regular" },
   { value: 500, label: "Medium" },
@@ -101,9 +101,9 @@ export const fontWeights = [
   { value: 700, label: "Bold" },
 ] as const;
 type FontWeight = (typeof fontWeights)[number]["value"];
-export const fontSizes = { min: 8, max: 64 } as const;
+const fontSizes = { min: 8, max: 64 } as const;
 /** A role's choices; anything left out keeps the built-in default. */
-export type TextStyle = {
+type TextStyle = {
   typeface?: Typeface | undefined;
   size?: number | undefined;
   weight?: FontWeight | undefined;

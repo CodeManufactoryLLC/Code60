@@ -50,7 +50,7 @@ it("uses saved membership order, a first-position creation card, independent men
   expect(html.match(/aria-label="Primary Provider"/g)).toHaveLength(1);
   expect(html).toContain('data-tooltip="Primary Provider"');
   expect(html).toContain('aria-label="More actions for claude"');
-  expect(html).toMatch(/<\/button>.*data-slot="card-action"/);
+  expect(html).toMatch(/<\/button>.*class="navigation-row-actions"/);
 });
 
 it("keeps Add Provider present and disabled when all providers are added and shares errors", () => {
@@ -66,7 +66,7 @@ it("keeps Add Provider present and disabled when all providers are added and sha
       onOpen={() => {}}
     />,
   );
-  expect(html).toContain('aria-label="Add Provider" disabled=""');
+  expect(html).toMatch(/<button[^>]*aria-label="Add Provider"[^>]*disabled=""/);
   expect(html).toContain('title="All supported providers are connected"');
   expect(html).toContain('role="alert">Save failed. Retry.');
 });

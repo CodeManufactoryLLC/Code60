@@ -1,11 +1,15 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { Button as AppButton } from "./carbon/button.js";
+import { Checkbox as CarbonCheckbox } from "./carbon/choices.js";
+import { Select as CarbonSelect } from "./carbon/fields.js";
 import { Icon } from "./icons.js";
-import { DialogContent } from "./neobrutalism/dialog.js";
+import { Modal } from "./modal.js";
 import { rowDensities } from "./table-preferences.js";
 import { TablePreview } from "./table-preview.js";
 import {
   defaultView,
   type FilterKind,
+  orderedColumns,
   type TableId,
   type TableView,
   type ViewDefaults,
@@ -56,7 +60,6 @@ export function TableSettings({
   textStyles: TextStyles;
 }) {
   const id = useId();
-  const dialog = useRef<HTMLDialogElement>(null);
   const density = useRef<HTMLSelectElement>(null);
   const columnsMenu = useRef<HTMLDivElement>(null);
   const columnsTrigger = useRef<HTMLButtonElement>(null);
@@ -80,21 +83,33 @@ export function TableSettings({
   );
   const current = draft ?? defaultView(defaults);
   const available = settingsColumnsFor(columns, current);
+  const arranged = orderedColumns(available, { ...current, hidden: [] });
+  const moveColumn = (key: string, offset: number) => {
+    const order = arranged.map((column) => column.key);
+    const index = order.indexOf(key);
+    const to = index + offset;
+    const target = order[to];
+    if (index < 0 || !target) return;
+    order[to] = key;
+    order[index] = target;
+    change({ ...current, order });
+  };
   const visibleCount = available.filter((column) => !current.hidden.includes(column.key)).length;
   useEffect(() => {
-    dialog.current?.showModal();
     density.current?.focus();
   }, []);
   const close = () => {
-    dialog.current?.close();
     onClose();
   };
   const change = (next: TableView) => setDraft(visibleSettingsView(columns, next));
   return (
-    <DialogContent
-      ref={dialog}
-      className="setup-dialog table-settings-dialog"
-      aria-labelledby={`${id}-title`}
+    <Modal
+      title={title}
+      busy={false}
+      onClose={close}
+      closeLabel="Close table settings"
+      className="table-settings-dialog"
+      wide
       onKeyDownCapture={(event) => {
         if (event.key === "Escape") {
           event.preventDefault();
@@ -105,28 +120,13 @@ export function TableSettings({
           } else close();
         }
       }}
-      onCancel={(event) => {
-        event.preventDefault();
-        close();
-      }}
     >
-      <header className="modal-heading">
-        <h2 id={`${id}-title`}>{title}</h2>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Close table settings"
-          onClick={close}
-        >
-          <Icon name="close" />
-        </button>
-      </header>
       <div className="table-settings-body">
         <section className="table-settings-preview" aria-labelledby={`${id}-preview`}>
           <div className="table-preview-toolbar">
             <h3 id={`${id}-preview`}>Preview</h3>
             <div ref={columnsMenu} className="table-columns-dropdown">
-              <button
+              <AppButton
                 ref={columnsTrigger}
                 type="button"
                 aria-expanded={columnsOpen}
@@ -134,7 +134,7 @@ export function TableSettings({
                 onClick={() => setColumnsOpen(!columnsOpen)}
               >
                 Visible columns <Icon name="chevron--down" />
-              </button>
+              </AppButton>
               <fieldset
                 id={`${id}-columns`}
                 className="table-column-settings"
@@ -147,7 +147,7 @@ export function TableSettings({
                     const checked = !current.hidden.includes(column.key);
                     const last = enabled && checked && visibleCount <= 1;
                     return (
-                      <label
+                      <div
                         key={column.key}
                         title={
                           !enabled
@@ -157,9 +157,12 @@ export function TableSettings({
                               : undefined
                         }
                       >
-                        <span>{column.title}</span>
-                        <input
-                          type="checkbox"
+                        <CarbonCheckbox
+                          labelText={
+                            <>
+                              <span>{column.title}</span>
+                            </>
+                          }
                           role="switch"
                           aria-checked={enabled && checked}
                           checked={enabled && checked}
@@ -173,7 +176,7 @@ export function TableSettings({
                             })
                           }
                         />
-                      </label>
+                      </div>
                     );
                   })}
                 </div>
@@ -194,9 +197,13 @@ export function TableSettings({
           <fieldset className="table-display-settings">
             <legend>Display</legend>
             <div className="table-display-choices">
-              <label className="table-setting-row">
-                <span id={`${id}-density`}>Row density</span>
-                <select
+              <div className="table-setting-row">
+                <CarbonSelect
+                  labelText={
+                    <>
+                      <span id={`${id}-density`}>Row density</span>
+                    </>
+                  }
                   ref={density}
                   aria-labelledby={`${id}-density`}
                   value={current.density}
@@ -209,21 +216,24 @@ export function TableSettings({
                       {entry.label}
                     </option>
                   ))}
-                </select>
-              </label>
+                </CarbonSelect>
+              </div>
               {(["horizontal", "vertical", "heading"] as const).map((key) => (
-                <label className="table-setting-row" key={key}>
-                  <span>
-                    {
-                      {
-                        horizontal: "Row lines",
-                        vertical: "Column lines",
-                        heading: "Heading lines",
-                      }[key]
+                <div className="table-setting-row" key={key}>
+                  <CarbonCheckbox
+                    labelText={
+                      <>
+                        <span>
+                          {
+                            {
+                              horizontal: "Row lines",
+                              vertical: "Column lines",
+                              heading: "Heading lines",
+                            }[key]
+                          }
+                        </span>
+                      </>
                     }
-                  </span>
-                  <input
-                    type="checkbox"
                     role="switch"
                     aria-checked={current.lines[key]}
                     checked={current.lines[key]}
@@ -234,43 +244,97 @@ export function TableSettings({
                       })
                     }
                   />
-                </label>
+                </div>
               ))}
-              <label className="table-setting-row">
-                <span>Fit columns to width</span>
-                <input
-                  type="checkbox"
+              <div className="table-setting-row">
+                <CarbonCheckbox
+                  labelText={
+                    <>
+                      <span>Fit columns to width</span>
+                    </>
+                  }
                   role="switch"
                   aria-checked={current.fit}
                   checked={current.fit}
                   onChange={(event) => change({ ...current, fit: event.target.checked })}
                 />
-              </label>
+              </div>
               {charts && (
-                <label className="table-setting-row">
-                  <span>Inline charts</span>
-                  <input
-                    type="checkbox"
+                <div className="table-setting-row">
+                  <CarbonCheckbox
+                    labelText={
+                      <>
+                        <span>Inline charts</span>
+                      </>
+                    }
                     role="switch"
                     aria-checked={current.charts}
                     checked={current.charts}
                     onChange={(event) => change({ ...current, charts: event.target.checked })}
                   />
-                </label>
+                </div>
               )}
             </div>
+          </fieldset>
+          <fieldset className="table-column-layout">
+            <legend>Column order and width</legend>
+            {arranged.map((column, index) => {
+              const width = current.widths[column.key] ?? column.width;
+              return (
+                <div key={column.key} className="table-column-layout-row">
+                  <span>{column.title}</span>
+                  <CarbonSelect
+                    labelText={`Width for ${column.title}`}
+                    value={width}
+                    disabled={current.fit}
+                    onChange={(event) =>
+                      change({
+                        ...current,
+                        widths: { ...current.widths, [column.key]: Number(event.target.value) },
+                      })
+                    }
+                  >
+                    {[...new Set([80, 120, 160, 240, 320, 480, width])]
+                      .sort((a, b) => a - b)
+                      .map((value) => (
+                        <option key={value} value={value}>
+                          {value}px
+                        </option>
+                      ))}
+                  </CarbonSelect>
+                  <AppButton
+                    type="button"
+                    className="small"
+                    aria-label={`Move ${column.title} earlier`}
+                    disabled={index === 0}
+                    onClick={() => moveColumn(column.key, -1)}
+                  >
+                    Earlier
+                  </AppButton>
+                  <AppButton
+                    type="button"
+                    className="small"
+                    aria-label={`Move ${column.title} later`}
+                    disabled={index === arranged.length - 1}
+                    onClick={() => moveColumn(column.key, 1)}
+                  >
+                    Later
+                  </AppButton>
+                </div>
+              );
+            })}
           </fieldset>
         </div>
       </div>
       <footer className="table-settings-footer">
-        <button type="button" onClick={() => setDraft(undefined)}>
+        <AppButton type="button" onClick={() => setDraft(undefined)}>
           Reset to defaults
-        </button>
+        </AppButton>
         <div className="table-settings-actions">
-          <button type="button" onClick={close}>
+          <AppButton type="button" onClick={close}>
             Cancel
-          </button>
-          <button
+          </AppButton>
+          <AppButton
             type="button"
             className="primary"
             onClick={() => {
@@ -279,9 +343,9 @@ export function TableSettings({
             }}
           >
             Apply
-          </button>
+          </AppButton>
         </div>
       </footer>
-    </DialogContent>
+    </Modal>
   );
 }

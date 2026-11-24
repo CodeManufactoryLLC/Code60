@@ -1,3 +1,14 @@
+import {
+  Button,
+  Checkbox,
+  FormGroup,
+  InlineLoading,
+  InlineNotification,
+  Select,
+  SelectItem,
+  TextArea,
+  TextInput,
+} from "@carbon/react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   type ApplicationClient,
@@ -6,9 +17,6 @@ import {
   TOOL_KINDS,
 } from "../bridge/index.js";
 import { automationDate, automationWeekdays } from "./automation-date.js";
-import { Button } from "./neobrutalism/button.js";
-import { Card, CardContent } from "./neobrutalism/card.js";
-import { Textarea } from "./neobrutalism/textarea.js";
 
 export function AutomationForm({
   api,
@@ -23,7 +31,7 @@ export function AutomationForm({
   agents: string[];
   active?: boolean;
   onClose(): void;
-  onSaved(): void;
+  onSaved(id?: string): void;
 }) {
   const promptId = useId();
   const permissionHelpId = useId();
@@ -95,12 +103,12 @@ export function AutomationForm({
     setBusy(true);
     setError("");
     try {
-      await api.automation(
+      const result = await api.automation(
         editor.id
           ? { action: "update", id: editor.id, revision: editor.revision, draft }
           : { action: "create", draft },
       );
-      if (alive.current) onSaved();
+      if (alive.current) onSaved((result as { id?: string } | null)?.id ?? editor.id);
     } catch (error) {
       if (alive.current) setError((error as Error).message);
     } finally {
@@ -109,233 +117,227 @@ export function AutomationForm({
     }
   };
   return (
-    <Card
-      className="automation-editor"
-      size="sm"
-      as="section"
+    <section
+      className="carbon-job-editor"
       aria-label={editor.id ? "Edit scheduled job" : "New scheduled job"}
     >
-      <CardContent>
-        <h3>{editor.id ? "Edit job" : "New scheduled job"}</h3>
-        <form
-          className="automation-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save();
-          }}
-        >
-          <fieldset className="automation-form-fields" disabled={busy}>
-            <label className="automation-name-field">
-              Name
-              <input
+      <h1>{editor.id ? "Edit scheduled job" : "New scheduled job"}</h1>
+      <form
+        className="carbon-job-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
+        <fieldset className="carbon-job-form-fields" disabled={busy}>
+          <TextInput
+            id={`${promptId}-name`}
+            labelText="Name"
+            required
+            maxLength={80}
+            ref={nameInput}
+            value={draft.name}
+            onChange={(event) => set("name", event.target.value)}
+          />
+          <TextArea
+            id={promptId}
+            labelText="Saved prompt"
+            required
+            maxLength={32000}
+            rows={5}
+            value={draft.prompt}
+            onChange={(event) => set("prompt", event.target.value)}
+          />
+          <FormGroup legendText="Schedule">
+            <Select
+              id={`${promptId}-schedule`}
+              labelText="Frequency"
+              value={schedule.type}
+              onChange={(event) => {
+                const type = event.target.value;
+                set(
+                  "schedule",
+                  type === "interval"
+                    ? { type, everyMinutes: 60, anchor: new Date().toISOString() }
+                    : type === "weekly"
+                      ? {
+                          type,
+                          days: [1],
+                          time: "09:00",
+                          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                        }
+                      : {
+                          type: "daily",
+                          time: "09:00",
+                          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                        },
+                );
+              }}
+            >
+              <SelectItem value="interval" text="Interval" />
+              <SelectItem value="daily" text="Daily" />
+              <SelectItem value="weekly" text="Weekly" />
+            </Select>
+            {schedule.type === "interval" ? (
+              <TextInput
+                id={`${promptId}-interval`}
+                labelText="Every (minutes)"
+                type="number"
                 required
-                maxLength={80}
-                ref={nameInput}
-                value={draft.name}
-                onChange={(event) => set("name", event.target.value)}
+                min={1}
+                max={10080}
+                value={schedule.everyMinutes}
+                onChange={(event) =>
+                  set("schedule", {
+                    ...schedule,
+                    everyMinutes: Number(event.target.value),
+                  })
+                }
               />
-            </label>
-            <label className="automation-form-prompt" htmlFor={promptId}>
-              Saved prompt
-              <Textarea
-                id={promptId}
-                required
-                maxLength={32000}
-                value={draft.prompt}
-                onChange={(event) => set("prompt", event.target.value)}
-              />
-            </label>
-            <fieldset className="automation-form-basics">
-              <legend>Execution</legend>
-              <label>
-                Agent
-                <select
+            ) : (
+              <>
+                <TextInput
+                  id={`${promptId}-time`}
+                  labelText="Time"
+                  type="time"
                   required
-                  value={draft.agent}
-                  onChange={(event) => set("agent", event.target.value)}
-                >
-                  <option value="">Choose a provider</option>
-                  {agents.map((agent) => (
-                    <option key={agent}>{agent}</option>
-                  ))}
-                </select>
-              </label>
-              <div className="automation-form-field">
-                <span className="automation-form-label">Repository</span>
-                <div className="automation-repository-choice">
-                  <Button type="button" disabled={busy} onClick={() => void pick()}>
-                    Choose repository
-                  </Button>
-                  <span>{repository || "No repository chosen"}</span>
-                </div>
-              </div>
-              <label>
-                Local base branch
-                <input
-                  required
-                  value={draft.baseBranch}
-                  onChange={(event) => set("baseBranch", event.target.value)}
+                  value={schedule.time}
+                  onChange={(event) => set("schedule", { ...schedule, time: event.target.value })}
                 />
-              </label>
-              <label>
-                Turn timeout
-                <input
+                <TextInput
+                  id={`${promptId}-timezone`}
+                  labelText="Time zone"
                   required
-                  value={draft.turnTimeout}
-                  onChange={(event) => set("turnTimeout", event.target.value)}
+                  value={schedule.timeZone}
+                  onChange={(event) =>
+                    set("schedule", { ...schedule, timeZone: event.target.value })
+                  }
                 />
-              </label>
-            </fieldset>
-            <fieldset>
-              <legend>Schedule</legend>
-              <label>
-                Schedule
-                <select
-                  value={schedule.type}
-                  onChange={(event) => {
-                    const type = event.target.value;
-                    set(
-                      "schedule",
-                      type === "interval"
-                        ? { type, everyMinutes: 60, anchor: new Date().toISOString() }
-                        : type === "weekly"
-                          ? {
-                              type,
-                              days: [1],
-                              time: "09:00",
-                              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                            }
-                          : {
-                              type: "daily",
-                              time: "09:00",
-                              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                            },
-                    );
-                  }}
-                >
-                  <option value="interval">Interval</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                </select>
-              </label>
-              {schedule.type === "interval" ? (
-                <label>
-                  Every (minutes)
-                  <input
-                    type="number"
-                    required
-                    min={1}
-                    max={10080}
-                    value={schedule.everyMinutes}
-                    onChange={(event) =>
-                      set("schedule", { ...schedule, everyMinutes: Number(event.target.value) })
+              </>
+            )}
+            {schedule.type === "weekly" && (
+              <fieldset className="carbon-job-checkboxes">
+                <legend>Days of week</legend>
+                {automationWeekdays.map((day, index) => (
+                  <Checkbox
+                    key={day}
+                    id={`${promptId}-day-${index}`}
+                    labelText={day}
+                    checked={schedule.days.includes(index)}
+                    onChange={(_event, { checked }) =>
+                      set("schedule", {
+                        ...schedule,
+                        days: checked
+                          ? [...schedule.days, index]
+                          : schedule.days.filter((value) => value !== index),
+                      })
                     }
                   />
-                </label>
-              ) : (
-                <>
-                  <label>
-                    Time
-                    <input
-                      type="time"
-                      required
-                      value={schedule.time}
-                      onChange={(event) =>
-                        set("schedule", { ...schedule, time: event.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Time zone
-                    <input
-                      required
-                      value={schedule.timeZone}
-                      onChange={(event) =>
-                        set("schedule", { ...schedule, timeZone: event.target.value })
-                      }
-                    />
-                  </label>
-                </>
-              )}
-              {schedule.type === "weekly" && (
-                <div className="automation-actions">
-                  {automationWeekdays.map((day, index) => (
-                    <label key={day}>
-                      <input
-                        type="checkbox"
-                        checked={schedule.days.includes(index)}
-                        onChange={(event) =>
-                          set("schedule", {
-                            ...schedule,
-                            days: event.target.checked
-                              ? [...schedule.days, index]
-                              : schedule.days.filter((value) => value !== index),
-                          })
-                        }
-                      />
-                      {day}
-                    </label>
-                  ))}
-                </div>
-              )}
-              <div className="automation-preview" aria-live="polite">
-                <span>Next occurrence preview</span>
-                <strong>
-                  {preview[0] ? automationDate(preview[0]) : "Enter a valid schedule"}
-                </strong>
-              </div>
-              <label className="automation-form-enabled">
-                <input
-                  type="checkbox"
-                  checked={draft.enabled}
-                  onChange={(event) => set("enabled", event.target.checked)}
-                />
-                Schedule enabled
-              </label>
-            </fieldset>
-            <fieldset>
-              <legend>Allowed tool kinds</legend>
-              <p className="automation-permissions-help" id={permissionHelpId}>
+                ))}
+              </fieldset>
+            )}
+            <div className="carbon-job-preview" aria-live="polite">
+              <span>Next occurrence preview</span>
+              <strong>{preview[0] ? automationDate(preview[0]) : "Enter a valid schedule"}</strong>
+            </div>
+            <Checkbox
+              id={`${promptId}-enabled`}
+              labelText="Schedule enabled"
+              checked={draft.enabled}
+              onChange={(_event, { checked }) => set("enabled", checked)}
+            />
+          </FormGroup>
+          <FormGroup legendText="Execution">
+            <Select
+              id={`${promptId}-agent`}
+              labelText="Agent"
+              required
+              value={draft.agent}
+              onChange={(event) => set("agent", event.target.value)}
+            >
+              <SelectItem value="" text="Choose a provider" />
+              {agents.map((agent) => (
+                <SelectItem key={agent} value={agent} text={agent} />
+              ))}
+            </Select>
+            <div className="carbon-job-repository">
+              <Button
+                type="button"
+                kind="tertiary"
+                size="md"
+                disabled={busy}
+                onClick={() => void pick()}
+              >
+                Choose repository
+              </Button>
+              <span>{repository || "No repository chosen"}</span>
+            </div>
+            <TextInput
+              id={`${promptId}-branch`}
+              labelText="Local base branch"
+              required
+              value={draft.baseBranch}
+              onChange={(event) => set("baseBranch", event.target.value)}
+            />
+            <TextInput
+              id={`${promptId}-timeout`}
+              labelText="Turn timeout"
+              required
+              value={draft.turnTimeout}
+              onChange={(event) => set("turnTimeout", event.target.value)}
+            />
+          </FormGroup>
+
+          <FormGroup legendText="Allowed tool kinds">
+            <details className="carbon-job-permission-help">
+              <summary>Permission limits</summary>
+              <p id={permissionHelpId}>
                 Everything else is denied without waiting for approval. Execute can grant broad
                 user-account and network access. A worktree is not a sandbox.
               </p>
-              <div className="automation-actions">
-                {TOOL_KINDS.map((kind) => (
-                  <label key={kind}>
-                    <input
-                      type="checkbox"
-                      checked={draft.allow.includes(kind)}
-                      aria-describedby={kind === "execute" ? permissionHelpId : undefined}
-                      onChange={(event) =>
-                        set(
-                          "allow",
-                          event.target.checked
-                            ? [...draft.allow, kind]
-                            : draft.allow.filter((value) => value !== kind),
-                        )
-                      }
-                    />
-                    {kind}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          </fieldset>
-          {error && <p role="alert">{error}</p>}
-          <div className="automation-actions automation-form-actions">
-            <Button type="button" disabled={busy} onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              type="submit"
-              disabled={busy || !repository || preview.length === 0 || (!!editor.id && !dirty)}
-            >
-              {editor.id ? "Save changes" : "Create job"}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+            </details>
+            <div className="carbon-job-checkboxes">
+              {TOOL_KINDS.map((kind) => (
+                <Checkbox
+                  key={kind}
+                  id={`${promptId}-tool-${kind}`}
+                  labelText={kind}
+                  checked={draft.allow.includes(kind)}
+                  aria-describedby={kind === "execute" ? permissionHelpId : undefined}
+                  onChange={(_event, { checked }) =>
+                    set(
+                      "allow",
+                      checked
+                        ? [...draft.allow, kind]
+                        : draft.allow.filter((value) => value !== kind),
+                    )
+                  }
+                />
+              ))}
+            </div>
+          </FormGroup>
+        </fieldset>
+        {error && (
+          <InlineNotification
+            kind="error"
+            title="Could not save job"
+            subtitle={error}
+            hideCloseButton
+          />
+        )}
+        {busy && <InlineLoading description="Saving scheduled job…" />}
+        <div className="carbon-job-actions">
+          <Button type="button" kind="secondary" disabled={busy} onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={busy || !repository || preview.length === 0 || (!!editor.id && !dirty)}
+          >
+            {editor.id ? "Save changes" : "Create job"}
+          </Button>
+        </div>
+      </form>
+    </section>
   );
 }

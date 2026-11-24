@@ -7,6 +7,7 @@ import { expect, test } from "@playwright/test";
 import type { LocalTransmission as ClientFactory } from "../src/application/index.js";
 import type { startGateway as GatewayFactory } from "../src/gateway/index.js";
 import type { preserveTransmissionBundle as PreserveFactory } from "../src/platform/index.js";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 import {
   nativeProcessAlive as alive,
@@ -106,17 +107,19 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
     await wizard.getByRole("button", { name: "Claude", exact: true }).click();
     await expect(wizard.getByRole("status")).toHaveText("Claude connected");
     await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     const open = async () => {
-      await page.locator("#tab-apps").press("ArrowRight");
+      await expandNavigation(page, "Automation");
       await page.locator("#tab-workflows").click();
     };
     await open();
     await expect(readFile(join(engineRoot, "endpoint.json"))).rejects.toMatchObject({
       code: "ENOENT",
     });
-    await page.getByRole("button", { name: "Workflows actions" }).click();
-    await page.getByRole("menuitem", { name: "New workflow", exact: true }).click();
+    await page
+      .locator(".workflows-page")
+      .getByRole("button", { name: "New workflow", exact: true })
+      .click();
     const form = page.getByRole("region", { name: "New workflow", exact: true });
     await form.getByLabel("Workflow name", { exact: true }).fill("Native preserved execution");
     await form.getByRole("button", { name: "Choose repository", exact: true }).click();
@@ -232,8 +235,8 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
     context.setDefaultTimeout(20_000);
     const reopened = await context.newPage();
     await reopened.goto(gateway.origin);
-    await reopened.getByRole("button", { name: "Start", exact: true }).click();
-    await reopened.locator("#tab-apps").press("ArrowRight");
+    await expect(reopened.getByRole("banner", { name: "Code60" })).toBeVisible();
+    await expandNavigation(reopened, "Automation");
     await reopened.locator("#tab-workflows").click();
     await reopened.getByRole("button", { name: /Native preserved execution/ }).click();
     expect(((await engine("health")) as { pid: number }).pid).toBe(enginePid);

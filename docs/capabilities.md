@@ -8,7 +8,7 @@ Schema version: 1
 
 - ID: `mcp-servers`
 - Status: shipped
-- Purpose: Manage MCP server definitions with guided forms or validated JSON; preview/restore backups and reset selected configurations; enable, approve, test, reconnect and disconnect managed connections; manage secure credentials and reviewed OAuth sign-in; review interrupted transactions, verify owned cleanup and copy a safe troubleshooting report.
+- Purpose: Use the Servers and JSON tabs to manage MCP definitions. Add server opens the guided form from the table toolbar; preview/restore backups and reset selected configurations; enable, approve, test, reconnect and disconnect managed connections; manage secure credentials and reviewed OAuth sign-in; review interrupted transactions, verify owned cleanup and copy a safe troubleshooting report.
 - Access: Apps → MCP Servers
 - Prerequisite: none
 - Agent access: human-only
@@ -22,12 +22,12 @@ Schema version: 1
 
 - ID: `page-navigation`
 - Status: shipped
-- Purpose: Open pages through the sidebar, navigation cards or Back and Forward.
-- Access: Left navigation sidebar or Home / Apps / Settings cards; workspace header → Back / Forward
+- Purpose: Open pages through the sidebar, Carbon destination lists or Back and Forward.
+- Access: Left navigation sidebar or Home / Apps / Settings lists; workspace header → Back / Forward
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: No confirmation; navigation only.
-- Limits: The workspace header contains history and global appearance controls, with no current-page dropdown. The sidebar has six permanently open cards: Home (with Search), Assistants, Projects, Providers, Apps and Settings. Each header has a full-width divider, with immediate child labels aligned beneath its title. Top-level collapse controls are absent; deeper navigation groups retain their accordions. Primary pages have a centered title with their navigation icon on its left inside the content card; a chevron-only title actions menu contains existing page commands. Pages without commands omit the menu. Table tools, scope selectors, creation cards and corner panel toggles remain visible. Chat Rename is in its content title actions menu. No database is required; existing destination guards apply. Navigation never sends a request or starts work.
+- Limits: Work, Automation, Inspect and Manage are expandable navigation groups. Opening a destination reveals its group. Skip to main content moves keyboard focus past the navigation to the current page. Projects and conversations keep their own actions. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.
 - Pages: none
 - Settings sections: none
 - Tools: none
@@ -37,11 +37,11 @@ Schema version: 1
 - ID: `navigation-history`
 - Status: shipped
 - Purpose: Return to visited pages, Settings sections, project and provider homes, and specific chats.
-- Access: Workspace header card → Back / Forward
+- Access: Workspace header → Back / Forward
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: No confirmation; navigation only.
-- Limits: Renderer-memory history holds up to 100 destinations and resets on reload or relaunch. Unavailable destinations are skipped. Buttons are disabled without an available destination or while a selection is pending. An empty circle replaces the arrow artwork for each unavailable direction while preserving its position. Restoring a chat preserves drafts and running work; it never sends a request to an agent.
+- Limits: Renderer-memory history holds up to 100 destinations and resets on reload or relaunch. Unavailable destinations are skipped. Buttons are disabled without an available destination or while a selection is pending. Restoring a chat preserves drafts and running work; it never sends a request to an agent.
 - Pages: none
 - Settings sections: none
 - Tools: none
@@ -78,7 +78,7 @@ Schema version: 1
 
 - ID: `assistants`
 - Status: shipped
-- Purpose: Open Relay or Custom Assistants from two navigation cards on the Assistants page.
+- Purpose: Open Relay or Custom Assistants from two destination rows on the Assistants page.
 - Access: Sidebar → Assistants heading (or command palette → Assistants)
 - Prerequisite: none
 - Agent access: human-only
@@ -93,7 +93,7 @@ Schema version: 1
 - ID: `custom-agents`
 - Status: shipped
 - Purpose: Create application-wide assistants with special instructions and one persistent Relay-style conversation each.
-- Access: Home → Custom Assistants or Sidebar → Assistants → Custom Assistants → New Assistant; assistant card → More actions → Edit or Archive; title actions → Archived → card → More actions → Restore
+- Access: Home → Custom Assistants or Sidebar → Assistants → Custom Assistants → New Assistant; assistant row → More actions → Edit or Archive; title actions → Archived → row → More actions → Restore
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Archiving requires browser confirmation, stops only the assistant and preserves history.
@@ -264,7 +264,7 @@ Schema version: 1
 - Access: Orchestration chat or worker composer → Code60 auto-approval (beside Harness mode)
 - Prerequisite: none
 - Agent access: human-only
-- Confirmation: When off, choose Allow once or Deny in the requesting conversation. The footer approval count opens a waiting conversation, including archived project chats with a pending request.
+- Confirmation: When off, choose Allow once or Deny in the requesting conversation. The Workspace approval count opens a waiting conversation, including archived project chats with a pending request.
 - Limits: Defaults on. Changes apply to new ACP requests in live and future sessions. Pending requests still need an answer. Manual runs and scheduled automations have separate policies.
 - Pages: none
 - Settings sections: none
@@ -344,12 +344,12 @@ Schema version: 1
 
 - ID: `automations`
 - Status: shipped
-- Purpose: Run consented local schedules in an independent service. Each job is an expandable accordion with ordered run/stop, delete and disclosure controls on its closed header. Play starts one run; the pulsing pause glyph retains the Stop action to cancel active work. Disabled schedules show (Paused) beside their name, independently of manual execution. Details show the saved prompt, schedule and execution settings, with separate schedule enable/pause and inline editing. The Scheduled Jobs title actions menu offers New scheduled job in an inline editor and Refresh; Execution history remains a table with live, assembled execution transcripts and saved outcomes.
-- Access: Apps → Scheduled Jobs
+- Purpose: Scheduled Jobs opens on Schedules in a Carbon product shell. Scan job name, schedule status, next run, live run status and agent. Run/Stop applies to one job and works independently of Enabled/Paused. Expand for the saved prompt, cadence, repository, branch, timeout and allowed tools. The row actions menu offers Edit job, Enable/Pause schedule, View history and Delete. New scheduled job and Refresh are in the schedules toolbar. Create and edit use a dedicated form. The Execution history tab supports current-page search, sorting, single execution selection and Older/Latest paging. View history opens an explicit schedule filter. Show all schedules clears it. Select a run to open Transcript or Changes beside its row, including live, assembled execution transcripts. Legacy saved grid preferences stay stored.
+- Access: Automation → Scheduled Jobs (also Apps → Scheduled Jobs)
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Human installation and schedule consent.
-- Limits: Transcripts subscribe before reading, refresh from saved-chunk notices, retain partial content on errors and show bounded evidence with execution status. Closing the browser and interactive Stop all leave scheduled work running. Stopping the backend stops both. Delete requires browser confirmation and refuses active jobs; evidence is preserved. Run state is independent of schedule enablement and history paging. Older services without live job state require a service restart for run/stop controls. Reduced motion and forced colors keep the stop glyph static. Awareness never installs or probes the service.
+- Limits: Transcripts subscribe before reading, refresh from saved-chunk notices, retain partial content on errors and show bounded evidence with execution status. Closing the browser and interactive Stop all leave scheduled work running. Stopping the backend stops both. Delete requires browser confirmation and refuses active jobs; evidence is preserved. Run state is independent of schedule enablement and history paging. Older services without live job state require a service restart for run/stop controls. Run/Stop controls use text labels; Carbon content follows Light/Dark/System while retaining its own productive typography and standard controls. Awareness never installs or probes the service.
 - Pages: `automations`
 - Settings sections: none
 - Tools: none
@@ -358,8 +358,8 @@ Schema version: 1
 
 - ID: `workflows`
 - Status: shipped
-- Purpose: Create ordered coding workflows manually or through Create with prompt, review and explicitly start them in dedicated saved-file worktrees. Track independent verification, repairs, decisions and accepted diffs.
-- Access: Apps → Workflows
+- Purpose: Inspect saved definitions or edit a copy for fresh review. Open Workflow sign-in for the host terminal authentication step. Use Execution history to open the player for one run. Create ordered coding workflows manually or through Create with prompt, review and explicitly start them in dedicated saved-file worktrees. Track independent verification, repairs, decisions and accepted diffs.
+- Access: Automation → Workflows (also Apps → Workflows)
 - Prerequisite: runtime
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
@@ -391,7 +391,7 @@ Schema version: 1
 - Prerequisite: database
 - Agent access: read
 - Confirmation: Existing permissions apply.
-- Limits: Existing table tools retain their scopes. Diagnostic logs and memory records are not agent-readable.
+- Limits: Carbon tables retain saved filters, column filters and backend paging scopes. Search filters the loaded rows; retained-log searches submit to the backend. Sortable headers, single-row selection and loaded-row pagination use Carbon controls. Retained logs use backend cursor paging without a second loaded-row pager. Table settings preview density, lines, visible columns and charts; named Earlier/Later and width controls replace canvas dragging. New configuration/session actions are visible toolbar buttons. Diagnostic logs and memory records are not agent-readable.
 - Pages: `tables`, `sessions`, `messages`, `events`, `worktrees`, `polling`
 - Settings sections: none
 - Tools: `code60_read_sessions`, `code60_search_sessions`, `code60_read_messages`, `code60_search_messages`, `code60_read_events`, `code60_search_events`, `code60_read_worktrees`, `code60_search_worktrees`, `code60_read_polling`, `code60_search_polling`
@@ -400,12 +400,12 @@ Schema version: 1
 
 - ID: `settings`
 - Status: shipped
-- Purpose: Change appearance, text, polling and application options. Text typefaces include locally bundled Scientifica; OCR-A is no longer offered. Table defaults start at Low density (44px rows), with row, column and heading lines off; saved global and per-table choices are retained. Options include Icon animations (on by default), Monochrome icons with a color selector (gray by default) and Icon contrast (0–200%, default 100%). Browser-native window management is outside Code60.
-- Access: Sidebar → Settings for About, Advanced, Table defaults and Text; Apps → Appearance → Icons or Theme; Apps → Polling; breadcrumb card → Color theme or Icon animations
+- Purpose: Choose Light, Dark or System, interface text size, focus highlights, signal colors and table defaults. Table defaults start at Low density (Carbon 64px rows), with row, column and heading lines off. Saved table settings retain their column order, visibility and density. Browser-native window management is outside Code60.
+- Access: Manage → Settings → Text or Table defaults, Apps → Appearance or Polling, Workspace → Color theme
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
-- Limits: Only explicitly allowlisted values are included in awareness. Each sidebar foreground card has a dedicated top-right chevron to expand or collapse its children without changing the current page. Home/Search is also collapsible. Header navigation never toggles expansion; Assistants opens a database-independent page with Relay and Custom Assistants cards. Hidden children are inert; explicit child navigation reveals ancestors. Monochrome is off by default; enabling it immediately tints icon artwork, provider logos and animated frames in shades of the selected color while preserving transparency and playback. Its color defaults to gray (#808080). Icon contrast spreads its shades from a flat color at 0%, through the standard range at 100%, to black/white extremes at 200%. Color and contrast persist locally and are retained when disabled. Forced colors bypasses the tint. The breadcrumb Icon animations toggle immediately freezes GIF artwork and CSS icon pulses app-wide, with a transparent block over its wheel when off. Re-enabling plays the wheel once; other icons wait for their usual triggers. Playback is on by default and saved locally alongside icon color/contrast. Page, panel, popover and status-text transitions remain unchanged; reduced motion and forced colors still suppress icon playback. The breadcrumb Color theme button shows System (eclipse), Dark (night) or Light (sun) and cycles System → Dark → Light → System on activation. System is the default and follows OS appearance; explicit choices persist locally and stay synchronized with Apps → Appearance → Theme.
+- Limits: Navigation groups expand or collapse independently. Project and conversation disclosures retain their own state. System follows the operating system. Legacy decorative preferences remain stored.
 - Pages: `apps`, `advanced`, `experiments`, `settings`
 - Settings sections: `appearance`, `table-defaults`, `text`, `polling-settings`, `about`
 - Tools: none
@@ -429,7 +429,7 @@ Schema version: 1
 - ID: `browser-runtime`
 - Status: shipped
 - Purpose: Connect a browser to the local Code60 backend and manage its lifetime.
-- Access: Terminal → code60 setup, status or open; browser footer → Stop Code60 Backend
+- Access: Terminal → code60 setup, status or open; Workspace → Stop Code60 Backend
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Take control explicitly replaces another browser's control; stale page confirmations are rejected. Stopping the backend confirms cancellation of all interactive and scheduled work. Restart never replays uncertain tasks.
@@ -503,7 +503,7 @@ Schema version: 1
 - Prerequisite: database
 - Agent access: human-only
 - Confirmation: Opening a closed project source asks the native Open Project confirmation. Archived conversations remain read-only.
-- Limits: Search needs no selected project. Includes project identity, saved project sessions/transcripts and bounded documentation/source evidence; excludes other databases, Relay and Custom Assistant histories. Results have project provenance and Load more pages of 100. Submitted results stay stable across project/page selection; new projects enter the next search. Missing/corrupt sources show partial results. Overview helpers use captured evidence, denied permissions and no gateway; failures preserve literal results. Agents cannot request Search.
+- Limits: Select a result to read its record alongside the query and results. Open source navigates to the original evidence. Search needs no selected project. Includes project identity, saved project sessions/transcripts and bounded documentation/source evidence; excludes other databases, Relay and Custom Assistant histories. Results have project provenance and Load more pages of 100. Submitted results stay stable across project/page selection; new projects enter the next search. Missing/corrupt sources show partial results. Overview helpers use captured evidence, denied permissions and no gateway; failures preserve literal results. Agents cannot request Search.
 - Pages: `search`
 - Settings sections: none
 - Tools: none

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ApplicationClient, RelayReviewEntry, Snapshot } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { ReviewFlow } from "./review-flow.js";
 
 const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
@@ -100,9 +101,9 @@ export function RelayChanges({
     <section className="relay-changes" aria-label="Relay changes by target">
       <header>
         <h2>Changes by target</h2>
-        <button type="button" onClick={latest}>
+        <AppButton type="button" onClick={latest}>
           Latest changes
-        </button>
+        </AppButton>
       </header>
       {error && <p role="alert">{error}</p>}
       <nav className="revision-list" aria-label="Relay target reviews">
@@ -113,7 +114,7 @@ export function RelayChanges({
               {reviews[0]?.labelTruncated ? "…" : ""}
             </h3>
             {reviews.map((entry) => (
-              <button
+              <AppButton
                 type="button"
                 key={entry.id}
                 aria-current={selected?.id === entry.id ? "true" : undefined}
@@ -121,27 +122,27 @@ export function RelayChanges({
               >
                 {entry.title} ·{" "}
                 {entry.generation === generation ? "Current generation" : "Historical evidence"}
-              </button>
+              </AppButton>
             ))}
           </section>
         ))}
       </nav>
       {!cursor && links.length > 32 && (
         <nav aria-label="Current worker review links">
-          <button
+          <AppButton
             type="button"
             disabled={linkPage === 0}
             onClick={() => setLinkPage((page) => page - 1)}
           >
             Previous worker links
-          </button>
-          <button
+          </AppButton>
+          <AppButton
             type="button"
             disabled={(linkPage + 1) * 32 >= links.length}
             onClick={() => setLinkPage((page) => page + 1)}
           >
             More worker links
-          </button>
+          </AppButton>
         </nav>
       )}
       {[...direct].map(([id, cwd]) => (
@@ -152,7 +153,7 @@ export function RelayChanges({
       ))}
       {!available.length && !direct.size && <p>No changes yet. Saved reviews remain on disk.</p>}
       <nav aria-label="Review pages">
-        <button
+        <AppButton
           type="button"
           disabled={!back.length}
           onClick={() => {
@@ -165,8 +166,8 @@ export function RelayChanges({
           }}
         >
           Newer reviews
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           type="button"
           disabled={!page?.cursor || page.owner !== owner}
           onClick={() => {
@@ -175,7 +176,7 @@ export function RelayChanges({
           }}
         >
           Older reviews
-        </button>
+        </AppButton>
       </nav>
       {selected && conversationId && generation !== undefined && (
         <ReviewFlow

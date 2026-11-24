@@ -23,6 +23,7 @@ import type {
   preserveTransmissionBundle as PreserveFactory,
   spawnOwnedProcess as SpawnFactory,
 } from "../src/platform/index.js";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 import {
   nativeProcessAlive as alive,
@@ -230,8 +231,8 @@ for (const saved of [undefined, "0.1.0-staging.18", "0.1.0-staging.20"] as const
       await wizard.getByRole("button", { name: "Claude", exact: true }).click();
       await expect(wizard.getByRole("status")).toHaveText("Claude connected");
       await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
-      await page.getByRole("button", { name: "Start", exact: true }).click();
-      await page.locator("#tab-apps").press("ArrowRight");
+      await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
+      await expandNavigation(page, "Automation");
       await page.locator("#tab-workflows").click();
       const view = page.locator(".workflows-page");
       await view.getByRole("button", { name: /Retained native workflow/ }).click();
@@ -259,10 +260,14 @@ for (const saved of [undefined, "0.1.0-staging.18", "0.1.0-staging.20"] as const
       const suspended = join(engineRoot, "endpoint.fixture-disconnected.json");
       await rename(endpoint, suspended);
       try {
-        await page.getByRole("button", { name: "Workflows actions" }).click();
-        await page.getByRole("menuitem", { name: "Refresh", exact: true }).click();
-        await page.getByRole("button", { name: "Workflows actions" }).click();
-        await page.getByRole("menuitem", { name: "Reconnect engine…", exact: true }).click();
+        await page
+          .locator(".workflows-page")
+          .getByRole("button", { name: "Refresh", exact: true })
+          .click();
+        await page
+          .locator(".workflows-page")
+          .getByRole("button", { name: "Reconnect engine…", exact: true })
+          .click();
         await expect(
           page.getByRole("dialog", { name: "Reconnect engine", exact: true }),
         ).toBeVisible();

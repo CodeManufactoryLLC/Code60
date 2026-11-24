@@ -46,7 +46,8 @@
     "test/update.config.ts",
     "test/uninstall.config.ts",
     "test/clean-install/uninstall.mjs",
-    "src/platform/index.bootstrap.ts"
+    "src/platform/index.bootstrap.ts",
+    "test/fixtures/carbon-tables.tsx"
   ],
   "project": [
     "src/**/*.{ts,tsx,cts,mjs,mts}",
@@ -55,6 +56,5 @@
     "test/**/*.{ts,tsx,mjs}",
     "*config*.ts"
   ],
-  "ignoreDependencies": ["@wyw-in-js/shared"],
   "ignoreBinaries": ["mkfifo", "gdbus", "gnome-keyring-daemon"]
 }

@@ -6,6 +6,8 @@ import {
   type RagStatus,
 } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
 export function RagPage({
@@ -154,16 +156,16 @@ export function RagPage({
           }}
         >
           <div className="rag-query">
-            <input
+            <CarbonTextInput
               className="rag-query-input"
               id="rag-message"
               aria-label="Retrieval query"
               value={text}
               onChange={(event) => setText(event.target.value)}
             />
-            <button type="submit" disabled={!database || !status?.index || busy || !text.trim()}>
+            <AppButton type="submit" disabled={!database || !status?.index || busy || !text.trim()}>
               Retrieve
-            </button>
+            </AppButton>
           </div>
         </form>
       </SettingsCard>

@@ -6,6 +6,9 @@ import {
   TACTICS,
   type Tactic,
 } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { RadioButton as CarbonRadioButton } from "./carbon/choices.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { Icon } from "./icons.js";
 import { Modal } from "./modal.js";
 import "./tactics.css";
@@ -95,7 +98,7 @@ export function TacticsDialog({
           </label>
           <div className="tactics-search">
             <Icon name="search" />
-            <input
+            <CarbonTextInput
               id={`${id}-search`}
               type="search"
               value={query}
@@ -127,26 +130,29 @@ export function TacticsDialog({
           >
             <legend className="sr-only">Preview a tactic, then Apply to chat</legend>
             {matches.map((tactic) => (
-              <label
+              <div
                 key={tactic.id}
                 className="tactics-option"
                 data-preview={preview?.id === tactic.id}
               >
-                <input
-                  type="radio"
+                <CarbonRadioButton
+                  labelText={
+                    <>
+                      <span>{tactic.title}</span>
+                      {selected === tactic.id && (
+                        <>
+                          <Icon name="checkmark" />
+                          <span className="sr-only">Applied to chat</span>
+                        </>
+                      )}
+                    </>
+                  }
                   name={`${id}-preview`}
                   value={tactic.id}
                   checked={preview?.id === tactic.id}
                   onChange={() => setPreviewId(tactic.id)}
                 />
-                <span>{tactic.title}</span>
-                {selected === tactic.id && (
-                  <>
-                    <Icon name="checkmark" />
-                    <span className="sr-only">Applied to chat</span>
-                  </>
-                )}
-              </label>
+              </div>
             ))}
           </fieldset>
           {!matches.length && <p className="tactics-empty">No matching tactics.</p>}
@@ -156,7 +162,7 @@ export function TacticsDialog({
             <>
               <header className="tactic-heading">
                 <h3>{preview.title}</h3>
-                <button
+                <AppButton
                   type="button"
                   className="primary"
                   disabled={busy || selected === preview.id}
@@ -175,7 +181,7 @@ export function TacticsDialog({
                   }}
                 >
                   {busy ? "Saving…" : selected === preview.id ? "Applied" : "Apply to chat"}
-                </button>
+                </AppButton>
               </header>
               {error && <p role="alert">{error}</p>}
               <div className="tactic-content" key={preview.id}>
@@ -264,7 +270,7 @@ export function TacticsControl({
   };
   return (
     <div className="tactics-control">
-      <button
+      <AppButton
         ref={trigger}
         type="button"
         className="tactics-trigger"
@@ -281,9 +287,9 @@ export function TacticsControl({
         <Icon name={selected ? "checkmark" : "branch"} />
         <span>{selected?.title ?? (selection ? "Unavailable tactic" : "Tactics")}</span>
         <Icon name="chevron--down" />
-      </button>
+      </AppButton>
       {selection && (
-        <button
+        <AppButton
           type="button"
           className="icon-button"
           aria-label="Remove tactic"
@@ -298,7 +304,7 @@ export function TacticsControl({
           }}
         >
           <Icon name="close" />
-        </button>
+        </AppButton>
       )}
       <span className="sr-only" aria-live="polite" aria-atomic="true">
         {notice}

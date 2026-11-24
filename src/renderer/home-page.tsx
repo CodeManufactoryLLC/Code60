@@ -36,6 +36,7 @@ export function HomePage({
     {
       id: "relay",
       label: "Relay",
+      task: "Direct work across projects",
       icon: "app-steering-wheel" as const,
       available: relayAvailable && !pending,
       reason: pending ? "Opening Relay" : "Relay is unavailable",
@@ -49,6 +50,13 @@ export function HomePage({
       return {
         id,
         label: page.label,
+        task: {
+          "custom-agents": "Configure an assistant or open its conversation",
+          search: "Find messages, plans and files",
+          projects: "Open a repository or resume a conversation",
+          apps: "Browse automation and management tools",
+          sessions: "Inspect a worker run",
+        }[id],
         icon: page.icon,
         available: pageAvailable(id, database) && !pending,
         reason: !pageAvailable(id, database)
@@ -59,12 +67,6 @@ export function HomePage({
     }),
   ];
   return (
-    <NavigationHomePage
-      page={page}
-      intro={page === "home" && <p className="home-welcome">Welcome to Code60</p>}
-      cards={cards}
-      error={error}
-      onOpen={(card) => card.action()}
-    />
+    <NavigationHomePage page={page} cards={cards} error={error} onOpen={(card) => card.action()} />
   );
 }

@@ -167,7 +167,8 @@ test("browser: closing and reconnecting preserves the backend; takeover and stop
     expect((await fetch(fixture.gateway.origin)).status).toBe(200);
     expect(fixture.gateway.application.snapshot().versions.node).toBe(pid);
     await first.page.getByRole("button", { name: "Take control", exact: true }).click();
-    await first.page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(first.page.getByRole("banner", { name: "Code60" })).toBeVisible();
+    await first.page.getByRole("button", { name: "Workspace", exact: true }).click();
     await first.page.getByRole("button", { name: "Stop Code60 Backend", exact: true }).click();
     await first.page
       .getByRole("dialog", { name: "Stop Code60 Backend?", exact: true })

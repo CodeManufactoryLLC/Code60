@@ -1,9 +1,23 @@
 import { join } from "node:path";
 import { expect, type Page } from "@playwright/test";
 
+export async function expandNavigation(
+  page: Page,
+  group: "Work" | "Automation" | "Inspect" | "Manage",
+) {
+  const menu = page
+    .getByRole("navigation", { name: "Product navigation" })
+    .getByRole("button", { name: group, exact: true });
+  if ((await menu.getAttribute("aria-expanded")) === "false") await menu.click();
+}
+
 export async function onboard(page: Page) {
   const wizard = page.locator(".agent-setup-dialog");
   await expect(wizard).toBeVisible();
+  await expect(page.locator("dialog:modal")).toHaveCount(1);
+  await expect(wizard.getByRole("button", { name: "Claude", exact: true })).toHaveClass(
+    /cds--tile--clickable/,
+  );
   await wizard.getByRole("button", { name: "Claude", exact: true }).click();
   await expect(wizard.getByRole("status")).toHaveText("Claude connected");
   await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
@@ -53,6 +67,7 @@ export async function createDatabase(page: Page, directory: string) {
   await expect(chooser).toHaveCount(0);
 }
 export async function openProject(page: Page, directory: string, name: string) {
+  await expandNavigation(page, "Work");
   await page.getByRole("tab", { name: "Projects", exact: true }).click();
   await page
     .locator("#panel-projects")
