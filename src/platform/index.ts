@@ -49,6 +49,13 @@ export {
 } from "./private-state.js";
 export { type OwnedProcess, spawnOwnedProcess } from "./process.js";
 export {
+  inspectMacRuntimeProcess,
+  macRuntimeProcessFamily,
+  type RuntimeProcessIdentity,
+  runtimeProcessExists,
+  waitForRuntimeExit,
+} from "./process-identity.js";
+export {
   appendPrivateFile,
   atomicReplace,
   createPrivateDirectory,

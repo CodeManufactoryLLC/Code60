@@ -11,6 +11,11 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
   update logic. Production registry/release origins have no public override.
 
 - Never use blanket `shell: true` or unverified PID kills.
+- Native Transmission process adoption is macOS Apple Silicon only, matching
+  engine availability. Verify the canonical Node text mapping, exact argv, UID and
+  stable start identity with fixed system inspection commands. Return hashes,
+  never raw argv. Portable PID-existence/exit checks do not establish ownership;
+  callers must first prove it through their service, gateway or owned-child boundary.
 - Reject unsupported hosts before process launch; macOS and Linux are the only supported operating systems.
 - Enforce finite startup/cleanup deadlines.
 - Preserve POSIX process groups and grace periods.
