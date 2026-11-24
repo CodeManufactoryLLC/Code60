@@ -18,7 +18,10 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
   Apple Silicon and Linux x64. Verify the canonical Node text mapping, exact argv, UID and
   stable start identity. macOS uses fixed system inspection commands; Linux uses
   bounded kernel procfs reads, exact NUL-separated argv, executable device/inode
-  and boot/start ticks. Permission or identity uncertainty refuses removal;
+  and boot/start ticks. All four UID fields must match for attributed processes
+  and descendants. Unrelated mixed-UID services do not become family members;
+  file-holder enumeration covers the caller's effective UID and refuses mixed
+  credentials within that scope. Permission or identity uncertainty refuses removal;
   do not fall back to argv alone under emulation. Return hashes,
   never raw argv. Portable PID-existence/exit checks do not establish ownership;
   callers must first prove it through their service, gateway or owned-child boundary.

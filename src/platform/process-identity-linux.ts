@@ -13,10 +13,7 @@ import { type RuntimeProcessIdentity, runtimeProcessExists } from "./process-ide
 
 type InspectionStage = "unverified" | "status" | "stat" | "mixed-uid";
 class LinuxInspectionError extends Error {
-  constructor(
-    readonly stage: InspectionStage = "unverified",
-    code?: string,
-  ) {
+  constructor(stage: InspectionStage = "unverified", code?: string) {
     super("Runtime process ownership is unavailable; preserve installation files", {
       cause: {
         stage,
@@ -90,6 +87,19 @@ export function parseLinuxProcessUid(value: string) {
     throw unavailable();
   return ids;
 }
+export function verifyLinuxProcessUid(uids: readonly number[], expected: number) {
+  if (
+    uids.length !== 4 ||
+    !Number.isInteger(expected) ||
+    expected < 0 ||
+    expected > 2 ** 32 - 1 ||
+    uids.some((value) => value !== expected)
+  )
+    throw new LinuxInspectionError("mixed-uid");
+}
+type LinuxProcessMetadata = Omit<RuntimeProcessIdentity, "commandHash"> & {
+  uids: readonly number[];
+};
 async function boot(signal: AbortSignal) {
   if ((await statfs("/proc")).type !== 0x9fa0) throw unavailable();
   // Some emulators virtualize argv but expose their own executable through the
@@ -97,6 +107,10 @@ async function boot(signal: AbortSignal) {
   const node = await stat(await verifyInstallationNode(), { bigint: true });
   const ownExecutable = await stat("/proc/self/exe", { bigint: true });
   if (node.dev !== ownExecutable.dev || node.ino !== ownExecutable.ino) throw unavailable();
+  verifyLinuxProcessUid(
+    parseLinuxProcessUid(await text("/proc/self/status", 16_384, signal)),
+    process.getuid?.() ?? Number.NaN,
+  );
   const id = (await text("/proc/sys/kernel/random/boot_id", 64, signal)).trim();
   if (!/^[a-f0-9-]{36}$/.test(id)) throw unavailable();
   return id;
@@ -109,17 +123,14 @@ async function metadata(pid: number, bootId: string, signal: AbortSignal, includ
     const uid = process.getuid?.();
     if (uid === undefined) throw unavailable();
     if (!uids.includes(uid) && !includeForeign) return null;
-    if (uids.includes(uid) && uids.some((value) => value !== uid))
-      throw new LinuxInspectionError("mixed-uid");
     stage = "stat";
     const row = parseLinuxProcessStat(await text(`/proc/${pid}/stat`, 16_384, signal), pid);
     const effectiveUid = uids[1];
     if (effectiveUid === undefined) throw unavailable();
-    return { pid, parent: row.parent, uid: effectiveUid, started: `${bootId}:${row.ticks}` };
+    return { pid, parent: row.parent, uid: effectiveUid, uids, started: `${bootId}:${row.ticks}` };
   } catch (error) {
     signal.throwIfAborted();
     if (installationFileCode(error) === "ENOENT" && !runtimeProcessExists(pid)) return null;
-    if (error instanceof LinuxInspectionError && error.stage === "mixed-uid") throw error;
     throw new LinuxInspectionError(stage, installationFileCode(error));
   }
 }
@@ -158,6 +169,9 @@ async function inspect(pid: number, command: readonly string[], signal: AbortSig
       if (!runtimeProcessExists(pid)) return null;
       throw unavailable();
     }
+    const uid = process.getuid?.();
+    if (uid === undefined) throw unavailable();
+    verifyLinuxProcessUid(before.uids, uid);
     const bytes = await bounded(`/proc/${pid}/cmdline`, 32_768, signal);
     if (
       !bytes.equals(expected) ||
@@ -174,7 +188,13 @@ async function inspect(pid: number, command: readonly string[], signal: AbortSig
     )
       throw unavailable();
     signal.throwIfAborted();
-    return { ...before, commandHash: createHash("sha256").update(bytes).digest("hex") };
+    return {
+      pid,
+      parent: before.parent,
+      uid: before.uid,
+      started: before.started,
+      commandHash: createHash("sha256").update(bytes).digest("hex"),
+    };
   } catch {
     signal.throwIfAborted();
     if (!runtimeProcessExists(pid)) return null;
@@ -220,7 +240,7 @@ export async function findLinuxRuntimeProcesses(command: readonly string[], sign
 }
 export function linuxFamilyPids(
   owner: RuntimeProcessIdentity,
-  rows: readonly Omit<RuntimeProcessIdentity, "commandHash">[],
+  rows: readonly LinuxProcessMetadata[],
   signal?: AbortSignal,
 ) {
   const root = rows.find((row) => row.pid === owner.pid);
@@ -232,8 +252,9 @@ export function linuxFamilyPids(
     root.started !== owner.started
   )
     throw unavailable();
+  verifyLinuxProcessUid(root.uids, owner.uid);
   const seen = new Set<number>(),
-    children = new Map<number, Omit<RuntimeProcessIdentity, "commandHash">[]>();
+    children = new Map<number, LinuxProcessMetadata[]>();
   for (const row of rows) {
     signal?.throwIfAborted();
     pidValue(row.pid);
@@ -254,6 +275,7 @@ export function linuxFamilyPids(
     signal?.throwIfAborted();
     for (const child of children.get(pid) ?? []) {
       if (child.uid !== owner.uid) throw unavailable();
+      verifyLinuxProcessUid(child.uids, owner.uid);
       ids.add(child.pid);
     }
     if (ids.size > 4096) throw unavailable();
@@ -271,6 +293,7 @@ export async function linuxRuntimeProcessFamily(
   const same = async () => {
     const row = await metadata(owner.pid, bootId, s);
     if (!row || row.started !== owner.started || row.parent !== owner.parent) throw unavailable();
+    verifyLinuxProcessUid(row.uids, owner.uid);
   };
   await same();
   const ids = linuxFamilyPids(owner, await users(bootId, s, true), s);
@@ -290,8 +313,14 @@ export async function linuxFileProcesses(paths: readonly string[], signal?: Abor
   const wanted = new Set(identities.map((i) => `${i.dev}:${i.ino}`)),
     ids = [];
   const bootId = await boot(s);
+  const uid = process.getuid?.();
+  if (uid === undefined) throw unavailable();
   let descriptors = 0;
   for (const row of await users(bootId, s)) {
+    // Privileged unrelated services can retain this user's real UID. They are
+    // not same-effective-user file holders or members of the verified family.
+    if (row.uid !== uid) continue;
+    verifyLinuxProcessUid(row.uids, uid);
     try {
       let found = false;
       for await (const { name: fd } of await opendir(`/proc/${row.pid}/fd`)) {

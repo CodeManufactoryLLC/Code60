@@ -203,7 +203,11 @@ continue to preserve independent engines. This private operation grants no file
 removal authority; installed management separately verifies consent and installation ownership.
 Linux proves process identity and open-file absence through bounded kernel procfs
 reads, binding exact NUL-separated argv to the canonical Node inode, UID and boot/start
-identity. macOS retains fixed ps/lsof inspection. Unavailable native evidence,
+identity. macOS retains fixed ps/lsof inspection.
+All four UID fields must match for an attributed process or descendant. Unrelated
+mixed-UID services are not adopted or allowed to invalidate a proven family;
+file-holder scans cover this user's effective UID and reject mixed credentials
+within that scope. Unavailable native evidence,
 including an unverifiable emulator text mapping, refuses removal rather than
 adopting by argv alone. See [Linux procfs](https://www.kernel.org/doc/html/latest/filesystems/proc.html).
 Guarded service removal additionally checks the original runtime and prepared PID
