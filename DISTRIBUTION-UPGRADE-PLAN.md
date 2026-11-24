@@ -412,29 +412,25 @@ Verify the prior release remains available and recovery never replays work.
 
 ## Phase 8 — State-preserving uninstall
 
-**Status:** implemented on `codex/state-preserving-uninstall`. Recorded isolated
-acceptance covers the full native installed golden/uninstall/reinstall
-journey, retained SQLite/Git state, offline embeddings and independent process
-cleanup. Full Linux CI passes, including two concurrent installed journeys and
-proof that one run's cleanup leaves the other's backend and assets usable.
-Inventory ownership, separate shell consent, guarded quiescence and standalone
-recovery have focused and installed coverage. Delivery still requires the PR's
-required Linux/native gates and verified cleanup of owned test resources on each
-engine used. PR #325 retains the final evidence. Native update, workflow and
-uninstall consumers verify the producer's exact payload independently; Linux
-baseline and concurrent-uninstall acceptance have separate required job budgets.
-Each consumer preserves the existing journey and cleanup deadlines. Linux
-concurrent acceptance at `62e24560` exceeded its maintenance deadline after both
-golden journeys; its owned resources were independently verified removed. Bounded
-parallel inventory reads and a combined physical/receipted ancestor walk require
-fresh exact-commit acceptance before delivery. Deletion, complete preflight,
-same-handle checks and per-entry sync remain mandatory. Linux
-native process inspection must pass on a genuine Linux x64 runner. Emulation
-without a verifiable Node executable mapping remains blocked for native ownership.
-Real login-service lifecycle certification belongs to Phase 9.
-Native update candidate generation and initial installation run concurrently as
-file-only preparation, drain together before cleanup, and retain the original
-preparation, six-minute journey and ten-minute suite deadlines.
+**Status:** implemented on `codex/state-preserving-uninstall`. At `62e24560`,
+Linux concurrent uninstall exceeded the maintenance deadline after both golden
+journeys. At `f68998e7`, both installed journeys completed and the survivor's
+backend and assets remained usable after the first cleanup. All Linux jobs passed.
+[Linux validation at f68998e7](https://github.com/CodeManufactoryLLC/Code60/actions/runs/45506864645)
+
+On Apple Silicon, installed uninstall/reinstall and idle-engine cleanup passed
+at `62e24560`. At `f68998e7`, the browser navigation test sent Escape while
+the sidebar was still inert after a viewport change. That stopped the producer
+before packaging and skipped the installed journeys.
+[Native validation at 62e24560](https://github.com/CodeManufactoryLLC/Code60/actions/runs/45497968747)
+and [at f68998e7](https://github.com/CodeManufactoryLLC/Code60/actions/runs/45506867368).
+
+Delivery requires Linux concurrency and all native installed journeys on the
+same final commit, a tested bootstrap assembled from its two verified platform
+payloads, and independently checked cleanup. The run links and artifact identities
+belong in [PR #325](https://github.com/CodeManufactoryLLC/Code60/pull/325).
+Linux process ownership requires a genuine Linux x64 runner. Real login-service
+lifecycle certification belongs to Phase 9.
 
 **PR outcome:** `code60 uninstall` removes owned installation resources predictably.
 
