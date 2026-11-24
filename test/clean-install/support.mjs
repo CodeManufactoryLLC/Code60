@@ -11,6 +11,7 @@ export const application = layout.application;
 export const fakeAgent = layout.fakeAgent;
 export const launcher = layout.launcher;
 export const updated = layout.update === true;
+export const uninstall = layout.uninstall === true;
 export const setupDatabase = layout.setupDatabase;
 export const execute = promisify(execFile);
 

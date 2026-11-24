@@ -24,8 +24,9 @@ remain. Unrelated global/npm commands and replaced launchers stay untouched.
 
 Before deleting application files, the command prints a shell-quoted absolute
 recovery command. Keep it: the standalone launcher under `removals/<attempt>`
-works even after the installed entrypoint or npm/bootstrap cache is gone. Invoke
-that printed command with `uninstall --yes` to resume only the recorded remainder.
+works even after the installed entrypoint or npm/bootstrap cache is gone. Run the
+printed command exactly as shown; it includes `uninstall --yes` and resumes only
+the recorded remainder.
 It uses the original installation/service scope even from another directory or
 with changed HOME/XDG values.
 
@@ -41,3 +42,15 @@ ownership and database selection, then reuses healthy retained data. It never
 replays uncertain work or replaces a damaged/custom database automatically. An old
 recovery attempt refuses a later installation. Real launchd/systemd login lifecycle
 certification remains a separate native release gate.
+
+## Acceptance evidence
+
+The clean-install `--uninstall` mode drives a full installed first-use journey
+before removal, then checks original process exit, exact owned file removal,
+retained SQLite/configuration/Git contents, repeated recovery and same-artifact
+reinstall. Application files remain read-only during the browser journey; a
+separately inspected maintenance customer owns the writable removal operation.
+`npm run test:uninstall` supplies native installed/launcher/browser coverage through
+the isolated supervisor fixture. `npm run test:installation` additionally exercises
+real shell startup before and after separately consented profile removal.
+These tests do not establish native login/reboot lifecycle behavior.

@@ -141,12 +141,20 @@ export async function writeInstallationFile(
   text: string,
   previous: FileIdentity | null,
   mode = 0o600,
+  maximum = 1024 * 1024,
 ) {
+  if (
+    !Number.isSafeInteger(maximum) ||
+    maximum < 1 ||
+    maximum > 64 * 1024 ** 2 ||
+    Buffer.byteLength(text) > maximum
+  )
+    throw new Error("Installation file exceeds its explicit size bound");
   await installationDirectory(dirname(path));
   if ((await lstat(dirname(path))).uid !== uid())
     throw new Error("Refusing to edit a foreign directory");
   const verify = async () => {
-    const actual = await installationSnapshot(path);
+    const actual = await installationSnapshot(path, maximum);
     if (JSON.stringify(actual?.identity ?? null) !== JSON.stringify(previous))
       throw new Error("Installation file changed since preview");
   };
@@ -173,7 +181,7 @@ export async function writeInstallationFile(
       if (installationFileCode(error) !== "ENOENT") throw error;
     });
   }
-  return (await installationSnapshot(path))?.identity as FileIdentity;
+  return (await installationSnapshot(path, maximum))?.identity as FileIdentity;
 }
 export async function syncInstallationDirectory(path: string) {
   const file = await open(path, constants.O_RDONLY);

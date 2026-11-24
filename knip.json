@@ -39,7 +39,9 @@
     "test/fixtures/backend-supervisor-command.mjs",
     "test/clean-install/install-setup.mjs",
     "test/fixtures/update-command.mjs",
-    "test/update.config.ts"
+    "test/update.config.ts",
+    "test/uninstall.config.ts",
+    "test/clean-install/uninstall.mjs"
   ],
   "project": [
     "src/**/*.{ts,tsx,cts,mjs,mts}",

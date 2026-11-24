@@ -66,6 +66,24 @@ describe("branch protection policy", () => {
 });
 
 describe("browser and package validation", () => {
+  it("requires real installed uninstall/reinstall and isolated native engine checks", () => {
+    expect(
+      ci.jobs.payload.steps.some(
+        (step) =>
+          step.run === "npm run test:packaged:clean -- --uninstall release/payloads/linux-x64.json",
+      ),
+    ).toBe(true);
+    for (const command of ["npm run test:uninstall", "npm run test:uninstall:engines"])
+      expect(nativeTests.jobs.test.steps.some((step) => step.run === command)).toBe(true);
+    expect(
+      nativeTests.jobs.test.steps.find((step) => step.with?.name === "native-installation-evidence")
+        .with.path,
+    ).toContain("test-results/uninstall/");
+    expect(
+      ci.jobs.payload.steps.find((step) => step.with?.name === "payload-acceptance-evidence").with
+        .path,
+    ).toContain("test-results/clean-install/");
+  });
   it("requires packaged setup acceptance and keeps native setup behind isolated fixtures", () => {
     expect(
       ci.jobs.payload.steps.some(

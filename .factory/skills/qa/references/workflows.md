@@ -186,6 +186,24 @@ and supported controls before extending tests. Retain evidence under ignored
 - **Cleanup:** explicitly stop the isolated service and its children, uninstall
   only a registration created for this run with authorization. Otherwise BLOCKED.
 
+## State-preserving uninstall and retained-data reinstall
+
+- **Start:** exact platform payload, isolated setup-created/custom database and
+  fake provider, complete shared golden journey through confirmed Undo. Retain
+  the original backend PID, independent SQLite/preferences and Git/worktree state.
+- **Actions:** reject invalid options, missing non-TTY consent and unowned release
+  additions; approve application/service removal separately from shell changes.
+  Repeat standalone recovery, reinstall the same verified artifact and reopen data.
+- **Invariants:** no interruption before consent/ownership proof; original backend
+  and providers exit; only receipted installation files disappear. Databases,
+  configuration, engine bindings/history, profiles and worktrees remain. Old
+  recovery cannot remove the new activation or stop its backend.
+- **Evidence/cleanup:** full traces, logical SQLite and file/Git hashes, original
+  process absence, completed receipts and independently inspected Docker inventory.
+  Writable maintenance shares only this run's PID/loopback namespaces and volumes;
+  the browser journey retains read-only application trees. Never count test-only
+  supervisor coverage as native login/reboot certification.
+
 ## Memory and context handoff
 
 - **Prerequisites/start:** synthetic conversations/projects, fake verified provider,

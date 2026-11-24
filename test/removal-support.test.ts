@@ -224,6 +224,19 @@ else throw Error('Fixture refuses unexpected native inspection or mutation');
         .map((line) => JSON.parse(line) as { pid: number; args: string[]; name: string }),
   };
 }
+it("publishes and validates durable receipts exceeding the ordinary profile size bound", async () => {
+  const f = await fixture();
+  f.plan.residuals = Array.from({ length: 400 }, (_, index) =>
+    join(f.root, "unowned", String(index), "x".repeat(3000)),
+  );
+  const state = await f.prepare();
+  expect((await lstat(join(state.directory, "receipt.json"))).size).toBeGreaterThan(1024 ** 2);
+  expect((await readRemovalState(f.plan.record))?.receipt.residuals).toEqual(f.plan.residuals);
+  await finishManagedRemoval(f.plan.record, { reserve: f.reserve });
+  expect((await readRemovalState(f.plan.record))?.value.phase).toBe("complete");
+  await retained(f);
+});
+
 it("publishes private standalone support, removes only receipted app files and repeats without touching retained state", async () => {
   const f = await fixture();
   const state = await f.prepare();

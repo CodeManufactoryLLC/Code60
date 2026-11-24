@@ -227,7 +227,7 @@ export async function prepareManagedRemoval(
     if (Buffer.byteLength(text) > 64 * 1024 ** 2)
       throw Error("Uninstall receipt exceeded its bound; no application files removed");
     plannedFiles.set("receipt.json", installationDigest(text));
-    await writeInstallationFile(join(directory, "receipt.json"), text, null);
+    await writeInstallationFile(join(directory, "receipt.json"), text, null, 0o600, 64 * 1024 ** 2);
     await syncInstallationDirectory(directory);
     await options.checkpoint?.(directory);
     options.signal?.throwIfAborted();

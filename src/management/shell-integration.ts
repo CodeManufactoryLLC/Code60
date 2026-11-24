@@ -168,7 +168,13 @@ export async function planShellIntegration(
               "esac",
               end,
             ];
-      const block = lines.join(newline) + newline;
+      // POSIX shells treat a CR before newline as a literal token. End each
+      // executable line with a comment so CRLF is preserved without changing
+      // command syntax. Marker lines already consist entirely of comments.
+      const block =
+        lines
+          .map((line) => (newline === "\r\n" && !line.startsWith("#") ? `${line} #` : line))
+          .join(newline) + newline;
       if (before.includes("# >>> code60 PATH") || before.includes("# <<< code60 PATH")) {
         if (
           before.split(block).length === 2 &&

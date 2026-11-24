@@ -54,6 +54,7 @@
     "build:distribution": "node scripts/build-distribution.mjs",
     "test:installation": "npm run build:distribution && node scripts/test-installation.mjs",
     "test:setup": "node scripts/test-setup.mjs",
+    "test:uninstall": "node scripts/test-uninstall.mjs",
     "test:update": "node scripts/test-update.mjs",
     "test:uninstall:engines": "node scripts/test-uninstall-engines.mjs",
     "prepare:engines": "node scripts/prepare-engines.mjs",

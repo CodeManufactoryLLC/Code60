@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { test } from "@playwright/test";
+import { readFile, writeFile } from "node:fs/promises";
+import { expect, test } from "@playwright/test";
 import { goldenJourney } from "../fixtures/golden-journey.js";
 
 test("installed package: first use through an accepted task and Undo", async ({ browser }) => {
@@ -10,6 +10,33 @@ test("installed package: first use through an accepted task and Undo", async ({ 
     setupDatabase?: string;
   };
   const context = await browser.newContext();
+  if (process.env.ACCEPTANCE_REINSTALLED === "1") {
+    try {
+      const page = await context.newPage();
+      await page.goto(origin);
+      await expect(page.getByRole("button", { name: "Relay", exact: true })).toBeVisible();
+      await expect(page.locator(".agent-setup-dialog")).toHaveCount(0);
+      const snapshot = await page.evaluate(() => window.code60.snapshot());
+      expect(snapshot.database).toBe(setupDatabase);
+      expect(snapshot.directory).toBe("/work/home/project with spaces");
+      await page.getByRole("button", { name: "Relay", exact: true }).click();
+      await expect(
+        page.getByRole("combobox", { name: "Message to orchestrator", exact: true }),
+      ).toBeEditable();
+      await page.screenshot({ path: test.info().outputPath("reinstalled.png") });
+      await writeFile(
+        "/evidence/reinstalled-browser.json",
+        JSON.stringify({
+          database: snapshot.database,
+          directory: snapshot.directory,
+          noProviderOnboarding: true,
+        }),
+      );
+    } finally {
+      await context.close();
+    }
+    return;
+  }
   await goldenJourney(
     {
       directory: "/work/home",

@@ -135,13 +135,17 @@ if (mode === "ready" || mode === "assets") {
     .filter(Boolean)
     .map(JSON.parse);
   const setup = JSON.parse(await readFile("/harness/layout.json", "utf8")).setup;
+  const uninstall = JSON.parse(await readFile("/harness/layout.json", "utf8")).uninstall;
   assert.ok(
     calls.every(
       (call) =>
         call.name === "systemctl" &&
         call.args[0] === "--user" &&
         (call.args[1] === "show" ||
-          (setup && ["daemon-reload", "enable", "start"].includes(call.args[1]))),
+          (setup && ["daemon-reload", "enable", "start"].includes(call.args[1])) ||
+          (uninstall &&
+            call.args[1] === "disable" &&
+            JSON.stringify(call.args) === '["--user","disable","--now","code60-backend.service"]')),
     ),
     "Unexpected supervisor/opener mutation",
   );

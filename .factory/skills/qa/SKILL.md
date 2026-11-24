@@ -113,6 +113,17 @@ Use the existing harness, not a new QA plugin or a live agent.
 
 ## Report what actually happened
 
+Uninstall changes additionally require clean-install `--uninstall` mode and
+`npm run test:uninstall` on the native supported target. Begin with the full shared
+golden journey, then verify missing-consent/unowned-file refusal without backend
+interruption, original backend/provider exit, exact owned file/service removal,
+standalone repeated recovery and retained-data reinstall. Compare logical SQLite,
+selection/configuration bytes, profiles and complete Git/index/HEAD/worktree state.
+Keep read-only golden mounts; inspect the separate maintenance customer's shared
+PID/loopback namespace and exact owned writable volumes. Real shell removal uses
+`npm run test:installation`; report missing native/fish coverage explicitly.
+Bounded supervisor fixtures are not native login/reboot certification.
+
 Write `test-results/qa/<run>/report.md` from the template, and summarize locally.
 For each selected journey use PASS, FAIL or BLOCKED, exact command, starting state,
 steps/checkpoints reached, expected versus actual results, evidence paths and gaps.

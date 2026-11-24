@@ -15,6 +15,7 @@ import {
   launcher,
   publicConnection,
   setupDatabase,
+  uninstall,
   updated,
 } from "./support.mjs";
 
@@ -54,6 +55,7 @@ const supervisor = await backendSupervisor({
   application,
   env,
   log: "/evidence/backend.log",
+  allowUninstall: uninstall,
 });
 env.CODE60_TEST_BACKEND_SOCKET = supervisor.socket;
 let stopping;

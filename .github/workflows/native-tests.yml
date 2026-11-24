@@ -36,6 +36,8 @@ jobs:
       - run: npm run test:payload
       - run: npm run test:setup
       - run: npm run test:update
+      - run: npm run test:uninstall
+      - run: npm run test:uninstall:engines
       # Payload verification makes each actual update expensive on this runner.
       # Keep whole journeys and their existing deadlines; retain every batch.
       - name: Native retained and restart regressions
@@ -58,6 +60,8 @@ jobs:
             test-results/installation/
             test-results/setup/
             test-results/update/
+            test-results/uninstall/
+            test-results/uninstall-engines/
             test-results/payload/
             test-results/transmission-native/
           retention-days: 7

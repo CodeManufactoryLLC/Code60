@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -56,6 +56,12 @@ try {
     const version = (
       await execute(executable, ["--version"], { env: shellEnv, timeout: 5000 })
     ).stdout.split("\n")[0];
+    const initial = await api.planShellIntegration(shellEnv);
+    const originalProfile = "# customer content preserved\r\n";
+    for (const edit of initial.edits) {
+      await mkdir(join(edit.path, ".."), { recursive: true });
+      await writeFile(edit.path, originalProfile, { mode: 0o640 });
+    }
     const preview = await api.planShellIntegration(shellEnv);
     assert.equal(preview.manual.length, 0);
     const applied = await api.applyShellIntegration(preview, { approved: true, interactive: true });
@@ -75,6 +81,62 @@ try {
       results.push({ shell, executable, version, login, status: "PASS" });
     }
     assert.equal((await api.planShellIntegration(shellEnv)).edits.length, 0);
+    const record = JSON.parse(await readFile(join(installed.root, "installation.json"), "utf8"));
+    const removal = await api.planShellRemoval(record);
+    assert.equal(removal.manual.length, 0);
+    assert.equal(removal.edits.length, preview.edits.length);
+    const originals = await Promise.all(removal.edits.map((edit) => readFile(edit.path)));
+    for (const consent of [
+      { approved: false, interactive: true },
+      { approved: true, interactive: false },
+    ]) {
+      assert.equal((await api.applyShellRemoval(record, removal, consent)).applied.length, 0);
+      for (const [index, edit] of removal.edits.entries())
+        assert.deepEqual(await readFile(edit.path), originals[index]);
+    }
+    const removed = await api.applyShellRemoval(record, removal, {
+      approved: true,
+      interactive: true,
+    });
+    assert.equal(removed.manual.length, 0);
+    assert.equal(removed.applied.length, removal.edits.length);
+    for (const edit of removal.edits) {
+      assert.equal(await readFile(edit.path, "utf8"), originalProfile);
+      assert.equal((await stat(edit.path)).mode & 0o777, 0o640);
+    }
+    assert.equal((await api.planShellRemoval(record)).edits.length, 0);
+    for (const login of [false, true]) {
+      const args =
+        shell === "fish"
+          ? [
+              ...(login ? ["--login"] : []),
+              "--interactive",
+              "--command",
+              "contains -- $HOME/.local/bin $PATH; and exit 9; or exit 0",
+            ]
+          : [
+              ...(login ? ["--login"] : []),
+              "-i",
+              "-c",
+              'case ":$PATH:" in *":$HOME/.local/bin:"*) exit 9;; *) exit 0;; esac',
+            ];
+      await execute(executable, args, {
+        env: shellEnv,
+        cwd: "/",
+        timeout: 15000,
+        maxBuffer: 1024 ** 2,
+      });
+      results.push({
+        shell,
+        executable,
+        version,
+        login,
+        removal: "PASS",
+        status: "PASS",
+        declineAndNonTtyPreserved: true,
+        unrelatedBytesAndModePreserved: true,
+      });
+    }
   }
   const output = join("test-results/installation", `${Date.now()}-${process.pid}`);
   await mkdir(output, { recursive: true, mode: 0o700 });

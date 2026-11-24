@@ -93,6 +93,7 @@ jobs:
       - run: npm run test:packaged:clean -- --payload release/payloads/linux-x64.json
       - run: npm run test:packaged:clean -- --managed release/payloads/linux-x64.json
       - run: npm run test:packaged:clean -- --setup release/payloads/linux-x64.json
+      - run: npm run test:packaged:clean -- --uninstall release/payloads/linux-x64.json
       - run: npm run devcontainer -- down
         if: always()
       - uses: actions/upload-artifact@v7.0.2
