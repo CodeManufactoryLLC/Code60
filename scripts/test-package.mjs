@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -11,7 +11,7 @@ const archive = resolve(process.argv[2] ?? `release/build/code60-${manifest.vers
 await stat(archive).catch(() => {
   throw new Error("Build the npm tarball first with npm run package:app.");
 });
-const prefix = await mkdtemp(join(tmpdir(), "code60-package-"));
+const prefix = await realpath(await mkdtemp(join(tmpdir(), "code60-package-")));
 let gateway;
 try {
   const command = await resolveCommand([
@@ -48,7 +48,23 @@ try {
     SHELL: "/bin/sh",
     XDG_STATE_HOME: join(isolated, "state"),
     XDG_CONFIG_HOME: join(isolated, "config"),
+    XDG_DATA_HOME: join(isolated, "data"),
   };
+  if (process.platform === "darwin" && process.arch === "arm64") {
+    const bundles = await readdir(join(root, "dist/engines"));
+    assert.equal(bundles.length, 1);
+    assert.match(bundles[0], /^[a-f0-9]{64}$/);
+    const engine = await import(pathToFileURL(join(root, "dist/platform/index.js")).href);
+    await engine.preserveTransmissionBundle(join(root, "dist/engines", bundles[0]), env);
+    for (const version of ["0.1.0-staging.18", "0.1.0-staging.20"]) {
+      const cached = await engine.resolveTransmissionRuntime(env, version);
+      assert.ok(cached.root.startsWith(`${env.XDG_DATA_HOME}/code60/engines/`));
+      assert.ok((await stat(cached.entry)).isFile());
+    }
+    assert.equal(await stat(join(isolated, "state/code60/workflows")).catch(() => null), null);
+  } else {
+    assert.equal(await stat(join(root, "dist/engines")).catch(() => null), null);
+  }
   const policy = (...args) =>
     JSON.parse(
       execFileSync(process.execPath, [join(root, installed.bin.code60), "pairing", ...args], {

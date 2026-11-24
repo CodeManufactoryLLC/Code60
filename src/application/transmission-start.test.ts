@@ -1,11 +1,16 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { LocalTransmission } from "./transmission.js";
 
-const fake = vi.hoisted(() => ({ probe: vi.fn(), spawn: vi.fn() }));
+const fake = vi.hoisted(() => ({
+  probe: vi.fn(),
+  spawn: vi.fn(),
+  resolve: vi.fn(),
+  preserve: vi.fn(),
+}));
 vi.mock("node:child_process", async (original) => ({
   ...(await original<typeof import("node:child_process")>()),
   execFile: Object.assign(() => {}, { [Symbol.for("nodejs.util.promisify.custom")]: fake.probe }),
@@ -13,10 +18,17 @@ vi.mock("node:child_process", async (original) => ({
 vi.mock("../platform/index.js", async (original) => ({
   ...(await original<typeof import("../platform/index.js")>()),
   spawnOwnedProcess: fake.spawn,
+  resolveTransmissionRuntime: fake.resolve,
+  preserveTransmissionBundle: fake.preserve,
 }));
 const roots: string[] = [];
 beforeEach(() => {
   vi.clearAllMocks();
+  fake.resolve.mockResolvedValue({
+    node: process.execPath,
+    entry: "/bundle/engine.js",
+    root: "/bundle",
+  });
   fake.probe.mockResolvedValue({
     stdout: JSON.stringify({ version: "24.22.0", executable: process.execPath }),
   });
@@ -49,7 +61,7 @@ async function fixture() {
     .mockResolvedValue({ ready: true });
   return { root, client, child, call };
 }
-it("bootstraps only the pinned package in an isolated npm context and releases its launcher", async () => {
+it("launches the preserved exact entrypoint without npm and releases only its MCP launcher", async () => {
   const f = await fixture();
   await f.client.connect(new AbortController().signal);
   const [command, temporary, env] = fake.spawn.mock.calls[0] as [
@@ -57,14 +69,20 @@ it("bootstraps only the pinned package in an isolated npm context and releases i
     string,
     NodeJS.ProcessEnv,
   ];
-  expect(command).toEqual(["npx", "-y", "code60-transmission-server@0.1.0-staging.20", "mcp"]);
+  expect(command).toEqual([process.execPath, "/bundle/engine.js", "mcp"]);
+  expect(fake.resolve).toHaveBeenCalledWith(
+    expect.any(Object),
+    "0.1.0-staging.20",
+    expect.any(AbortSignal),
+  );
+  expect(temporary).toBe("/bundle");
   expect(env.TRANSMISSION_STATE_DIR).toBe(join(f.root, "state"));
-  expect(env.NPM_CONFIG_REGISTRY).toBe("https://registry.npmjs.org");
-  expect(env.NPM_CONFIG_IGNORE_SCRIPTS).toBe("true");
+  expect(env.PATH).toBe("/usr/bin");
+  expect(env).not.toHaveProperty("NPM_CONFIG_REGISTRY");
   expect(env).not.toHaveProperty("NODE_OPTIONS");
   expect(env).not.toHaveProperty("npm_config_registry");
   expect(f.child.stop).toHaveBeenCalledWith(1000);
-  await expect(stat(temporary)).rejects.toMatchObject({ code: "ENOENT" });
+  expect(fake.preserve).not.toHaveBeenCalled();
   expect(await readFile(join(f.root, "state", "endpoint.json")).catch(() => null)).toBeNull();
 });
 it("attaches to an existing healthy engine without probing or downloading", async () => {
@@ -85,14 +103,13 @@ it.each(["22.12.0", "24.21.0", "25.0.0"])(
     expect(fake.spawn).not.toHaveBeenCalled();
   },
 );
-it("stops a failed launcher and removes temporary configuration", async () => {
+it("stops a failed MCP launcher without removing the persistent engine", async () => {
   const f = await fixture();
   f.call.mockReset().mockRejectedValue(new Error("offline"));
   f.child.hasExited = () => true;
   await expect(f.client.connect(new AbortController().signal)).rejects.toThrow("launcher failed");
-  const temporary = fake.spawn.mock.calls[0]?.[1] as string;
   expect(f.child.stop).toHaveBeenCalledOnce();
-  await expect(stat(temporary)).rejects.toMatchObject({ code: "ENOENT" });
+  expect(fake.preserve).not.toHaveBeenCalled();
 });
 it("honors cancellation before downloading", async () => {
   const f = await fixture();
@@ -105,4 +122,24 @@ it("refuses the unsupported production execution boundary", async () => {
   const f = await fixture();
   Object.defineProperty(f.client, "supported", { value: false });
   await expect(f.client.connect(new AbortController().signal)).rejects.toThrow("macOS");
+});
+
+it("preserves damaged bindings rather than falling back to a replacement", async () => {
+  const f = await fixture();
+  fake.resolve.mockRejectedValue(new Error("Damaged pinned identity"));
+  await expect(f.client.connect(new AbortController().signal)).rejects.toThrow(
+    "Damaged pinned identity",
+  );
+  expect(fake.spawn).not.toHaveBeenCalled();
+  expect(fake.preserve).not.toHaveBeenCalled();
+});
+it("refuses a moved runtime identity before spawning", async () => {
+  const f = await fixture();
+  fake.probe.mockResolvedValue({
+    stdout: JSON.stringify({ version: "24.22.0", executable: "/different/node" }),
+  });
+  await expect(f.client.connect(new AbortController().signal)).rejects.toThrow(
+    "recorded Transmission runtime",
+  );
+  expect(fake.spawn).not.toHaveBeenCalled();
 });

@@ -67,6 +67,8 @@ Code60-managed user storage; it cannot select packages, commands or destinations
 - gateway composes application and automation once, validates HTTP/session boundaries,
   serves assets, owns client interactions and private local service management.
 - management parses the narrow code60 setup/status/open/service/pairing CLI and calls gateway/platform APIs.
+  Its fixed workflows login command delegates provider authentication to the
+  preserved Codex CLI in an interactive terminal, without starting an engine.
   It offers no run, prompt or agent-command execution interface.
 - automation retains its separate scheduler policy/store and an internal legacy protocol
   adapter. Only the gateway is installed as a production service.
@@ -520,7 +522,25 @@ imports are permitted.
 ### Approved Transmission workflows
 
 Apps → Workflows is a database-independent, macOS-only execution prototype using
-exactly `code60-transmission-server@0.1.0-staging.20` for new approvals and external Node >=24.22 <25.
+exactly `code60-transmission-server@0.1.0-staging.20` for new approvals and recorded Node >=24.22 <25.
+macOS payloads bundle that artifact and staging.18 with a separate committed
+production lockfile, verified prebuilt Codex runtime and dependency notices. The
+supported artifacts contain no engine-native helper sources; helpers from the
+newer, incompatible Transmission checkout are not substituted. Linux payloads
+omit these components. Build-time npm acquisition is separate from execution;
+workflow start/reconnect never runs npm, npx or a compiler.
+
+Managed installation preserves the bundle under XDG_DATA_HOME/code60/engines,
+outside application releases/activations. Private immutable version bindings pin
+its inventory and canonical Node. Source development explicitly prepares local
+assets; the first approved start may cache those verified local files. Existing
+bindings, state roots, run IDs, start keys and legacy npm caches are preserved.
+Application provider verification does not authorize Transmission: its bundled
+Codex harness uses its own external provider configuration/login.
+The human-only `code60 workflows login` command uses its verified cached Node and
+Codex wrapper, inherits the terminal, strips Node/npm injection settings, bounds
+authentication and retains child ownership through interruption. It accepts no
+provider command or credential flags and grants no Code60 provider verification.
 A human reviews and starts ordered tasks with independent verification. Automatic
 permission approvals default on and are shown before approval. A dedicated Git
 worktree starts from current saved files using existing private task snapshots;

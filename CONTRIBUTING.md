@@ -80,6 +80,14 @@ They must never require live agents or credentials.
 assets, foreground backend and offline embedding model without service enrollment.
 `npm run test:rag:model` exercises the actual offline model and worker lifecycle.
 
+For Transmission development on native macOS arm64, run `npm run prepare:engines`
+after building to stage both pinned engines and their native Codex dependency from
+the separate committed lockfile. A full build clears these generated assets.
+Packaging prepares them automatically on macOS; Linux omits them. After native
+packaging, `npm run test:transmission` runs the real engine/ACP/Codex browser
+journey with an isolated fake model endpoint, never a live provider. It retains
+traces, identities and process cleanup evidence under `test-results/transmission-native`.
+
 For independent Linux installation acceptance, build the tarball and run
 `npm run test:packaged:clean` on the host. The [clean-install guide](test/clean-install/README.md)
 describes the fresh customer environment, separate browser driver, online installation

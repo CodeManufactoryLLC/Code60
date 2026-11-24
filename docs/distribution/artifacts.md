@@ -1,9 +1,10 @@
 # Distribution artifacts
 
-Phase 3 builds unpublished release candidates. It does not implement public setup,
-persistent installation, shell changes, login services, updates or Transmission.
-The source package and generated bootstrap remain private. Never publish or tag
-as part of contributor acceptance.
+These commands build unpublished release candidates, including the pinned macOS
+workflow components. Installation and setup use these artifacts through the
+[managed installer](installation.md) and [setup flow](setup.md). The source package
+and generated bootstrap remain private. Never publish or tag as part of
+contributor acceptance.
 
 ## Build candidates
 
@@ -107,3 +108,24 @@ consistent without weakening those existing regression checks.
 Phase 5 adds the private candidate setup command; see [setup behavior](setup.md).
 The bootstrap remains dependency-free and below 1 MiB, with no production URL
 override, install hooks or publishing action.
+
+## Pinned workflow components
+
+macOS packaging additionally stages the two supported Transmission artifacts from
+`distribution/transmission/package-lock.json` into a fresh tree with scripts
+disabled. It verifies the prebuilt Apple Silicon Codex runtime before archiving,
+records exact package integrities, dependency inventory, native hashes, Node and
+lockfile identity, and includes dependency notices. These pinned releases have no
+native helper sources requiring compilation. Do not substitute helpers or APIs
+from the newer Transmission repository. Linux payload verification rejects engine
+components rather than shipping binaries that cannot run there.
+
+Exclude dependency `.npmignore` and `.gitignore` metadata before recording the
+engine inventory, since npm strips or renames it when repacking. The installed
+npm-package smoke verifies both preserved engine bindings without launching them.
+
+Runtime acquisition is forbidden: installation and explicit workflow start may
+preserve verified local bundled files in independent engine storage, without npm,
+compilation or a public transport override. Immutable version bindings keep
+staging.18 and staging.20 routing separate from application activation. Preserve
+published bundles and old executable caches if setup fails or an app is replaced.

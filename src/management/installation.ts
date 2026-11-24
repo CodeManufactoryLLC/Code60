@@ -6,12 +6,15 @@ import {
   createInstallationParents,
   exclusiveInstallationLink,
   executableInstallationFile,
+  installationDirectory,
   installationFileCode,
   installationLink,
   installationTreeIdentity,
   lockInstallation,
+  preserveTransmissionBundle,
   publishInstallationLink,
   removeInstallationTree,
+  resolveTransmissionRuntime,
   syncInstallationDirectory,
   verifyInstallationNode,
   writeInstallationFile,
@@ -91,6 +94,20 @@ async function copyRuntime(source: string, target: string) {
   return files;
 }
 
+async function preserveEngines(application: string, env: NodeJS.ProcessEnv, signal?: AbortSignal) {
+  const metadata = JSON.parse(await readFile(join(application, "payload.json"), "utf8"));
+  // Legacy tarballs and synthetic installation fixtures have no payload engine
+  // declaration. Current macOS payloads must declare it in artifact validation.
+  if (metadata.transmissionBundle === undefined) return;
+  if (process.platform !== "darwin" || !/^[a-f0-9]{64}$/.test(metadata.transmissionBundle))
+    throw Error("Unsupported installation engine bundle");
+  await preserveTransmissionBundle(
+    join(application, "dist/engines", metadata.transmissionBundle),
+    env,
+    signal,
+  );
+}
+
 export async function installManagedRelease(options: InstallationOptions) {
   supportedInstallationRuntime();
   const env = options.env ?? process.env;
@@ -119,8 +136,27 @@ export async function installManagedRelease(options: InstallationOptions) {
     let record = await readInstallation(paths);
     const initial = !record;
     record ??= { ...paths, schema: 1, id: randomUUID() };
-    if (initial && (await readdir(paths.root)).some((name) => name !== ".install-lock"))
-      throw new Error("Installation directory contains unowned files; preserved contents");
+    if (initial) {
+      const contents = (await readdir(paths.root)).filter((name) => name !== ".install-lock");
+      if (contents.length) {
+        if (contents.length !== 1 || contents[0] !== "engines" || process.platform !== "darwin")
+          throw new Error("Installation directory contains unowned files; preserved contents");
+        // Recognize only our own prior source-development cache. No migration
+        // or ownership claim is made over unrelated files or legacy npm state.
+        await installationDirectory(join(paths.root, "engines"), false, true);
+        let verified = false;
+        for (const version of ["0.1.0-staging.18", "0.1.0-staging.20"] as const) {
+          try {
+            await resolveTransmissionRuntime(env, version, options.signal);
+            verified = true;
+          } catch (error) {
+            if (installationFileCode(error) !== "CODE60_ENGINE_UNAVAILABLE") throw error;
+          }
+        }
+        if (!verified && (await readdir(join(paths.root, "engines"))).length)
+          throw Error("Engine cache ownership is uncertain; preserved existing files");
+      }
+    }
     if (initial && (await installationLink(record.launcher)) !== null)
       throw new Error("Launcher ownership is unknown; existing command preserved");
     await verifyCommandPath(record, env, options.bootstrapEntry);
@@ -140,6 +176,7 @@ export async function installManagedRelease(options: InstallationOptions) {
       if (!options.repair && (await installationLink(record.launcher))) {
         if ((await verifyInstallationNode()) !== current.receipt.node.path)
           throw new Error("Installed Node binding differs; explicit repair is required");
+        await preserveEngines(current.receipt.release.path, env, options.signal);
         result = {
           root: paths.root,
           launcher: paths.launcher,
@@ -176,6 +213,7 @@ export async function installManagedRelease(options: InstallationOptions) {
         created.push({ path: application, identity: await installationTreeIdentity(application) });
       }
       const generation = randomUUID();
+      await preserveEngines(application, env, options.signal);
       const directory = join(paths.root, "activations", generation);
       await mkdir(directory, { mode: 0o700 });
       created.push({ path: directory, identity: await installationTreeIdentity(directory) });
