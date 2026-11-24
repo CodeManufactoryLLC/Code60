@@ -77,6 +77,39 @@ describe("guarded configuration files", () => {
     });
   });
 
+  it.each(["regular", "symlink", "hardlink"] as const)(
+    "refuses a %s stage replacement between lstat and open without publishing it",
+    async (kind) => {
+      const path = join(root, "mcp.json");
+      await fs.writeFile(path, "original", { mode: 0o600 });
+      const target = await bindGuardedTarget(root, true);
+      const before = await readGuardedFile(target, 1024);
+      const stage = await stageGuardedFile(target, Buffer.from("replacement"), 0o600);
+      const temporary = join(root, stage.name);
+      const decoy = join(root, "decoy");
+      await fs.writeFile(decoy, "replacement", { mode: 0o600 });
+      let swapped = false;
+      const open = (async (...args: Parameters<typeof fs.open>) => {
+        if (args[0] === temporary && !swapped) {
+          swapped = true;
+          await fs.rename(temporary, join(root, "owned-stage"));
+          if (kind === "symlink") await fs.symlink(decoy, temporary);
+          else if (kind === "hardlink") await fs.link(decoy, temporary);
+          else await fs.writeFile(temporary, "replacement", { mode: 0o600 });
+        }
+        return fs.open(...args);
+      }) as typeof fs.open;
+      await expect(
+        publishGuardedFile(target, before.revision, stage, 1024, { ...fs, open }),
+      ).rejects.toThrow();
+      expect(swapped).toBe(true);
+      expect(await fs.readFile(path, "utf8")).toBe("original");
+      expect((await readGuardedFile(target, 1024)).revision).toBe(before.revision);
+      expect(await fs.readFile(decoy, "utf8")).toBe("replacement");
+      expect(await fs.readFile(join(root, "owned-stage"), "utf8")).toBe("replacement");
+    },
+  );
+
   it("removes only its own stage after a failed sync and preserves the destination", async () => {
     const path = join(root, "mcp.json");
     await fs.writeFile(path, "old", { mode: 0o600 });

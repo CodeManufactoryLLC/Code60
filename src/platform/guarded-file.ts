@@ -283,6 +283,8 @@ export async function publishGuardedFile(
       JSON.stringify(identity(info)) !== JSON.stringify(stage.identity)
     )
       throw new GuardedFileError("changed");
+    // lstat is advisory: O_NOFOLLOW and the same-handle identity/content checks
+    // below must also pass before the final revision/path recheck and rename.
     const handle = await io.open(
       temporary,
       constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,

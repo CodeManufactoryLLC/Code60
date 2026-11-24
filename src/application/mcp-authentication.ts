@@ -108,6 +108,7 @@ const indexSchema = z.strictObject({
     ),
   ),
 });
+// Identity/review hashes cover public discovery and registration metadata, excluding tokens/secrets.
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const identity = (capture: AuthenticationServer) =>
   hash([capture.targetId, capture.serverId, mcpSecurityFingerprint(capture.definition)]);

@@ -34,6 +34,25 @@ try {
   assert.equal(installed.engines.node, ">=24 <25");
   assert.equal(installed.dependencies["@modelcontextprotocol/sdk"], "1.32.2");
   assert.equal(installed.dependencies["@napi-rs/keyring"], "2.1.2");
+  const { createUpdatePorts } = await import(
+    pathToFileURL(join(root, "dist/management/update.js")).href
+  );
+  const runtime = createUpdatePorts({ HOME: prefix, PATH: "/usr/bin:/bin" }).runtimeDirectory;
+  assert.equal(await realpath(runtime), await realpath(join(root, "dist/bootstrap")));
+  const support = await readdir(runtime, { recursive: true });
+  for (const name of support.filter((name) => /\.(?:js|mjs)$/.test(name)))
+    assert.match(name, /^(?:management|platform)\/[a-z0-9-]+\.(?:js|mjs)$/);
+  assert.equal(
+    support.some((name) => name.includes("credential")),
+    false,
+  );
+  assert.equal(
+    support.some((name) => name.includes("index.bootstrap")),
+    false,
+  );
+  const bootstrapPlatform = await import(pathToFileURL(join(runtime, "platform/index.js")).href);
+  assert.equal(typeof bootstrapPlatform.installationSnapshot, "function");
+  assert.equal(bootstrapPlatform.nativeCredentialStore, undefined);
   const helper = join(root, "dist/platform/credential-helper.js");
   await stat(helper);
   const malformedCredential = spawnSync(process.execPath, [helper], {

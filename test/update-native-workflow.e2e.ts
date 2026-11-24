@@ -99,7 +99,7 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
         pathToFileURL(join(root, "build/distribution/management/index.js")).href
       )) as { installManagedRelease: typeof InstallFactory };
       const { acquirePayload } = (await import(
-        pathToFileURL(join(root, "build/distribution/platform/index.js")).href
+        pathToFileURL(join(root, "dist/platform/index.js")).href
       )) as { acquirePayload: typeof AcquireFactory };
       const { updateFixture } = (await import(
         pathToFileURL(join(root, "scripts/distribution/update-fixture.mjs")).href

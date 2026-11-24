@@ -20,6 +20,7 @@ function canonical(value: unknown): unknown {
     );
   return value;
 }
+// Stable identity/metadata hashes and RAM-only replay fingerprints, never password verifiers.
 const hash = (value: unknown) =>
   createHash("sha256")
     .update(JSON.stringify(canonical(value)))

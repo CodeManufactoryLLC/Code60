@@ -73,6 +73,7 @@ export function updateFlags(args: readonly string[]) {
 
 export function createUpdatePorts(env: NodeJS.ProcessEnv): UpdatePorts {
   return {
+    runtimeDirectory: fileURLToPath(new URL("../bootstrap/", import.meta.url)),
     interactive: !!process.stdin.isTTY && !!process.stdout.isTTY,
     confirm: async (message, signal) => {
       const input = createInterface({ input: process.stdin, output: process.stdout });

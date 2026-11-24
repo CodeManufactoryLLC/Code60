@@ -40,3 +40,8 @@ implicitly replace healthy engine bindings, downgrade a database or resume
 uncertain execution during recovery. Browser update views have read authority only.
 Reject an old current pointer that contradicts recorded publication before
 consent or service effects; preserve both the pointer and journal for inspection.
+
+Installed update ports select the packaged `dist/bootstrap` Node-only support
+closure, never the application platform directory. Preserve strict launcher
+receipt path/hash validation; do not admit bootstrap variants or credential
+runtime dependencies to work around a packaging failure.

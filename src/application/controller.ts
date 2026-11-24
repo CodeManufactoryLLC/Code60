@@ -490,6 +490,7 @@ export class ApplicationHost {
     if ("target" in request)
       await this.mcpOperation(() => this.mcp.authorizeRuntimeAddress(request.target));
     if (!("requestId" in request)) return this.performMcpAuthentication(request, page);
+    // RAM-only request replay fingerprint; never persisted or used to verify a password.
     const fingerprint = createHash("sha256")
       .update(JSON.stringify([request, page]))
       .digest("hex");
@@ -593,6 +594,7 @@ export class ApplicationHost {
       await this.mcpOperation(() => this.mcp.authorizeRuntimeAddress(request.target));
     if (!("requestId" in request) || request.action === "cancel-test")
       return this.performMcpRuntime(request, page);
+    // RAM-only request replay fingerprint; never persisted or used to verify a password.
     const fingerprint = createHash("sha256")
       .update(JSON.stringify([request, page]))
       .digest("hex");

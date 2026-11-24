@@ -360,3 +360,19 @@ No generic terminal, shell, provider-server proxy, package selector or credentia
 is exposed. Providers own persistent credentials and container home retains them.
 Cancelling never logs out or removes credentials. Cleanup failures block further setup
 until owned processes stop. Custom launch overrides retain external setup.
+
+## MCP fingerprint and guarded-file review
+
+SHA-256 in MCP identity/review metadata binds configuration, public discovery,
+client identity and scope. Authentication and credential-write replay fingerprints
+that include secret inputs remain in backend memory only. They are never persisted
+as password verifiers; tokens, client secrets and credential values use the secure
+store or explicitly accepted temporary memory. This is separate from password
+storage and its password-derivation requirements.
+
+A guarded stage's pathname check is followed by O_NOFOLLOW open, full native
+identity/content checks on that same handle, another target revision and stage
+identity check before rename, and verification after publication. Replacement by a
+regular file, symlink or hard link between lstat and open must fail without changing
+the destination. Guarded writes do not claim atomic compare-and-swap against a
+non-cooperating editor; uncertain publication retains recovery evidence.

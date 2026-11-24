@@ -3459,3 +3459,9 @@ Tradeoffs: installer platform exports must be maintained explicitly. A missing
 export fails compilation, and any third-party or application import still fails
 the distribution closure verifier. MCP credential schemas and runtime behavior are
 unchanged; neither credentials nor connector initialization enter the bootstrap.
+
+The full application build also ships that verified closure under `dist/bootstrap`.
+Installed update ports capture this packaged directory for launcher support rather
+than copying the application platform index or its credential dependencies. The
+regular application compiler excludes the bootstrap source variant. Launcher
+receipt path/hash checks stay strict and identical for initial setup and updates.
