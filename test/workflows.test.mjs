@@ -54,6 +54,7 @@ describe("branch protection policy", () => {
     // Every PR must emit the required check, including documentation-only PRs.
     expect(ci.on.pull_request).toBeNull();
     expect(ci.on.push).toEqual({ branches: ["main"] });
+    expect(ci.on).toHaveProperty("workflow_dispatch", null);
     expect(ci.jobs.passed.if).toBe("always()");
     expect(ci.jobs.passed.needs).toEqual([
       "check",
@@ -70,7 +71,8 @@ describe("browser and package validation", () => {
     expect(
       ci.jobs.payload.steps.some(
         (step) =>
-          step.run === "npm run test:packaged:clean -- --uninstall release/payloads/linux-x64.json",
+          step.run ===
+          "npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json",
       ),
     ).toBe(true);
     for (const command of ["npm run test:uninstall", "npm run test:uninstall:engines"])
@@ -106,6 +108,17 @@ describe("browser and package validation", () => {
       ci.jobs.payload.steps.find((step) => step.with?.name === "payload-acceptance-evidence").with
         .path,
     ).toContain("test-results/clean-install/");
+    expect(
+      ci.jobs.payload.steps.find((step) => step.with?.name === "payload-acceptance-evidence").with
+        .path,
+    ).toContain("test-results/clean-install-concurrent/");
+    expect(
+      release.jobs.payload.steps.some(
+        (step) =>
+          step.run ===
+          "npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json",
+      ),
+    ).toBe(true);
   });
   it("requires packaged setup acceptance and keeps native setup behind isolated fixtures", () => {
     expect(

@@ -335,6 +335,7 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
         const result = await execute(file, argv, {
           env: commandEnvironment(process.env),
           timeout: options.timeout ?? 60_000,
+          killSignal: "SIGKILL",
           signal: options.signal,
           maxBuffer: 16 * 1024 * 1024,
         });

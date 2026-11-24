@@ -123,6 +123,10 @@ Keep read-only golden mounts; inspect the separate maintenance customer's shared
 PID/loopback namespace and exact owned writable volumes. Real shell removal uses
 `npm run test:installation`; report missing native/fish coverage explicitly.
 Bounded supervisor fixtures are not native login/reboot certification.
+Linux delivery also requires `npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json`:
+two complete journeys, with independent owner-labelled inventories and a real
+survivor readiness/assets probe after the first cleanup. Retain both run reports
+and the orchestration summary; injected gate tests alone are supporting evidence.
 
 Write `test-results/qa/<run>/report.md` from the template, and summarize locally.
 For each selected journey use PASS, FAIL or BLOCKED, exact command, starting state,

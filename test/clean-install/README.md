@@ -97,6 +97,21 @@ driver reopens retained data; offline models, fault detection, leak detection an
 independent Docker cleanup remain required. Native service registration is a
 bounded fixture, not real systemd login validation.
 
+Run `npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json`
+for the same-host isolation check required by Linux CI. It runs two complete
+uninstall/reinstall journeys with distinct ownership labels. One waits with its
+reinstalled backend live while the other completes fault checks and removes its
+resources. Independent Docker inventories must show the first run absent and the
+second present; a real readiness/assets probe must still succeed on the survivor.
+The survivor then completes its own shutdown, fault checks and cleanup. Both
+retain the existing twenty-minute acceptance and ninety-second cleanup bounds.
+Summary evidence under `test-results/clean-install-concurrent` links both complete
+run reports. Cancellation releases held checkpoints and awaits both cleanups.
+
+The CI workflow can also be dispatched on an exact feature-branch commit to run
+the full Linux pipeline before opening a PR. This does not replace required PR
+checks or resolve unverified resources left by a failed local Docker engine.
+
 For native Apple Silicon, `npm run test:uninstall` performs the same real installed
 CLI and retained-data checks around the shared golden journey with an isolated
 supervisor fixture. It does not install a real service or edit host profiles.

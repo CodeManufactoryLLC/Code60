@@ -480,3 +480,10 @@ unresolved until exact run-labelled inventories can be inspected again.
 Manual native CI validates uninstall on a fresh dependent runner using the exact
 payload from its baseline job. The artifact handoff must match the clean source
 commit/version/platform and archive hash before tests run; both jobs are required.
+
+Use `npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json`
+to prove that cleanup from one complete Linux run leaves another's reinstalled
+backend and assets responsive. Both run reports and the independent resource/probe
+observations are retained. This is the required Linux CI uninstall command. The
+full CI workflow also accepts manual feature-branch dispatch before a PR exists;
+PR checks and independent cleanup of any failed local run remain required.
