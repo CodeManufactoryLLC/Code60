@@ -31,6 +31,10 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
   lockPrivateState's stale-owner cleanup for distribution. Preserve uncertain
   locks and possibly published activations. Validate private receipts, directory
   containment and file identities; never repair by chmod/chown or sudo.
+  Removal may coordinate with backend service operations only through the
+  compatible private-state lock with reclaimStale:false. Never use its default
+  stale-writer reclamation as distribution ownership. Release checks pin both
+  the lock directory and unique owner-file identities; preserve changed locks.
   Removal callers must establish receipt ownership before capturing an inventory.
   Compare the complete remainder before deletion, then recheck each entry and its
   parent identities. Missing entries may represent prior cleanup; new or changed

@@ -32,6 +32,13 @@ and workflow owners before gating new browser operations. Refuse pending human
 operations promptly. Release reservations after failed inspection; never reopen
 owners after shutdown begins. Quiescence is distinct from native backend process
 exit, service unregistration or installation deletion, which require their own proof.
+Guarded application removal pins the installed Node/entrypoint/version and prepared
+backend PID inside service-operation ownership. Require completed uninstall
+preparation, not generic shutdown, before supervisor stop. Refuse restarted PIDs
+or uncertain exit/absence. For a stopped backend, reserve and inspect saved workflow
+ownership without starting an ApplicationHost or engine; inspect native absence
+again afterward. Partial unregistration may finish only after positive supervisor
+and connection absence. The ordinary service-uninstall command remains separate.
 
 The service-definition serializer is part of registration ownership version 1.
 Changing its byte format requires an explicit versioned ownership/migration path

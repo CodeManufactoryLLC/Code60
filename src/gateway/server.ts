@@ -152,6 +152,7 @@ export async function startGateway(options: GatewayOptions = {}) {
   let closing = false;
   let quiescing = false;
   let preparingUninstall = false;
+  let uninstallPrepared = false;
   let stopped: Promise<void> | undefined;
   let shutdownRequested = false;
   let transferring = false;
@@ -478,6 +479,7 @@ export async function startGateway(options: GatewayOptions = {}) {
           } else if (path === "/management/status")
             respond(response, {
               pid: process.pid,
+              uninstallPrepared,
               appVersion: CODE60_VERSION,
               version: GATEWAY_VERSION,
               requirePairing,
@@ -804,6 +806,7 @@ export async function startGateway(options: GatewayOptions = {}) {
       } else if (failure) quiescing = shutdownStarted;
     }
     if (failure) throw failure;
+    uninstallPrepared = true;
     return result;
   }
   async function quiesce() {

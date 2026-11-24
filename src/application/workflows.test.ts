@@ -27,7 +27,11 @@ import type {
 import { defaultDeps } from "../core/index.js";
 import type { TransmissionClient } from "./transmission.js";
 import { workflowContext } from "./workflow-context.js";
-import { DesktopWorkflows, inspectWorkflowRecordsForUninstall } from "./workflows.js";
+import {
+  DesktopWorkflows,
+  inspectWorkflowRecordsForUninstall,
+  prepareOfflineWorkflowsForUninstall,
+} from "./workflows.js";
 
 const roots: string[] = [];
 const services: DesktopWorkflows[] = [];
@@ -607,3 +611,71 @@ it("refuses damaged or duplicate workflow evidence and creates no state on a fre
   ).rejects.toThrow("Workflow history is unavailable; preserve state before uninstalling");
   expect(await readFile(path, "utf8")).toBe(damaged);
 });
+
+it("prepares a fresh offline uninstall without creating workflow state or connecting an engine", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "code60 offline removal ")));
+  roots.push(root);
+  const env = { XDG_STATE_HOME: join(root, "state") };
+  expect(await prepareOfflineWorkflowsForUninstall(env, new AbortController().signal)).toEqual({
+    enginePids: [],
+  });
+  expect(await readdir(root)).toEqual([]);
+  await expect(
+    prepareOfflineWorkflowsForUninstall(env, AbortSignal.abort(Error("cancelled"))),
+  ).rejects.toThrow("cancelled");
+  expect(await readdir(root)).toEqual([]);
+});
+
+it("reserves an existing offline workflow writer without changing its empty registry or starting an engine", async () => {
+  const f = await fixture();
+  const env = { XDG_STATE_HOME: join(f.root, "state") };
+  await expect(
+    prepareOfflineWorkflowsForUninstall(env, new AbortController().signal),
+  ).rejects.toThrow("No lock was reclaimed");
+  await f.service.close();
+  const before = await readFile(join(f.service.root, "registry.json")).catch(() => null);
+  const names = await readdir(f.service.root);
+  expect(await prepareOfflineWorkflowsForUninstall(env, new AbortController().signal)).toEqual({
+    enginePids: [],
+  });
+  expect(await readdir(f.service.root)).toEqual(names);
+  expect(await readFile(join(f.service.root, "registry.json")).catch(() => null)).toEqual(before);
+  expect(f.call).not.toHaveBeenCalled();
+  expect(f.client.connect).not.toHaveBeenCalled();
+});
+
+it.each(["active", "uncertain", "stale-writer"] as const)(
+  "refuses offline uninstall with %s evidence before any engine or history mutation",
+  async (fault) => {
+    const f = await fixture();
+    const { id } = await f.start();
+    if (fault !== "active") await f.service.request({ action: "cancel", id });
+    await f.service.close();
+    const path = join(f.service.root, "registry.json");
+    if (fault === "uncertain") {
+      const record = JSON.parse(await readFile(path, "utf8"));
+      record.entries[0].stopPending = true;
+      await writeFile(path, JSON.stringify(record));
+    }
+    if (fault === "stale-writer") {
+      await mkdir(join(f.service.root, ".writer"), { mode: 0o700 });
+      await writeFile(
+        join(f.service.root, ".writer/owner-1000000000-00000000-0000-4000-8000-000000000001"),
+        "",
+        { mode: 0o600 },
+      );
+    }
+    const before = await readFile(path);
+    const names = await readdir(f.service.root);
+    const calls = f.call.mock.calls.length;
+    await expect(
+      prepareOfflineWorkflowsForUninstall(
+        { XDG_STATE_HOME: join(f.root, "state") },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow(fault === "stale-writer" ? "No lock was reclaimed" : "active or uncertain");
+    expect(await readFile(path)).toEqual(before);
+    expect(await readdir(f.service.root)).toEqual(names);
+    expect(f.call).toHaveBeenCalledTimes(calls);
+  },
+);

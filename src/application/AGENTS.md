@@ -310,6 +310,11 @@ both versions first, then use authenticated fixed health/stop with verified Node
 native process identity and private endpoint identity. Require positive process
 and open-file absence without an endpoint; preserve uncertain evidence. Only this
 explicit uninstall path may stop idle independent engines, never ordinary close.
+Stopped-backend uninstall preparation is called only while gateway owns the
+service-operation lock and has proved backend absence. Reserve an existing
+workflow writer without reclaiming stale evidence; refuse active/uncertain history
+before any engine stop. A fresh missing workflow root needs no creation. Release
+the writer afterward, preserving every registry, database and engine binding.
 Pin CODEX_PATH to the verified cached native Codex for new engines; application
 provider overrides must not replace this runtime. Preserve healthy existing engines.
 

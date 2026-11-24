@@ -94,8 +94,10 @@ async function readWorkflowRemovalRecords(root: string): Promise<WorkflowRecord[
   return records as WorkflowRecord[];
 }
 async function inspectWorkflowRecordRoot(root: string) {
+  return workflowRemovalCounts(await readWorkflowRemovalRecords(root));
+}
+function workflowRemovalCounts(records: readonly WorkflowRecord[]) {
   const counts = { completed: 0, active: 0, uncertain: 0 };
-  const records = await readWorkflowRemovalRecords(root);
   for (const record of records) {
     const snapshot = record.snapshot;
     if (
@@ -136,6 +138,35 @@ async function inspectWorkflowRecordRoot(root: string) {
     else counts.active++;
   }
   return counts;
+}
+
+/** The caller holds service-operation ownership and has proved the backend absent. */
+export async function prepareOfflineWorkflowsForUninstall(
+  env: Readonly<NodeJS.ProcessEnv>,
+  signal: AbortSignal,
+  ports?: TransmissionRemovalPorts,
+) {
+  signal.throwIfAborted();
+  const root = join(stateHome(env), "code60", "workflows");
+  const present = await lstat(root).catch((error: unknown) => {
+    if (fileCode(error) !== "ENOENT") throw error;
+    return null;
+  });
+  if (!present) return { enginePids: [] as number[] };
+  await installationDirectory(root, false, true);
+  // Never reclaim a dead/uncertain backend's writer as authority to uninstall.
+  const release = await lockPrivateState(root, { reclaimStale: false });
+  try {
+    const records = await readWorkflowRemovalRecords(root);
+    const counts = workflowRemovalCounts(records);
+    if (counts.active || counts.uncertain)
+      throw Error("Workflows are active or uncertain; recover them before uninstalling");
+    const prepared = await prepareTransmissionRemoval(root, env, records, signal, ports);
+    for (const engine of prepared) await engine.stop(signal);
+    return { enginePids: [...new Set(prepared.flatMap((engine) => [...engine.pids]))] };
+  } finally {
+    await release();
+  }
 }
 type Choice = {
   path: string;

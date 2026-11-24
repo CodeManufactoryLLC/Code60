@@ -8,4 +8,8 @@ export type { downloadProviderArtifact as ProviderDownload } from "./provider-ar
 export { providerAgents } from "./provider-runtime.js";
 export { LocalTransmission, type TransmissionClient } from "./transmission.js";
 export type { TransmissionRemovalPorts } from "./transmission-removal.js";
-export { DesktopWorkflows, inspectWorkflowRecordsForUninstall } from "./workflows.js";
+export {
+  DesktopWorkflows,
+  inspectWorkflowRecordsForUninstall,
+  prepareOfflineWorkflowsForUninstall,
+} from "./workflows.js";

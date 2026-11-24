@@ -1,6 +1,7 @@
 import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { prepareOfflineWorkflowsForUninstall } from "../application/index.js";
 import { automationClient, schedulerControl } from "../automation/index.js";
 import { CODE60_VERSION } from "../core/index.js";
 import {
@@ -15,6 +16,7 @@ import {
   userHome,
   userServiceDefinition,
   userServiceSnapshot,
+  waitForRuntimeExit,
   writePrivateJson,
 } from "../platform/index.js";
 import { gatewayRoot, managementRequest } from "./server.js";
@@ -26,6 +28,26 @@ type Registration = RegisteredRuntime & {
   installed: boolean;
   previous?: RegisteredRuntime;
 };
+/** Internal uninstall proof. Never accepted from a browser or CLI payload. */
+export interface BackendRemovalGuard {
+  pid: number | null;
+  executable: string;
+  entrypoint: string;
+  appVersion: string;
+}
+async function requireNoResponder(env: Readonly<NodeJS.ProcessEnv>) {
+  try {
+    await managementRequest(env, "status");
+  } catch (error) {
+    if (
+      fileCode(error) === "ENOENT" ||
+      fileCode((error as { cause?: unknown }).cause) === "ECONNREFUSED"
+    )
+      return;
+    throw new Error("Backend connection ownership is uncertain; preserve the installation");
+  }
+  throw new Error("An unexpected backend is responding; preserve the installation");
+}
 function validRuntime(value: RegisteredRuntime) {
   return (
     value &&
@@ -83,16 +105,43 @@ export async function backendControl(
   env: Readonly<NodeJS.ProcessEnv>,
   action: BackendControl,
   consent = false,
+  removal?: BackendRemovalGuard,
 ) {
+  if (removal) {
+    if (
+      action !== "uninstall" ||
+      !consent ||
+      (removal.pid !== null &&
+        (!Number.isInteger(removal.pid) || removal.pid < 1 || removal.pid > 2 ** 31 - 1)) ||
+      typeof removal.appVersion !== "string"
+    )
+      throw new Error("Invalid guarded backend removal");
+    absoluteInstallationPath(removal.executable);
+    absoluteInstallationPath(removal.entrypoint);
+  }
   if (!["status", "start"].includes(action) && !consent)
     throw new Error("Explicit consent is required for this service action.");
   const root = gatewayRoot(env);
   const saved = await registration(env);
+  if (
+    removal &&
+    saved &&
+    (saved.previous ||
+      saved.appVersion !== removal.appVersion ||
+      saved.runtime.executable !== removal.executable ||
+      JSON.stringify(saved.runtime.args) !== JSON.stringify([removal.entrypoint]))
+  )
+    throw new Error("Backend runtime ownership changed; preserve the installation");
   if (action === "install" && saved?.installed)
     throw new Error("The backend is already installed. Use code60 service repair to update it.");
   if (action === "stop" && !saved?.installed) throw new Error("The backend is not installed.");
   const runtime =
-    action === "install" || action === "repair" ? await currentRuntime(env) : saved?.runtime;
+    action === "install" || action === "repair"
+      ? await currentRuntime(env)
+      : (saved?.runtime ??
+        (removal
+          ? { executable: removal.executable, args: [removal.entrypoint], env: {} }
+          : undefined));
   if (!runtime) {
     if (action === "status") return { installed: false, nativeState: "stopped", service: null };
     throw new Error("Install the backend first with code60 service install.");
@@ -139,10 +188,39 @@ export async function backendControl(
     };
   }
   await privateDirectory(root);
-  const release = await lockPrivateState(join(root, "registration-operation"));
+  const release = await lockPrivateState(
+    join(root, "registration-operation"),
+    removal ? { reclaimStale: false } : {},
+  );
+  let enginePids: number[] = [];
   try {
     if (JSON.stringify(await registration(env)) !== JSON.stringify(saved))
       throw new Error("Backend registration changed. Check status before retrying.");
+    if (removal && !saved?.installed) {
+      const native = await inspectUserService(existing);
+      if (
+        definitionFile ||
+        native.definitionPresent ||
+        native.state !== "stopped" ||
+        native.loaded === true
+      )
+        throw new Error("Backend absence could not be verified; preserve the installation");
+      await requireNoResponder(env);
+      if (removal.pid !== null) await waitForRuntimeExit([removal.pid]);
+      ({ enginePids } = await prepareOfflineWorkflowsForUninstall(
+        env,
+        AbortSignal.timeout(85_000),
+      ));
+      const stillAbsent = await inspectUserService(existing);
+      if (
+        stillAbsent.state !== "stopped" ||
+        stillAbsent.definitionPresent ||
+        stillAbsent.loaded === true
+      )
+        throw new Error("Backend absence changed during workflow preparation");
+      await requireNoResponder(env);
+      return { installed: false, enginePids };
+    }
     if (action === "start") {
       if (!saved?.installed) throw new Error("The backend is not installed.");
       await realpath(runtime.executable).catch(() => {
@@ -195,12 +273,44 @@ export async function backendControl(
       const native = await inspectUserService(existing);
       if (native.state === "unavailable")
         throw new Error("Backend ownership could not be verified. Registration was preserved.");
+      if (
+        removal &&
+        native.state === "running" &&
+        (removal.pid === null || native.pid !== removal.pid || !definitionFile)
+      )
+        throw new Error("Prepared backend generation changed; preserve the installation");
       if (native.state === "running") {
         const live = await managementRequest(env, "status");
         if (!native.pid || live.pid !== native.pid)
           throw new Error("Backend process ownership could not be verified.");
+        if (removal && live.uninstallPrepared !== true)
+          throw new Error("Backend has not completed idle uninstall preparation");
         await managementRequest(env, "shutdown");
+        if (removal) {
+          const still = await inspectUserService(existing);
+          if (still.state !== "running" || still.pid !== removal.pid)
+            throw new Error("Prepared backend generation changed before supervisor stop");
+        }
         await controlUserService(existing, "stop", undefined, undefined, ownership);
+      }
+      if (removal) {
+        if (removal.pid !== null) await waitForRuntimeExit([removal.pid]);
+        const stopped = await inspectUserService(existing);
+        if (stopped.state !== "stopped" || stopped.pid)
+          throw new Error("Backend stop is uncertain; preserve the installation");
+        await requireNoResponder(env);
+        if (removal.pid === null) {
+          ({ enginePids } = await prepareOfflineWorkflowsForUninstall(
+            env,
+            AbortSignal.timeout(85_000),
+          ));
+          const stillStopped = await inspectUserService(existing);
+          if (stillStopped.state !== "stopped" || stillStopped.pid)
+            throw new Error(
+              "Backend restarted during workflow preparation; preserve the installation",
+            );
+          await requireNoResponder(env);
+        }
       }
     }
     if (action === "stop") return { installed: true };
@@ -218,14 +328,27 @@ export async function backendControl(
       };
       await writePrivateJson(join(root, "registration.json"), previous, saved ?? undefined, 16_384);
     }
-    await controlUserService(definition, action, undefined, undefined, ownership);
+    // After a prior owned uninstall removed its definition but failed before
+    // saving installed:false, positive native absence permits metadata recovery.
+    if (removal && !definitionFile) {
+      const absent = await inspectUserService(definition);
+      if (absent.state !== "stopped" || absent.definitionPresent || absent.loaded === true)
+        throw new Error("Partial backend removal is uncertain; preserve registration");
+    } else await controlUserService(definition, action, undefined, undefined, ownership);
+    if (removal) {
+      const absent = await inspectUserService(definition);
+      if (absent.state !== "stopped" || absent.definitionPresent || absent.loaded === true)
+        throw new Error(
+          "Backend unregistration could not be verified; preserve installation files",
+        );
+    }
     await writePrivateJson(
       join(root, "registration.json"),
       { version: 1, installed: action !== "uninstall", runtime, appVersion: CODE60_VERSION },
       previous ?? undefined,
       16_384,
     );
-    return { installed: action !== "uninstall" };
+    return { installed: action !== "uninstall", ...(removal ? { enginePids } : {}) };
   } finally {
     await release();
   }

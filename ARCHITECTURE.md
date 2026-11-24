@@ -173,6 +173,13 @@ fixed authenticated health/stop operations and native process/file inspection pr
 exit. Inspection never starts an engine. Ordinary shutdown and application updates
 continue to preserve independent engines. This private operation is not yet a public
 application uninstall command or permission to remove installation files.
+Guarded service removal additionally checks the original runtime and prepared PID
+under a compatible, non-reclaiming service-operation lock. Completed private
+preparation is distinct from ordinary shutdown. Restarted backends, uncertain exit
+or native absence stop removal. An already stopped backend uses strict offline
+workflow preparation without constructing an ApplicationHost or starting engines.
+Partial unregistration can finish its metadata only after positive native and HTTP
+absence; application file deletion and durable recovery remain separate work.
 
 ## Current exclusions
 
