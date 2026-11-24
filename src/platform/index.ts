@@ -1,4 +1,6 @@
 export { resolveCommand } from "./command.js";
+export type { CredentialStorePort } from "./credential-protocol.js";
+export { nativeCredentialStore } from "./credential-store.js";
 export { DiagnosticTail, diagnosticMessage, diagnosticText } from "./diagnostics.js";
 export { environmentValue, mergeSearchPath, setEnvironmentPath, userHome } from "./environment.js";
 export {
@@ -15,6 +17,11 @@ export {
   stageGuardedFile,
   syncGuardedDirectory,
 } from "./guarded-file.js";
+export {
+  type GuardedNetworkOptions,
+  guardedFetch,
+  registerPrivateListener,
+} from "./network-policy.js";
 export { containedPath, samePath } from "./paths.js";
 export {
   fileCode,

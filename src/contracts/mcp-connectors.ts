@@ -49,6 +49,31 @@ const env = recordInput
 const headers = recordInput
   .pipe(z.record(headerName, z.union([literal, headerSecret])))
   .refine((value) => Object.keys(value).length <= MCP_CONNECTOR_LIMITS.bindings)
+  .refine((value) =>
+    Object.keys(value).every(
+      (name) =>
+        ![
+          "host",
+          "connection",
+          "content-length",
+          "content-type",
+          "accept",
+          "mcp-session-id",
+          "mcp-protocol-version",
+          "last-event-id",
+          "transfer-encoding",
+          "upgrade",
+          "origin",
+          "mcp-method",
+          "keep-alive",
+          "te",
+          "trailer",
+          "proxy-connection",
+          "proxy-authorization",
+          "proxy-authenticate",
+        ].includes(name.toLowerCase()),
+    ),
+  )
   .refine((value) => {
     const names = Object.keys(value).map((name) => name.toLowerCase());
     return new Set(names).size === names.length;
@@ -85,10 +110,15 @@ const auth = z.discriminatedUnion("type", [
   z.strictObject({
     type: z.literal("oauth"),
     scopes: z
-      .array(nonempty(MCP_CONNECTOR_LIMITS.scope))
+      .array(
+        nonempty(MCP_CONNECTOR_LIMITS.scope).refine((value) =>
+          /^[\x21\x23-\x5b\x5d-\x7e]+$/.test(value),
+        ),
+      )
       .max(MCP_CONNECTOR_LIMITS.scopes)
       .default([]),
     clientId: nonempty(MCP_CONNECTOR_LIMITS.launch).optional(),
+    clientIdType: z.enum(["registered", "metadata-url"]).optional(),
     clientSecretRef: credentialRef.optional(),
   }),
 ]);
@@ -96,25 +126,59 @@ const common = {
   label: nonempty(MCP_CONNECTOR_LIMITS.label),
   enabled: z.boolean(),
 };
-const definition = z.discriminatedUnion("type", [
-  z.strictObject({
-    ...common,
-    type: z.literal("stdio"),
-    command: nonempty(MCP_CONNECTOR_LIMITS.launch),
-    args: z
-      .array(text(MCP_CONNECTOR_LIMITS.launch))
-      .max(MCP_CONNECTOR_LIMITS.arguments)
-      .default([]),
-    env: env.default({}),
-  }),
-  z.strictObject({
-    ...common,
-    type: z.literal("http"),
-    url,
-    headers: headers.default({}),
-    auth: auth.default({ type: "none" }),
-  }),
-]);
+const definition = z
+  .discriminatedUnion("type", [
+    z.strictObject({
+      ...common,
+      type: z.literal("stdio"),
+      command: nonempty(MCP_CONNECTOR_LIMITS.launch),
+      args: z
+        .array(text(MCP_CONNECTOR_LIMITS.launch))
+        .max(MCP_CONNECTOR_LIMITS.arguments)
+        .default([]),
+      env: env.default({}),
+    }),
+    z.strictObject({
+      ...common,
+      type: z.literal("http"),
+      url,
+      headers: headers.default({}),
+      auth: auth.default({ type: "none" }),
+    }),
+  ])
+  .refine(
+    (server) =>
+      server.type !== "http" ||
+      server.auth.type !== "oauth" ||
+      (!Object.keys(server.headers).some((name) => name.toLowerCase() === "authorization") &&
+        !Object.values(server.headers).some(
+          (binding) =>
+            "credentialRef" in binding &&
+            binding.credentialRef ===
+              (server.auth.type === "oauth" ? server.auth.clientSecretRef : undefined),
+        )),
+  )
+  .refine((server) => {
+    if (
+      server.type !== "http" ||
+      server.auth.type !== "oauth" ||
+      server.auth.clientIdType !== "metadata-url"
+    )
+      return true;
+    try {
+      const client = new URL(server.auth.clientId ?? "");
+      return (
+        client.protocol === "https:" &&
+        client.pathname !== "/" &&
+        !client.username &&
+        !client.password &&
+        !client.hash &&
+        !server.auth.clientSecretRef
+      );
+    } catch {
+      return false;
+    }
+  });
 
 export const mcpConnectorDocumentSchema = z.strictObject({
   version: z.literal(1),

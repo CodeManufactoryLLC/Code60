@@ -29,13 +29,16 @@ import { type CoreDeps, defaultDeps, stateHome } from "../core/index.js";
 import {
   diagnosticMessage,
   lockPrivateState,
+  nativeCredentialStore,
   privateDirectory,
   readPrivateJson,
+  registerPrivateListener,
   userHome,
   writePrivateJson,
 } from "../platform/index.js";
 import { Interactions } from "./interactions.js";
 import { createMcpBroker } from "./mcp-broker.js";
+import { openOAuthCallback } from "./oauth-callback.js";
 import { applicationOperations } from "./operations.js";
 import { Sessions, sameSecret } from "./sessions.js";
 import { readGatewaySettings, writeGatewaySettings } from "./settings.js";
@@ -179,6 +182,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     env,
     interactions,
     {
+      mcpAuthentication: { credentials: nativeCredentialStore(env), callback: openOAuthCallback },
       mcpRuntime: {
         connect: connectMcpUpstream,
         expose: async (input) => {
@@ -657,6 +661,8 @@ export async function startGateway(options: GatewayOptions = {}) {
     });
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("Could not bind the backend.");
+    const unregister = registerPrivateListener(address.port);
+    server.once("close", unregister);
     origin = `http://127.0.0.1:${address.port}`;
     await writePrivateJson(
       join(root, "connection.json"),

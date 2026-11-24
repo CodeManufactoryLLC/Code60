@@ -27,6 +27,7 @@ export interface McpFormFields {
   oauth: boolean;
   scopes: string;
   clientId: string;
+  clientIdType: "registered" | "metadata-url";
   clientSecretRef: string;
 }
 export function mcpFormFields(id: string, definition?: McpConnectorDefinition): McpFormFields {
@@ -60,6 +61,7 @@ export function mcpFormFields(id: string, definition?: McpConnectorDefinition): 
     oauth: Boolean(auth),
     scopes: auth?.scopes.join("\n") ?? "",
     clientId: auth?.clientId ?? "",
+    clientIdType: auth?.clientIdType ?? "registered",
     clientSecretRef: auth?.clientSecretRef ?? "",
   };
 }
@@ -103,6 +105,7 @@ export function mcpFormDocument(
           auth: fields.oauth
             ? {
                 type: "oauth",
+                ...(fields.clientIdType === "metadata-url" ? { clientIdType: "metadata-url" } : {}),
                 scopes: fields.scopes
                   .split("\n")
                   .map((s) => s.trim())
@@ -484,6 +487,22 @@ export function McpForm({
                   />
                 </label>
                 <label>
+                  Client ID type
+                  <select
+                    aria-label="Client ID type"
+                    value={fields.clientIdType}
+                    onChange={(event) =>
+                      change(
+                        "clientIdType",
+                        event.target.value === "metadata-url" ? "metadata-url" : "registered",
+                      )
+                    }
+                  >
+                    <option value="registered">Pre-registered client ID</option>
+                    <option value="metadata-url">User-hosted HTTPS client metadata URL</option>
+                  </select>
+                </label>
+                <label>
                   Client secret reference (optional)
                   <input
                     aria-label="Client secret reference"
@@ -497,15 +516,16 @@ export function McpForm({
           </>
         )}
         <p>
-          Credential references are unverified. Credentials are not stored, resolved or copied here.
-          Use literals only for non-secret values.
+          Credential references are unverified by configuration editing. Use Manage authentication
+          after saving. Credentials are never stored in this file or copied by Move. Use literals
+          only for non-secret values.
         </p>
         <p>
           {originalId
             ? "The existing enabled state is preserved."
             : "New servers are saved disabled."}{" "}
-          Saving does not launch or connect a server. Launch commands such as npx may download
-          packages when runtime support is added.
+          Saving does not launch or connect a server. Commands such as npx may download packages
+          when a connection or confirmed test starts.
         </p>
         {error && <p role="alert">{error}</p>}
         {problem && (

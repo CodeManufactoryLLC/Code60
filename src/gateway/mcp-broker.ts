@@ -3,6 +3,7 @@ import { createServer, type ServerResponse } from "node:http";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import type { McpRuntimePorts } from "../application/index.js";
+import { registerPrivateListener } from "../platform/index.js";
 import { sameSecret } from "./sessions.js";
 
 const requestSchema = z.strictObject({
@@ -86,6 +87,8 @@ export async function createMcpBroker(
   });
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Private MCP listener unavailable");
+  const unregister = registerPrivateListener(address.port);
+  server.once("close", unregister);
   origin = `http://127.0.0.1:${address.port}`;
   const revoke = (token: string) => {
     const entry = entries.get(token);
@@ -106,6 +109,23 @@ export async function createMcpBroker(
         command: process.execPath,
         args: [adapterPath],
         env: [
+          ...[
+            "NODE_OPTIONS",
+            "NODE_DEBUG",
+            "NODE_PATH",
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "ALL_PROXY",
+            "http_proxy",
+            "https_proxy",
+            "all_proxy",
+            "LD_PRELOAD",
+            "DYLD_INSERT_LIBRARIES",
+            "DYLD_LIBRARY_PATH",
+          ].map((name) => ({ name, value: "" })),
+          { name: "NODE_USE_ENV_PROXY", value: "0" },
+          { name: "NO_PROXY", value: "127.0.0.1,localhost,::1" },
+          { name: "no_proxy", value: "127.0.0.1,localhost,::1" },
           { name: "CODE60_CONNECTOR_ENDPOINT", value: origin },
           { name: "CODE60_CONNECTOR_CAPABILITY", value: token },
           { name: "CODE60_CONNECTOR_OWNER", value: input.owner },

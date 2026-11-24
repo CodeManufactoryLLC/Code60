@@ -11,7 +11,7 @@ const base: McpConnectorDocument = {
       enabled: true,
       label: "Docs",
       url: "https://example.com/mcp",
-      headers: { Authorization: { credentialRef: "token", prefix: "Bearer " } },
+      headers: { "X-Service-Token": { credentialRef: "token", prefix: "Bearer " } },
       auth: {
         type: "oauth",
         scopes: ["read"],
@@ -106,4 +106,23 @@ it("restores incomplete guided fields and paste errors from renderer memory with
   expect(html).toContain("{incomplete");
   expect(html).toContain("Invalid server definition.");
   expect(base.servers.unfinished).toBeUndefined();
+});
+
+it("rejects OAuth/Authorization conflicts and supports explicit metadata URL registration", () => {
+  const fields = mcpFormFields("docs", base.servers.docs);
+  fields.headers[0]!.name = "Authorization";
+  expect(() => mcpFormDocument(fields, base, "docs")).toThrow(
+    "Invalid MCP connector configuration",
+  );
+  fields.headers = [];
+  fields.clientIdType = "metadata-url";
+  fields.clientId = "https://client.example/metadata.json";
+  fields.clientSecretRef = "";
+  expect(mcpFormDocument(fields, base, "docs").servers.docs).toMatchObject({
+    auth: { type: "oauth", clientIdType: "metadata-url", clientId: fields.clientId },
+  });
+  fields.clientId = "http://client.example/metadata.json";
+  expect(() => mcpFormDocument(fields, base, "docs")).toThrow(
+    "Invalid MCP connector configuration",
+  );
 });

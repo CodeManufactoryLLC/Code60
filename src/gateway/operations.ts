@@ -85,6 +85,7 @@ export function applicationOperations(
     operations.set(name, action);
   };
   handle("mcp-runtime", (value) => controller.mcpRuntime(value, interactions.page()));
+  handle("mcp-authentication", (value) => controller.mcpAuthentication(value, interactions.page()));
   handle("mcp-read-text", (value) =>
     controller.mcpReadText(parseMcpManagement(mcpTargetSchema, value)),
   );

@@ -23,7 +23,9 @@
     ".devcontainer/init-volumes.mjs",
     "test/fixtures/fake-transmission.mjs",
     "src/agents/mcp-adapter.ts",
-    "test/fixtures/mcp-upstream.mjs"
+    "src/platform/credential-helper.ts",
+    "test/fixtures/mcp-upstream.mjs",
+    "test/fixtures/credential-helper.mjs"
   ],
   "project": [
     "src/**/*.{ts,tsx,cts}",
@@ -33,5 +35,5 @@
     "*config*.ts"
   ],
   "ignoreDependencies": ["@wyw-in-js/shared"],
-  "ignoreBinaries": ["mkfifo"]
+  "ignoreBinaries": ["mkfifo", "gdbus", "gnome-keyring-daemon"]
 }

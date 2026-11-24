@@ -1,9 +1,10 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { type JSONRPCMessage, JSONRPCMessageSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { McpConnectorDefinition } from "../contracts/index.js";
-import { type OwnedProcess, spawnOwnedProcess } from "../platform/index.js";
+import { guardedFetch, type OwnedProcess, spawnOwnedProcess } from "../platform/index.js";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -67,11 +68,29 @@ class OwnedStdio implements Transport {
 }
 
 /** A bounded stream wrapper applies to event-stream and JSON responses alike. */
-function boundedFetch(base: typeof fetch): typeof fetch {
+function boundedFetch(base: typeof fetch, calls: AsyncLocalStorage<AbortSignal>): typeof fetch {
   return async (input, init) => {
     if (typeof init?.body === "string" && Buffer.byteLength(init.body) > MAX_BYTES)
       throw new Error("MCP request exceeded its limit");
-    const response = await base(input, { ...init, redirect: "error" });
+    // The SDK transport signal is connection-wide. Bind only business requests
+    // to this call; cancellation notifications must survive that call's abort.
+    const business =
+      typeof init?.body === "string" && JSON.parse(init.body).method === "tools/call";
+    const authority = business ? calls.getStore() : undefined;
+    const headers = new AbortController();
+    const timer = authority ? undefined : setTimeout(() => headers.abort(), 30_000);
+    timer?.unref();
+    const signal = AbortSignal.any([
+      headers.signal,
+      ...(init?.signal ? [init.signal] : []),
+      ...(authority ? [authority] : []),
+    ]);
+    let response: Response;
+    try {
+      response = await base(input, { ...init, signal, redirect: "error" });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!response.body) return response;
     const reader = response.body.getReader();
     let bytes = 0;
@@ -124,6 +143,21 @@ export async function connectMcpUpstream(input: {
   fetch?: typeof fetch;
 }): Promise<McpUpstream> {
   const { definition, signal } = input;
+  const calls = new AsyncLocalStorage<AbortSignal>();
+  const network =
+    input.fetch ??
+    (definition.type === "http"
+      ? guardedFetch({
+          privateOrigins: [new URL(definition.url).origin],
+          maximumBytes: MAX_BYTES,
+          streaming: true,
+          timeoutMs: 0,
+          credentials: Object.values(definition.headers).some(
+            (binding) => "credentialRef" in binding,
+          ),
+        })
+      : fetch);
+  const fetchMcp = boundedFetch(network, calls);
   const client = new Client({ name: "code60-connector", version: "1" }, { capabilities: {} });
   const transport: Transport =
     definition.type === "stdio"
@@ -134,7 +168,7 @@ export async function connectMcpUpstream(input: {
         )
       : new StreamableHTTPClientTransport(new URL(definition.url), {
           requestInit: { headers: { ...input.headers }, redirect: "error" },
-          fetch: boundedFetch(input.fetch ?? fetch),
+          fetch: fetchMcp,
           reconnectionOptions: {
             maxRetries: 0,
             initialReconnectionDelay: 0,
@@ -154,7 +188,7 @@ export async function connectMcpUpstream(input: {
         definition.type === "http"
       ) {
         try {
-          const response = await boundedFetch(input.fetch ?? fetch)(definition.url, {
+          const response = await fetchMcp(definition.url, {
             method: "DELETE",
             redirect: "error",
             signal: AbortSignal.timeout(5000),
@@ -221,11 +255,15 @@ export async function connectMcpUpstream(input: {
       closed,
       tools,
       async call(name, args, callSignal, timeout) {
-        return client.callTool({ name, arguments: args }, undefined, {
-          signal: callSignal,
-          timeout: Math.max(1, Math.min(timeout, 2_147_483_647)),
-          resetTimeoutOnProgress: false,
-        });
+        const deadline = Math.max(1, Math.min(timeout, 2_147_483_647));
+        const authority = AbortSignal.any([callSignal, AbortSignal.timeout(deadline)]);
+        return calls.run(authority, () =>
+          client.callTool({ name, arguments: args }, undefined, {
+            signal: authority,
+            timeout: deadline,
+            resetTimeoutOnProgress: false,
+          }),
+        );
       },
       close: async () => {
         signal.removeEventListener("abort", onAbort);

@@ -33,6 +33,18 @@ try {
   const installed = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
   assert.equal(installed.engines.node, ">=24 <25");
   assert.equal(installed.dependencies["@modelcontextprotocol/sdk"], "1.32.2");
+  assert.equal(installed.dependencies["@napi-rs/keyring"], "2.1.2");
+  const helper = join(root, "dist/platform/credential-helper.js");
+  await stat(helper);
+  const malformedCredential = spawnSync(process.execPath, [helper], {
+    env: {},
+    input: '{"action":"get","service":"invalid","account":"invalid"}',
+    encoding: "utf8",
+    timeout: 10_000,
+  });
+  assert.equal(malformedCredential.status, 0);
+  assert.deepEqual(JSON.parse(malformedCredential.stdout), { status: "uncertain" });
+  assert.equal(malformedCredential.stderr, "");
   const adapter = join(root, "dist/agents/mcp-adapter.js");
   await stat(adapter);
   const denied = spawnSync(process.execPath, [adapter], {

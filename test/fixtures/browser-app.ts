@@ -13,6 +13,7 @@ export async function browserApp(
   browser: Browser,
   flags: string[] = ["--relay", "--session-info"],
   requirePairing = true,
+  extraEnvironment: NodeJS.ProcessEnv = {},
 ) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-browser-")));
   const config = join(directory, "config/code60");
@@ -39,6 +40,7 @@ export async function browserApp(
   );
   const env = {
     ...process.env,
+    ...extraEnvironment,
     HOME: directory,
     SHELL: shell,
     XDG_CONFIG_HOME: join(directory, "config"),

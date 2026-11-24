@@ -75,3 +75,33 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.mcp-authentication p {
+  overflow-wrap: anywhere;
+}
+.mcp-authentication fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  margin-block: 16px;
+}
+.mcp-authentication label {
+  display: block;
+}
+.mcp-authentication select {
+  width: 100%;
+}
+.mcp-authentication label:has(input[type="radio"]),
+.mcp-authentication label:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+}
+.setup-dialog.mcp-authentication input[type="radio"] {
+  display: inline-grid;
+  width: 18px;
+  flex: 0 0 18px;
+  margin: 2px 0 0;
+}

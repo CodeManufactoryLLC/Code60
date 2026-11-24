@@ -46,7 +46,8 @@
     "test:memory:performance": "npm run build && node scripts/benchmark-memory.mjs",
     "service": "node dist/management/main.js service",
     "test:browser": "npm run build && playwright test",
-    "package:app": "npm run build && node scripts/prepare-package.mjs && node scripts/package-app.mjs"
+    "package:app": "npm run build && node scripts/prepare-package.mjs && node scripts/package-app.mjs",
+    "test:mcp:credentials": "node scripts/test-mcp-credentials-native.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^2.4.0",
@@ -58,6 +59,7 @@
     "@headless-tree/react": "1.8.0",
     "@huggingface/transformers": "4.3.2",
     "@modelcontextprotocol/sdk": "1.32.2",
+    "@napi-rs/keyring": "2.1.2",
     "monaco-editor": "0.57.0",
     "react": "19.3.1",
     "react-aria-components": "1.22.1",

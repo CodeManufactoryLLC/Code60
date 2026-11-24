@@ -449,7 +449,8 @@ behavior, provider errors, cancellation, browser detach and process cleanup.
 Support API keys, header credentials and stdio environment secrets using macOS
 Keychain or Linux Secret Service. Store only references and non-secret metadata
 in configuration files. If secure storage is unavailable or locked, explain the
-condition and offer session-only credentials without a plaintext fallback.
+condition. Temporary backend memory requires explicit selection and lasts until
+backend restart or sign-out; never silently fall back to plaintext or memory.
 
 Implement generic backend-owned OAuth discovery, supported client registration,
 authorization code flow with PKCE, state and issuer validation, protected loopback
@@ -574,3 +575,77 @@ are updated for the new human controls. Phase 6 authentication and phase 7 recov
 GUI/troubleshooting reports remain outstanding; all dedicated-integration, shared
 registration/client ID/secret, hosted-authentication, migration and legacy-SSE
 exclusions remain.
+
+
+### Phase 6 implementation record (complete)
+
+Phase 6 delivers the platform-only bounded native credential helper with exact
+`@napi-rs/keyring` 2.1.2 and explicit Linux Secret Service selection; an
+application-owned versioned vault and grant coordinator; guarded anonymous OAuth
+metadata discovery, user registration/metadata-URL IDs or per-installation dynamic
+registration; S256/state/exact-issuer/resource checks and five-minute page/revision-
+bound callbacks; serialized refresh without authentication or business-call replay;
+and human transient credential, explicit persistent/temporary, sign-in/cancel/
+forget/sign-out controls. Application receives narrow injected ports and still
+imports no agents implementation. Upstream credentials never enter ACP setup,
+configuration drafts, ordinary snapshots or private plaintext operation metadata.
+
+Credential identity binds installation, canonical source/server, security-relevant
+definition, reference and account/grant. Label/enablement edits preserve that
+identity; moves transfer neither credentials nor approval. Sign-out revokes
+capabilities first and preserves deletion tombstones with independent remote
+revocation outcomes. Explicit temporary entries last until backend restart or
+sign-out; persistent failures never become temporary implicitly. Unclean epochs
+require fresh entry/authorization. Private heads/receipts/scope/reference metadata
+are cross-checked before native lookup. Concurrent cold secure reads converge on
+one cached grant and refresh; the gated eight-reader fixture proves one exchange.
+Phase 4 drafts remain intact; failed sign-in cancellation stays visible until
+acknowledged, and late status replies cannot update a replacement owner.
+
+Validation passed in the isolated Linux amd64 devcontainer: final one-worker
+`npm run check` passed **315 files / 2,996 tests in 546.54 seconds**, including
+instructions, typecheck, Biome, Knip and all four unchanged coverage gates.
+Supporting integration covers strict requests, credential binding/version/replay,
+locked/unavailable storage, temporary restart, tombstones and corrupt metadata,
+OAuth discovery/registration/PKCE/state/issuer/resource/scopes, callback replay,
+refresh cancellation/races/uncertain exchanges, real HTTP cancellation/no replay,
+private DNS/socket/redirect policy, native helper pipes/process groups and actual
+OAuth-backed ACP new/load/resume. Browser detach preserves authorized work; sign-out
+revokes capabilities. Stateful HTTP streams survive setup completion and close on
+cleanup. Provider setup has no upstream credentials/URLs and proxy call counts stay
+zero.
+
+All **11 existing MCP browser journeys** and **four authentication journeys**
+passed, including manual/template/paste/configuration flows, malformed/recovery
+states, enablement/approval/test/reconnect/disconnect, temporary consent, unavailable
+persistent storage without fallback, sign-in/cancel/sign-out, dropped cancellation
+acknowledgment, callback cleanup and retained JSON drafts. The separate first-use
+→ acceptance → automatic edits → reload → Undo golden journey passed. Model
+preparation, rebuilt npm package and installed Linux CLI/backend/local JSON-worker/
+offline-model smoke passed.
+
+Packaged native Linux x64 verified available/locked/unavailable Secret Service,
+round-trip, owned deletion and cleanup on a private disposable bus. Packaged macOS
+arm64 verified a unique synthetic Keychain entry, unavailable default-store
+handling and independent deletion lookup; the packaged adapter also passed real
+initialization/discovery/call, revocation, lease and process-group cleanup. No
+shared Keychain was locked or unrelated credential enumerated. The initial macOS
+isolated-HOME blocker and earlier failures remain recorded; the corrected native
+probe passed rather than being replaced by a mock.
+
+Owned containers 5cf2c4dd222d and beef2beb3231 and exported image 65f8cd9901ba were
+removed after validation. Empty task container/image inventories, preserved other
+containers, native prefix/PID/listener absence and scratch removal were independently
+verified. Dependency/build/npm/browser/model volumes, BuildKit cache, port reservations
+and evidence remain. Commands, failures, screenshots and typed native results are
+under `test-results/qa/mcp-connectors-phase-6/`. No assertion, timeout, coverage floor
+or broad Knip exclusion was relaxed. The two explicit QA-only binary allowances
+cover gdbus and gnome-keyring-daemon. Architecture/module instructions, MCP/recovery
+guidance, capability descriptors/availability tests and generated catalog are updated.
+
+Phase 6 is delivered as one DCO-signed commit after phase 5's separate validated
+commit, pushed to existing draft PR #317. Phase 7's transaction-recovery GUI and safe
+troubleshooting report remain deferred. Dedicated integrations, shared Code60
+registration/client IDs/secrets, hosted authentication, migrations and legacy SSE
+remain excluded; pre-bundled definitions remain optional templates and runtime
+support remains tools only.

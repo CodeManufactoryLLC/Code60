@@ -250,7 +250,15 @@ describe("MCP runtime ownership and policy", () => {
       }
     };
     const tests = Array.from({ length: 7 }, () =>
-      runtime.test({ definition, cwd: directory, page: "page", requestId: randomUUID() }),
+      runtime.test({
+        targetId,
+        serverId: "fixture",
+        revision,
+        definition,
+        cwd: directory,
+        page: "page",
+        requestId: randomUUID(),
+      }),
     );
     await expect.poll(() => active).toBe(4);
     runtime.detach("other-page");
@@ -389,7 +397,15 @@ describe("MCP runtime ownership and policy", () => {
     expect(inputs).toHaveLength(1);
   });
   it("records test outcomes once per identical request and never silently relaunches an uncertain cleanup", async () => {
-    const request = { definition, cwd: directory, page: "page", requestId: randomUUID() };
+    const request = {
+      targetId,
+      serverId: "fixture",
+      revision,
+      definition,
+      cwd: directory,
+      page: "page",
+      requestId: randomUUID(),
+    };
     expect(await runtime.test(request)).toEqual({ connection: "connected", tools: 1 });
     expect(await runtime.test(request)).toEqual({ connection: "connected", tools: 1 });
     expect(inputs).toHaveLength(1);

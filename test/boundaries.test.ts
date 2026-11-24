@@ -23,6 +23,7 @@ const ALLOWED: Readonly<Record<string, readonly string[]>> = {
 const PACKAGE_OWNERS: Readonly<Record<string, string>> = {
   "@agentclientprotocol/sdk": "agents",
   "@modelcontextprotocol/sdk": "agents",
+  "@napi-rs/keyring": "platform",
   react: "renderer",
   "react-dom": "renderer",
   "react-markdown": "renderer",

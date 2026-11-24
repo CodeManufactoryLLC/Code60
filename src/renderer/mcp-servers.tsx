@@ -11,6 +11,7 @@ import type {
 } from "../bridge/index.js";
 import { AnchoredMenu } from "./anchored-menu.js";
 import { DataTable, type TableOptions } from "./data-table.js";
+import { McpAuthenticationPanel } from "./mcp-authentication.js";
 import { McpForm, type McpFormDraft, mcpFormFields } from "./mcp-form.js";
 import { McpRuntimePanel } from "./mcp-runtime.js";
 import { Modal } from "./modal.js";
@@ -415,6 +416,15 @@ export function McpServersPage({
           read={read}
           serverId={selectedId}
           blocked={blocked}
+        />
+      )}
+      {read && selectedId && !editor && !remove && !move && (
+        <McpAuthenticationPanel
+          api={api}
+          read={read}
+          serverId={selectedId}
+          blocked={blocked}
+          active={active}
         />
       )}
       {active && visible && menu && (

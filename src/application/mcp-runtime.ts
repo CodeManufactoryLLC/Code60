@@ -13,7 +13,9 @@ import {
   readPrivateJson,
   writePrivateJson,
 } from "../platform/index.js";
+import type { McpAuthentication } from "./mcp-authentication.js";
 import { type McpConnectorRole, resolveMcpConnectors } from "./mcp-configuration.js";
+import { CredentialFailure } from "./mcp-credentials.js";
 
 /** Backend ports. No paths or definitions cross the human/browser runtime surface. */
 export interface McpRuntimePorts {
@@ -22,6 +24,7 @@ export interface McpRuntimePorts {
     cwd: string;
     environment: Readonly<Record<string, string>>;
     headers: Readonly<Record<string, string>>;
+    fetch?: typeof fetch;
     signal: AbortSignal;
   }): Promise<{
     closed?: Promise<void>;
@@ -52,6 +55,7 @@ interface Instance {
   id: string;
   targetId: string;
   revision: string;
+  controller?: AbortController;
   status:
     | "connecting"
     | "connected"
@@ -90,6 +94,12 @@ const stateSchema = z.strictObject({
 const fingerprint = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const AUTH_REQUIRED = Symbol("authentication-required");
+type AuthenticationObservation =
+  | "not-checked"
+  | "not-required"
+  | "required"
+  | "authenticated"
+  | "failed";
 function pendingCleanup(error: unknown): (() => Promise<void>) | undefined {
   if (
     error &&
@@ -111,7 +121,13 @@ export class McpRuntime {
   private readonly sessions = new Map<string, Session>();
   private readonly tests = new Map<
     string,
-    { page: string; controller: AbortController; done: Promise<void> }
+    {
+      page: string;
+      targetId: string;
+      serverId: string;
+      controller: AbortController;
+      done: Promise<void>;
+    }
   >();
   private readonly actions = new Map<string, { fingerprint: string; result: Promise<void> }>();
   private readonly previews = new Map<
@@ -123,6 +139,7 @@ export class McpRuntime {
     { fingerprint: string; result: ReturnType<McpRuntime["performTest"]> }
   >();
   private readonly observations = new Map<string, Instance["status"]>();
+  private readonly authenticationFacts = new Map<string, AuthenticationObservation>();
   private live = 0;
   private initializing = 0;
   private readonly waiters: (() => void)[] = [];
@@ -134,6 +151,7 @@ export class McpRuntime {
     private readonly ports: McpRuntimePorts | undefined,
     private readonly changed: () => void,
     private readonly baseEnvironment: Readonly<Record<string, string>>,
+    private readonly authentication?: Pick<McpAuthentication, "prepare">,
   ) {}
   private open() {
     this.opening ??= (async () => {
@@ -258,15 +276,74 @@ export class McpRuntime {
     }
     return { environment, headers };
   }
-  private async initialize(definition: McpConnectorDefinition, cwd: string, signal: AbortSignal) {
+  private async initialize(
+    definition: McpConnectorDefinition,
+    cwd: string,
+    signal: AbortSignal,
+    targetId: string,
+    serverId: string,
+    revision: string,
+  ) {
     if (!this.ports || this.closed) throw new Error("MCP transport is unavailable");
-    const bindings = this.bindings(definition);
     const release = await this.permit(signal);
     try {
       if (this.live >= 256) throw new Error("MCP connection limit reached");
+      let prepared: Awaited<ReturnType<McpAuthentication["prepare"]>> | undefined;
+      const key = `${targetId}:${serverId}:${revision}`;
+      const needsCredentials =
+        (definition.type === "http" && definition.auth.type === "oauth") ||
+        Object.values(definition.type === "stdio" ? definition.env : definition.headers).some(
+          (item) => "credentialRef" in item,
+        );
+      let bindings: {
+        environment: Record<string, string>;
+        headers: Record<string, string>;
+        fetch?: typeof fetch;
+      };
+      try {
+        prepared = await this.authentication?.prepare({ targetId, serverId, definition }, signal);
+        bindings = prepared
+          ? {
+              environment: Object.assign(
+                Object.create(null),
+                this.baseEnvironment,
+                prepared.environment,
+              ),
+              headers: prepared.headers,
+              ...(prepared.fetch ? { fetch: prepared.fetch } : {}),
+            }
+          : this.bindings(definition);
+        this.authenticationFacts.set(key, needsCredentials ? "authenticated" : "not-required");
+      } catch (error) {
+        if (error instanceof CredentialFailure || error === AUTH_REQUIRED) {
+          this.authenticationFacts.set(key, "required");
+          throw AUTH_REQUIRED;
+        }
+        this.authenticationFacts.set(key, "failed");
+        throw error;
+      }
+      signal.throwIfAborted();
+      if (this.live >= 256) throw new Error("MCP connection limit reached");
       this.live++;
       try {
-        return await this.ports.connect({ definition, cwd, signal, ...bindings });
+        const upstream = await this.ports.connect({ definition, cwd, signal, ...bindings });
+        if (!prepared) return upstream;
+        const authorization = prepared;
+        return {
+          ...(upstream.closed ? { closed: upstream.closed } : {}),
+          tools: upstream.tools,
+          call: async (
+            name: string,
+            args: Record<string, unknown>,
+            callSignal: AbortSignal,
+            timeout: number,
+          ) => {
+            await authorization.beforeCall(callSignal);
+            callSignal.throwIfAborted();
+            return upstream.call(name, args, callSignal, timeout);
+          },
+          close: () => upstream.close(),
+        };
       } catch (error) {
         const cleanup = pendingCleanup(error);
         if (cleanup) this.unresolved.add(cleanup);
@@ -301,6 +378,7 @@ export class McpRuntime {
         session.epoch++;
         for (const call of session.calls) call.abort();
         session.calls.clear();
+        this.changed();
       };
       const close = async () => {
         if (session.closed && session.instances.every((instance) => !instance.upstream)) return;
@@ -355,10 +433,12 @@ export class McpRuntime {
                   ? status.source.projectId
                   : snapshot.user.targetId,
               revision: status.source.revision,
+              controller: new AbortController(),
               status: "connecting",
               close: () => {
                 if (instance.cleanup) return instance.cleanup;
                 instance.status = "disconnected";
+                instance.controller?.abort();
                 this.observations.set(
                   `${instance.targetId}:${instance.id}:${instance.revision}`,
                   "disconnected",
@@ -385,7 +465,14 @@ export class McpRuntime {
             };
             session.instances.push(instance);
             try {
-              const upstream = await this.initialize(definition, context.cwd, setup);
+              const upstream = await this.initialize(
+                definition,
+                context.cwd,
+                AbortSignal.any([setup, instance.controller!.signal]),
+                instance.targetId,
+                instance.id,
+                instance.revision,
+              );
               instance.upstream = upstream;
               if (session.closed || instance.status !== "connecting") {
                 // An earlier disconnect may have settled before connect returned.
@@ -508,12 +595,13 @@ export class McpRuntime {
             ? [instance.exposure.descriptor]
             : [],
         ),
-        beginTurn(deadline) {
+        beginTurn: (deadline) => {
           end();
           if (!session.closed) {
             session.active = true;
             session.deadline = deadline;
           }
+          this.changed();
         },
         endTurn: end,
         close,
@@ -543,13 +631,30 @@ export class McpRuntime {
   observation(targetId: string, id: string, revision: string) {
     return this.observations.get(`${targetId}:${id}:${revision}`) ?? "not-tested";
   }
+  authenticationObservation(
+    targetId: string,
+    id: string,
+    revision: string,
+  ): AuthenticationObservation {
+    return this.authenticationFacts.get(`${targetId}:${id}:${revision}`) ?? "not-checked";
+  }
   test(input: {
+    targetId: string;
+    serverId: string;
+    revision: string;
     definition: McpConnectorDefinition;
     cwd: string;
     page: string;
     requestId: string;
   }) {
-    const hash = fingerprint([input.definition, input.cwd, input.page]);
+    const hash = fingerprint([
+      input.targetId,
+      input.serverId,
+      input.revision,
+      input.definition,
+      input.cwd,
+      input.page,
+    ]);
     const previous = this.testReceipts.get(input.requestId);
     if (previous) {
       if (previous.fingerprint !== hash) throw new Error("Conflicting MCP request ID");
@@ -561,6 +666,9 @@ export class McpRuntime {
     return result;
   }
   private async performTest(input: {
+    targetId: string;
+    serverId: string;
+    revision: string;
     definition: McpConnectorDefinition;
     cwd: string;
     page: string;
@@ -573,7 +681,13 @@ export class McpRuntime {
     const done = new Promise<void>((resolve) => {
       settled = resolve;
     });
-    this.tests.set(input.requestId, { page: input.page, controller, done });
+    this.tests.set(input.requestId, {
+      page: input.page,
+      targetId: input.targetId,
+      serverId: input.serverId,
+      controller,
+      done,
+    });
     let upstream: Upstream | undefined;
     let result: {
       connection: "connected" | "authentication-required" | "cancelled" | "failed";
@@ -584,6 +698,9 @@ export class McpRuntime {
         input.definition,
         input.cwd,
         AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
+        input.targetId,
+        input.serverId,
+        input.revision,
       );
       result = { connection: "connected", tools: upstream.tools.length };
     } catch (error) {
@@ -639,6 +756,26 @@ export class McpRuntime {
   cancelTest(page: string, requestId: string) {
     const test = this.tests.get(requestId);
     if (test?.page === page) test.controller.abort();
+  }
+  async revokeCredentials(targetId: string, serverId: string) {
+    for (const [key, fact] of this.authenticationFacts)
+      if (key.startsWith(`${targetId}:${serverId}:`) && fact === "authenticated")
+        this.authenticationFacts.set(key, "required");
+    for (const test of this.tests.values())
+      if (test.targetId === targetId && test.serverId === serverId) test.controller.abort();
+    const selected = [...this.sessions.values()].flatMap((session) =>
+      session.instances.filter(
+        (instance) => instance.targetId === targetId && instance.id === serverId,
+      ),
+    );
+    for (const instance of selected) {
+      instance.status = "disconnected";
+      instance.controller?.abort();
+    }
+    const result = await Promise.allSettled(selected.map((instance) => instance.close()));
+    this.changed();
+    if (result.some((entry) => entry.status === "rejected"))
+      throw new Error("Credential authority was revoked; connection cleanup remains unresolved");
   }
   detach(page: string) {
     for (const [id, preview] of this.previews) if (preview.page === page) this.previews.delete(id);

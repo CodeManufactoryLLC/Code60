@@ -34,9 +34,9 @@ and obtains fresh capabilities without replaying work. Otherwise start a new ses
 Unavailable servers warn while the agent and other available tools remain usable.
 
 Configuration validity, enabled state, approval, authentication and connection
-health are separate. Untested means **Not tested**. In phase 5, unresolved credential
-references and OAuth mean **Authentication required**; no plaintext fallback exists.
-Phase 6 adds secure credential entry and generic OAuth. Transaction-recovery GUI and
+health are separate. Untested means **Not tested**. Unresolved credential references
+and OAuth mean **Authentication required**. Use **Authentication** on a local
+definition for credential entry or reviewed OAuth sign-in. Transaction-recovery GUI and
 troubleshooting reports remain phase 7. Dedicated integrations, Code60-owned OAuth
 registrations/client IDs/secrets, hosted authentication and legacy SSE are excluded.
 See the [implementation plan](ad-hoc-plans/mcp-connectors-plan.md),
@@ -290,3 +290,56 @@ Reset preserves other project files, unrelated settings, built-ins, credentials 
 running agents/connections. Interrupted changes require explicit backend Complete or
 Roll back; preserve evidence and follow the recovery runbook. Runtime activation is described above; sign-in and transaction recovery GUI remain
 later phases.
+
+
+## Credentials and sign-in
+
+Credential bindings contain references, never secret values. Authentication controls
+are human-only and never expose a credential-read API. Enter a value in the
+transient authentication dialog; it clears on submission or dismissal. Select
+**Persistent** for macOS Keychain or Linux Secret Service, or explicitly select
+**Temporary** to keep it only in backend memory until restart or sign-out.
+Locked/unavailable persistent storage blocks the operation; it never silently
+becomes temporary storage or Linux keyutils. Unlock/configure the operating-system
+store separately, or make a new explicit temporary choice.
+
+Credentials bind this installation, canonical configuration source, server ID,
+security-relevant definition, reference and account/grant. Label and enabled edits
+do not rebind them. Commands, arguments, endpoint, bindings, registration and scopes
+require review and new entry/authorization. Moving a definition transfers neither
+credentials nor approval. An interrupted credential operation may require fresh
+entry; an older stored version is never reactivated as a fallback.
+
+For OAuth, select an advertised issuer, then review issuer, resource, scopes,
+endpoints and registration before starting. Supply your own client ID and optional
+client-secret reference, or use advertised per-installation dynamic registration.
+A user-hosted HTTPS client-metadata URL requires **Metadata URL** client ID type
+and server support; ordinary client IDs remain opaque even when they look like URLs.
+Code60 does not host metadata or distribute a shared client registration. Discovery
+is anonymous; private issuer destinations require explicit approval. MCP endpoints
+may be explicitly configured local/LAN addresses, but credentials require HTTPS
+except loopback. Application-private listeners and metadata-service addresses are
+blocked. Transport-owned headers and OAuth/Authorization conflicts are rejected.
+
+Continue authorization in the browser. The single-use loopback callback is bound
+to the initiating page, configuration/revision and attempt, expires in five minutes,
+and uses S256 PKCE and issuer/resource checks. Cancel, page detach, owner replacement
+or shutdown invalidates pending attempts. Ordinary in-app navigation preserves
+pending sign-in and JSON drafts. Completed temporary credentials survive navigation
+and browser detach while the backend runs.
+
+Sign-out revokes affected connection capabilities immediately, clears temporary
+material, closes owned upstreams and attempts persistent removal and advertised
+remote revocation. Local deletion and remote revocation have separate outcomes;
+locked storage can leave **deletion uncertain**, with private tombstones preventing
+reuse after restart. Explicitly retry cleanup after unlocking. Forgetting one
+reference preserves other manual references but invalidates that server's OAuth
+grant and closes its connections. Enablement and configuration are unchanged.
+No business request is replayed after authentication failure. An uncertain refresh
+requires explicit reauthorization. Reconnect remains an idle, reviewed action.
+
+Native/package QA uses `npm run test:mcp:credentials` against the packaged tarball.
+Linux requires a disposable private D-Bus and Secret Service (`dbus-run-session`,
+`gnome-keyring-daemon`, `gdbus` for this QA harness); macOS uses only a unique
+synthetic service/account namespace. The production helper needs no QA commands.
+Never enumerate unrelated credentials or lock a shared service for a test.

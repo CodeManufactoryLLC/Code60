@@ -597,6 +597,49 @@ it("provides authenticated scoped MCP management without leaking definitions thr
     expect(saved.status).toBe(200);
     const result = await saved.json();
     expect(await (await rpc("mcp-save", value)).json()).toEqual(result);
+    const captured = {
+      target,
+      expectedRevision: (await (await rpc("mcp-read", target)).json()).revision,
+      serverId: "docs",
+    };
+    const review = await (
+      await rpc("mcp-authentication", { action: "preview", ...captured })
+    ).json();
+    const credential = {
+      action: "credential-write",
+      ...captured,
+      previewId: review.previewId,
+      requestId: crypto.randomUUID(),
+      reference: "private-reference",
+      secret: "unique-synthetic-gateway-secret",
+      storage: "temporary",
+    };
+    expect((await rpc("mcp-authentication", { ...credential, path: "/private" })).status).toBe(400);
+    expect(
+      (await rpc("mcp-authentication", { ...credential, action: "credential-read" })).status,
+    ).toBe(400);
+    const entered = await rpc("mcp-authentication", credential);
+    expect(entered.status).toBe(200);
+    expect(JSON.stringify(await entered.json())).not.toContain(credential.secret);
+    expect((await rpc("mcp-authentication", credential)).status).toBe(200);
+    expect((await rpc("mcp-authentication", { ...credential, secret: "different" })).status).toBe(
+      400,
+    );
+    expect(
+      await (await rpc("mcp-authentication", { action: "status", ...captured })).json(),
+    ).toMatchObject({ status: "authenticated" });
+    expect(JSON.stringify(await (await rpc("snapshot-summary")).json())).not.toContain(
+      credential.secret,
+    );
+    expect(
+      await (
+        await rpc("mcp-authentication", {
+          action: "sign-out",
+          ...captured,
+          requestId: crypto.randomUUID(),
+        })
+      ).json(),
+    ).toMatchObject({ status: "signed-out" });
     const invalid = await rpc("mcp-read", { ...target, path: "/private-value" });
     expect(await invalid.json()).toEqual({ error: "Invalid MCP management request." });
     const snapshot = JSON.stringify(await (await rpc("snapshot-summary")).json());

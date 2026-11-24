@@ -390,6 +390,9 @@ export interface ApplicationClient {
   mcpRuntime(
     request: import("./index.js").McpRuntimeRequest,
   ): Promise<import("./index.js").McpRuntimeResponse>;
+  mcpAuthentication(
+    request: import("./index.js").McpAuthenticationRequest,
+  ): Promise<import("./index.js").McpAuthenticationResponse>;
   mcpReadText(
     target: import("./index.js").McpTargetAddress,
   ): Promise<import("./index.js").McpTextRead>;
@@ -1069,6 +1072,8 @@ export const parseSearchSummaryRequestId = (value: unknown): string =>
   parseValue(memoryRequestIdSchema, value);
 
 export type {
+  McpAuthenticationRequest,
+  McpAuthenticationResponse,
   McpRuntimeRequest,
   McpRuntimeResponse,
 } from "../contracts/index.js";
@@ -1096,6 +1101,7 @@ export {
   type McpSaveText,
   type McpTargetAddress,
   type McpTextRead,
+  mcpAuthenticationRequestSchema,
   mcpBackupSchema,
   mcpMovePreviewSchema,
   mcpMoveSchema,

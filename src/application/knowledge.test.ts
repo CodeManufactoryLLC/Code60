@@ -741,7 +741,7 @@ it("describes workflow drafting and execution prerequisites without starting the
   expect(reads).toEqual([]);
 });
 
-it("describes human MCP connection controls without claiming authentication or exposing definitions", async () => {
+it("describes human MCP authentication prerequisites without exposing definitions or credentials", async () => {
   const { knowledge } = setup({ database: null, providers: [], projectOpen: false });
   const capabilities = result(
     await knowledge.call("code60_get_capabilities", { query: "MCP Servers" }, relay),
@@ -753,7 +753,7 @@ it("describes human MCP connection controls without claiming authentication or e
         agentAccess: "human-only",
         availability: expect.objectContaining({
           status: "available",
-          reason: expect.stringContaining("configuration and connection controls"),
+          reason: expect.stringContaining("connection and authentication controls"),
         }),
       }),
     ]),
@@ -761,5 +761,7 @@ it("describes human MCP connection controls without claiming authentication or e
   expect(JSON.stringify(capabilities)).toContain(
     "Enablement and approval changes affect future connections",
   );
+  expect(JSON.stringify(capabilities)).toContain("Linux Secret Service");
+  expect(JSON.stringify(capabilities)).toContain("Explicit temporary storage");
   expect(JSON.stringify(capabilities)).not.toContain("credentialRef");
 });

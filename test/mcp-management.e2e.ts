@@ -62,12 +62,20 @@ test("MCP management: user scope, templates, pasted review, HTTP edits, cancella
     await form.getByLabel("Authentication", { exact: true }).selectOption("oauth");
     await form.getByLabel("Requested scopes", { exact: true }).fill("docs:read");
     await expect(form).toContainText("Credential references are unverified");
+    const beforeInvalidSave = await readFile(config(fixture.directory));
+    await expect(form.getByRole("button", { name: "Save server", exact: true })).toBeDisabled();
+    await expect(
+      form.getByRole("status").filter({ hasText: "Invalid MCP connector configuration" }),
+    ).toBeVisible();
+    expect(await readFile(config(fixture.directory))).toEqual(beforeInvalidSave);
+    await form.getByLabel("Headers name 1", { exact: true }).fill("X-Service-Token");
+    await expect(form.getByRole("button", { name: "Save server", exact: true })).toBeEnabled();
     await form.getByRole("button", { name: "Save server", exact: true }).click();
     await expect(form).toHaveCount(0);
     expect((await load(config(fixture.directory))).servers.docs).toMatchObject({
       type: "http",
       enabled: false,
-      headers: { Authorization: { credentialRef: "docs-token", prefix: "Bearer " } },
+      headers: { "X-Service-Token": { credentialRef: "docs-token", prefix: "Bearer " } },
       auth: { type: "oauth", scopes: ["docs:read"] },
     });
     const before = await readFile(config(fixture.directory));

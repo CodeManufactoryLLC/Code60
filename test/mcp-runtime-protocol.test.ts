@@ -243,6 +243,7 @@ describe("production MCP transports and per-session authority (supporting integr
   });
   it("terminates its stateful HTTP session once and closes its listener lease", async () => {
     let deletes = 0;
+    let activeStreams = 0;
     const server = new Server(
       { name: "stateful-fixture", version: "1" },
       { capabilities: { tools: {} } },
@@ -255,12 +256,19 @@ describe("production MCP transports and per-session authority (supporting integr
     await server.connect(transport);
     const http = createServer((request, response) => {
       if (request.method === "DELETE") deletes++;
+      if (request.method === "GET") {
+        activeStreams++;
+        response.once("close", () => {
+          activeStreams--;
+        });
+      }
       void transport.handleRequest(request, response).catch(() => response.end());
     });
     await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
     const address = http.address();
     if (!address || typeof address === "string") throw new Error();
     try {
+      const setup = new AbortController();
       const connection = await connectMcpUpstream({
         definition: {
           type: "http",
@@ -273,12 +281,16 @@ describe("production MCP transports and per-session authority (supporting integr
         cwd: directory,
         environment: {},
         headers: {},
-        signal: AbortSignal.timeout(10_000),
+        signal: setup.signal,
       });
+      await expect.poll(() => activeStreams).toBe(1);
+      setup.abort();
+      expect(activeStreams).toBe(1);
       await connection.close();
       await connection.close();
       await connection.closed;
       expect(deletes).toBe(1);
+      await expect.poll(() => activeStreams).toBe(0);
     } finally {
       await server.close();
       http.closeAllConnections();

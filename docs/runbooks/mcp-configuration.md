@@ -65,7 +65,7 @@ storage decision; do not erase recovery evidence or replay an uncertain operatio
 Re-read all affected files, compare their exact bytes/modes and fresh revisions,
 confirm pending metadata cleared, and verify owned staging files were removed.
 Configuration validity does not establish project approval, authentication or
-connection health. This phase starts no connectors and moves no credentials or
+connection health. Moving or restoring configuration transfers no credentials or
 approvals.
 
 
@@ -80,7 +80,7 @@ absent-file backup explicitly removes the dedicated configuration file. Preserve
 private evidence and use the backend recovery procedure above with verified
 ownership. Never clear a writer lock as a repair. After an external edit, reload
 the configuration explicitly; failed drafts do not grant authority to a reopened
-project or replacement root. Connection health and authentication are independent observations. Phase 5 adds human runtime controls; unresolved references/OAuth require authentication.
+project or replacement root. Connection health and authentication are independent observations. Runtime controls and secure authentication are human-only; unresolved references/OAuth require authentication.
 
 
 ## Interrupted reset
@@ -110,3 +110,33 @@ all affected connectors. Otherwise start a new session. Never retry an uncertain
 tool call automatically, clear writer locks, or treat tool annotations as approval.
 Disconnect revokes selected instances without changing configured enablement.
 Unverified cleanup remains unresolved; preserve ownership and process evidence.
+
+
+## Credential and authorization failures
+
+Use the affected definition's Authentication controls. Keep configuration validity,
+approval, storage availability, authentication and health separate. Do not put a
+secret in JSON, a command argument, an environment literal, a journal or a report.
+Persistent entry requires unlocked macOS Keychain or Linux Secret Service. A locked
+or unavailable store never switches to keyutils or temporary memory. Unlock/fix the
+OS store separately, or explicitly choose a new temporary operation. Temporary
+credentials last until backend restart or sign-out; they are never recovered from
+records.
+
+A security-relevant edit or move requires review in the new namespace. Label and
+enabled changes do not change credential identity. Failed writes and deletion
+retain non-secret pending/tombstone metadata; uncertain operations must not select
+an old version. Sign-out revokes connections first even if persistent deletion
+fails. After unlocking, use Sign out again with a new request to retry owned-entry
+cleanup; retain a deletion-uncertain result until verified. No lock-deletion repair
+exists, and private ownership/evidence must not be erased. Remote revocation can be
+uncertain independently; review the provider's own account/grants if needed.
+
+OAuth requires advertised issuer selection and scope/resource/registration review.
+Supply compatible registration information when dynamic registration or metadata
+client IDs are unavailable. Rejected issuer/state/resource/PKCE responses never
+exchange or restore authority. A five-minute attempt expires on cancellation,
+page detach, owner replacement or shutdown. Start a new reviewed authorization;
+never replay an old callback/code, resume an uncertain refresh, expand scopes or
+retry a business tool request automatically. Reconnect creates fresh session
+capabilities only when idle and supported. Recovery GUI/reporting remain phase 7.

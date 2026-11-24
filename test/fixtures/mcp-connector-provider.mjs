@@ -105,7 +105,7 @@ const app = agent({ name: "connector-fixture" })
     }
     try {
       const result = await request(action.method ?? "tools/call", {
-        name: "fixture_tool",
+        name: action.name ?? "fixture_tool",
         arguments: { slow: action.slow === true },
       });
       await message(JSON.stringify(result));

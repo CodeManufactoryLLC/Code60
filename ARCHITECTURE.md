@@ -1098,7 +1098,8 @@ Phases 1–2 provide the contracts, resolver, strict text validation and guarded
 service with Apps → MCP Servers. It reads/writes dedicated user/project mcp.json
 files. Phase 4 adds JSON editing, backup restore and reset. Phase 5 makes these
 files authoritative for desktop execution with private project approvals, managed
-connections and human activation controls. Secure credentials/OAuth remain phase 6.
+connections and human activation controls. Phase 6 adds secure credentials and
+reviewed generic OAuth through injected backend ports.
 
 #### Guided configuration management
 
@@ -1123,7 +1124,8 @@ refresh active views; inactive/hidden views defer reads and reject stale replies
 
 Guided forms support stdio arguments/environment bindings and Streamable HTTP
 headers/OAuth registration metadata. Literals are explicitly non-secret; credential
-references remain unverified and are never resolved/copied. Add accepts blank,
+references are resolved only by backend authentication and are never copied by
+configuration operations. Add accepts blank,
 optional pinned Playwright/Context7 templates or one strictly parsed pasted server
 object for review. Add defaults disabled, Edit preserves enabled state and IDs.
 Remove/move require confirmation and use captured revisions. Moves preview
@@ -1131,8 +1133,8 @@ collisions, affected open-project context and unverifiable references; no closed
 repositories are scanned. Guided saves produce two-space JSON with a final newline.
 Forms retain drafts on recoverable failures and reject changed owner/revision;
 phase 4 adds validated exact-text repair, backup restoration and confirmed reset.
-In-app transaction recovery and secure authentication remain deferred. Phase 5
-adds activation and private exact-revision project approval.
+In-app transaction recovery remains deferred. Phase 5 adds activation and private
+exact-revision project approval; phase 6 adds secure credential entry and OAuth.
 
 #### Configuration storage service
 
@@ -1212,7 +1214,9 @@ Phases 1–4 provide contracts, guarded storage, guided/JSON management and reco
 primitives. Phase 5 adds production tools-only stdio/Streamable HTTP connections,
 per-session adapters and private exact-revision project approval. The dedicated
 files now feed desktop sessions; legacy config.json.mcpServers is rejected with no
-migration or fallback. Credential resolution and OAuth are not implemented yet.
+migration or fallback. Phase 6 resolves credentials through a bounded OS helper or
+explicit temporary backend RAM and owns reviewed OAuth separately from transport
+retry logic. See the credential/authorization ownership section below.
 See [the implementation plan](ad-hoc-plans/mcp-connectors-plan.md) and
 [the architectural view](docs/architectural-views/mcp-connector-ownership.md).
 
@@ -1367,7 +1371,8 @@ revokes selected instances without changing enablement. Reconnect previews all
 connectors in the owning ACP session and requires idle plus load/resume support;
 it never manufactures a prompt or falls back to replay. Failed connectors warn and
 leave available tools/session work usable. Phase 5 reports unresolved references
-or OAuth as Authentication required; secure credential handling remains phase 6.
+or OAuth as Authentication required; phase 6 adds explicit credential entry and
+reviewed sign-in while preserving that separate authentication fact.
 
 ### Conversational browser automation
 
@@ -3170,3 +3175,59 @@ blocks affected targets and requires explicit backend recovery; no recovery GUI 
 automatic replay. Reset never changes unrelated settings, built-ins, credentials or
 running work. Activation, secure authentication and dedicated integrations remain
 later work. Implementation/validation status is recorded in the MCP plan.
+
+## MCP credential and authorization ownership (phase 6)
+
+Phase 6 implements generic MCP authentication; its validation/completion record is
+kept in the seven-phase plan. It supersedes earlier deferred-authentication wording.
+Application owns credential binding, grant/revocation policy, registration/discovery,
+PKCE and refresh coordination. Gateway owns per-attempt loopback callbacks and
+injects a backend credential port. Platform alone imports pinned
+`@napi-rs/keyring` 2.1.2, inside a bounded helper process using private stdin/stdout.
+It explicitly selects Linux Secret Service (never keyutils fallback) or macOS
+Keychain. No credential-read browser operation exists. No module dependency edge
+changes; application still receives agents transports through gateway composition.
+
+Private operation metadata contains installation identity, namespace/version heads,
+receipts, pending/revoked states and non-secret review hashes. Secrets and sensitive
+registration/token bundles live only in secure OS storage or explicitly selected
+backend RAM. Namespaces bind installation, canonical configuration source, server
+ID, command/arguments/bindings/endpoint/registration/scopes and reference/account or
+grant identity. Labels, enablement and generated worker directory names do not
+rebind credentials. Moves transfer neither credentials nor approval. Native writes
+are fenced before and after activation; uncertainty never selects an older version.
+A dirty previous backend epoch requires fresh entry/authorization, preventing
+resurrection after an unrecorded revocation. Temporary heads persist only non-secret
+metadata and never fall back to older persistent entries after restart.
+
+Authorization uses S256, unpredictable state, exact issuer validation and resource
+binding. The initiating page, captured revision/project runtime and five-minute
+attempt own single-use callbacks. User-supplied pre-registration takes precedence;
+`clientIdType: "metadata-url"` explicitly selects a user-hosted HTTPS metadata client
+ID. Advertised dynamic registration is per installation; otherwise client information
+is required. Code60 hosts no metadata and supplies no shared registration or secret.
+Discovery is anonymous. Platform HTTP policy validates all DNS results, pins the
+socket destination, rejects metadata/link-local and application-private listeners,
+and follows only bounded anonymous GET redirects. Explicit configured local/LAN
+MCP origins are allowed; credentials require HTTPS except loopback. OAuth and
+Authorization/header overrides conflict rather than silently choosing one.
+
+A grant has one bounded refresh operation; cancellation can release its waiter
+without creating another exchange. Scope expansion or uncertain refresh requires
+explicit authorization, never a tool-call replay. Agents' HTTP call signals remain
+bound to owning turn authority through response consumption; background streams
+outlive initialization. The SDK receives no auth provider. Sign-out revokes local
+capabilities and grants first, clears temporary material and records tombstones
+before bounded secure deletion; failed deletion stays visible and cannot reactivate.
+Advertised remote revocation is best effort and reported separately. Unverifiable
+process/listener cleanup retains ownership. Browser detach cancels pending decisions
+and attempts, while authenticated approved session work continues.
+
+Human authentication controls preserve configuration/editor drafts. Secret fields
+are transient and cleared on submission/dismissal/navigation; only metadata returns
+to the renderer. Temporary storage requires explicit selection and lasts until
+backend restart or Sign out. OS failures never become temporary storage implicitly.
+Native/package checks use a disposable Linux Secret Service and unique synthetic
+macOS namespaces. Phase 7's transaction-recovery GUI and troubleshooting report,
+dedicated integrations, hosted authentication, shared Code60 client IDs/secrets,
+migrations and legacy SSE remain excluded.

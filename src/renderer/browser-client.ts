@@ -92,6 +92,7 @@ export function createBrowserClient(
     browserRequest<T>("/api/operation", session, { id: crypto.randomUUID(), operation, value });
   const api: ApplicationClient = {
     mcpRuntime: (request) => rpc("mcp-runtime", request),
+    mcpAuthentication: (request) => rpc("mcp-authentication", request),
     mcpReadText: (request) => rpc("mcp-read-text", request),
     mcpSaveText: (request) => rpc("mcp-save-text", request),
     mcpBackups: (request) => rpc("mcp-backups", request),

@@ -1,6 +1,7 @@
 export { DesktopAutomations } from "./automations.js";
 export { ApplicationHost } from "./controller.js";
 export { DesktopLogStore, logProjectId } from "./log-store.js";
+export type { OAuthCallbackPort } from "./mcp-authentication.js";
 export { type McpConnectorRole, resolveMcpConnectors } from "./mcp-configuration.js";
 export { McpConfigurationStore, McpStorageError } from "./mcp-configuration-store.js";
 export type { McpRuntimePorts } from "./mcp-runtime.js";
