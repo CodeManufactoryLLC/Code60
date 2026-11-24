@@ -19,3 +19,8 @@ never initialize databases in ordinary startup or expose this route through the
 browser bridge. Management status reports bounded database/engine availability
 without provider probes, pairing codes or repair. Preserve XDG_DATA_HOME in the
 registered runtime so setup and the backend use the same data location.
+
+Preserve an explicitly configured absolute CODEX_HOME path for workflow login and
+execution. Never persist CODEX_CONFIG payloads or provider credential environment
+variables in the service definition. Existing engines retain their startup
+environment; backend repair must not silently replace or cancel them.

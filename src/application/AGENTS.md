@@ -286,6 +286,15 @@ Transmission workflows are owned by DesktopWorkflows, independently of databases
 
 Route each record to its saved engine version. Records lacking a version belong to staging.18. Reconnect and recovery require explicit actions tied to that record.
 
+Launch only preserved bundled entrypoints with their recorded Node, retaining the
+pinned release's MCP bootstrap and authenticated HTTP operations. Never run npm,
+npx or a compiler at execution time. A missing bundle may be cached from prepared
+local assets only on explicit start/reconnect; damaged bindings require recovery,
+never fallback. Keep Transmission provider authentication separate from Code60's
+verified provider membership. Backend shutdown does not cancel approved workflows.
+Pin CODEX_PATH to the verified cached native Codex for new engines; application
+provider overrides must not replace this runtime. Preserve healthy existing engines.
+
 ## Initial database preparation
 
 Only explicit private management setup may prepare the default database under

@@ -29,6 +29,7 @@ export async function backendSupervisor({ directory, application, env, log }) {
     assert.deepEqual(saved.runtime.args, [join(application, "dist/gateway/main.js")]);
     for (const key of ["HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME"])
       assert.equal(saved.runtime.env[key], env[key]);
+    if (env.CODEX_HOME) assert.equal(saved.runtime.env.CODEX_HOME, env.CODEX_HOME);
     const { userServiceDefinition, installationSnapshot } = await import(
       pathToFileURL(join(application, "dist/platform/index.js")).href
     );

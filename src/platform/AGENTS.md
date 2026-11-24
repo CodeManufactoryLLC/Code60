@@ -20,3 +20,10 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
   lockPrivateState's stale-owner cleanup for distribution. Preserve uncertain
   locks and possibly published activations. Validate private receipts, directory
   containment and file identities; never repair by chmod/chown or sudo.
+
+- Transmission bundle storage is a Node-only filesystem boundary. Validate exact
+  supported artifact identities and the complete regular-file inventory before
+  publication or launch. Version bindings and canonical Node are immutable; keep
+  published engines separate from application activation and workflow state.
+  Never acquire dependencies, compile helpers, reclaim uncertain locks or start
+  engines during inspection. Remove only verified staging owned by the attempt.

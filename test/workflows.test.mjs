@@ -81,6 +81,9 @@ describe("browser and package validation", () => {
     expect(nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:setup")).toBe(
       true,
     );
+    expect(
+      nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:transmission"),
+    ).toBe(true);
   });
   it("uses Node 24 and validates the real browser and installed package", () => {
     for (const name of ["check", "browser", "package"])

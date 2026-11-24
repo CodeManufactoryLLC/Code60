@@ -90,6 +90,31 @@ it("pins plain Node and the backend entrypoint, ignoring Electron/AppImage envir
   );
   await expect(backendControl(env, "install", true)).rejects.toThrow("already installed");
 });
+it("preserves the explicit Codex home path without persisting provider credentials or config payloads", async () => {
+  const { env, root } = await fixture();
+  await backendControl(
+    {
+      ...env,
+      CODEX_HOME: join(env.HOME, "workflow's Codex home"),
+      CODEX_CONFIG: "fixture configuration",
+      OPENAI_API_KEY: "fixture value",
+    },
+    "install",
+    true,
+  );
+  const saved = JSON.parse(await readFile(join(root, "registration.json"), "utf8"));
+  expect(saved.runtime.env.CODEX_HOME).toBe(join(env.HOME, "workflow's Codex home"));
+  expect(saved.runtime.env).not.toHaveProperty("CODEX_CONFIG");
+  expect(saved.runtime.env).not.toHaveProperty("OPENAI_API_KEY");
+});
+it("rejects relative workflow provider homes before changing service registration", async () => {
+  const { env, root } = await fixture();
+  await expect(backendControl({ ...env, CODEX_HOME: "relative" }, "install", true)).rejects.toThrow(
+    "absolute",
+  );
+  expect(fake.control).not.toHaveBeenCalled();
+  await expect(readFile(join(root, "registration.json"))).rejects.toMatchObject({ code: "ENOENT" });
+});
 it("refuses an unverified responder before stopping or replacing registration", async () => {
   const { env, root } = await fixture(true);
   const before = await readFile(join(root, "registration.json"));

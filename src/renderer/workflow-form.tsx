@@ -330,6 +330,11 @@ export function WorkflowForm({
             <dd>Current saved files</dd>
             <dt>Execution</dt>
             <dd>Dedicated worktree; continues after Code60 quits</dd>
+            <dt>Workflow provider</dt>
+            <dd>
+              Use <code>code60 workflows login</code> in a terminal if Codex authentication is
+              needed. Code60 provider connections are separate.
+            </dd>
             <dt>Automatic permission approvals</dt>
             <dd>{review.draft.autoApprove ? "Enabled" : "Disabled"}</dd>
             <dt>Repairs / retries</dt>

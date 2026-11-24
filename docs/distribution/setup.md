@@ -61,7 +61,9 @@ available independently.
 `code60 status` returns JSON for installation/runtime, service/backend, database
 and existing engine availability. Unavailable and offline components are explicit.
 Status never creates storage, installs/repairs services, issues pairing codes or
-starts an engine. Engine bundling remains Phase 6.
+starts an engine. macOS installation candidates preserve pinned workflow engines
+outside application activations; workflow start/reconnect remains explicit and
+uses separate Codex authentication. Linux retains read-only workflow history.
 
 Failed readiness, registration or database preparation returns nonzero and preserves
 valid installed files and committed state. Inspect `code60 status` and

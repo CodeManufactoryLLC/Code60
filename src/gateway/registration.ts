@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { automationClient, schedulerControl } from "../automation/index.js";
 import { CODE60_VERSION } from "../core/index.js";
 import {
+  absoluteInstallationPath,
   controlUserService,
   fileCode,
   inspectUserService,
@@ -43,6 +44,7 @@ async function currentRuntime(env: Readonly<NodeJS.ProcessEnv>): Promise<Service
   if (Number(process.versions.node.split(".")[0]) !== 24)
     throw new Error("Code60 requires Node 24.");
   const runtimeEnv: Record<string, string> = {};
+  if (env.CODEX_HOME) absoluteInstallationPath(env.CODEX_HOME);
   for (const name of [
     "PATH",
     "HOME",
@@ -50,6 +52,7 @@ async function currentRuntime(env: Readonly<NodeJS.ProcessEnv>): Promise<Service
     "XDG_STATE_HOME",
     "XDG_CONFIG_HOME",
     "XDG_DATA_HOME",
+    "CODEX_HOME",
   ])
     if (env[name]) runtimeEnv[name] = env[name];
   return {

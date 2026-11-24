@@ -44,6 +44,10 @@ export {
 } from "./storage.js";
 export { assertSupportedPlatform } from "./support.js";
 export {
+  preserveTransmissionBundle,
+  resolveTransmissionRuntime,
+} from "./transmission-bundle.js";
+export {
   controlUserService,
   inspectUserService,
   type ServiceRuntime,

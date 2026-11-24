@@ -214,6 +214,29 @@ it("verifies and extracts a self-contained payload into owned staging in a path 
   expect(await readFile(join(result.root, "package.json"), "utf8")).toContain("code60");
   expect(await readdir(result.owned)).toEqual(["application"]);
 });
+
+it("rejects unsupported engine components in a Linux payload", async () => {
+  const f = await fixture();
+  await mkdir(join(f.root, "dist/engines/unsupported"), { recursive: true });
+  await writeFile(join(f.root, "dist/engines/unsupported/engine.js"), "unsupported engine");
+  await f.pack();
+  await expect(
+    acquirePayload(f.expected, { parent: f.parent, host, transport: f.transport }),
+  ).rejects.toThrow("Linux payload must omit");
+});
+
+it("rejects a macOS payload missing its engine bundle declaration", async () => {
+  const f = await fixture();
+  Object.assign(f.expected, value("darwin", "arm64"));
+  await f.pack();
+  await expect(
+    acquirePayload(f.expected, {
+      parent: f.parent,
+      host: { platform: "darwin", arch: "arm64", versions: { node: "24.22.0" } },
+      transport: () => createReadStream(join(f.parent, f.expected.archive.name)),
+    }),
+  ).rejects.toThrow("macOS payload requires");
+});
 it.each(["hash", "size", "missing asset", "inventory", "identity", "extra file"])(
   "rejects %s without leaving owned staging",
   async (mode) => {

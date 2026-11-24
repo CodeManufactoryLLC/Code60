@@ -11,7 +11,9 @@ releases themselves.
 The default root is `~/.local/share/code60`, overridden by absolute XDG_DATA_HOME
 with `/code60` appended. It contains a private installation receipt, `.install-lock`,
 `.staging`, digest-keyed `releases`, immutable `activations` and the relative
-`current` symlink. Future engines have separate storage. The durable command is
+`current` symlink. Pinned Transmission engines have independent `engines` storage
+and immutable private version/runtime bindings, preserved before app activation.
+The durable command is
 `~/.local/bin/code60`, an exclusively created symlink to the owned current launcher.
 
 Management receives Phase 3's verified artifact acquisition as an injected port.

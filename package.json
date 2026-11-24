@@ -53,7 +53,9 @@
     "test:bootstrap": "node scripts/test-bootstrap.mjs",
     "build:distribution": "node scripts/build-distribution.mjs",
     "test:installation": "npm run build:distribution && node scripts/test-installation.mjs",
-    "test:setup": "node scripts/test-setup.mjs"
+    "test:setup": "node scripts/test-setup.mjs",
+    "prepare:engines": "node scripts/prepare-engines.mjs",
+    "test:transmission": "playwright test --config test/transmission-native.config.ts"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^2.4.0",
