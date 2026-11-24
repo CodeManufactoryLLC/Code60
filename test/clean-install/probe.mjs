@@ -4,6 +4,7 @@ import { readFile, stat, writeFile } from "node:fs/promises";
 import { request } from "node:http";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
+import { assertSupervisorCalls } from "./supervisor-calls.mjs";
 import { application, architecture, cli, evidence, fresh, processes, waitFor } from "./support.mjs";
 
 const mode = process.argv[2];
@@ -136,20 +137,9 @@ if (mode === "ready" || mode === "assets") {
     .map(JSON.parse);
   const setup = JSON.parse(await readFile("/harness/layout.json", "utf8")).setup;
   const uninstall = JSON.parse(await readFile("/harness/layout.json", "utf8")).uninstall;
-  assert.ok(
-    calls.every(
-      (call) =>
-        call.name === "systemctl" &&
-        call.args[0] === "--user" &&
-        (call.args[1] === "show" ||
-          (setup && ["daemon-reload", "enable", "start"].includes(call.args[1])) ||
-          (uninstall &&
-            call.args[1] === "disable" &&
-            JSON.stringify(call.args) === '["--user","disable","--now","code60-backend.service"]')),
-    ),
-    "Unexpected supervisor/opener mutation",
-  );
+  // Retain bounded fixture calls even when the independent audit rejects one.
   await evidence("supervisor", { calls, nativeServiceValidation: "not performed" });
+  assertSupervisorCalls(calls, { setup, uninstall });
 } else if (mode === "leak") {
   const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
     detached: true,

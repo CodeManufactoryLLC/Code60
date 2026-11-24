@@ -240,7 +240,14 @@ async function stage(
   }
   for (const name of ["Customer.Dockerfile", "Driver.Dockerfile"])
     await cp(join(repository, "test/clean-install", name), join(context, name));
-  for (const name of ["support.mjs", "install.mjs", "runtime.mjs", "probe.mjs", "supervisor.mjs"])
+  for (const name of [
+    "support.mjs",
+    "install.mjs",
+    "runtime.mjs",
+    "probe.mjs",
+    "supervisor.mjs",
+    "supervisor-calls.mjs",
+  ])
     await cp(join(repository, "test/clean-install", name), join(harness, name));
   if (setup) {
     for (const name of ["backend-supervisor.mjs", "backend-supervisor-command.mjs"])
