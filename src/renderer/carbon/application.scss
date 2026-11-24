@@ -74,6 +74,7 @@
     --button-shadow: none;
     --button-radius: 0;
     --ui-radius: 0;
+    --dialog-radius: 0;
     --input-radius: 0;
     --letter-spacing: normal;
     font-family: 'IBM Plex Sans', sans-serif;
@@ -90,6 +91,7 @@
     @include meta.load-css('@carbon/react/scss/utilities/visually-hidden');
     @include meta.load-css('@carbon/react/scss/components/accordion');
     @include meta.load-css('@carbon/react/scss/components/button');
+    @include meta.load-css('@carbon/react/scss/components/tile');
     @include meta.load-css('@carbon/react/scss/components/form');
     @include meta.load-css('@carbon/react/scss/components/text-area');
     @include meta.load-css('@carbon/react/scss/components/text-input');
@@ -171,6 +173,13 @@
     .navigation-create { margin-block-end: 1.5rem; }
     .home-content { align-items: flex-start; justify-content: flex-start; }
     .home-content > .settings-card { margin-inline: 0; }
+    // A native modal paints its own Carbon backdrop in the browser's top layer.
+    .cds--modal:has(.cds--dialog:modal) { background-color: transparent; }
+    .cds--modal .cds--modal-close {
+      background-color: transparent;
+      color: var(--cds-icon-primary);
+      &:hover:not(:disabled) { background-color: var(--cds-layer-hover-01); }
+    }
     .code60-modal .cds--modal-content { max-block-size: 70dvh; overflow: auto; }
     .carbon-data-table { overflow: hidden; min-block-size: 0; display: flex; flex-direction: column; }
     .carbon-data-table .cds--table-toolbar { block-size: auto; flex-shrink: 0; }
@@ -219,12 +228,13 @@
 }
 
 @layer carbon-app {
-  .carbon-app .splash-overlay .splash {
+  .carbon-app .splash-overlay.splash {
     display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
     transform: none; inline-size: 100vw; block-size: 100dvh; max-block-size: none;
     background: var(--cds-background); color: var(--cds-text-primary);
   }
-  .carbon-app .splash-body { display: contents; padding: 0; }
+  .carbon-app .splash-title { margin: 0; }
+  .carbon-app .splash-brand { background: var(--cds-background); }
 }
 
 @layer carbon-app {
@@ -340,5 +350,25 @@
       .chat-conversations > :not(#workspace-panel-actions,.content-page-header-slot) {display:none;}
       .file-panel:not([data-minimized=true]) {flex:1;min-height:0;margin:0;}
     }
+  }
+}
+
+@layer carbon-app {
+  .carbon-app {
+    .agent-choices .agent-choice { display: flex; align-items: center; gap: 1rem; min-block-size: 4rem; }
+    .agent-setup-dialog .modal-footer:empty { display: none; }
+    .workflow-empty { padding-block: 2rem; }
+    .workflow-empty h2 { @include type.type-style('heading-03'); margin: 0; }
+    .workflow-empty p { @include type.type-style('body-01'); margin-block: .5rem 1rem; }
+    .command-form { max-inline-size: 40rem; gap: 1.5rem; }
+    .command-form-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .prompt-editor-list .cds--btn { max-inline-size: 100%; inline-size: 100%; }
+    .prompt-editor-list .cds--btn[aria-current=true] {
+      color: var(--cds-text-primary);
+      background: var(--cds-layer-selected-01);
+      box-shadow: inset 3px 0 var(--cds-border-interactive);
+    }
+    .search-query-action .cds--search { flex: 1; min-inline-size: 0; }
+    .search-page mark { background: var(--cds-highlight); color: var(--cds-text-primary); }
   }
 }

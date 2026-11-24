@@ -13,6 +13,8 @@ The comparison uses the approved Scheduled Jobs build at `656b0ae` and the full-
 | Configure and recover | [Prompt Builder](before-prompts.png) · [Command Builder](before-commands.png) · [Service health](before-system.png) | [Prompt Builder](after-prompts.png) · [Command Builder](after-commands.png) · [Service health](after-system.png) |
 | Readability | [Appearance](before-appearance.png) | [Appearance](after-appearance.png) · [Forced colors](jobs-forced-colors.png) · [200% CSS zoom](jobs-zoom.png) |
 
+The [Carbon interaction audit](carbon-audit.md) records the subsequent review of startup, navigation, forms, search and workflows.
+
 ## Sidebar review
 
 The Carbon homepage uses UI Shell submenu buttons for its section navigation. The four Code60 sections use that same React component. The current route opens its section, and each section can be toggled without leaving the page. At the default text size, the section uses 16px semibold Plex and destinations use 14px regular Plex. A collapsed section containing the current page retains Carbon’s active indicator. [Carbon homepage](https://carbondesignsystem.com/) · [UI Shell left panel](https://carbondesignsystem.com/building-blocks/core/components/ui-shell-left-panel/accessibility/)

@@ -197,7 +197,7 @@ migration as the finished application.
 
 The product header owns browser history, connection status, commands and workspace
 controls. The responsive panel uses Carbon UI Shell submenus for Work, Automation, Inspect and Manage. Opening a destination reveals its group. Toggling a group preserves the current view and its nested disclosures.
-The application grid retains inactive destinations and their drafts. Startup pairs
+The start screen occupies the viewport and hides the retained workspace until entry. Provider setup opens one native modal above it. The header skip link focuses the active panel. The application grid retains inactive destinations and their drafts. Startup pairs
 the controlling browser and verifies a provider before restoring a destination.
 Each browser stores a route identity per active database and a separate identity for
 database-independent work. Restoration validates the identity against the current

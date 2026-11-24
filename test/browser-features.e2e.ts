@@ -211,6 +211,24 @@ test("browser: Carbon application navigation, appearance controls and retained d
       "aria-selected",
       "true",
     );
+    await page.getByRole("link", { name: "Skip to main content" }).press("Enter");
+    await expect(page.locator("#panel-automations")).toBeFocused();
+    await app(page, "Command Builder");
+    const form = page.locator("#panel-commands form");
+    await expect(form.locator("[aria-invalid=true]")).toHaveCount(0);
+    await expect(form.getByRole("button", { name: "Discard changes" })).toBeDisabled();
+    const name = form.getByLabel("Name", { exact: true });
+    await name.fill("Invalid name");
+    await name.press("Tab");
+    await expect(name).toHaveAttribute("aria-invalid", "true");
+    await expect(form.getByText("Use 1–64 lowercase letters, digits or hyphens")).toBeVisible();
+    await name.fill("review");
+    await expect(name).not.toHaveAttribute("aria-invalid", "true");
+    await form.getByRole("button", { name: "Discard changes" }).click();
+    await expect(name).toHaveValue("");
+    await form.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(form.getByLabel("Title", { exact: true })).toBeFocused();
+    await expect(form.locator("[aria-invalid=true]")).toHaveCount(3);
     await app(page, "Appearance");
     const appearance = page.locator("#panel-settings-appearance");
     await expect(appearance.getByRole("switch", { name: "Monochrome" })).toHaveCount(0);
@@ -767,7 +785,7 @@ test("browser: inspects a search result alongside the query and recovers from no
     await openProject(page, fixture.directory, project);
     await page.getByRole("tab", { name: "Search", exact: true }).click();
     const panel = page.locator("#panel-search");
-    const query = panel.getByLabel("Query", { exact: true });
+    const query = panel.getByRole("searchbox", { name: "Query", exact: true });
     await query.fill("cedar");
     await query.press("Enter");
     const result = panel.getByRole("list", { name: "Search results" }).getByRole("button").first();
@@ -777,10 +795,14 @@ test("browser: inspects a search result alongside the query and recovers from no
     await expect(detail.getByRole("button", { name: "Open source" })).toBeVisible();
     await expect(query).toHaveValue("cedar");
     await page.screenshot({ path: test.info().outputPath("search-selected-record.png") });
+    await panel.getByRole("button", { name: "Clear search input", exact: true }).click();
+    await expect(query).toHaveValue("");
+    await expect(query).toBeFocused();
+    await expect(detail).toHaveCount(0);
     await query.fill("unmatched446247ceacd");
     await query.press("Enter");
     await expect(detail).toHaveCount(0);
-    await panel.getByRole("button", { name: "Clear search" }).click();
+    await panel.getByRole("button", { name: "Clear search", exact: true }).click();
     await expect(query).toHaveValue("");
     let unavailable = true;
     await page.route("**/api/operation", async (route) => {

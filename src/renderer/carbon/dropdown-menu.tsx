@@ -51,7 +51,7 @@ export function DropdownMenu({
         }}
       >
         {!iconOnly && label}
-        <Icon name="chevron--down" />
+        <Icon name={iconOnly ? "overflow-menu--horizontal" : "chevron--down"} />
       </Button>
       {expanded && position && (
         <AnchoredMenu

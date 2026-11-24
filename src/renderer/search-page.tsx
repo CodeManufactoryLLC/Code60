@@ -1,4 +1,4 @@
-import { InlineLoading } from "@carbon/react";
+import { InlineLoading, Search } from "@carbon/react";
 import { useEffect, useRef, useState } from "react";
 import {
   type ApplicationClient,
@@ -8,7 +8,7 @@ import {
 } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
 import { Button as AppButton } from "./carbon/button.js";
-import { Select as CarbonSelect, TextInput as CarbonTextInput } from "./carbon/fields.js";
+import { Select as CarbonSelect } from "./carbon/fields.js";
 import { Icon } from "./icons.js";
 import { Modal } from "./modal.js";
 import { PageTitle } from "./page-title.js";
@@ -33,6 +33,8 @@ const typeLabels = {
   message: "Message",
   thought: "Thought",
 } satisfies Record<SearchKind | "all", string>;
+// Carbon forwards native input attributes to its search field.
+const searchInput = { type: "search", maxLength: SEARCH_QUERY_LIMIT };
 const sortLabels = { relevance: "Relevance", newest: "Newest" };
 const unappliedLabel = "Unapplied Search Changes";
 
@@ -250,7 +252,7 @@ export function SearchPage({
   return (
     <main className="search-page" aria-label="Search" data-expanded={expanded}>
       <PageTitle page="search" className="table-title" />
-      <search className="search-entry">
+      <div className="search-entry">
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -259,13 +261,12 @@ export function SearchPage({
         >
           <div className="search-query-row">
             <div className="search-query-action">
-              <CarbonTextInput
+              <Search
+                size="lg"
                 className="search-query"
                 labelText="Query"
-                aria-label="Query"
-                type="search"
+                {...searchInput}
                 value={query}
-                maxLength={SEARCH_QUERY_LIMIT}
                 placeholder="Search all projects"
                 onChange={(event) => {
                   const value = event.target.value;
@@ -295,7 +296,6 @@ export function SearchPage({
             <div className="search-controls">
               <CarbonSelect
                 labelText="Record type"
-                aria-label="Type"
                 value={kind}
                 onChange={(event) => setKind(event.target.value as SearchCriteria["kind"])}
               >
@@ -307,7 +307,6 @@ export function SearchPage({
               </CarbonSelect>
               <CarbonSelect
                 labelText="Sort by"
-                aria-label="Sort"
                 value={sort}
                 onChange={(event) => setSort(event.target.value as SearchCriteria["sort"])}
               >
@@ -324,7 +323,7 @@ export function SearchPage({
             </div>
           </div>
         </form>
-      </search>
+      </div>
       <div ref={content} className="search-content" hidden={!expanded && !!database && hasProjects}>
         {!database && <p>Connect to a database to search.</p>}
         {database && !hasProjects && (
@@ -339,7 +338,11 @@ export function SearchPage({
             <AppButton onClick={() => void submit()}>Retry search</AppButton>
           </section>
         )}
-        {loading && <InlineLoading description="Searching…" />}
+        {loading && (
+          <InlineLoading
+            description={submitted?.results === null ? "Searching…" : "Generating overview…"}
+          />
+        )}
         {sourceError && <p role="alert">{sourceError}</p>}
         {!!submitted?.warnings.length && (
           <details className="search-warnings">
@@ -455,6 +458,7 @@ export function SearchPage({
                       <AppButton
                         type="button"
                         className="search-result-title"
+                        variant="quiet"
                         data-result-index={i}
                         aria-expanded={selectedSource === result.id}
                         onClick={() =>

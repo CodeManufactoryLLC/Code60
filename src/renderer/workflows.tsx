@@ -177,47 +177,51 @@ export function WorkflowsPage({
     setSelected(null);
     setView(1);
   };
+  const newWorkflow = (
+    <AppButton
+      variant="primary"
+      disabled={!!busy || !list?.supported}
+      onClick={() => {
+        setTemplate(undefined);
+        setCreating(true);
+      }}
+    >
+      New workflow
+    </AppButton>
+  );
+  const actions = (
+    <div className="workflow-actions">
+      {selected && <AppButton onClick={showHistory}>Workflow history</AppButton>}
+      {!creating && !selected && view === 0 && !!list?.entries.length && newWorkflow}
+      {!creating && (
+        <AppButton
+          disabled={!!busy}
+          onClick={() => {
+            setActionError("");
+            void refresh.current();
+          }}
+        >
+          Refresh
+        </AppButton>
+      )}
+      {list?.supported && !selected && (
+        <AppButton variant="quiet" aria-haspopup="dialog" onClick={() => setShowLogin(true)}>
+          Workflow sign-in
+        </AppButton>
+      )}
+      {record && detail?.connected === false && list?.supported && (
+        <AppButton disabled={!!busy} onClick={() => setReconnect(record.id)}>
+          Reconnect engine…
+        </AppButton>
+      )}
+    </div>
+  );
   return (
     <section className="workflows-page" aria-label="Workflows">
       <PageTitle page="workflows">
         {creating ? "New workflow" : record ? record.name : "Workflows"}
       </PageTitle>
-      <div className="workflow-actions">
-        {selected && <AppButton onClick={showHistory}>Workflow history</AppButton>}
-        {!creating && !selected && view === 0 && (
-          <AppButton
-            variant="primary"
-            disabled={!!busy || !list?.supported}
-            onClick={() => {
-              setTemplate(undefined);
-              setCreating(true);
-            }}
-          >
-            New workflow
-          </AppButton>
-        )}
-        {!creating && (
-          <AppButton
-            disabled={!!busy}
-            onClick={() => {
-              setActionError("");
-              void refresh.current();
-            }}
-          >
-            Refresh
-          </AppButton>
-        )}
-        {list?.supported && !selected && (
-          <AppButton variant="quiet" aria-haspopup="dialog" onClick={() => setShowLogin(true)}>
-            Workflow sign-in
-          </AppButton>
-        )}
-        {record && detail?.connected === false && list?.supported && (
-          <AppButton disabled={!!busy} onClick={() => setReconnect(record.id)}>
-            Reconnect engine…
-          </AppButton>
-        )}
-      </div>
+      {(creating || selected) && actions}
       {active && showLogin && (
         <Modal title="Workflow sign-in" busy={false} onClose={() => setShowLogin(false)}>
           <p>Run this command in a terminal on the computer hosting Code60.</p>
@@ -303,16 +307,21 @@ export function WorkflowsPage({
               <TabPanels>
                 {["Definitions", "Execution history"].map((label, index) => (
                   <TabPanel key={label}>
+                    {view === index && actions}
                     <nav
                       className="workflow-history"
                       aria-label={index ? "Workflow history" : "Workflow definitions"}
                     >
                       {!list && !error && <p role="status">Loading workflows…</p>}
                       {list && !list.entries.length && (
-                        <section>
-                          <p role="status">
-                            {index ? "No workflow executions yet." : "No saved workflows"}
+                        <section className="workflow-empty">
+                          <h2>{index ? "No workflow executions yet" : "No saved workflows"}</h2>
+                          <p>
+                            {index
+                              ? "Review the status and results here after a workflow starts."
+                              : "Create a workflow to define the tasks and checks for a repository."}
                           </p>
+                          {index === 0 && newWorkflow}
                           {index === 1 && (
                             <AppButton onClick={() => setView(0)}>Open definitions</AppButton>
                           )}

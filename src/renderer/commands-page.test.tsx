@@ -34,9 +34,8 @@ it("renders labelled fields and actions without treating a saved command's metad
     expect(html).toContain(label);
   expect(html).toContain("Review &lt;script&gt; as text.");
   expect(html).toContain('class="prompt-editor-name">$review</span>');
-  expect(html).toContain('<span aria-hidden="true">$</span>');
+  expect(html).toContain("Use $name at the start of a message.");
   expect(html).toContain("with $name to use one.");
-  expect(html).toContain('aria-invalid="false"');
   expect(html).not.toContain('aria-invalid="true"');
   expect(html).toMatch(/<h1[^>]*class="content-page-title"[^>]*>.*Command Builder<\/span>.*<\/h1>/);
   const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));

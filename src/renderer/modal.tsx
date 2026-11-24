@@ -18,7 +18,6 @@ export function Modal({
   onKeyDown,
   onKeyDownCapture,
   closeLabel,
-  focusHeading = false,
   onClose,
   children,
 }: {
@@ -26,11 +25,10 @@ export function Modal({
   busy: boolean;
   wide?: boolean;
   className?: string;
-  initialFocus?: string;
+  initialFocus?: string | undefined;
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
   onKeyDownCapture?: KeyboardEventHandler<HTMLDivElement>;
   closeLabel?: string;
-  focusHeading?: boolean;
   onClose(): void;
   children: ReactNode;
 }) {
@@ -40,14 +38,6 @@ export function Modal({
     const close = header.current?.querySelector("button");
     if (close) close.disabled = busy;
   }, [busy]);
-  useEffect(() => {
-    if (!focusHeading) return;
-    const heading = header.current?.querySelector("h2");
-    if (heading?.textContent === title) {
-      heading.tabIndex = -1;
-      heading.focus();
-    }
-  }, [title, focusHeading]);
   useEffect(() => {
     if (initialFocus)
       header.current

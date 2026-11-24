@@ -47,7 +47,9 @@ describe("browser capability catalog", () => {
       prerequisite: "none",
       agentAccess: "human-only",
       access: expect.stringContaining("Left navigation sidebar"),
-      limitations: expect.stringContaining("Work, Automation, Inspect and Manage"),
+      limitations: expect.stringMatching(
+        /Work, Automation, Inspect and Manage.*Skip to main content/,
+      ),
     });
     expect(
       APPLICATION_CAPABILITIES.find((cap) => cap.id === "page-navigation")?.limitations,

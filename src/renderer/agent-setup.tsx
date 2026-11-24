@@ -1,4 +1,4 @@
-import { ProgressBar } from "@carbon/react";
+import { ClickableTile, ProgressBar } from "@carbon/react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   type ApplicationClient,
@@ -80,7 +80,7 @@ export function AgentSetupWizard({
   const heading = choosing
     ? setup?.complete || mode === "add"
       ? "Connect another provider"
-      : "Select your Primary Provider"
+      : "Choose your primary provider"
     : `Connect ${candidate?.name ?? "provider"}`;
   const finish = useCallback(async () => {
     if (!session?.id || !session.candidate || saveInFlight.current) return;
@@ -263,7 +263,7 @@ export function AgentSetupWizard({
       busy={saving}
       onClose={() => void close()}
       closeLabel="Close provider setup"
-      focusHeading
+      initialFocus={choosing && session ? ".agent-choice" : undefined}
     >
       {windowControls}
       <div className="agent-setup-body">
@@ -273,9 +273,10 @@ export function AgentSetupWizard({
             {providers
               .filter((p) => !session?.verified.includes(p.id))
               .map((p) => (
-                <AppButton
+                <ClickableTile
                   key={p.id}
-                  type="button"
+                  role="button"
+                  disabled={!session || saving}
                   className="agent-choice"
                   onClick={() => void attempt(p.id)}
                   onKeyDown={(event) => {
@@ -283,8 +284,8 @@ export function AgentSetupWizard({
                     if (!keys.includes(event.key)) return;
                     event.preventDefault();
                     const cards = Array.from(
-                      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
-                        ".agent-choice:not(:disabled)",
+                      event.currentTarget.parentElement?.querySelectorAll<HTMLElement>(
+                        ".agent-choice[tabindex='0']",
                       ) ?? [],
                     );
                     const index = cards.indexOf(event.currentTarget);
@@ -302,7 +303,7 @@ export function AgentSetupWizard({
                 >
                   <AgentLogo id={p.logo} />
                   <span>{p.name}</span>
-                </AppButton>
+                </ClickableTile>
               ))}
           </fieldset>
         )}
@@ -543,7 +544,7 @@ export function AgentSetupWizard({
               )}
             <AppButton
               type="button"
-              className="primary"
+              variant={session.setupAction || session.codexAction ? "quiet" : "primary"}
               onClick={() => {
                 if (session.phase === "success") void finish();
                 else if (candidate) void attempt(candidate.id);
@@ -552,11 +553,7 @@ export function AgentSetupWizard({
               Retry
             </AppButton>
           </>
-        ) : (
-          <AppButton type="button" disabled={saving} onClick={() => void close()}>
-            {saving ? "Saving…" : "Close"}
-          </AppButton>
-        )}
+        ) : null}
       </div>
     </Modal>
   );

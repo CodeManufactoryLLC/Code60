@@ -327,14 +327,12 @@ it("centers the Home welcome above its cards without clipping on short windows",
   expect(rule("home", ".home-content")).toContain("overflow: auto");
 });
 
-it("keeps the Polling fieldset wrapper in the same 640px reading grid as other settings", () => {
-  const prefix =
-    '.settings-page > [role="tabpanel"] > .database-dependent-controls > .settings-section';
-  expect(rule("settings", prefix)).toContain("minmax(0, 640px)");
-  expect(rule("settings", `${prefix} > *`)).toContain("grid-column: 2");
-  expect(rule("settings", `${prefix} > .settings-section-header:first-child`)).toContain(
-    "grid-column: 1 / -1",
-  );
+it("aligns wrapped and unwrapped settings in the shared reading column", () => {
+  expect(rule("settings", ".settings-section")).toContain("inline-size: min(100%, 46rem)");
+  expect(rule("settings", ".settings-page")).toContain("padding: 0");
+  const wrapper = rule("overlays", ".database-dependent-controls");
+  expect(wrapper).toContain("padding: 0");
+  expect(wrapper).toContain("min-width: 0");
   expect(rule("tables", ".sessions")).toContain("min-width: 0");
   expect(rule("tables", ".sessions")).toContain("max-width: 100%");
 });

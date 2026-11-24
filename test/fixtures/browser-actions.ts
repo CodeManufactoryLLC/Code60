@@ -14,6 +14,10 @@ export async function expandNavigation(
 export async function onboard(page: Page) {
   const wizard = page.locator(".agent-setup-dialog");
   await expect(wizard).toBeVisible();
+  await expect(page.locator("dialog:modal")).toHaveCount(1);
+  await expect(wizard.getByRole("button", { name: "Claude", exact: true })).toHaveClass(
+    /cds--tile--clickable/,
+  );
   await wizard.getByRole("button", { name: "Claude", exact: true }).click();
   await expect(wizard.getByRole("status")).toHaveText("Claude connected");
   await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();

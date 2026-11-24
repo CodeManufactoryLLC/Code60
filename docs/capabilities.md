@@ -27,7 +27,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: No confirmation; navigation only.
-- Limits: Work, Automation, Inspect and Manage are expandable navigation groups. Opening a destination reveals its group. Projects and conversations keep their own actions. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.
+- Limits: Work, Automation, Inspect and Manage are expandable navigation groups. Opening a destination reveals its group. Skip to main content moves keyboard focus past the navigation to the current page. Projects and conversations keep their own actions. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.
 - Pages: none
 - Settings sections: none
 - Tools: none

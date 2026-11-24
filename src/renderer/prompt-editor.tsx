@@ -91,6 +91,7 @@ export function PromptEditorPage({
           <AppButton
             type="button"
             className="prompt-system-toggle"
+            variant="quiet"
             aria-expanded={systemExpanded}
             aria-controls={`${id}-system`}
             onClick={() => setSystemExpanded((current) => !current)}
@@ -104,6 +105,7 @@ export function PromptEditorPage({
               return (
                 <AppButton
                   key={entry.id}
+                  variant="quiet"
                   type="button"
                   aria-current={entry.id === selected.id ? "true" : undefined}
                   onClick={() => setSelectedId(entry.id)}

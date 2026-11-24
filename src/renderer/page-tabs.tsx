@@ -7,6 +7,7 @@ import {
   SideNavItems,
   SideNavLink,
   SideNavMenu,
+  SkipToContent,
 } from "@carbon/react";
 import {
   type KeyboardEvent,
@@ -122,6 +123,13 @@ export function PageTabBar({
   return (
     <>
       <Header aria-label="Code60" className="product-header">
+        <SkipToContent
+          href={`#panel-${tabs.active}`}
+          onClick={(event) => {
+            event.preventDefault();
+            document.getElementById(`panel-${tabs.active}`)?.focus();
+          }}
+        />
         <HeaderMenuButton
           aria-label={mobileOpen ? "Close product navigation" : "Open product navigation"}
           isActive={mobileOpen}

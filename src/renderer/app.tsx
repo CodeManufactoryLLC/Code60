@@ -391,7 +391,12 @@ export function App({
           onConnect={() => showPicker("database")}
         />
       )}
-      <div className="app-workspace" data-chat={!splash && tabs.active === "chat"}>
+      <div
+        className="app-workspace"
+        hidden={splash}
+        inert={splash}
+        data-chat={!splash && tabs.active === "chat"}
+      >
         {!splash && (
           <PageTabBar
             commands={() => setPalette(true)}

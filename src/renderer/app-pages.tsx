@@ -699,6 +699,7 @@ export function AppPages(props: AppPagesProps) {
               key={id}
               className="page-panel"
               role="tabpanel"
+              tabIndex={-1}
               id={`panel-${id}`}
               aria-labelledby={
                 id === "settings" && settingsSection
