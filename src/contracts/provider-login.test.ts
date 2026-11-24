@@ -30,3 +30,42 @@ it("accepts exactly the official HTTPS verification destination with bounded cod
   for (const userCode of ["", "A".repeat(129), "<script>", "has space"])
     expect(codexChallengeSchema.safeParse({ ...value, userCode }).success).toBe(false);
 });
+
+it("restricts generic provider operations and keeps code submissions bounded and correlated", async () => {
+  const {
+    parseProviderSetupStart,
+    parseProviderSetupIdentity,
+    parseProviderSetupSubmission,
+    providerLoginChallengeSchema,
+  } = await import("./provider-login.js");
+  const sessionId = "00000000-0000-4000-8000-000000000001";
+  const attemptId = "00000000-0000-4000-8000-000000000002";
+  const challengeId = "00000000-0000-4000-8000-000000000003";
+  const address = { sessionId, attemptId, provider: "claude" };
+  expect(
+    parseProviderSetupStart({ sessionId, provider: "claude", method: "claude-console" }).method,
+  ).toBe("claude-console");
+  expect(
+    parseProviderSetupSubmission({
+      ...address,
+      challengeId,
+      answer: { kind: "code", code: "opaque-code" },
+    }).answer,
+  ).toEqual({ kind: "code", code: "opaque-code" });
+  for (const field of ["command", "env", "url", "package", "path", "owner"])
+    expect(() => parseProviderSetupIdentity({ ...address, [field]: "untrusted" })).toThrow();
+  for (const code of ["", "x".repeat(4097), "a\nb", "a\u0000b"])
+    expect(() =>
+      parseProviderSetupSubmission({ ...address, challengeId, answer: { kind: "code", code } }),
+    ).toThrow();
+  expect(() =>
+    parseProviderSetupStart({ sessionId, provider: "unknown", method: "default" }),
+  ).toThrow();
+  expect(() =>
+    providerLoginChallengeSchema.parse({
+      kind: "code",
+      challengeId,
+      verificationUrl: "http://claude.ai/oauth/authorize",
+    }),
+  ).toThrow();
+});

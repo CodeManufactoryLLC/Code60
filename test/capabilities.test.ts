@@ -241,8 +241,25 @@ describe("browser capability catalog", () => {
       "explicit installation of pinned @openai/codex@0.171.0",
     );
     expect(providers?.limitations).toContain(
-      "Custom Codex commands and other providers use manual setup",
+      "Custom launch commands and enterprise endpoints use manual setup",
     );
+  });
+  it("describes all catalog installation and browser login methods without new agent authority", () => {
+    const capability = APPLICATION_CAPABILITIES.find((item) => item.id === "providers");
+    expect(capability?.prerequisite).toBe("none");
+    for (const label of [
+      "Antigravity",
+      "Claude subscription",
+      "Anthropic Console",
+      "Copilot",
+      "Kiro",
+      "Droid",
+      "OpenCode",
+      "code paste-back",
+      "API-key entry",
+    ])
+      expect(capability?.limitations).toContain(label);
+    expect(capability?.limitations).toContain("controlling setup dialog alone");
   });
   it("classifies model switching as provider-dependent and human-only with role-scoped defaults", () => {
     expect(APPLICATION_CAPABILITIES.find((c) => c.id === "model-settings")).toMatchObject({

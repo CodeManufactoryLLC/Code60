@@ -5,13 +5,13 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ApplicationHost,
-  codexProviderAgents,
   DesktopAutomations,
   DesktopLogStore,
   DesktopWorkflows,
   filePreferences,
   openProjectDatabase,
   prepareCodexEnvironment,
+  providerAgents,
   type TransmissionClient,
 } from "../application/index.js";
 import { startSchedulerRuntime } from "../automation/index.js";
@@ -65,6 +65,8 @@ export interface GatewayOptions {
   lanPublisher?: LanPublisher;
   lanAddress?: () => Promise<string | null>;
   lanIntervalMs?: number;
+  providerFetch?: typeof fetch;
+  providerDownload?: typeof import("../application/index.js").ProviderDownload;
   workflowClients?: { current: TransmissionClient; legacy: TransmissionClient };
 }
 const json = (value: unknown) => JSON.stringify(value ?? null);
@@ -190,6 +192,8 @@ export async function startGateway(options: GatewayOptions = {}) {
     env,
     interactions,
     {
+      ...(options.providerDownload ? { providerDownload: options.providerDownload } : {}),
+      ...(options.providerFetch ? { providerFetch: options.providerFetch } : {}),
       relay: true,
       memory: true,
       openDatabase: openProjectDatabase,
@@ -204,7 +208,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     const schedulerDeps = options.deps ?? defaultDeps();
     scheduler = await startSchedulerRuntime(env, {
       ...schedulerDeps,
-      agents: codexProviderAgents(schedulerDeps.agents, env),
+      agents: providerAgents(schedulerDeps.agents, env),
     });
   } catch {
     schedulerError = "Scheduled jobs are unavailable. Check scheduler storage and ownership.";
@@ -646,7 +650,10 @@ export async function startGateway(options: GatewayOptions = {}) {
           if (!operation) throw new Error("Unknown application operation.");
           const receiptKey = `${owner}:${value.id}`;
           const fingerprint = createHash("sha256").update(json(value)).digest("hex");
-          const existing = receipts.get(receiptKey);
+          const privateProgress = ["setup-provider-read", "setup-codex-read"].includes(
+            value.operation,
+          );
+          const existing = privateProgress ? undefined : receipts.get(receiptKey);
           if (existing) {
             if (existing.fingerprint !== fingerprint)
               throw new Error("Request ID was reused with different arguments.");
@@ -673,7 +680,7 @@ export async function startGateway(options: GatewayOptions = {}) {
               else calls.delete(session);
             });
           const receipt = { fingerprint, result: task, settled: false };
-          receipts.set(receiptKey, receipt);
+          if (!privateProgress) receipts.set(receiptKey, receipt);
           void task
             .finally(() => {
               receipt.settled = true;

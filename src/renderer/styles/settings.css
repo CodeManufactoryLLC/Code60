@@ -735,3 +735,17 @@ button.settings-group-reset {
 .web-server-help {
   margin-top: 24px;
 }
+
+.provider-code-login {
+  display: grid;
+  gap: 12px;
+}
+
+.provider-code-login > label {
+  display: grid;
+  gap: 6px;
+}
+
+.provider-code-login > button {
+  justify-self: start;
+}

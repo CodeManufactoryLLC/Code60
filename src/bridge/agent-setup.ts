@@ -1,3 +1,20 @@
+export type {
+  ProviderLoginAnswer,
+  ProviderLoginChallenge,
+  ProviderLoginMethod,
+  ProviderSetupIdentity,
+  ProviderSetupProgress,
+  ProviderSetupStart,
+  ProviderSetupSubmission,
+  SetupProviderId,
+} from "../contracts/index.js";
+export {
+  parseProviderSetupIdentity,
+  parseProviderSetupStart,
+  parseProviderSetupSubmission,
+  providerLoginChallengeSchema,
+} from "../contracts/index.js";
+
 import { z } from "zod";
 
 export type {
@@ -56,6 +73,7 @@ export interface SetupProvider {
   name: string;
   logo: string;
   guidance: string;
+  loginMethods?: readonly import("../contracts/index.js").ProviderLoginMethod[];
 }
 export interface AgentSetupSession {
   id: string;
@@ -70,6 +88,7 @@ export interface AgentSetupSession {
     | "authenticating"
     | "success"
     | "failed";
+  setupAction?: "install" | "login";
   codexAction?: "install" | "login";
   failureReason?:
     | "missing"

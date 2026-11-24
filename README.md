@@ -14,7 +14,7 @@ code60 service install
 code60 open
 ```
 
-Installation asks for confirmation before creating a launchd or user systemd service. Use `--yes` only for an explicitly authorized unattended service change. Provider CLIs keep their own authentication; Code60 never asks for their passwords. Standard Codex setup can install a pinned compatible CLI after you explicitly choose **Install Codex and sign in**. Other providers use their own installation flows.
+Installation asks for confirmation before creating a launchd or user systemd service. Use `--yes` only for an explicitly authorized unattended service change. Provider CLIs keep their own authentication; Code60 never asks for their passwords. Standard Codex setup can install a pinned compatible CLI after you explicitly choose **Install Codex and sign in**. The other catalog harnesses also support explicit in-app installation and browser sign-in.
 
 `code60 open` opens Code60 directly. Pairing codes are skipped by default. Each
 browser still gets its own session, and **Take control** explicitly replaces the
@@ -32,6 +32,10 @@ that mode. With pairing off, any browser on this computer can connect; enable
 pairing when you want an explicit local authorization step.
 
 Complete provider verification in the browser. Select **Codex** to connect an existing authenticated installation. If missing, choose **Install Codex and sign in**; otherwise choose **Sign in to Codex** when prompted. Copy the displayed device code, open the sign-in page in its separate tab, and authorize with your ChatGPT account. Device-code login must be enabled in your ChatGPT security settings. Keep setup open until the fresh connection check and automatic save finish. **Connected** confirms both succeeded.
+
+The same dialog installs and signs in to **Antigravity, Claude, Copilot, Droid, Kiro and OpenCode**. Choose Claude subscription or Anthropic Console, or choose ChatGPT/GitHub Copilot for OpenCode. Some providers return an authorization code to paste into Code60; others display a device code to enter on their website. If Copilot cannot use a system keychain, Code60 asks before allowing its private-file credential fallback. Keep setup open until verification and saving finish.
+
+Installations use fixed, integrity-verified releases in private versioned backend-user storage, preserving existing CLIs and configuration. Native archives and platform packages run without vendor install scripts; the Claude ACP adapter uses npm with lifecycle scripts disabled. Provider logins stay in each harness’s own backend-user storage and survive normal dev-container recreation. Custom launch commands, enterprise endpoint forms and API-key entry retain external setup.
 
 Codex installation uses non-root npm with lifecycle scripts disabled and the official registry, pinned to `@openai/codex@0.171.0`. Code60 activates its private copy under `~/.local/share/code60/providers/codex/0.171.0` and prefers it for the standard Codex connector without changing configuration or replacing an existing CLI. Codex stores credentials in its normal backend-user home. Closing/cancelling setup, reloading, taking control in another tab or stopping the backend cancels the owned installation/login process; it does not log out an account or remove issued credentials. Retry requests a new attempt. Unsupported CLIs offer the compatible installation; custom launch commands retain manual setup. Account switching, logout and API-key entry are outside this setup flow.
 
