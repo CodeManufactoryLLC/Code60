@@ -73,7 +73,8 @@ async function inspectWorkflowRecordRoot(root: string) {
   await installationDirectory(root, false, true);
   const raw = await readPrivateJson(join(root, "registry.json"), maximum).catch(
     (error: unknown) => {
-      if (fileCode(error) !== "ENOENT") throw error;
+      if (fileCode(error) !== "ENOENT")
+        throw Error("Workflow history is unavailable; preserve state before uninstalling");
       return undefined;
     },
   );

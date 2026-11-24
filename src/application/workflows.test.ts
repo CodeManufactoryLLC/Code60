@@ -523,6 +523,18 @@ it("refuses an active draft without cancelling or applying it and releases a can
   expect(await f.service.request({ action: "list" })).toMatchObject({ entries: [] });
 });
 
+it("refuses another workflow writer without reclaiming its lock or connecting engines", async () => {
+  const f = await fixture();
+  const second = f.open();
+  await expect(second.reserveIdleForUninstall()).rejects.toThrow("writer ownership is uncertain");
+  expect(f.call).not.toHaveBeenCalled();
+  expect(f.client.connect).not.toHaveBeenCalled();
+  expect(await f.service.request({ action: "list" })).toMatchObject({ entries: [] });
+  await f.service.close();
+  const release = await second.reserveIdleForUninstall();
+  await release();
+});
+
 it("never mistakes uncertain or pending-stop terminal snapshots for uninstall readiness", async () => {
   const f = await fixture();
   const { id } = await f.start();
@@ -571,9 +583,10 @@ it("refuses damaged or duplicate workflow evidence and creates no state on a fre
   await expect(
     inspectWorkflowRecordsForUninstall({ XDG_STATE_HOME: join(f.root, "state") }),
   ).rejects.toThrow("duplicate ownership");
-  await writeFile(path, "{damaged");
+  const damaged = "private draft fixture that must never appear in errors";
+  await writeFile(path, damaged);
   await expect(
     inspectWorkflowRecordsForUninstall({ XDG_STATE_HOME: join(f.root, "state") }),
-  ).rejects.toThrow();
-  expect(await readFile(path, "utf8")).toBe("{damaged");
+  ).rejects.toThrow("Workflow history is unavailable; preserve state before uninstalling");
+  expect(await readFile(path, "utf8")).toBe(damaged);
 });

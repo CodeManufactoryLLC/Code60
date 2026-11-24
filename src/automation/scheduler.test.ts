@@ -130,9 +130,14 @@ describe("durable automation scheduler", () => {
     await entered.promise;
     const reservation = s.scheduler.reserveIdleForUninstall();
     const rejected = expect(reservation).rejects.toThrow("active or its ownership is uncertain");
+    const abort = new AbortController();
+    const cancelled = s.scheduler.reserveIdleForUninstall(abort.signal);
+    const cancellation = expect(cancelled).rejects.toThrow("cancelled before claim persisted");
+    abort.abort(Error("cancelled before claim persisted"));
     hold.resolve();
     await claim;
     await rejected;
+    await cancellation;
     await flush();
     expect(s.executor.execute).toHaveBeenCalledOnce();
     expect(vi.mocked(s.executor.execute).mock.calls[0]?.[2].aborted).toBe(false);

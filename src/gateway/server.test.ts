@@ -500,6 +500,20 @@ it.each(["update-summary", "uninstall-summary"] as const)(
   },
 );
 
+it("keeps damaged private workflow contents out of uninstall inspection errors", async () => {
+  const { env, directory } = await fixture();
+  const root = join(directory, "state/code60/workflows");
+  await mkdir(root, { mode: 0o700 });
+  const contents = "private draft fixture that must never appear in errors";
+  await writeFile(join(root, "registry.json"), contents, { mode: 0o600 });
+  await expect(managementRequest(env, "uninstall-summary")).rejects.toThrow(
+    "Workflow history is unavailable; preserve state before uninstalling",
+  );
+  expect(await readFile(join(root, "registry.json"), "utf8")).toBe(contents);
+  expect(await readdir(root)).toEqual(["registry.json"]);
+  expect((await managementRequest(env, "status")).pid).toBe(process.pid);
+});
+
 it("prepares a database only through authenticated payload-free private management", async () => {
   const { gateway, env, directory } = await fixture();
   const saved = (await readPrivateJson(
