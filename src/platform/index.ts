@@ -49,7 +49,9 @@ export {
 } from "./private-state.js";
 export { type OwnedProcess, spawnOwnedProcess } from "./process.js";
 export {
+  findMacRuntimeProcesses,
   inspectMacRuntimeProcess,
+  macFileProcesses,
   macRuntimeProcessFamily,
   type RuntimeProcessIdentity,
   runtimeProcessExists,

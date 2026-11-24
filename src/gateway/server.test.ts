@@ -514,6 +514,50 @@ it("keeps damaged private workflow contents out of uninstall inspection errors",
   expect((await managementRequest(env, "status")).pid).toBe(process.pid);
 });
 
+it("prepares uninstall only with private authentication and no payload, then keeps all owners quiescent", async () => {
+  const { env, directory, gateway } = await fixture();
+  const metadata = (await readPrivateJson(
+    join(directory, "state/code60/gateway/connection.json"),
+    4096,
+  )) as { token: string };
+  const request = (headers: Record<string, string>, value?: string) =>
+    fetch(`${gateway.origin}/management/prepare-uninstall`, {
+      method: "POST",
+      headers,
+      ...(value ? { body: value } : {}),
+    });
+  expect((await request({})).status).toBe(403);
+  expect(
+    (await request({ "X-Code60-Management": metadata.token, Origin: gateway.origin })).status,
+  ).toBe(403);
+  expect((await request({ "X-Code60-Management": metadata.token }, "{}")).status).toBe(400);
+  expect((await fetch(`${gateway.origin}/api/connection`)).status).toBe(200);
+  expect(await managementRequest(env, "prepare-uninstall")).toEqual({
+    quiescent: true,
+    pid: process.pid,
+    enginePids: [],
+  });
+  expect((await fetch(`${gateway.origin}/api/connection`)).status).toBe(503);
+  expect((await managementRequest(env, "status")).pid).toBe(process.pid);
+  await expect(managementRequest(env, "prepare-database")).rejects.toThrow("app is stopping");
+  await expect(managementRequest(env, "prepare-uninstall")).rejects.toThrow("Backend is busy");
+  expect(await managementRequest(env, "shutdown")).toEqual({ stopped: true });
+});
+
+it("releases all idle reservations when native state is uncertain, preserving a usable backend", async () => {
+  const { env, directory, gateway } = await fixture();
+  const state = join(directory, "state/code60/workflows/transmission-0.1.0-staging.20");
+  await mkdir(state, { recursive: true, mode: 0o700 });
+  await writeFile(join(state, "evidence.txt"), "retained fixture evidence", { mode: 0o600 });
+  await expect(managementRequest(env, "prepare-uninstall")).rejects.toThrow(
+    /uncertain|cannot be verified/,
+  );
+  expect(await readFile(join(state, "evidence.txt"), "utf8")).toBe("retained fixture evidence");
+  expect(await readdir(state)).toEqual(["evidence.txt"]);
+  expect((await fetch(`${gateway.origin}/api/connection`)).status).toBe(200);
+  expect(await managementRequest(env, "prepare-database")).toEqual({ state: "ready" });
+});
+
 it("prepares a database only through authenticated payload-free private management", async () => {
   const { gateway, env, directory } = await fixture();
   const saved = (await readPrivateJson(

@@ -7,4 +7,5 @@ export { openProjectDatabase } from "./projects.js";
 export type { downloadProviderArtifact as ProviderDownload } from "./provider-archive.js";
 export { providerAgents } from "./provider-runtime.js";
 export { LocalTransmission, type TransmissionClient } from "./transmission.js";
+export type { TransmissionRemovalPorts } from "./transmission-removal.js";
 export { DesktopWorkflows, inspectWorkflowRecordsForUninstall } from "./workflows.js";

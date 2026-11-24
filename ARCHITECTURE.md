@@ -164,6 +164,15 @@ starts an engine or creates workflow storage, and cannot alone prove process exi
 Temporary idle reservations fence application actions, workflow preparation and
 scheduler claims on their owning queues without changing saved schedules or pause
 state. Releasing a reservation never reopens an owner that has begun shutdown.
+The private, payload-free `prepare-uninstall` operation composes all three idle
+reservations before stopping engines and quiescing the backend. Pending application
+or workflow actions refuse preparation promptly, including human dialogs. Native
+engine inspection uses the pinned SQLite schema read-only, never the restart-capable
+engine constructor. Both versions must have terminal, matching saved ownership;
+fixed authenticated health/stop operations and native process/file inspection prove
+exit. Inspection never starts an engine. Ordinary shutdown and application updates
+continue to preserve independent engines. This private operation is not yet a public
+application uninstall command or permission to remove installation files.
 
 ## Current exclusions
 

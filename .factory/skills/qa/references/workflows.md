@@ -20,6 +20,12 @@
 - Retain full Linux/native evidence and independently verify owned process and
   Docker resource cleanup. Unit tests establish supporting behavior only; native
   login/reboot certification remains separate Phase 9 work.
+- Supporting native engine preparation can run with
+  `npm run test:uninstall:engines -- release/payloads/darwin-arm64.json` after a
+  build. It verifies/extracts that artifact, starts both empty engines from their
+  independent cache in isolated state, exercises production ownership/stop checks,
+  compares saved rows and verifies process exit. It calls no provider or real
+  login service and does not substitute for complete installed uninstall acceptance.
 
 ## Explicit update and recovery
 

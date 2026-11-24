@@ -26,6 +26,10 @@ import {
   writePrivateJson,
 } from "../platform/index.js";
 import { LocalTransmission, type TransmissionClient } from "./transmission.js";
+import {
+  prepareTransmissionRemoval,
+  type TransmissionRemovalPorts,
+} from "./transmission-removal.js";
 import { workflowContext, workflowDirectoryIdentity } from "./workflow-context.js";
 
 const maximum = 8 * 1024 * 1024;
@@ -63,13 +67,12 @@ const ended = (record: WorkflowRecord) =>
 export async function inspectWorkflowRecordsForUninstall(env: Readonly<NodeJS.ProcessEnv>) {
   return inspectWorkflowRecordRoot(join(stateHome(env), "code60", "workflows"));
 }
-async function inspectWorkflowRecordRoot(root: string) {
-  const counts = { completed: 0, active: 0, uncertain: 0 };
+async function readWorkflowRemovalRecords(root: string): Promise<WorkflowRecord[]> {
   const exists = await lstat(root).catch((error: unknown) => {
     if (fileCode(error) !== "ENOENT") throw error;
     return null;
   });
-  if (!exists) return counts;
+  if (!exists) return [];
   await installationDirectory(root, false, true);
   const raw = await readPrivateJson(join(root, "registry.json"), maximum).catch(
     (error: unknown) => {
@@ -78,7 +81,7 @@ async function inspectWorkflowRecordRoot(root: string) {
       return undefined;
     },
   );
-  if (raw === undefined) return counts;
+  if (raw === undefined) return [];
   const parsed = registrySchema.safeParse(raw);
   if (!parsed.success)
     throw Error("Workflow history is invalid; preserve state and recover it before uninstalling");
@@ -88,6 +91,11 @@ async function inspectWorkflowRecordRoot(root: string) {
     new Set(records.map((record) => record.key)).size !== records.length
   )
     throw Error("Workflow history has duplicate ownership; preserve state before uninstalling");
+  return records as WorkflowRecord[];
+}
+async function inspectWorkflowRecordRoot(root: string) {
+  const counts = { completed: 0, active: 0, uncertain: 0 };
+  const records = await readWorkflowRemovalRecords(root);
   for (const record of records) {
     const snapshot = record.snapshot;
     if (
@@ -162,6 +170,8 @@ export class DesktopWorkflows {
   private loading: Promise<void> | undefined;
   private release: (() => Promise<void>) | undefined;
   private queue: Promise<unknown> = Promise.resolve();
+  private queuedActions = 0;
+  private readonly environment: Readonly<NodeJS.ProcessEnv>;
   private generation = 0;
   private closed = false;
   private removalReservation: symbol | null = null;
@@ -175,7 +185,9 @@ export class DesktopWorkflows {
     private readonly generate: (input: string, signal: AbortSignal) => Promise<WorkflowDraftReply>,
     client?: TransmissionClient,
     legacyClient?: TransmissionClient,
+    private readonly removalPorts?: TransmissionRemovalPorts,
   ) {
+    this.environment = { ...env };
     this.root = join(stateHome(env), "code60", "workflows");
     this.client =
       client ?? new LocalTransmission(join(this.root, `transmission-${TRANSMISSION_VERSION}`), env);
@@ -216,9 +228,19 @@ export class DesktopWorkflows {
     await this.release?.();
     this.release = undefined;
   }
+  private queueAction<T>(operation: () => Promise<T>) {
+    this.queuedActions++;
+    const result = this.queue.then(operation).finally(() => {
+      this.queuedActions--;
+    });
+    this.queue = result.catch(() => {});
+    return result;
+  }
   async reserveIdleForUninstall(signal?: AbortSignal): Promise<() => Promise<void>> {
     signal?.throwIfAborted();
-    const run = this.queue.then(async () => {
+    if (this.queuedActions)
+      throw Error("Workflow preparation is pending; finish it before uninstalling.");
+    const run = this.queueAction(async () => {
       signal?.throwIfAborted();
       if (this.closed || this.removalReservation || this.pendingDrafts || this.drafts.size)
         throw Error("Workflow preparation is active or closing; finish it before uninstalling.");
@@ -240,14 +262,13 @@ export class DesktopWorkflows {
           );
         let released = false;
         return () => {
-          const done = this.queue.then(async () => {
+          const done = this.queueAction(async () => {
             if (released) return;
             if (this.removalReservation !== token)
               throw Error("Workflow uninstall reservation changed.");
             this.removalReservation = null;
             released = true;
           });
-          this.queue = done.catch(() => {});
           return done;
         };
       } catch (error) {
@@ -255,8 +276,22 @@ export class DesktopWorkflows {
         throw error;
       }
     });
-    this.queue = run.catch(() => {});
     return run;
+  }
+  prepareUninstall(signal: AbortSignal) {
+    return this.queueAction(async () => {
+      signal.throwIfAborted();
+      if (!this.removalReservation || this.closed)
+        throw Error("Reserve idle workflows before preparing uninstall");
+      const records = await readWorkflowRemovalRecords(this.root);
+      return prepareTransmissionRemoval(
+        this.root,
+        this.environment,
+        records,
+        signal,
+        this.removalPorts,
+      );
+    });
   }
   private async load() {
     this.loading ??= (async () => {
@@ -439,13 +474,12 @@ export class DesktopWorkflows {
       };
     }
     const generation = this.generation;
-    const run = this.queue.then(async () => {
+    const run = this.queueAction(async () => {
       if (generation !== this.generation || this.closed || this.removalReservation)
         throw new Error("Workflow view changed");
       await this.load();
       return this.handle(request, generation);
     });
-    this.queue = run.catch(() => {});
     return run;
   }
   private async handle(

@@ -1,8 +1,15 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { dirname } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
-import { installationFileCode, verifyInstallationNode } from "./installation-files.js";
+import {
+  absoluteInstallationPath,
+  installationDirectory,
+  installationFileCode,
+  verifyInstallationNode,
+} from "./installation-files.js";
+import { verifyPrivatePath } from "./private-state.js";
 
 const execute = promisify(execFile);
 function supportedNativeInspection() {
@@ -169,6 +176,86 @@ export async function macRuntimeProcessFamily(owner: RuntimeProcessIdentity, sig
     }
   }
   return [...ids];
+}
+
+/** Find only exact recorded engine argv; every match receives the full identity check. */
+export async function findMacRuntimeProcesses(command: readonly string[], signal?: AbortSignal) {
+  supportedNativeInspection();
+  if (!command.length || command.some((part) => !part || /[\0\r\n]/.test(part)))
+    throw unavailable();
+  const wanted = command.join(" ");
+  if (Buffer.byteLength(wanted) > 32_768) throw unavailable();
+  const output = await ps(["-ww", "-axo", "pid=,uid=,args="], 2 * 1024 ** 2, signal);
+  const ids = new Set<number>();
+  for (const row of output.trim().split("\n")) {
+    const match = /^\s*(\d+)\s+(-?\d+)\s+([^\r\n]+)$/.exec(row);
+    if (match && numericUid(match[2]) === process.getuid?.() && match[3]?.trim() === wanted) {
+      const pid = Number(match[1]);
+      validPid(pid);
+      ids.add(pid);
+      if (ids.size > 32) throw unavailable();
+    }
+  }
+  const result: RuntimeProcessIdentity[] = [];
+  for (const pid of ids) {
+    const identity = await inspectMacRuntimeProcess(pid, command, signal);
+    if (identity) result.push(identity);
+  }
+  return result;
+}
+
+/** Positive current-user open-file evidence, including absent endpoint/starting engine cases. */
+export async function macFileProcesses(paths: readonly string[], signal?: AbortSignal) {
+  supportedNativeInspection();
+  if (paths.length > 8) throw unavailable();
+  if (!paths.length) return [] as number[];
+  const identities = [];
+  for (const path of paths) {
+    if (absoluteInstallationPath(path) !== path) throw unavailable();
+    await installationDirectory(dirname(path), false, true);
+    identities.push(await verifyPrivatePath(path, false));
+  }
+  let output: string;
+  try {
+    const result = await execute(
+      "/usr/sbin/lsof",
+      ["-a", "-u", String(process.getuid?.()), "-t", "--", ...paths],
+      {
+        cwd: "/",
+        env: { LC_ALL: "C", PATH: "/usr/bin:/bin" },
+        timeout: 5000,
+        maxBuffer: 64 * 1024,
+        ...(signal ? { signal } : {}),
+      },
+    );
+    output = result.stdout;
+  } catch (error) {
+    signal?.throwIfAborted();
+    const result = error as { code?: unknown; stdout?: string; stderr?: string };
+    if (result.code !== 1 || result.stdout?.trim() || result.stderr?.trim()) throw unavailable();
+    output = "";
+  }
+  for (let index = 0; index < paths.length; index++) {
+    const after = await verifyPrivatePath(paths[index] ?? "", false);
+    if (after.dev !== identities[index]?.dev || after.ino !== identities[index]?.ino)
+      throw unavailable();
+  }
+  const ids = [
+    ...new Set(
+      output
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((value) => {
+          if (!/^\d+$/.test(value)) throw unavailable();
+          const pid = Number(value);
+          validPid(pid);
+          return pid;
+        }),
+    ),
+  ];
+  if (ids.length > 64) throw unavailable();
+  return ids;
 }
 
 /** Poll only; never resend a signal to a possibly reused process identity. */

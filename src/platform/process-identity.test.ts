@@ -1,11 +1,13 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  findMacRuntimeProcesses,
   inspectMacRuntimeProcess,
+  macFileProcesses,
   macRuntimeProcessFamily,
   type OwnedProcess,
   runtimeProcessExists,
@@ -124,6 +126,27 @@ it.runIf(native)(
     expect(family.every((pid) => !runtimeProcessExists(pid))).toBe(true);
   },
 );
+it.runIf(native)(
+  "finds exact engine processes and positively inspects private file holders",
+  async () => {
+    const f = await fixture();
+    expect((await findMacRuntimeProcesses(f.command)).map((entry) => entry.pid)).toEqual([
+      f.child.pid,
+    ]);
+    const path = join(f.root, "owner.sqlite");
+    await writeFile(path, "", { mode: 0o600 });
+    const file = await open(path, "r");
+    try {
+      expect(await macFileProcesses([path])).toContain(process.pid);
+    } finally {
+      await file.close();
+    }
+    expect(await macFileProcesses([path])).toEqual([]);
+    await f.child.stop();
+    expect(await findMacRuntimeProcesses(f.command)).toEqual([]);
+  },
+);
+
 it("bounds cancellation and rejects unsafe identities without sending termination signals", async () => {
   const f = await fixture();
   const signal = AbortSignal.abort(Error("cancelled"));

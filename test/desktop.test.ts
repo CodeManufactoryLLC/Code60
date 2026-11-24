@@ -290,6 +290,34 @@ it("fences idle application mutations until uninstall releases the reservation a
   );
 });
 
+it("refuses uninstall promptly while an application action is awaiting external input", async () => {
+  let enter: () => void = () => {};
+  let answer: (record: ModelDefaultsRecord) => void = () => {};
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
+  const answered = new Promise<ModelDefaultsRecord>((resolve) => {
+    answer = resolve;
+  });
+  const read = vi.spyOn(preferences, "modelDefaults").mockImplementation(async () => {
+    enter();
+    return answered;
+  });
+  const pending = controller.restore();
+  try {
+    await entered;
+    await expect(controller.reserveIdleForUninstall()).rejects.toThrow("operation is pending");
+  } finally {
+    answer(modelDefaults);
+    await pending;
+    read.mockRestore();
+  }
+  const release = await controller.reserveIdleForUninstall();
+  await release();
+  await controller.connect(join(directory, "after-pending-action.sqlite"), true);
+  expect(controller.snapshot().database).toBe(join(directory, "after-pending-action.sqlite"));
+});
+
 it("saves main-owned confirmed model defaults by role, applies only to new sessions, and clears independently", async () => {
   const startAgent = agents.start.bind(agents);
   agents.start = async (spec, signal) => {

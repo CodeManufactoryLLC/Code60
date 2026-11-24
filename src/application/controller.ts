@@ -436,6 +436,7 @@ export class ApplicationHost {
   private summaryListeners = new Set<(snapshot: Snapshot) => void>();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private queue: Promise<unknown> = Promise.resolve();
+  private queuedActions = 0;
   private closing = false;
   private shutdownStarted = false;
   private removalReservation: symbol | null = null;
@@ -4613,7 +4614,10 @@ export class ApplicationHost {
   }
 
   private queueAction<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.queue.then(operation);
+    this.queuedActions++;
+    const result = this.queue.then(operation).finally(() => {
+      this.queuedActions--;
+    });
     this.queue = result.catch(() => {});
     return result;
   }
@@ -4629,6 +4633,8 @@ export class ApplicationHost {
   /** Reserve the idle lifecycle on the action queue before a consented uninstall shutdown. */
   async reserveIdleForUninstall(signal?: AbortSignal): Promise<() => Promise<void>> {
     signal?.throwIfAborted();
+    if (this.queuedActions)
+      throw Error("Application operation is pending; finish it before uninstalling.");
     return this.exclusive(async () => {
       signal?.throwIfAborted();
       if (this.hasActiveWork || this.taskOperation || this.providerMutation)

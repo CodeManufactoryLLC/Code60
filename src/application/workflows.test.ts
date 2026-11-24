@@ -100,16 +100,10 @@ async function fixture() {
     }),
   );
   const env = { XDG_STATE_HOME: join(root, "state") };
+  const pick = vi.fn(async () => repo);
   const deps = defaultDeps();
   const open = (legacyClient?: TransmissionClient) => {
-    const service = new DesktopWorkflows(
-      env,
-      deps,
-      async () => repo,
-      generate,
-      client,
-      legacyClient,
-    );
+    const service = new DesktopWorkflows(env, deps, pick, generate, client, legacyClient);
     services.push(service);
     return service;
   };
@@ -151,6 +145,7 @@ async function fixture() {
     approve,
     start,
     generate,
+    pick,
     open,
     offline: () => {
       fail = true;
@@ -532,6 +527,28 @@ it("refuses another workflow writer without reclaiming its lock or connecting en
   expect(await f.service.request({ action: "list" })).toMatchObject({ entries: [] });
   await f.service.close();
   const release = await second.reserveIdleForUninstall();
+  await release();
+});
+
+it("refuses a pending human repository choice promptly instead of blocking its answer", async () => {
+  const f = await fixture();
+  let resolve: (value: string) => void = () => {};
+  f.pick.mockImplementationOnce(
+    () =>
+      new Promise<string>((done) => {
+        resolve = done;
+      }),
+  );
+  const choice = f.service.request({ action: "pickRepository", formId: randomUUID() });
+  await vi.waitFor(() => expect(f.pick).toHaveBeenCalledTimes(2));
+  try {
+    await expect(f.service.reserveIdleForUninstall()).rejects.toThrow("preparation is pending");
+  } finally {
+    resolve(f.repo);
+    await choice;
+  }
+  expect(f.call).not.toHaveBeenCalled();
+  const release = await f.service.reserveIdleForUninstall();
   await release();
 });
 

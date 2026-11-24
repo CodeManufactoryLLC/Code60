@@ -27,6 +27,11 @@ updates must verify quiescence and native/backend process exit before activation
 The private uninstall summary likewise accepts no body or browser Origin. Saved
 workflow counts are read-only evidence, not proof that engine processes are gone;
 removal must separately verify process ownership and refuse uncertain work.
+The private no-body `prepare-uninstall` operation reserves scheduler, application
+and workflow owners before gating new browser operations. Refuse pending human
+operations promptly. Release reservations after failed inspection; never reopen
+owners after shutdown begins. Quiescence is distinct from native backend process
+exit, service unregistration or installation deletion, which require their own proof.
 
 The service-definition serializer is part of registration ownership version 1.
 Changing its byte format requires an explicit versioned ownership/migration path
