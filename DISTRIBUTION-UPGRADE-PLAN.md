@@ -424,9 +424,17 @@ engine used. PR #325 retains the final evidence. Native update, workflow and
 uninstall consumers verify the producer's exact payload independently; Linux
 baseline and concurrent-uninstall acceptance have separate required job budgets.
 Each consumer preserves the existing journey and cleanup deadlines. Linux
+concurrent acceptance at `62e24560` exceeded its maintenance deadline after both
+golden journeys; its owned resources were independently verified removed. Bounded
+parallel inventory reads and a combined physical/receipted ancestor walk require
+fresh exact-commit acceptance before delivery. Deletion, complete preflight,
+same-handle checks and per-entry sync remain mandatory. Linux
 native process inspection must pass on a genuine Linux x64 runner. Emulation
 without a verifiable Node executable mapping remains blocked for native ownership.
 Real login-service lifecycle certification belongs to Phase 9.
+Native update candidate generation and initial installation run concurrently as
+file-only preparation, drain together before cleanup, and retain the original
+preparation, six-minute journey and ten-minute suite deadlines.
 
 **PR outcome:** `code60 uninstall` removes owned installation resources predictably.
 

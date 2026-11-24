@@ -107,6 +107,10 @@ HTTPS policy unchanged.
   Compare the complete remainder before deletion, then recheck each entry and its
   parent identities. Missing entries may represent prior cleanup; new or changed
   contents never become owned just because they are in a managed directory.
+  Inventory reads may inspect four siblings concurrently; drain them on failure
+  and retain deterministic tree order. Deletion stays sequential with a fresh
+  root-first physical/receipted ancestor proof, same-handle hash and per-entry sync.
+  Never cache parent proofs across mutations or weaken checks to meet a test budget.
   Removal service proofs retain the original runtime, private registration file
   identity and observed PID set. Under the compatible operation lock, recheck
   installed:false, native absence and process exit before file cleanup. Proofs

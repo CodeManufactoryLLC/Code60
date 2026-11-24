@@ -183,7 +183,11 @@ download, activate, repair or schedule application updates.
 Phase 8 work adds Node-only installation removal primitives in platform and
 receipt-owned shell removal planning in management. Removal inventories pin file
 contents, directory identities and contained links; interrupted cleanup may remove
-only the recorded remainder. Shell removal has its own exact preview and explicit
+only the recorded remainder. Read-only inventory scans inspect at most four siblings
+at once and drain all reads before returning a failure. Deletion remains sequential:
+each leaf gets a fresh root-first physical/receipted parent walk, same-handle content
+verification and directory sync. No parent proof is cached across deletions.
+Shell removal has its own exact preview and explicit
 interactive approval, preserving unrelated profile bytes and changed blocks.
 Installed management composes these primitives into the human-only uninstall command.
 Private uninstall inspection adds bounded interactive/scheduled availability and

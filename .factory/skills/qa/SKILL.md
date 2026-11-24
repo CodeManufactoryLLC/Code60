@@ -112,7 +112,9 @@ Use the existing harness, not a new QA plugin or a live agent.
   approved workflows survive the actual update on their original engine/runtime.
   Native update file preparation is an independently bounded fixture, before
   visible onboarding, provider verification and approval. It creates no live
-  backend or engine authority. Keep its recorded timing/cleanup evidence and the
+  backend or engine authority. Candidate generation and initial installation may
+  run concurrently into separate owned destinations, with serialized evidence
+  writes and both operations drained before cleanup. Keep its recorded timing/cleanup evidence and the
   existing six-minute user journey and ten-minute suite limits.
 
 ## Report what actually happened

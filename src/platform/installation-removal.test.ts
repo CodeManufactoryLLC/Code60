@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmod,
   link,
@@ -48,6 +49,28 @@ it("removes exactly inventoried files and contained links without touching adjac
   await expect(lstat(f.root)).rejects.toMatchObject({ code: "ENOENT" });
   expect(await readFile(join(f.home, "database.sqlite"), "utf8")).toBe("customer bytes");
   await removeInstallationInventory(f.root, inventory);
+});
+it("hashes empty, small and multi-chunk siblings independently in deterministic tree order", async () => {
+  const f = await fixture();
+  const files = [0, 7, 129, 4097, 1024 * 1024 + 73, 1, 83, 2049, 25].map((size, index) => ({
+    path: `nested/asset-${index}`,
+    bytes: Buffer.alloc(size, index + 1),
+  }));
+  for (const file of files) await writeFile(join(f.root, file.path), file.bytes, { mode: 0o600 });
+  const inventory = await inventoryInstallationRemoval(f.root);
+  expect(inventory.entries.map((entry) => entry.path)).toEqual(
+    inventory.entries.map((entry) => entry.path).sort(),
+  );
+  for (const file of files)
+    expect(inventory.entries.find((entry) => entry.path === file.path)).toMatchObject({
+      type: "file",
+      size: file.bytes.length,
+      sha256: createHash("sha256").update(file.bytes).digest("hex"),
+    });
+  await writeFile(join(f.root, "nested/asset-4"), "outside concurrent change");
+  await expect(removeInstallationInventory(f.root, inventory)).rejects.toThrow("ownership");
+  expect(await readFile(join(f.root, "nested/asset-0"))).toEqual(Buffer.alloc(0));
+  expect(await readFile(join(f.home, "database.sqlite"), "utf8")).toBe("customer bytes");
 });
 it.each(["file", "addition", "directory", "hardlink", "link"])(
   "refuses changed %s before deleting any remaining contents",

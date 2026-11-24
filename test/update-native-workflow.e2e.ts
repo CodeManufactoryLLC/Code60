@@ -80,22 +80,23 @@ async function prepareInstallation(info: TestInfo) {
   const signal = AbortSignal.timeout(330000);
   const started = performance.now();
   const checkpoints: { stage: string; elapsedMs: number }[] = [];
+  let checkpointWrite = Promise.resolve();
   const checkpoint = async (stage: string) => {
     checkpoints.push({ stage, elapsedMs: performance.now() - started });
-    await writeFile(
-      info.outputPath("installation-preparation.json"),
-      JSON.stringify({
-        input: identity,
-        fixture: {
-          path: directory,
-          dev: String(owner.dev),
-          ino: String(owner.ino),
-          uid: String(owner.uid),
-        },
-        checkpoints,
-      }),
-      { mode: 0o600 },
+    const text = JSON.stringify({
+      input: identity,
+      fixture: {
+        path: directory,
+        dev: String(owner.dev),
+        ino: String(owner.ino),
+        uid: String(owner.uid),
+      },
+      checkpoints,
+    });
+    checkpointWrite = checkpointWrite.then(() =>
+      writeFile(info.outputPath("installation-preparation.json"), text, { mode: 0o600 }),
     );
+    await checkpointWrite;
   };
   try {
     for (const path of [
@@ -123,30 +124,47 @@ async function prepareInstallation(info: TestInfo) {
         signal?: AbortSignal,
       ): Promise<UpdateFixture>;
     };
-    await checkpoint("preparing-candidate");
-    const candidate = await updateFixture(
+    await checkpoint("preparing-candidate-and-installation");
+    // These independent file-only preparations read the same immutable archive
+    // into separate owned destinations. Drain both before cleanup on any failure.
+    const [candidate, installed] = await Promise.allSettled([
+      updateFixture(identity, directory, () => createReadStream(input), signal).then(
+        async (value) => {
+          await checkpoint("candidate-ready");
+          return value;
+        },
+      ),
+      installManagedRelease({
+        env,
+        signal,
+        runtimeDirectory: join(root, "build/distribution"),
+        artifact: {
+          identity,
+          acquire: ({ parent, signal: requestSignal }) =>
+            acquirePayload(identity, {
+              parent,
+              signal: requestSignal ?? signal,
+              transport: () => createReadStream(input),
+            }),
+        },
+      }).then(async (value) => {
+        await checkpoint("installation-ready");
+        return value;
+      }),
+    ]);
+    if (candidate.status === "rejected") throw candidate.reason;
+    if (installed.status === "rejected") throw installed.reason;
+    return {
+      root,
       identity,
       directory,
-      () => createReadStream(input),
-      signal,
-    );
-    await checkpoint("candidate-ready");
-    const installed = await installManagedRelease({
+      home,
+      bin,
+      repo,
       env,
-      signal,
-      runtimeDirectory: join(root, "build/distribution"),
-      artifact: {
-        identity,
-        acquire: ({ parent, signal: requestSignal }) =>
-          acquirePayload(identity, {
-            parent,
-            signal: requestSignal ?? signal,
-            transport: () => createReadStream(input),
-          }),
-      },
-    });
-    await checkpoint("installation-ready");
-    return { root, identity, directory, home, bin, repo, env, candidate, installed };
+      candidate: candidate.value,
+      installed: installed.value,
+    };
   } catch (error) {
     // No backend, provider or engine has been started during file preparation.
     // Only this fresh synthetic customer's verified directory can be removed.

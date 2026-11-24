@@ -175,10 +175,12 @@ async function inspect(
   root: string,
   path: string,
   signal?: AbortSignal,
+  parents?: ReadonlyMap<string, InstallationRemovalEntry>,
 ): Promise<InstallationRemovalEntry> {
   signal?.throwIfAborted();
   const full = path ? join(root, path) : root;
-  await installationDirectory(dirname(full));
+  if (parents) await verifyRemovalParents(root, path, parents, signal);
+  else await installationDirectory(dirname(full));
   const before = await lstat(full, { bigint: true });
   if (before.uid !== BigInt(process.getuid?.() ?? -1)) throw fail();
   const identity = {
@@ -217,7 +219,7 @@ async function inspect(
     )
       throw fail();
     const hash = createHash("sha256");
-    const buffer = Buffer.alloc(1024 * 1024);
+    const buffer = Buffer.alloc(Math.min(1024 * 1024, Number(start.size) + 1));
     let size = 0;
     for (;;) {
       signal?.throwIfAborted();
@@ -256,15 +258,28 @@ export async function inventoryInstallationRemoval(
   await installationDirectory(root, false, true);
   const entries: InstallationRemovalEntry[] = [];
   let bytes = 0;
-  async function walk(path: string) {
-    const entry = await inspect(root, path, signal);
+  async function walk(path: string, entry?: InstallationRemovalEntry) {
+    entry ??= await inspect(root, path, signal);
     entries.push(entry);
     if (entries.length > maximumEntries) throw fail();
     if (entry.type === "file") bytes += entry.size;
     if (bytes > maximumBytes) throw fail();
     if (entry.type === "directory") {
-      for (const name of (await readdir(join(root, path))).sort())
-        await walk(path ? `${path}/${name}` : name);
+      const names = (await readdir(join(root, path))).sort();
+      // Bound inspection to four siblings. Drain every read before propagating
+      // failure/cancellation; only the sequential deletion loop mutates files.
+      for (let offset = 0; offset < names.length; offset += 4) {
+        const paths = names
+          .slice(offset, offset + 4)
+          .map((name) => (path ? `${path}/${name}` : name));
+        const inspected = await Promise.allSettled(
+          paths.map(async (child) => ({ path: child, entry: await inspect(root, child, signal) })),
+        );
+        const failed = inspected.find((result) => result.status === "rejected");
+        if (failed?.status === "rejected") throw failed.reason;
+        for (const result of inspected)
+          if (result.status === "fulfilled") await walk(result.value.path, result.value.entry);
+      }
     }
   }
   await walk("");
@@ -324,6 +339,27 @@ async function removalParent(
   };
 }
 
+/** Check the physical chain root-first, proving each owned parent before traversing it. */
+async function verifyRemovalParents(
+  root: string,
+  path: string,
+  expected: ReadonlyMap<string, InstallationRemovalEntry>,
+  signal?: AbortSignal,
+) {
+  await installationDirectory(dirname(root));
+  if (!path) return;
+  const ancestors = [""];
+  let relative = "";
+  for (const part of path.split("/").slice(0, -1)) {
+    relative = relative ? `${relative}/${part}` : part;
+    ancestors.push(relative);
+  }
+  for (const ancestor of ancestors) {
+    const recorded = expected.get(ancestor);
+    if (!recorded || !same(recorded, await removalParent(root, ancestor, signal))) throw fail();
+  }
+}
+
 /** Resume only the recorded removal; missing entries are previous progress, never permission to claim new files. */
 export async function removeInstallationInventory(
   root: string,
@@ -347,21 +383,9 @@ export async function removeInstallationInventory(
   for (const entry of [...actual.entries].reverse()) {
     options.signal?.throwIfAborted();
     await options.checkpoint?.(entry.path);
-    // Validate the physical chain before metadata reads, then check every owned
-    // ancestor deepest-first. inspect() repeats the complete physical-chain walk
-    // immediately before the same-handle leaf check. Recursively walking the
-    // whole chain again for each ancestor made deletion quadratic in path depth.
-    if (entry.path) await installationDirectory(dirname(join(root, entry.path)));
-    let parent = entry.path ? dirname(entry.path) : "";
-    while (entry.path) {
-      const relative = parent === "." ? "" : parent;
-      const recorded = expected.get(relative);
-      if (!recorded || !same(recorded, await removalParent(root, relative, options.signal)))
-        throw fail();
-      if (!relative) break;
-      parent = dirname(relative);
-    }
-    if (!same(entry, await inspect(root, entry.path, options.signal))) throw fail();
+    // One root-first physical walk checks every receipted ancestor immediately
+    // before the same-handle leaf check; no parent proof is reused across deletions.
+    if (!same(entry, await inspect(root, entry.path, options.signal, expected))) throw fail();
     const full = join(root, entry.path);
     if (entry.type === "directory") await rmdir(full);
     else await unlink(full);
