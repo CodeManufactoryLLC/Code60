@@ -378,6 +378,38 @@ export function WorkflowForm({
       {error && !chat && <p role="alert">{error}</p>}
       {chat && active && (
         <Modal
+          footer={
+            <>
+              {!providerReady ? (
+                <AppButton
+                  variant="primary"
+                  type="button"
+                  onClick={() => {
+                    closeChat();
+                    onProvider();
+                  }}
+                >
+                  Connect a provider
+                </AppButton>
+              ) : (
+                <>
+                  {generating && (
+                    <AppButton variant="secondary" type="button" onClick={cancelDraft}>
+                      Cancel generation
+                    </AppButton>
+                  )}
+                  <AppButton
+                    variant="primary"
+                    form={formId}
+                    type="submit"
+                    disabled={generating || !prompt.trim()}
+                  >
+                    {generating ? "Drafting…" : "Send"}
+                  </AppButton>
+                </>
+              )}
+            </>
+          }
           title="Create with prompt"
           busy={false}
           onClose={closeChat}
@@ -393,18 +425,9 @@ export function WorkflowForm({
             ))}
           </div>
           {error && <p role="alert">{error}</p>}
-          {!providerReady ? (
-            <AppButton
-              type="button"
-              onClick={() => {
-                closeChat();
-                onProvider();
-              }}
-            >
-              Connect a provider
-            </AppButton>
-          ) : (
+          {providerReady && (
             <form
+              id={formId}
               onSubmit={(event) => {
                 event.preventDefault();
                 void generate();
@@ -417,16 +440,6 @@ export function WorkflowForm({
                   maxLength={16_000}
                   onChange={(event) => setPrompt(event.target.value)}
                 />
-              </div>
-              <div className="workflow-actions">
-                <AppButton type="submit" disabled={generating || !prompt.trim()}>
-                  {generating ? "Drafting…" : "Send"}
-                </AppButton>
-                {generating && (
-                  <AppButton type="button" onClick={cancelDraft}>
-                    Cancel generation
-                  </AppButton>
-                )}
               </div>
             </form>
           )}

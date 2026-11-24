@@ -233,13 +233,20 @@ export function MemoriesPage({
         }}
       />{" "}
       {active && detail && (
-        <Modal title="Memory details" className="memory-dialog" busy={busy} onClose={close}>
+        <Modal
+          editorFooter
+          title="Memory details"
+          className="memory-dialog"
+          busy={busy}
+          onClose={close}
+        >
           {error && (
             <p className="table-notice" role="alert">
               {error}
             </p>
           )}
           <MemoryInspector
+            onClose={close}
             key={`${detail.record.id}:${detail.record.revision}`}
             detail={detail}
             busy={busy}

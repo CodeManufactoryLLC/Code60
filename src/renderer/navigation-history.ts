@@ -9,7 +9,6 @@ export interface Destination {
   /** The orchestrator or worker run shown, when `page` is `chat`. */
   chat?: string;
   project?: string;
-  provider?: string;
 }
 
 export interface NavigationHistory {
@@ -39,11 +38,7 @@ export function destination(
 }
 
 const sameDestination = (a: Destination, b: Destination) =>
-  a.page === b.page &&
-  a.section === b.section &&
-  a.chat === b.chat &&
-  a.project === b.project &&
-  a.provider === b.provider;
+  a.page === b.page && a.section === b.section && a.chat === b.chat && a.project === b.project;
 
 /** Chat without a conversation is a placeholder that any conversation fulfils. */
 const fulfils = (actual: Destination, target: Destination) =>

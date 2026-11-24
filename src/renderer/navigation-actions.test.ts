@@ -353,14 +353,10 @@ it("opens custom assistants without a database and selects existing custom conve
   });
 });
 
-it("opens provider details locally without selecting a chat or probing a connection", async () => {
-  const { actions, context, reveal } = fixture();
+it("opens Providers without a database or a chat selection", async () => {
+  const { actions, context } = fixture();
   context.database = null;
-  context.providers = ["codex"];
-  context.onProvider = vi.fn();
-  expect(await actions.open({ kind: "provider", id: "codex" })).toBe(true);
-  expect(context.onProvider).toHaveBeenCalledExactlyOnceWith("codex");
-  expect(reveal).toHaveBeenCalledExactlyOnceWith({ kind: "provider", id: "codex" });
+  expect(await actions.open({ kind: "page", id: "providers" })).toBe(true);
+  expect(context.onPage).toHaveBeenCalledExactlyOnceWith("providers");
   expect(context.api.orchestrationChatAction).not.toHaveBeenCalled();
-  expect(await actions.open({ kind: "provider", id: "missing" })).toBe(false);
 });

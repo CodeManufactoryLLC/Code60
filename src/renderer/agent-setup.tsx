@@ -1,5 +1,5 @@
 import { ClickableTile, ProgressBar } from "@carbon/react";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   type ApplicationClient,
   type ProviderLoginChallenge,
@@ -30,6 +30,7 @@ export function AgentSetupWizard({
   mode: SetupBegin["mode"];
   onClose(): void;
 }) {
+  const codeForm = useId();
   const started = useRef(false);
   const closing = useRef(false);
   const attemptInFlight = useRef(false);
@@ -66,6 +67,12 @@ export function AgentSetupWizard({
       setSubmitting(false);
     }
   }, [challengeId]);
+  const setupAction = session?.setupAction ?? session?.codexAction;
+  const canStartLogin = !!(
+    candidate &&
+    setupAction &&
+    (api.installProviderForSetup || (candidate.id === "codex" && api.installCodexForSetup))
+  );
   const success = connected !== null;
   const busy =
     starting ||
@@ -258,12 +265,137 @@ export function AgentSetupWizard({
   }
   return (
     <Modal
+      footer={
+        <>
+          {session?.phase === "authenticating" && challenge?.kind === "confirmation" ? (
+            <>
+              <AppButton
+                variant="secondary"
+                type="button"
+                disabled={submitting}
+                onClick={() => void submitLogin(false)}
+              >
+                Don’t save
+              </AppButton>
+              <AppButton
+                variant="primary"
+                type="button"
+                disabled={submitting}
+                onClick={() => void submitLogin(true)}
+              >
+                Save login
+              </AppButton>
+            </>
+          ) : busy && !saving ? (
+            <>
+              <AppButton
+                variant="secondary"
+                type="button"
+                onClick={() =>
+                  session &&
+                  void invoke(async () => {
+                    if (loginAttempt && api.cancelProviderSetup)
+                      await api.cancelProviderSetup(loginAttempt);
+                    else if (loginAttempt && api.cancelCodexSetup)
+                      await api.cancelCodexSetup({
+                        sessionId: loginAttempt.sessionId,
+                        attemptId: loginAttempt.attemptId,
+                      });
+                    else await api.cancelAgentSetup({ sessionId: session.id });
+                    setLoginAttempt(null);
+                    setChallenge(null);
+                    setPending(null);
+                  })
+                }
+              >
+                Cancel attempt
+              </AppButton>
+              {session?.phase === "authenticating" && challenge?.kind === "code" && (
+                <AppButton
+                  variant="primary"
+                  form={codeForm}
+                  type="submit"
+                  disabled={submitting || !authorizationCode.trim()}
+                >
+                  Complete sign-in
+                </AppButton>
+              )}
+            </>
+          ) : success ? (
+            <>
+              {!providers.every((p) => setup?.enabled.includes(p.id)) && (
+                <AppButton
+                  variant="secondary"
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void addAnother()}
+                >
+                  Add another provider
+                </AppButton>
+              )}
+              <AppButton
+                type="button"
+                className="primary"
+                disabled={saving}
+                onClick={() => void close()}
+              >
+                Close
+              </AppButton>
+            </>
+          ) : session?.phase === "failed" || (session?.phase === "success" && error) ? (
+            <>
+              <AppButton variant="secondary" type="button" onClick={() => void close()}>
+                Close
+              </AppButton>
+              {canStartLogin ? (
+                <AppButton
+                  type="button"
+                  className="primary"
+                  onClick={() => void startLogin(setupAction === "install")}
+                >
+                  {setupAction === "install"
+                    ? `Install ${candidate.name} and sign in`
+                    : `Sign in to ${candidate.name}`}
+                </AppButton>
+              ) : (
+                <AppButton
+                  type="button"
+                  variant="primary"
+                  onClick={() => {
+                    if (session.phase === "success") void finish();
+                    else if (candidate) void attempt(candidate.id);
+                  }}
+                >
+                  Retry
+                </AppButton>
+              )}
+            </>
+          ) : (
+            <AppButton
+              variant="secondary"
+              type="button"
+              disabled={saving}
+              onClick={() => void close()}
+            >
+              Cancel
+            </AppButton>
+          )}
+        </>
+      }
       title={heading}
       className="agent-setup-dialog"
       busy={saving}
       onClose={() => void close()}
       closeLabel="Close provider setup"
-      initialFocus={choosing && session ? ".agent-choice" : undefined}
+      initialFocus={
+        success
+          ? ".cds--modal-footer .cds--btn--primary"
+          : choosing && session
+            ? ".agent-choice"
+            : challenge?.kind === "code"
+              ? ".provider-code-login input"
+              : undefined
+      }
     >
       {windowControls}
       <div className="agent-setup-body">
@@ -371,6 +503,7 @@ export function AgentSetupWizard({
                 )}
                 {challenge.kind === "code" ? (
                   <form
+                    id={codeForm}
                     className="provider-code-login"
                     onSubmit={(event) => {
                       event.preventDefault();
@@ -386,9 +519,7 @@ export function AgentSetupWizard({
                       spellCheck={false}
                       maxLength={4096}
                     />
-                    <AppButton type="submit" disabled={submitting || !authorizationCode.trim()}>
-                      Complete sign-in
-                    </AppButton>
+
                     <p>Sign in on the provider’s page, then paste its authorization code here.</p>
                   </form>
                 ) : challenge.kind === "confirmation" ? (
@@ -397,20 +528,6 @@ export function AgentSetupWizard({
                       The system keychain is unavailable. Save your Copilot login in a private file
                       on the computer running Code60?
                     </p>
-                    <AppButton
-                      type="button"
-                      disabled={submitting}
-                      onClick={() => void submitLogin(true)}
-                    >
-                      Save login
-                    </AppButton>
-                    <AppButton
-                      type="button"
-                      disabled={submitting}
-                      onClick={() => void submitLogin(false)}
-                    >
-                      Don’t save
-                    </AppButton>
                   </>
                 ) : (
                   <section aria-label="Sign-in help">
@@ -437,123 +554,51 @@ export function AgentSetupWizard({
                 <p role="alert">{session.error}</p>
                 <section aria-label="Connection help">
                   <p>{candidate.guidance}</p>
+                  <AppButton
+                    type="button"
+                    onClick={() =>
+                      void invoke(async () => {
+                        if (session) await api.cancelAgentSetup({ sessionId: session.id });
+                      })
+                    }
+                  >
+                    Choose another provider
+                  </AppButton>
+                  {canStartLogin && (
+                    <>
+                      <AppButton disabled={saving} onClick={() => void attempt(candidate.id)}>
+                        Retry
+                      </AppButton>
+                      {(candidate.loginMethods?.length ?? 0) > 1 && (
+                        <Select
+                          labelText="Sign-in method"
+                          aria-label="Sign-in method"
+                          value={method}
+                          onChange={(event) => setMethod(event.target.value as ProviderLoginMethod)}
+                        >
+                          {candidate.loginMethods?.map((item) => (
+                            <option key={item} value={item}>
+                              {
+                                {
+                                  "claude-subscription": "Claude subscription",
+                                  "claude-console": "Anthropic Console",
+                                  chatgpt: "ChatGPT",
+                                  "github-copilot": "GitHub Copilot",
+                                  default: "Browser sign-in",
+                                }[item]
+                              }
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                    </>
+                  )}
                 </section>
               </>
             )}
           </div>
         )}
         {error && <p role="alert">{error}</p>}
-      </div>
-      <div className="modal-footer">
-        {busy && !saving ? (
-          <AppButton
-            type="button"
-            onClick={() =>
-              session &&
-              void invoke(async () => {
-                if (loginAttempt && api.cancelProviderSetup)
-                  await api.cancelProviderSetup(loginAttempt);
-                else if (loginAttempt && api.cancelCodexSetup)
-                  await api.cancelCodexSetup({
-                    sessionId: loginAttempt.sessionId,
-                    attemptId: loginAttempt.attemptId,
-                  });
-                else await api.cancelAgentSetup({ sessionId: session.id });
-                setLoginAttempt(null);
-                setChallenge(null);
-                setPending(null);
-              })
-            }
-          >
-            Cancel attempt
-          </AppButton>
-        ) : success ? (
-          <>
-            <AppButton
-              type="button"
-              className="primary"
-              disabled={saving}
-              onClick={() => void close()}
-            >
-              Close
-            </AppButton>
-            <AppButton
-              type="button"
-              disabled={saving || providers.every((p) => setup?.enabled.includes(p.id))}
-              onClick={() => void addAnother()}
-            >
-              Add another provider
-            </AppButton>
-          </>
-        ) : session?.phase === "failed" || (session?.phase === "success" && error) ? (
-          <>
-            <AppButton type="button" onClick={() => void close()}>
-              Close
-            </AppButton>
-            {session.phase === "failed" && (
-              <AppButton
-                type="button"
-                onClick={() =>
-                  void invoke(async () => {
-                    if (session) await api.cancelAgentSetup({ sessionId: session.id });
-                  })
-                }
-              >
-                Choose another provider
-              </AppButton>
-            )}
-            {candidate &&
-              (session.setupAction || session.codexAction) &&
-              (api.installProviderForSetup ||
-                (candidate.id === "codex" && api.installCodexForSetup)) && (
-                <>
-                  {(candidate.loginMethods?.length ?? 0) > 1 && (
-                    <Select
-                      labelText="Sign-in method"
-                      aria-label="Sign-in method"
-                      value={method}
-                      onChange={(event) => setMethod(event.target.value as ProviderLoginMethod)}
-                    >
-                      {candidate.loginMethods?.map((item) => (
-                        <option key={item} value={item}>
-                          {
-                            {
-                              "claude-subscription": "Claude subscription",
-                              "claude-console": "Anthropic Console",
-                              chatgpt: "ChatGPT",
-                              "github-copilot": "GitHub Copilot",
-                              default: "Browser sign-in",
-                            }[item]
-                          }
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                  <AppButton
-                    type="button"
-                    className="primary"
-                    onClick={() =>
-                      void startLogin((session.setupAction ?? session.codexAction) === "install")
-                    }
-                  >
-                    {(session.setupAction ?? session.codexAction) === "install"
-                      ? `Install ${candidate.name} and sign in`
-                      : `Sign in to ${candidate.name}`}
-                  </AppButton>
-                </>
-              )}
-            <AppButton
-              type="button"
-              variant={session.setupAction || session.codexAction ? "quiet" : "primary"}
-              onClick={() => {
-                if (session.phase === "success") void finish();
-                else if (candidate) void attempt(candidate.id);
-              }}
-            >
-              Retry
-            </AppButton>
-          </>
-        ) : null}
       </div>
     </Modal>
   );

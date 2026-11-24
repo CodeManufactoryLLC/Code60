@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AgentSetupSnapshot } from "../bridge/index.js";
+import { AnchoredMenu } from "./anchored-menu.js";
 import { Button as AppButton } from "./carbon/button.js";
-import { ProviderDropdown } from "./carbon/provider-controls.js";
 import { Icon } from "./icons.js";
 import { type ProviderManagement, providerActionReasons } from "./provider-management.js";
 
@@ -45,7 +45,8 @@ export function ProviderMenu({
         <Icon name="overflow-menu--horizontal" />
       </AppButton>
       {position && active && connected && (
-        <ProviderDropdown
+        <AnchoredMenu
+          className="provider-dropdown"
           anchor={trigger.current}
           {...position}
           label={`${name} actions`}

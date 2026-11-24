@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   MCP_TEXT_LIMITS,
   type McpConnectorDefinition,
@@ -10,6 +10,7 @@ import { randomId } from "./browser-platform.js";
 import { Button } from "./carbon/button.js";
 import { Select, TextInput } from "./carbon/fields.js";
 import { Textarea } from "./carbon/textarea.js";
+import { ModalActions } from "./modal.js";
 
 type Binding = {
   key: string;
@@ -246,6 +247,7 @@ export function McpForm({
   onCancel(): void;
   onReload(): void;
 }) {
+  const formId = useId();
   const [fields, setFields] = useState(draft?.fields ?? initial);
   const [paste, setPaste] = useState(draft?.paste ?? "");
   const [pasteOpen, setPasteOpen] = useState(draft?.pasteOpen ?? false);
@@ -272,6 +274,7 @@ export function McpForm({
   }
   return (
     <form
+      id={formId}
       className="mcp-form"
       onSubmit={(e) => {
         e.preventDefault();
@@ -512,15 +515,22 @@ export function McpForm({
           </p>
         )}
         <div className="dialog-actions">
-          <Button variant="quiet" type="button" onClick={onCancel}>
-            Cancel
-          </Button>
           <Button variant="quiet" type="button" onClick={onReload}>
             Reload and discard draft
           </Button>
-          <Button variant="primary" type="submit" disabled={!document || stale}>
-            Save server
-          </Button>
+          <ModalActions>
+            <Button variant="secondary" disabled={busy} onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              form={formId}
+              type="submit"
+              disabled={busy || !document || stale}
+            >
+              Save server
+            </Button>
+          </ModalActions>
         </div>
       </fieldset>
     </form>

@@ -6,6 +6,8 @@ import { defineConfig } from "vite";
 const styleNonce = randomBytes(24).toString("base64");
 
 export default defineConfig(({ command }) => ({
+  // The dev fixture shares node_modules with the checkout. Each source tree needs its own optimized modules.
+  cacheDir: fileURLToPath(new URL("./test-results/dev/vite-cache", import.meta.url)),
   html: { cspNonce: styleNonce },
   plugins: [
     react(),

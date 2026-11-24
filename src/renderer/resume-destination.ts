@@ -7,6 +7,12 @@ export function readResume(storage: Storage, key: string): Destination | undefin
   try {
     const value = JSON.parse(storage.getItem(key) ?? "null");
     if (
+      value?.page === "provider" &&
+      typeof value.provider === "string" &&
+      value.provider.length > 0
+    )
+      return { page: "providers" };
+    if (
       !value ||
       typeof value.page !== "string" ||
       !Object.hasOwn(pageDefinitions, value.page) ||
@@ -20,14 +26,7 @@ export function readResume(storage: Storage, key: string): Destination | undefin
         : isSettingsSection(value.section)
           ? { page, section: value.section }
           : undefined;
-    const field =
-      page === "chat"
-        ? "chat"
-        : page === "project"
-          ? "project"
-          : page === "provider"
-            ? "provider"
-            : undefined;
+    const field = page === "chat" ? "chat" : page === "project" ? "project" : undefined;
     if (!field) return { page };
     return typeof value[field] === "string" && value[field].length > 0
       ? { page, [field]: value[field] }

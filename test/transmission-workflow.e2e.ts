@@ -150,7 +150,7 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     application = await launchWorkflowBrowser(browser, directory);
     let page = await application.firstWindow();
     const openWorkflows = async () => {
-      await expandNavigation(page, "Automation");
+      await expandNavigation(page, "Develop");
       await page.locator("#tab-workflows").click();
     };
     const menu = async (label: string) =>
@@ -299,7 +299,7 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     const rejected = page.getByRole("dialog", { name: "Task 1 results" });
     await expect(rejected).toContainText("Rejected");
     await expect(rejected).toContainText("Add the missing negative case");
-    await rejected.getByRole("button", { name: "Close", exact: true }).click();
+    await rejected.getByRole("button", { name: "Close Task 1 results", exact: true }).click();
     await firstTask.locator("summary").click();
     await workflows
       .getByLabel("Preserve negative zero?", { exact: true })
@@ -341,7 +341,7 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     await headerAction("Refresh");
     await writeFile(join(engineRoot, "control"), "repairing");
     await headerAction("Refresh");
-    await page.locator("#tab-home").click();
+    await page.getByRole("link", { name: "Code60", exact: true }).click();
     await openWorkflows();
     await expect(
       workflows.locator(".workflow-task-list").getByText("Repairing", { exact: true }),
@@ -376,7 +376,7 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     await headerAction("Refresh");
     await writeFile(join(engineRoot, "control"), "repairing");
     await headerAction("Refresh");
-    await page.locator("#tab-home").click();
+    await page.getByRole("link", { name: "Code60", exact: true }).click();
     await openWorkflows();
     await expect(
       workflows.getByRole("heading", { name: "Execution status", exact: true }),
@@ -434,7 +434,7 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     await page.getByRole("button", { name: "Stop Code60 Backend", exact: true }).click();
     const shutdown = page.getByRole("dialog", { name: "Stop Code60 Backend?", exact: true });
     await expect(shutdown).toContainText("Approved Transmission workflows keep running");
-    await shutdown.getByRole("button", { name: "Confirm", exact: true }).click();
+    await shutdown.getByRole("button", { name: "Stop backend", exact: true }).click();
     const previousOrigin = application.origin;
     await expect
       .poll(() =>
@@ -645,7 +645,7 @@ test("workflow: Transmission staging.18 retained history and controls use its or
     await expect(wizard.getByRole("status")).toHaveText("Claude connected");
     await wizard.getByRole("button", { name: "Close provider setup" }).click();
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
-    await expandNavigation(page, "Automation");
+    await expandNavigation(page, "Develop");
     await page.locator("#tab-workflows").click();
     const view = page.locator(".workflows-page");
     await view.getByRole("tab", { name: "Execution history", exact: true }).click();

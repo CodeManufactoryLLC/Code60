@@ -37,7 +37,7 @@ it("renders labelled fields and actions without treating a saved command's metad
   expect(html).toContain("Use $name at the start of a message.");
   expect(html).toContain("with $name to use one.");
   expect(html).not.toContain('aria-invalid="true"');
-  expect(html).toMatch(/<h1[^>]*class="content-page-title"[^>]*>.*Command Builder<\/span>.*<\/h1>/);
+  expect(html).toMatch(/<h1[^>]*class="content-page-title"[^>]*>.*Commands<\/span>.*<\/h1>/);
   const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
   expect(html).toContain(">New command</button>");
   expect(header).not.toContain("New command");

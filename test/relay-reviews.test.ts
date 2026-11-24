@@ -732,10 +732,7 @@ it("captures, previews, confirms, applies and undoes only the addressed checkout
   });
   expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Before\n");
   expect((await task(a, { type: "apply", operationId })).operation?.status).toBe("applied");
-  expect(confirm).toHaveBeenCalledWith(
-    "Apply reviewed changes?",
-    expect.stringContaining(join(root, "a")),
-  );
+  expect(confirm).toHaveBeenCalledWith("apply-changes", expect.stringContaining(join(root, "a")));
   expect(await readFile(join(root, "a", "file.txt"), "utf8")).toBe("Worker changes\n");
   expect(await readFile(join(root, "b", "file.txt"), "utf8")).toBe("Before\n");
   expect((await task(a, { type: "undo", operationId })).operation?.status).toBe("undone");

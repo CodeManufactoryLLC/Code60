@@ -141,6 +141,9 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
   addDisabled,
   viewState,
   pageActions,
+  title,
+  description,
+  emptyMessage,
   scope,
   onRetainedQuery,
 }: {
@@ -161,6 +164,9 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
   onActions?(id: string, bounds: Rectangle, contextual?: boolean): void;
   parent?(row: Row): string | undefined;
   hasActions?(row: Row): boolean;
+  title?: string;
+  description?: string;
+  emptyMessage?: string;
   scope?: ReactNode;
   onRetainedQuery?(query: RetainedTableQuery): void;
 } & TableOptions) {
@@ -317,12 +323,17 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
     return top.flatMap((row) => [row, ...(children.get(row.id) ?? [])]);
   }, [roots, currentPage, pageSize, rows, parent, onRetainedQuery]);
   const actionable = (row: Row) => !!onActions && (hasActions?.(row) ?? true);
+  const showEmptyMessage = Boolean(emptyMessage) && rows.length === 0;
   const closeSettings = () => {
     setSettings(undefined);
     if (settingsTrigger.current?.checkVisibility()) settingsTrigger.current.focus();
   };
   return (
-    <TableContainer className="data-table carbon-data-table">
+    <TableContainer
+      className="data-table carbon-data-table"
+      title={title}
+      description={description}
+    >
       <div className="table-controls">
         <TableHeading tableId={tableId} actions={pageActions} />
         {scope && <div className="table-scope">{scope}</div>}
@@ -442,7 +453,13 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
           </Button>
         </section>
       )}
+      {showEmptyMessage && (
+        <p className="table-empty-message" role="status">
+          {emptyMessage}
+        </p>
+      )}
       <div
+        hidden={showEmptyMessage}
         ref={container}
         className="carbon-table-scroll"
         style={
@@ -578,7 +595,7 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
           </TableBody>
         </Table>
       </div>
-      {!onRetainedQuery && (
+      {!showEmptyMessage && !onRetainedQuery && (
         <Pagination
           page={currentPage}
           pageSize={pageSize}

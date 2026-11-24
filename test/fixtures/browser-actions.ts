@@ -3,12 +3,29 @@ import { expect, type Page } from "@playwright/test";
 
 export async function expandNavigation(
   page: Page,
-  group: "Work" | "Automation" | "Inspect" | "Manage",
+  group:
+    | "Chat"
+    | "Develop"
+    | "Automate"
+    | "Connect"
+    | "Customize"
+    | "Personalize"
+    | "Manage"
+    | "Contributor Tools"
+    | "Experiments",
 ) {
   const menu = page
     .getByRole("navigation", { name: "Product navigation" })
     .getByRole("button", { name: group, exact: true });
   if ((await menu.getAttribute("aria-expanded")) === "false") await menu.click();
+}
+
+export async function openMcpServers(page: Page) {
+  await expandNavigation(page, "Connect");
+  await page
+    .getByRole("tablist", { name: "Connect", exact: true })
+    .getByRole("tab", { name: "MCP Servers", exact: true })
+    .click();
 }
 
 export async function onboard(page: Page) {
@@ -35,7 +52,7 @@ export async function createDatabase(page: Page, directory: string) {
   await expect(chooser).toHaveCount(0);
 }
 export async function openProject(page: Page, directory: string, name: string) {
-  await expandNavigation(page, "Work");
+  await expandNavigation(page, "Develop");
   await page.getByRole("tab", { name: "Projects", exact: true }).click();
   await page
     .locator("#panel-projects")
@@ -51,7 +68,7 @@ export async function openProject(page: Page, directory: string, name: string) {
   await chooser.getByRole("button", { name: "Choose folder", exact: true }).click();
   await page
     .getByRole("dialog", { name: "Open project?", exact: true })
-    .getByRole("button", { name: "Confirm", exact: true })
+    .getByRole("button", { name: "Open project", exact: true })
     .click();
   await expect
     .poll(async () => (await page.evaluate(() => window.code60.snapshot())).directory)

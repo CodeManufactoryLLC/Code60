@@ -33,8 +33,6 @@ const currentDestination = ({
 }: HistoryDependencies): Destination => {
   if (tabs.active === "project" && tabs.projectId)
     return { page: "project", project: tabs.projectId };
-  if (tabs.active === "provider" && tabs.providerId)
-    return { page: "provider", provider: tabs.providerId };
   return destination(
     tabs.active,
     settingsSection,
@@ -57,8 +55,7 @@ export function historyNavigation(recorder: NavigationRecorder, dependencies: Hi
     if (!pageAvailable(entry.page, database)) return false;
     if (entry.project)
       return Boolean(snapshot?.openProjects?.some((project) => project.id === entry.project));
-    if (entry.provider) return Boolean(snapshot?.agentSetup?.enabled.includes(entry.provider));
-    if (entry.page === "project" || entry.page === "provider") return false;
+    if (entry.page === "project") return false;
     if (!entry.chat) return true;
     const chat = chatById(entry.chat);
     if (chat) return !chat.archived && (Boolean(database) || chat.kind === "relay");
@@ -75,11 +72,9 @@ export function historyNavigation(recorder: NavigationRecorder, dependencies: Hi
       ? { kind: "conversation", id: entry.chat }
       : entry.project
         ? { kind: "project", id: entry.project }
-        : entry.provider
-          ? { kind: "provider", id: entry.provider }
-          : entry.section
-            ? { kind: "settings", id: entry.section }
-            : { kind: "page", id: entry.page };
+        : entry.section
+          ? { kind: "settings", id: entry.section }
+          : { kind: "page", id: entry.page };
     if (!(await navigation.open(target)))
       throw new Error("Unable to restore navigation destination.");
   };
@@ -103,8 +98,6 @@ export function historyNavigation(recorder: NavigationRecorder, dependencies: Hi
           );
         case "project":
           return entry.page === "project" && entry.project === target.id;
-        case "provider":
-          return entry.page === "provider" && entry.provider === target.id;
         case "settings":
           return entry.page === "settings" && entry.section === target.id;
         case "page":

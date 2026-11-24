@@ -295,7 +295,7 @@ export async function startGateway(options: GatewayOptions = {}) {
   operations.set("backend-stop", async () => {
     if (
       await interactions.confirm(
-        "Stop Code60 Backend?",
+        "stop-backend",
         "Interactive agents and scheduled jobs will stop. Approved Transmission workflows keep running; use Apps → Workflows to stop them. History and worktrees are kept. Start Code60 again with code60 service start.",
       )
     )

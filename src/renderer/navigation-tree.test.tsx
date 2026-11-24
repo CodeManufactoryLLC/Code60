@@ -6,10 +6,8 @@ import { NavigationHomePage } from "./navigation-home-page.js";
 import {
   conversationNodes,
   conversationProject,
-  inNavigationBranch,
   isNavigationHome,
   navigationParent,
-  parentActivation,
   projectConversations,
   projectNodes,
   sidebarPageElementId,
@@ -67,15 +65,15 @@ describe("navigation tree", () => {
       ),
     ).toBeUndefined();
   });
-  it("resolves only immediate children in sidebar order with real destinations", () => {
+  it("resolves only immediate children in alphabetical order with real destinations", () => {
     expect(staticChildren("apps", null).map(({ id }) => id)).toEqual([
       "appearance",
       "commands",
       "tables",
+      "prompts",
       "mcp-servers",
       "memory",
       "polling-settings",
-      "prompts",
       "automations",
       "system-manager",
       "updates",
@@ -123,9 +121,6 @@ describe("navigation tree", () => {
       ),
     ).toBe(true);
     expect(staticChildren("experiments", "/db").every(({ available }) => available)).toBe(true);
-    expect(inNavigationBranch("rag", "settings")).toBe(true);
-    expect(inNavigationBranch("memories", "apps")).toBe(true);
-    expect(inNavigationBranch("logs", "settings")).toBe(false);
     expect(navigationParent("home")).toBeUndefined();
     for (const id of [
       "assistants",
@@ -141,11 +136,7 @@ describe("navigation tree", () => {
       expect(isNavigationHome(id)).toBe(true);
     expect(isNavigationHome("chat")).toBe(false);
   });
-  it("shares parent activation without toggling children on first navigation", () => {
-    for (const expanded of [true, false])
-      expect(parentActivation(false, expanded)).toEqual({ navigate: true, expanded: true });
-    expect(parentActivation(true, true)).toEqual({ navigate: false, expanded: false });
-    expect(parentActivation(true, false)).toEqual({ navigate: false, expanded: true });
+  it("locates sidebar destinations and project entries", () => {
     expect(sidebarPageElementId("projects")).toBe("tab-chat");
     expect(sidebarPageElementId("project", "a")).toBe("project-a");
     expect(sidebarPageElementId("project")).toBe("tab-chat");

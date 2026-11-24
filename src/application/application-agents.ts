@@ -171,7 +171,7 @@ export class ApplicationAgents {
           if (request.type === "archive") {
             if (
               !(await this.dialogs.confirm(
-                "Archive custom assistant?",
+                "archive-assistant",
                 "Stop this assistant and its workers and hide it from navigation? History and files will be preserved.",
               ))
             )

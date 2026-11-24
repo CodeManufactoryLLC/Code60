@@ -32,8 +32,6 @@ interface Context {
   onPage(id: PageId): void;
   onSection(id: SettingsSectionId | null): void;
   onProject(id: string): void;
-  providers?: readonly string[];
-  onProvider?(id: string): void;
   selectWorker(
     id: string | undefined,
     projectId?: string | null,
@@ -164,12 +162,6 @@ export function createNavigationActions(
   const open = async (target: NavigationTarget) => {
     const context = read();
     switch (target.kind) {
-      case "provider":
-        if (!context.providers?.includes(target.id) || !context.onProvider) return false;
-        ++serial;
-        context.onProvider(target.id);
-        reveal(target);
-        return true;
       case "custom-agent":
         return run(
           async () => {

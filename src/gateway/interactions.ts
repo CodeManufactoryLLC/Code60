@@ -1,7 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
+import type { ConfirmationId } from "../bridge/index.js";
 import {
   type ChooserRequest,
+  confirmationPresentation,
   GATEWAY_LIMITS,
   type Interaction,
   type InteractionAnswer,
@@ -43,21 +45,9 @@ export class Interactions {
     if (!owner || !this.active.has(owner)) throw new Error("This page is no longer active.");
     return owner;
   }
-  private ask(
-    kind: "confirm" | "pick",
-    title: string,
-    detail: string,
-    picker?: PickKind,
-  ): Promise<string | boolean | null> {
+  private ask(interaction: Interaction): Promise<string | boolean | null> {
     const owner = this.context.getStore();
     if (!owner || !this.active.has(owner) || this.pending.size >= 16) return Promise.resolve(null);
-    const interaction: Interaction = {
-      id: randomUUID(),
-      kind,
-      title,
-      detail,
-      ...(picker ? { picker } : {}),
-    };
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(interaction.id);
@@ -69,25 +59,37 @@ export class Interactions {
         interaction,
         resolve,
         timer,
-        ...(picker ? { chooser: new HostChooser(this.roots, picker) } : {}),
+        ...(interaction.kind === "pick"
+          ? { chooser: new HostChooser(this.roots, interaction.picker) }
+          : {}),
       });
       this.emit(owner, interaction);
     });
   }
-  async confirm(title: string, detail: string): Promise<boolean> {
-    return (await this.ask("confirm", title, detail)) === true;
+  async confirm(presentation: ConfirmationId, detail: string): Promise<boolean> {
+    return (
+      (await this.ask({
+        id: randomUUID(),
+        kind: "confirm",
+        presentation,
+        title: confirmationPresentation[presentation].title,
+        detail,
+      })) === true
+    );
   }
   async pick(kind: PickKind): Promise<string | null> {
-    const result = await this.ask(
-      "pick",
-      kind === "folder"
-        ? "Choose folder"
-        : kind === "database-create"
-          ? "Create database"
-          : "Open database",
-      "Choose a location on the computer running Code60.",
-      kind,
-    );
+    const result = await this.ask({
+      id: randomUUID(),
+      kind: "pick",
+      picker: kind,
+      title:
+        kind === "folder"
+          ? "Choose folder"
+          : kind === "database-create"
+            ? "Create database"
+            : "Open database",
+      detail: "Choose a location on the computer running Code60.",
+    });
     return typeof result === "string" ? result : null;
   }
   list(owner: string): Interaction[] {

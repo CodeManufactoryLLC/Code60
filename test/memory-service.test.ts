@@ -592,7 +592,7 @@ describe.skipIf(!sqliteFtsAvailable())("scoped runtime memory and handoff", () =
     expect(await service.action({ type: "configure", settings }, declined)).toBe(false);
     expect(store.settings().retentionDays).toBe(0);
     expect(declined).toHaveBeenCalledWith(
-      "Automatically delete old memories?",
+      "enable-retention",
       expect.stringContaining("0 unpinned memories"),
     );
     const cid = store.register("expiry", "Expiry", null).id;

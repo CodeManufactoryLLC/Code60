@@ -84,6 +84,21 @@ export function ColumnMenu({
   const needsValue = op !== "empty" && op !== "present";
   return (
     <Modal
+      footer={
+        <>
+          <AppButton variant="secondary" type="button" onClick={onClose}>
+            Close
+          </AppButton>
+          <AppButton
+            form={id}
+            type="submit"
+            className="primary"
+            disabled={needsValue && !value.trim()}
+          >
+            Apply filter
+          </AppButton>
+        </>
+      }
       title={`${title} filter and sort`}
       busy={false}
       onClose={onClose}
@@ -98,6 +113,7 @@ export function ColumnMenu({
         </AppButton>
       </div>
       <form
+        id={id}
         onSubmit={(event) => {
           event.preventDefault();
           onFilter({ op, value });
@@ -149,17 +165,9 @@ export function ColumnMenu({
             )}
           </label>
         )}
-        <div className="button-group">
-          <AppButton type="submit" className="primary" disabled={needsValue && !value.trim()}>
-            Apply filter
-          </AppButton>
-          <AppButton type="button" onClick={() => onFilter(undefined)}>
-            Clear filter
-          </AppButton>
-          <AppButton type="button" onClick={onClose}>
-            Close
-          </AppButton>
-        </div>
+        <AppButton type="button" onClick={() => onFilter(undefined)}>
+          Clear filter
+        </AppButton>
       </form>
     </Modal>
   );

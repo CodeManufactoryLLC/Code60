@@ -232,7 +232,7 @@ for (const saved of [undefined, "0.1.0-staging.18", "0.1.0-staging.20"] as const
       await expect(wizard.getByRole("status")).toHaveText("Claude connected");
       await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
       await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
-      await expandNavigation(page, "Automation");
+      await expandNavigation(page, "Develop");
       await page.locator("#tab-workflows").click();
       const view = page.locator(".workflows-page");
       await view.getByRole("button", { name: /Retained native workflow/ }).click();

@@ -175,12 +175,28 @@ export function AgentEditor({
   const changed = agent === "new" || name !== agent.name || instructions !== agent.instructions;
   return (
     <Modal
+      footer={
+        <>
+          <AppButton variant="secondary" type="button" disabled={busy} onClick={onClose}>
+            Cancel
+          </AppButton>
+          <AppButton
+            variant="primary"
+            form={id}
+            type="submit"
+            disabled={busy || !changed || !name.trim() || !instructions.trim()}
+          >
+            Save
+          </AppButton>
+        </>
+      }
       className="custom-agent-editor"
       title={agent === "new" ? "New Assistant" : "Edit Assistant"}
       busy={busy}
       onClose={onClose}
     >
       <form
+        id={id}
         onSubmit={(event) => {
           event.preventDefault();
           if (!api.customAgent || busy) return;
@@ -218,17 +234,6 @@ export function AgentEditor({
           onChange={(e) => setInstructions(e.target.value)}
         />
         {error && <p role="alert">{error}</p>}
-        <div className="dialog-actions">
-          <AppButton type="button" disabled={busy} onClick={onClose}>
-            Cancel
-          </AppButton>
-          <AppButton
-            type="submit"
-            disabled={busy || !changed || !name.trim() || !instructions.trim()}
-          >
-            Save
-          </AppButton>
-        </div>
       </form>
     </Modal>
   );

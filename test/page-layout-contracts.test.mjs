@@ -30,26 +30,7 @@ it("centers one compact left-aligned blank-tab action group without stretching i
   expect(rule("files", ".file-panel-empty-actions button")).toContain("text-align: left");
 });
 
-it("keeps project controls centered with one shared row fill and a corner removal icon", () => {
-  expect(rule("overlays", ".project-dialog > .modal-heading")).toContain("border-bottom: 0");
-  expect(rule("overlays", ".modal-heading")).toContain("border-bottom: 1px solid");
-  expect(rule("overlays", ".project-open-folder")).toContain("align-self: center");
-  expect(rule("overlays", ".project-open-folder")).toContain("margin-inline: auto");
-  expect(rule("overlays", ".project-dialog")).not.toContain("scrollbar-gutter:");
-  expect(rule("overlays", ".project-row")).toContain("position: relative");
-  const remove = rule("overlays", ".project-remove");
-  for (const value of ["position: absolute", "top: 4px", "right: 4px"])
-    expect(remove).toContain(value);
-  expect(rule("overlays", ".project-item")).toContain("padding-right: 40px");
-  expect(rule("overlays", ".project-row:has(> button:hover:not(:disabled))")).toContain(
-    "background: var(--hover-bg)",
-  );
-  expect(rule("overlays", ".project-row > .project-item:not(:disabled)")).toContain(
-    "background: transparent",
-  );
-  expect(rule("overlays", ".project-row > .project-item:not(:disabled)")).toContain(
-    "color: var(--text)",
-  );
+it("uses the saved text weight for activity names", () => {
   expect(rule("chat", ".activity-name")).toContain("font-weight: var(--text-weight, 400)");
 });
 

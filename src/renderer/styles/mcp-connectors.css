@@ -4,19 +4,13 @@
   overflow: auto;
   padding-block-end: 2rem;
 }
-.mcp-workspace-controls,
+.mcp-actions,
 .mcp-json-actions,
-.mcp-details,
 .mcp-binding {
   display: flex;
   align-items: end;
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
-}
-.mcp-workspace-controls,
-.mcp-details,
-.mcp-maintenance > [aria-label="MCP troubleshooting"] {
-  margin-block-start: 1rem;
 }
 .mcp-servers-page,
 .mcp-form > fieldset,
@@ -26,7 +20,6 @@
   min-inline-size: 0;
   gap: 1rem;
 }
-.mcp-notice,
 .mcp-form fieldset,
 .mcp-authentication fieldset {
   margin: 0;

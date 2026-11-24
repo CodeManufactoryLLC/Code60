@@ -18,6 +18,7 @@ vi.mock("react", async (original) => ({
     hooks.refs[index] = ref;
     return ref;
   },
+  useId: () => "provider-code-form",
   useState: (value: unknown) => [value, vi.fn()],
   useEffect: (effect: EffectCallback) => {
     hooks.effects.push(effect);

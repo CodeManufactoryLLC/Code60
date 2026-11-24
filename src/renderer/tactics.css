@@ -22,19 +22,6 @@
   flex-basis: 100%;
   max-width: 220px;
 }
-.tactics-dialog[open] {
-  display: flex;
-  flex-direction: column;
-  width: min(900px, calc(100vw - 32px));
-  height: min(560px, calc(100dvh - 32px));
-  padding: 0;
-  overflow: hidden;
-  scrollbar-gutter: auto;
-}
-.tactics-dialog .modal-heading {
-  flex: none;
-  margin: 0;
-}
 .tactics-layout {
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr);
@@ -190,7 +177,10 @@
 @media (max-width: 600px) {
   .tactics-layout {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(90px, 32%) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+  }
+  .tactics-list {
+    max-block-size: 12rem;
   }
   .tactics-browser {
     border-right: 0;

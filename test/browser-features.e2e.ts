@@ -77,9 +77,12 @@ async function start(page: Page, directory: string) {
     .toBe(join(directory, "projects.sqlite"));
   await expect(page.getByRole("heading", { level: 1, name: "Relay", exact: true })).toBeVisible();
 }
+async function openFromHome(page: Page, name: string) {
+  await page.getByRole("link", { name: "Code60", exact: true }).click();
+  await page.getByRole("button", { name: `Open ${name}`, exact: true }).click();
+}
 async function app(page: Page, name: string) {
-  await expandNavigation(page, "Manage");
-  await page.getByRole("tab", { name: "Apps", exact: true }).click();
+  await openFromHome(page, "Apps");
   await page.getByRole("button", { name: `Open ${name}`, exact: true }).click();
 }
 
@@ -127,6 +130,44 @@ test("browser: approved conversation continues with no browser and reattaches wi
   }
 });
 
+test("browser: chat links require an explicit decision and open with an isolated opener", async ({
+  browser,
+}) => {
+  const fixture = await browserApp(browser);
+  try {
+    const { page, context } = await fixture.open();
+    await start(page, fixture.directory);
+    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    const composer = page.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const url = "https://example.test/fixture?view=modal";
+    await context.route(url, (route) =>
+      route.fulfill({ contentType: "text/html", body: "Fixture destination" }),
+    );
+    await composer.fill(JSON.stringify([{ message: `[Fixture destination](${url})` }]));
+    await composer.press("Enter");
+    const source = page.getByRole("link", { name: /Fixture destination: https/ });
+    await source.click();
+    const dialog = page.getByRole("dialog", { name: "Open web link?", exact: true });
+    await expect(dialog).toContainText(url);
+    await page.mouse.click(2, 2);
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(source).toBeFocused();
+    expect(context.pages()).toHaveLength(1);
+    await source.press("Enter");
+    const [destination] = await Promise.all([
+      context.waitForEvent("page"),
+      dialog.getByRole("button", { name: "Open link", exact: true }).click(),
+    ]);
+    await expect(destination).toHaveURL(url);
+    expect(await destination.evaluate(() => window.opener === null)).toBe(true);
+    await expect(dialog).toHaveCount(0);
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("browser: custom assistant, memory settings and manual update information survive refresh", async ({
   browser,
 }) => {
@@ -134,14 +175,31 @@ test("browser: custom assistant, memory settings and manual update information s
   try {
     const { page } = await fixture.open();
     await start(page, fixture.directory);
-    await page.getByRole("tab", { name: "Assistants", exact: true }).click();
-    await page.getByRole("button", { name: "Open Custom Assistants", exact: true }).click();
+    await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
     await page.getByRole("button", { name: "New Assistant", exact: true }).click();
     const editor = page.getByRole("dialog", { name: "New Assistant", exact: true });
     await editor.getByLabel("Name", { exact: true }).fill("Browser reviewer");
     await editor
       .getByLabel("Special instructions", { exact: true })
       .fill("Review the requested change with concise findings.");
+    await page.route("**/api/operation", async (route) => {
+      if (route.request().postDataJSON()?.operation === "custom-agent")
+        await route.fulfill({
+          status: 409,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "Fixture save rejected" }),
+        });
+      else await route.continue();
+    });
+    await editor.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(
+      editor.getByRole("alert").filter({ hasText: "Fixture save rejected" }),
+    ).toBeVisible();
+    await expect(editor.getByLabel("Name", { exact: true })).toHaveValue("Browser reviewer");
+    await expect(editor.getByLabel("Special instructions", { exact: true })).toHaveValue(
+      "Review the requested change with concise findings.",
+    );
+    await page.unroute("**/api/operation");
     await editor.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Open Browser reviewer", exact: true }),
@@ -157,7 +215,7 @@ test("browser: custom assistant, memory settings and manual update information s
     await memory.focus();
     await page.keyboard.press("Space");
     await expect(memory).toBeChecked();
-    await app(page, "Update Manager");
+    await app(page, "Updates");
     await expect(page.locator(".updates-page, #app-updates").first()).toContainText(
       "code60 update",
     );
@@ -178,8 +236,7 @@ test("browser: Carbon application navigation, appearance controls and retained d
     const { page } = await fixture.open();
     page.setDefaultTimeout(10_000);
     await start(page, fixture.directory);
-    await expandNavigation(page, "Manage");
-    await page.getByRole("tab", { name: "Apps", exact: true }).click();
+    await openFromHome(page, "Apps");
     await expect(page.locator(".page-panel:not([hidden])")).toHaveCount(1);
     await expect(page.locator("#panel-apps .navigation-list-row").first()).toBeVisible();
     await expect(page.locator("#panel-apps [data-slot='card']")).toHaveCount(0);
@@ -188,13 +245,14 @@ test("browser: Carbon application navigation, appearance controls and retained d
       path: test.info().outputPath("carbon-apps-light.png"),
       animations: "disabled",
     });
-    // Compare the visible content with the workspace edge, including Carbon's
-    // breakpoint margin and the column's half gutter.
+    // Measure visible content from the workspace edge across both shell layouts.
     async function expectPageAlignment(heading: string, content: string) {
       for (const [width, inset] of [
         [390, 16],
-        [768, 32],
-        [1600, 40],
+        [672, 32],
+        [673, 100],
+        [768, 100],
+        [1600, 100],
       ] as const) {
         await page.setViewportSize({ width, height: 1000 });
         const workspace = page.locator(".app-workspace");
@@ -203,35 +261,53 @@ test("browser: Carbon application navigation, appearance controls and retained d
         await expect
           .poll(async () => {
             const left = (element: Element) => element.getBoundingClientRect().left;
-            const edge = await workspace.evaluate(left);
-            return [(await title.evaluate(left)) - edge, (await body.evaluate(left)) - edge];
+            const bounds = await workspace.evaluate((el) => el.getBoundingClientRect().toJSON());
+            const panelRight = await workspace
+              .locator(".page-panel:not([hidden])")
+              .evaluate((el) => el.getBoundingClientRect().right);
+            return [
+              (await title.evaluate(left)) - bounds.left,
+              (await body.evaluate(left)) - bounds.left,
+              bounds.right - panelRight,
+            ];
           })
-          .toEqual([inset, inset]);
+          .toEqual([inset, inset, inset]);
       }
     }
     await expectPageAlignment("#panel-apps .content-page-title", "#panel-apps .navigation-list");
     const nav = page.getByRole("navigation", { name: "Product navigation" });
     const group = (name: string) => nav.getByRole("button", { name, exact: true });
-    const manage = group("Manage");
-    const apps = nav.getByRole("tab", { name: "Apps", exact: true });
-    for (const name of ["Automation", "Inspect"])
+    await expandNavigation(page, "Connect");
+    const connect = group("Connect");
+    const mcp = nav.getByRole("tab", { name: "MCP Servers", exact: true });
+    for (const name of ["Automate", "Experiments"])
       await expect(group(name)).toHaveAttribute("aria-expanded", "false");
     const fontSize = (el: Element) => parseFloat(getComputedStyle(el).fontSize);
     expect(
-      await manage.locator(".cds--side-nav__submenu-title").evaluate(fontSize),
-    ).toBeGreaterThan(await apps.locator(".page-tab-label").evaluate(fontSize));
-    await apps.press("Escape");
-    await expect(manage).toBeFocused();
-    await expect(manage).toHaveAttribute("aria-expanded", "false");
-    await expect(apps).toBeHidden();
+      await connect.locator(".cds--side-nav__submenu-title").evaluate(fontSize),
+    ).toBeGreaterThan(await mcp.locator(".page-tab-label").evaluate(fontSize));
+    await mcp.press("Escape");
+    await expect(connect).toBeFocused();
+    await expect(connect).toHaveAttribute("aria-expanded", "false");
+    await expect(mcp).toBeHidden();
     await expect(page.locator("#panel-apps")).toBeVisible();
-    await manage.press("Space");
-    await expect(apps).toBeVisible();
-    await group("Automation").press("Enter");
+    await connect.press("Space");
+    await expect(mcp).toBeVisible();
+    await mcp.click();
+    await expandNavigation(page, "Customize");
+    const alternate = nav
+      .getByRole("tablist", { name: "Customize", exact: true })
+      .getByRole("tab", { name: "MCP Servers" });
+    await alternate.click();
+    await expect(alternate).toHaveAttribute("aria-selected", "true");
+    await expect(alternate).toBeFocused();
+    await expect(page.locator("#panel-mcp-servers")).toBeVisible();
+    await openFromHome(page, "Apps");
+    await group("Automate").press("Enter");
     await expect(nav.getByRole("tab", { name: "Scheduled Jobs" })).toBeVisible();
-    await group("Automation").click();
+    await group("Automate").click();
     await page.getByRole("button", { name: "Open Scheduled Jobs", exact: true }).click();
-    await expect(group("Automation")).toHaveAttribute("aria-expanded", "true");
+    await expect(group("Automate")).toHaveAttribute("aria-expanded", "true");
     await expect(nav.getByRole("tab", { name: "Scheduled Jobs" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -239,7 +315,20 @@ test("browser: Carbon application navigation, appearance controls and retained d
     await page.getByRole("link", { name: "Skip to main content" }).press("Enter");
     await expect(page.locator("#panel-automations")).toBeFocused();
     await expectPageAlignment("#jobs-page-heading", "#panel-automations .cds--tabs");
-    await app(page, "Command Builder");
+    const customize = nav.getByRole("tablist", { name: "Customize", exact: true });
+    await expect(customize.getByRole("tab")).toHaveText([
+      "Internal Prompts",
+      "Commands",
+      "MCP Servers",
+    ]);
+    await customize.getByRole("tab", { name: "Internal Prompts", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "Internal Prompts", level: 1, exact: true }),
+    ).toBeVisible();
+    await customize.getByRole("tab", { name: "Commands", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "Commands", level: 1, exact: true }),
+    ).toBeVisible();
     const form = page.locator("#panel-commands form");
     await expectPageAlignment(
       "#panel-commands .content-page-title",
@@ -296,6 +385,36 @@ test("browser: Carbon application navigation, appearance controls and retained d
       )
       .toBe(0);
     await composer.fill("Unsent Carbon migration draft");
+    for (const [groupName, destinations] of [
+      [
+        "Contributor Tools",
+        [
+          ["Memory Tester", "episodic-memory"],
+          ["Retrieval Tests", "rag"],
+        ],
+      ],
+      [
+        "Manage",
+        [
+          ["About", "settings-about"],
+          ["Polling", "settings-polling-settings"],
+          ["Updates", "settings-updates"],
+        ],
+      ],
+      ["Personalize", [["Table Defaults", "settings-table-defaults"]]],
+      ["Experiments", [["Web Server (Beta)", "web-server"]]],
+    ] as const) {
+      await expandNavigation(page, groupName);
+      for (const [label, panelId] of destinations) {
+        await nav.getByRole("tab", { name: label, exact: true }).click();
+        await expect(page.locator(`#panel-${panelId}`)).toBeVisible();
+        await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible();
+      }
+    }
+    for (const groupName of ["Develop", "Automate"] as const)
+      await expandNavigation(page, groupName);
+    await page.setViewportSize({ width: 1600, height: 1280 });
+    await page.screenshot({ path: test.info().outputPath("sidebar-groups.png") });
     await app(page, "Memory");
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     await expect(composer).toHaveValue("Unsent Carbon migration draft");
@@ -346,7 +465,7 @@ test("browser: Carbon scheduled jobs edit, run, evidence, cancellation and brows
     first.page.setDefaultTimeout(10_000);
     await start(first.page, fixture.directory);
     await expandNavigation(first.page, "Manage");
-    const appsTab = first.page.getByRole("tab", { name: "Apps", exact: true });
+    const appsTab = first.page.getByRole("tab", { name: "System Manager", exact: true });
     const tabStyles = () =>
       appsTab.evaluate((element) => {
         const style = getComputedStyle(element);
@@ -402,7 +521,7 @@ test("browser: Carbon scheduled jobs edit, run, evidence, cancellation and brows
     await chooser.getByRole("button", { name: "Choose folder", exact: true }).click();
     await first.page
       .getByRole("dialog", { name: "Use this automation repository?", exact: true })
-      .getByRole("button", { name: "Confirm", exact: true })
+      .getByRole("button", { name: "Use repository", exact: true })
       .click();
     await expect(form.getByRole("button", { name: "Create job", exact: true })).toBeEnabled();
     await first.page.screenshot({ path: test.info().outputPath("carbon-job-form-light.png") });
@@ -600,7 +719,7 @@ test("browser: Carbon scheduled jobs edit, run, evidence, cancellation and brows
     await (await menu(second.page, "Delete")).click();
     await second.page
       .getByRole("dialog", { name: "Delete automation?", exact: true })
-      .getByRole("button", { name: "Confirm", exact: true })
+      .getByRole("button", { name: "Delete automation", exact: true })
       .click();
     await expect(content.getByText("No scheduled jobs.", { exact: true })).toBeVisible();
     await tab(second.page, "Execution history").click();
@@ -608,19 +727,21 @@ test("browser: Carbon scheduled jobs edit, run, evidence, cancellation and brows
     await expandNavigation(second.page, "Manage");
     await second.page
       .getByRole("navigation", { name: "Product navigation" })
-      .getByRole("tab", { name: "Apps", exact: true })
+      .getByRole("tab", { name: "System Manager", exact: true })
       .click();
     await second.page.mouse.move(1590, 10);
     await expect
       .poll(() =>
-        second.page.getByRole("tab", { name: "Apps", exact: true }).evaluate((element) => {
-          const style = getComputedStyle(element);
-          return {
-            font: style.font,
-            background: style.backgroundColor,
-            border: style.borderRadius,
-          };
-        }),
+        second.page
+          .getByRole("tab", { name: "System Manager", exact: true })
+          .evaluate((element) => {
+            const style = getComputedStyle(element);
+            return {
+              font: style.font,
+              background: style.backgroundColor,
+              border: style.borderRadius,
+            };
+          }),
       )
       .toEqual(shellBefore);
     ownedPids = await Promise.all(
@@ -648,7 +769,7 @@ test("browser: confirmed Stop Backend closes the runtime and preserves its datab
     await page.getByRole("button", { name: "Stop Code60 Backend", exact: true }).click();
     await page
       .getByRole("dialog", { name: "Stop Code60 Backend?", exact: true })
-      .getByRole("button", { name: "Confirm", exact: true })
+      .getByRole("button", { name: "Stop backend", exact: true })
       .click();
     await expect
       .poll(async () =>
@@ -741,7 +862,7 @@ test("browser: navigation retains two projects and searches their real files", a
     expect(snapshot.openProjects?.map((project) => project.path).sort()).toEqual(
       repositories.sort(),
     );
-    await page.getByRole("tab", { name: "Search", exact: true }).click();
+    await openFromHome(page, "Search");
     const search = page.getByRole("main", { name: "Search", exact: true });
     await search
       .getByRole("searchbox", { name: "Query", exact: true })
@@ -771,7 +892,7 @@ test("browser: resumes a verified destination per database and recovers a remove
     const scope = (name: string) =>
       `code60.resume.${JSON.stringify(join(fixture.directory, name))}`;
     const first = scope("projects.sqlite");
-    await page.getByRole("tab", { name: "Search", exact: true }).click();
+    await openFromHome(page, "Search");
     await expect
       .poll(() => page.evaluate((key) => localStorage.getItem(key), first))
       .toBe(JSON.stringify({ page: "search" }));
@@ -785,7 +906,7 @@ test("browser: resumes a verified destination per database and recovers a remove
     );
     await page.reload();
     await expect(page.getByRole("main", { name: "Relay", exact: true })).toBeVisible();
-    await page.getByRole("tab", { name: "Search", exact: true }).click();
+    await openFromHome(page, "Search");
     await page.getByRole("button", { name: "Workspace", exact: true }).click();
     await page.getByRole("button", { name: "Select or create database" }).click();
     await page.getByRole("button", { name: "Create database…", exact: true }).click();
@@ -821,11 +942,11 @@ test("browser: inspects a search result alongside the query and recovers from no
     commitFixture(path);
     const { page } = await fixture.open();
     await start(page, fixture.directory);
-    await page.getByRole("tab", { name: "Search", exact: true }).click();
+    await openFromHome(page, "Search");
     await expect(page.getByRole("heading", { name: "No projects in this database" })).toBeVisible();
     await page.getByRole("button", { name: "Open projects", exact: true }).click();
     await openProject(page, fixture.directory, project);
-    await page.getByRole("tab", { name: "Search", exact: true }).click();
+    await openFromHome(page, "Search");
     const panel = page.locator("#panel-search");
     const query = panel.getByRole("searchbox", { name: "Query", exact: true });
     await query.fill("cedar");
@@ -942,7 +1063,7 @@ test("browser: concurrent project conversations retain their own streaming respo
     const dialog = page.getByRole("dialog", { name: "Rename chat" });
     await dialog.getByLabel("Chat name").press("Escape");
     await expect(dialog).toBeHidden();
-    await expect(page.getByRole("button", { name: "Work", exact: true })).toHaveAttribute(
+    await expect(page.getByRole("button", { name: "Develop", exact: true })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
@@ -989,6 +1110,127 @@ test("browser: pages retained diagnostic records through the gateway", async ({ 
     await expect(logs.getByRole("table")).toContainText("Desktop startup completed");
     await logs.getByRole("button", { name: "Newer page", exact: true }).click();
     await expect(logs).toContainText("Page 1");
+    await logs.getByRole("table").getByRole("radio").first().press("Space");
+    const record = page.getByRole("dialog", { name: "Log record", exact: true });
+    await expect(record.getByRole("button", { name: "Copy record", exact: true })).toBeVisible();
+    await page.mouse.click(2, 2);
+    await expect(record).toHaveCount(0);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("browser: manage providers on a single page", async ({ browser }) => {
+  const fixture = await browserApp(browser);
+  try {
+    const configPath = join(fixture.directory, "config/code60/config.json");
+    const config = JSON.parse(await readFile(configPath, "utf8"));
+    config.agents.droid = config.agents.claude;
+    await writeFile(configPath, JSON.stringify(config));
+    await fixture.restart();
+    const { page } = await fixture.open();
+    await onboard(page);
+    await expandNavigation(page, "Connect");
+    const nav = page.getByRole("tablist", { name: "Connect", exact: true });
+    await expect(nav.getByRole("tab")).toHaveText(["MCP Servers", "Providers"]);
+    await nav.getByRole("tab", { name: "Providers", exact: true }).click();
+    const providers = page.getByRole("main", { name: "Providers", exact: true });
+    const names = providers.getByRole("heading", { level: 2 });
+    await expect(names).toHaveText(["Claude (Primary)"]);
+    await providers.getByRole("button", { name: "Add Provider" }).click();
+    const wizard = page.locator(".agent-setup-dialog");
+    await wizard.getByRole("button", { name: "Droid", exact: true }).click();
+    await expect(wizard.getByRole("status")).toHaveText("Droid connected");
+    await wizard.getByRole("button", { name: "Close provider setup" }).click();
+    await expect(names).toHaveText(["Claude (Primary)", "Droid"]);
+    await providers.getByRole("button", { name: "More actions for Droid" }).click();
+    await page.getByRole("menuitem", { name: "Set as Primary" }).click();
+    await expect(names).toHaveText(["Claude", "Droid (Primary)"]);
+    await providers.getByRole("button", { name: "More actions for Claude" }).click();
+    await page.getByRole("menuitem", { name: "Disconnect" }).click();
+    await expect(names).toHaveText(["Droid (Primary)"]);
+    const saved = JSON.parse(
+      await readFile(join(fixture.directory, "state/code60/desktop.json"), "utf8"),
+    );
+    expect(saved.agentSetup).toMatchObject({ primary: "droid", enabled: ["droid"] });
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("browser: Open Project modal fits its content and keeps actions in view", async ({
+  browser,
+}) => {
+  const fixture = await browserApp(browser);
+  try {
+    const name = "sample-project-with-a-long-name-for-the-recent-projects-list";
+    const repo = join(fixture.directory, name);
+    await mkdir(repo);
+    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+    commitFixture(repo);
+    const { page } = await fixture.open();
+    await start(page, fixture.directory);
+    await expandNavigation(page, "Develop");
+    await page.getByRole("tab", { name: "Projects", exact: true }).click();
+    const launch = page.locator("#panel-projects").getByRole("button", { name: "New Project" });
+    await launch.click();
+    const dialog = page.getByRole("dialog", { name: "Open Project", exact: true });
+    await expect(dialog.getByText("No recent projects.")).toBeVisible();
+    for (const [width, height] of [
+      [1440, 900],
+      [375, 667],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await dialog.screenshot({
+        path: test.info().outputPath(`empty-${width}.png`),
+        animations: "disabled",
+      });
+      const bounds = await dialog.boundingBox();
+      const cancel = await dialog
+        .getByRole("button", { name: "Cancel", exact: true })
+        .boundingBox();
+      const open = await dialog
+        .getByRole("button", { name: "Open Folder", exact: true })
+        .boundingBox();
+      if (!bounds || !cancel || !open) throw new Error("Missing project picker controls");
+      expect(bounds.height).toBeLessThan(300);
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+      expect(Math.abs(cancel.y - open.y)).toBeLessThan(1);
+      expect(Math.abs(cancel.width - open.width)).toBeLessThan(1);
+      expect(Math.abs(cancel.x - bounds.x)).toBeLessThanOrEqual(2);
+      expect(Math.abs(open.y + open.height - bounds.y - bounds.height)).toBeLessThanOrEqual(2);
+    }
+    await page.keyboard.press("Escape");
+    await expect(launch).toBeFocused();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openProject(page, fixture.directory, name);
+    await page.getByRole("tab", { name: "Projects", exact: true }).click();
+    await launch.click();
+    const row = dialog.getByRole("listitem").filter({ hasText: repo });
+    await page.setViewportSize({ width: 375, height: 667 });
+    await expect(row).toBeVisible();
+    const item = row.getByRole("button").first();
+    await expect(item).toBeFocused();
+    for (const locator of [dialog, row, item]) {
+      expect(await locator.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    }
+    await dialog.screenshot({
+      path: test.info().outputPath("recent-375.png"),
+      animations: "disabled",
+    });
+    await page.setViewportSize({ width: 375, height: 240 });
+    const content = dialog.locator(".cds--modal-content");
+    expect(await content.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    await content.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+    await expect(dialog.getByRole("button", { name: "Open Folder", exact: true })).toBeInViewport({
+      ratio: 1,
+    });
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(execFileSync("git", ["status", "--porcelain"], { cwd: repo, encoding: "utf8" })).toBe(
+      "",
+    );
   } finally {
     await fixture.close();
   }

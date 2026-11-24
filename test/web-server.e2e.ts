@@ -1,26 +1,29 @@
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { expandNavigation } from "./fixtures/browser-actions.js";
+import { expandNavigation, openMcpServers } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard } from "./fixtures/browser-app.js";
 
 async function serverPage(page: Page) {
-  await expandNavigation(page, "Manage");
-  await page.locator("#advanced-toggle").click();
+  await expandNavigation(page, "Experiments");
   await page.locator("#tab-web-server").click();
-  await expect(page.getByRole("heading", { name: "Web Server Beta", exact: true })).toBeVisible();
-  return page.getByRole("main", { name: "Web Server Beta", exact: true });
+  await expect(page.getByRole("heading", { name: "Web Server (Beta)", exact: true })).toBeVisible();
+  return page.getByRole("main", { name: "Web Server (Beta)", exact: true });
 }
 
-test("browser: Web Server Beta is available before provider or database setup", async ({
+test("browser: Web Server (Beta) is available before provider or database setup", async ({
   browser,
 }) => {
   const fixture = await browserApp(browser, [], false);
   try {
     const local = await fixture.open();
-    await local.page.getByRole("button", { name: "Close provider setup", exact: true }).click();
-    await local.page.getByRole("button", { name: "Web Server Beta", exact: true }).click();
-    const settings = local.page.getByRole("main", { name: "Web Server Beta", exact: true });
+    const setup = local.page.locator(".agent-setup-dialog");
+    await setup
+      .locator(".cds--modal-footer")
+      .getByRole("button", { name: "Cancel", exact: true })
+      .click();
+    await local.page.getByRole("button", { name: "Web Server (Beta)", exact: true }).click();
+    const settings = local.page.getByRole("main", { name: "Web Server (Beta)", exact: true });
     await expect(settings.getByRole("switch")).toBeEnabled();
     await expect(settings.locator("p[role=status]")).toHaveText("Off");
     const snapshot = await local.page.evaluate(() => window.code60.snapshot());
@@ -95,11 +98,8 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     await page.getByRole("button", { name: "Connect to Code60", exact: true }).click();
     await page.getByRole("button", { name: "Take control", exact: true }).click();
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
-    await expandNavigation(page, "Manage");
-    // MCP management also runs on paired HTTP, without secure-context UUID/clipboard APIs.
     const beforeMcp = await readdir(fixture.processLog);
-    await page.getByRole("tab", { name: "Apps", exact: true }).click();
-    await page.getByRole("button", { name: "Open MCP Servers", exact: true }).click();
+    await openMcpServers(page);
     await page.getByRole("button", { name: "Add server", exact: true }).click();
     const form = page.getByRole("dialog", { name: /Add MCP server/ });
     await form.getByLabel("Server ID", { exact: true }).fill("lan-docs");
@@ -126,7 +126,9 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     });
     const safeReport = await report.locator("pre").textContent();
     expect(safeReport).not.toContain("LAN documentation");
+    await expect(report.getByRole("button", { name: "Close report", exact: true })).toBeFocused();
     await report.getByRole("button", { name: "Copy safe report", exact: true }).click();
+    await expect(page.getByText("Safe report copied.", { exact: true })).toBeAttached();
     await expect
       .poll(() => local.page.evaluate(() => navigator.clipboard.readText()))
       .toBe(safeReport);

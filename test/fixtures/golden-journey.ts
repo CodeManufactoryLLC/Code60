@@ -122,12 +122,16 @@ export async function goldenJourney(fixture: GoldenApplication, setupDatabase?: 
       .getByRole("button", { name: "Undo", exact: true });
     await undo.click();
     let confirm = page.getByRole("dialog", { name: "Undo this request?", exact: true });
+    await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await expect(confirm.getByRole("button", { name: "Undo request", exact: true })).toHaveClass(
+      /cds--btn--danger/,
+    );
     await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
     expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("human accepted target\n");
     await unchanged();
     await undo.click();
     confirm = page.getByRole("dialog", { name: "Undo this request?", exact: true });
-    await confirm.getByRole("button", { name: "Confirm", exact: true }).click();
+    await confirm.getByRole("button", { name: "Undo request", exact: true }).click();
     await expect
       .poll(async () => readFile(join(repo, "result.txt"), "utf8"), { timeout: 20_000 })
       .toBe("original\n");

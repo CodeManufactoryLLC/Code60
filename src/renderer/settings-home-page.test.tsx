@@ -13,7 +13,7 @@ describe("Settings home", () => {
       expect([...html.matchAll(/aria-label="Open ([^"]+)"/g)].map((match) => match[1])).toEqual([
         "About",
         "Advanced",
-        "Table defaults",
+        "Table Defaults",
         "Text",
       ]);
       expect(html.match(/class="navigation-list-row"/g)).toHaveLength(4);

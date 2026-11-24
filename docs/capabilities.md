@@ -8,8 +8,8 @@ Schema version: 1
 
 - ID: `mcp-servers`
 - Status: shipped
-- Purpose: Use the Servers and JSON tabs to manage MCP definitions. Add server opens the guided form from the table toolbar; preview/restore backups and reset selected configurations; enable, approve, test, reconnect and disconnect managed connections; manage secure credentials and reviewed OAuth sign-in; review interrupted transactions, verify owned cleanup and copy a safe troubleshooting report.
-- Access: Apps → MCP Servers
+- Purpose: Select a user or project configuration above the Servers and JSON tabs. Add server opens the guided form from the table toolbar. Select a server to edit it, manage secure credentials or review OAuth sign-in. Use Connections to enable, approve, test, disconnect or reconnect. Configuration maintenance groups backup restoration, reset, interrupted transaction recovery, cleanup verification and the safe troubleshooting report.
+- Access: Connect → MCP Servers or Customize → MCP Servers
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Review forms before immediate saves; Save, Discard or Cancel dirty JSON before guided edits or scope changes. Confirm removal, moves, draft discard, backup restoration and reset after scope/inheritance review. Review exact project configuration before approval; confirm stdio tests and reviewed Disconnect/Reconnect effects. Explicitly choose persistent or temporary storage; review issuer, scopes, resource and registration before sign-in; confirm forgetting credentials or sign-out. Review captured revisions and effects before confirming Complete/Roll back; confirm owned cleanup verification. Review the safe report before copying.
@@ -27,7 +27,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: No confirmation; navigation only.
-- Limits: Work, Automation, Inspect and Manage are expandable navigation groups. Opening a destination reveals its group. Skip to main content moves keyboard focus past the navigation to the current page. Projects and conversations keep their own actions. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.
+- Limits: Chat, Develop, Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments are expandable navigation groups. Opening a destination reveals its group. Skip to main content moves keyboard focus past the navigation to the current page. Projects and conversations keep their own actions. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.
 - Pages: none
 - Settings sections: none
 - Tools: none
@@ -65,7 +65,7 @@ Schema version: 1
 - ID: `relay`
 - Status: shipped
 - Purpose: Application-wide orchestration across explicit targets.
-- Access: Sidebar → Assistants → Relay (also available from Home)
+- Access: Sidebar → Chat → Relay (also available from Home)
 - Prerequisite: provider
 - Agent access: existing-tools
 - Confirmation: Existing permissions apply.
@@ -79,7 +79,7 @@ Schema version: 1
 - ID: `assistants`
 - Status: shipped
 - Purpose: Open Relay or Custom Assistants from two destination rows on the Assistants page.
-- Access: Sidebar → Assistants heading (or command palette → Assistants)
+- Access: Commands → Assistants
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
@@ -93,7 +93,7 @@ Schema version: 1
 - ID: `custom-agents`
 - Status: shipped
 - Purpose: Create application-wide assistants with special instructions and one persistent Relay-style conversation each.
-- Access: Home → Custom Assistants or Sidebar → Assistants → Custom Assistants → New Assistant; assistant row → More actions → Edit or Archive; title actions → Archived → row → More actions → Restore
+- Access: Home → Custom Assistants or Sidebar → Chat → Custom Assistants → New Assistant; assistant row → More actions → Edit or Archive; title actions → Archived → row → More actions → Restore
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Archiving requires browser confirmation, stops only the assistant and preserves history.
@@ -110,7 +110,7 @@ Schema version: 1
 - Access: Projects heading → circular Add Project; project row → + (New Session); Projects page → New Project; project home → New Session; project row → red × (Close Project); project row → chevron (expand/collapse)
 - Prerequisite: database
 - Agent access: read
-- Confirmation: The authenticated host folder chooser allows directory creation within locally configured roots. Click to select a folder, double-click or press Enter to browse, then choose the folder. Confirm the full selected path to open. Back, Forward and Up navigate the chooser; Cancel leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.
+- Confirmation: Select database offers Open existing database and Create database. Each opens its host picker immediately. The authenticated host folder chooser allows directory creation within locally configured roots. Click to select a folder, double-click or press Enter to browse, then choose the folder. Confirm the full selected path with Open project. Back, Forward and Up navigate the chooser. Cancel has initial focus on confirmation and leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.
 - Limits: Opening or selecting a project is a human action; opening never initializes Git. Archiving the last displayed project chat returns to its home without a replacement. New Session explicitly creates a chat. Project chat auto-names are limited to 19 characters. Manual names and existing titles are unchanged. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.
 - Pages: `projects`, `project`, `chat`
 - Settings sections: none
@@ -205,7 +205,7 @@ Schema version: 1
 - ID: `commands`
 - Status: shipped
 - Purpose: Use bundled or saved reusable prompts with a leading $name. Bundled commands: $create-command: Create a reusable $ command from your instructions. $plan: Propose a plan for your request and wait for Code60 acceptance. $business-evaluation: Plan an evidence-based business evaluation, then wait for Code60 acceptance. $catch-me-up: Explain the broader context and anything I may have missed. $big-picture: Step back from the details and reassess the value and approach. $pushback: Challenge your conclusion and re-evaluate the evidence. $simplify: Explain the current topic in simple, plain language.
-- Access: Apps → Command Builder; project composer $ command picker
+- Access: Customize → Commands (also Apps → Commands); project composer $ command picker
 - Prerequisite: database
 - Agent access: existing-tools
 - Confirmation: Existing permissions apply.
@@ -233,7 +233,7 @@ Schema version: 1
 - ID: `prompts`
 - Status: shipped
 - Purpose: Customize project orchestration and handoff templates.
-- Access: Apps → Prompt Builder → title actions for Save, Discard changes or Reset to default
+- Access: Customize → Internal Prompts (also Apps → Internal Prompts) → title actions for Save, Discard changes or Reset to default
 - Prerequisite: database
 - Agent access: read
 - Confirmation: Existing permissions apply.
@@ -270,15 +270,15 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
-## Web Server Beta
+## Web Server (Beta)
 
 - ID: `web-server`
 - Status: shipped
 - Purpose: Enable paired access to Code60 from another device on the same trusted LAN.
-- Access: Settings → Advanced → Web Server Beta
+- Access: Experiments → Web Server (Beta)
 - Prerequisite: none
 - Agent access: human-only
-- Confirmation: Turning the switch on explicitly enables trusted-LAN access. Pair each remote browser using six digits displayed as 123-456 (the hyphen is optional when entering it); take control explicitly. Server administration is localhost-only. Before provider setup, close the setup dialog and choose Web Server Beta on the start screen.
+- Confirmation: Turning the switch on explicitly enables trusted-LAN access. Pair each remote browser using six digits displayed as 123-456 (the hyphen is optional when entering it); take control explicitly. Server administration is localhost-only. Before provider setup, close the setup dialog and choose Web Server (Beta) on the start screen.
 - Limits: Off by default; remembers the enabled preference. Uses the current primary private IPv4 address and existing application port. Only the controlling localhost browser can toggle access or create single-use 60-second pairing codes; LAN always requires pairing, with ten attempts per minute. Paired devices use the full app with explicit single-browser control takeover. Disabling, address changes and backend restart revoke LAN sessions; approved work continues. HTTP is not encrypted. Native execution and the dev-container start launcher are supported; ordinary containers without the host controller report unavailable. LAN serves bundled assets without Vite/HMR or source maps. No custom ports, TLS, public hosting, router/firewall changes, passwords or separate service. Codes are private responses, never snapshots, diagnostics or saved storage.
 - Pages: `web-server`
 - Settings sections: none
@@ -289,12 +289,12 @@ Schema version: 1
 - ID: `providers`
 - Status: shipped
 - Purpose: Verify and choose coding-agent providers; inspect and clear saved per-connector orchestrator and worker model defaults.
-- Access: Providers → provider details → title actions for Disconnect or Set as Primary
+- Access: Connect → Providers → More actions beside a provider → Disconnect or Set as Primary
 - Prerequisite: none
 - Agent access: read
 - Confirmation: Installation and login are explicit human-only setup actions. Install [provider] and sign in authorizes the fixed release installation and continuation into browser login; authorization happens on the official provider website.
-- Limits: Database-independent. Add Provider verifies catalog connectors. Standard Codex setup offers explicit installation of pinned @openai/codex@0.171.0 and device-code sign-in; A non-root backend user is required; Codex and the Claude ACP adapter require npm. The controlling setup dialog alone receives temporary codes and official HTTPS sign-in links; authorization-code paste-back and the fixed Copilot private-file storage confirmation are ephemeral. Login requires enabled ChatGPT device-code authentication, then a fresh ACP probe and automatic save. Closing, reload, takeover or shutdown cancels setup without logout. Other standard harnesses offer fixed pinned installations and browser sign-in: Antigravity with code paste-back, Claude subscription or Anthropic Console with code paste-back, Copilot and Kiro device codes, Droid device pairing, and OpenCode ChatGPT or GitHub Copilot OAuth. Custom launch commands and enterprise endpoints use manual setup. Credentials and managed tools persist in the backend user's home, including the container home volume. No account switching, logout, API-key entry or management MCP tools. Set as Primary preserves other memberships and uses saved command verification; Disconnect removes only Code60 membership and retains model defaults, history and external login. Both actions require stopped interactive agent work and no setup transaction. The primary cannot disconnect until another provider is primary. Verified membership is not live connection health.
-- Pages: `providers`, `provider`
+- Limits: Database-independent. Add Provider verifies catalog connectors. After connection, choose Close or Add another provider. Standard Codex setup offers explicit installation of pinned @openai/codex@0.171.0 and device-code sign-in; A non-root backend user is required; Codex and the Claude ACP adapter require npm. The controlling setup dialog alone receives temporary codes and official HTTPS sign-in links; authorization-code paste-back and the fixed Copilot private-file storage confirmation are ephemeral. Login requires enabled ChatGPT device-code authentication, then a fresh ACP probe and automatic save. Closing, reload, takeover or shutdown cancels setup without logout. Other standard harnesses offer fixed pinned installations and browser sign-in: Antigravity with code paste-back, Claude subscription or Anthropic Console with code paste-back, Copilot and Kiro device codes, Droid device pairing, and OpenCode ChatGPT or GitHub Copilot OAuth. Custom launch commands and enterprise endpoints use manual setup. Credentials and managed tools persist in the backend user's home, including the container home volume. No account switching, logout, API-key entry or management MCP tools. Set as Primary preserves other memberships and uses saved command verification; Disconnect removes only Code60 membership and retains model defaults, history and external login. Both actions require stopped interactive agent work and no setup transaction. The primary cannot disconnect until another provider is primary. Verified membership is not live connection health.
+- Pages: `providers`
 - Settings sections: none
 - Tools: none
 
@@ -303,7 +303,7 @@ Schema version: 1
 - ID: `model-settings`
 - Status: shipped
 - Purpose: Switch connector-advertised model and reasoning settings between turns and save confirmed role defaults for new sessions.
-- Access: Chat or worker composer → Model; Providers → provider details → Default models to clear
+- Access: Chat or worker composer → Model; Connect → Providers → Clear beside a saved model default
 - Prerequisite: provider
 - Agent access: human-only
 - Confirmation: Human selection only; no model-switching MCP tool. Main derives saved values from the owned session.
@@ -345,7 +345,7 @@ Schema version: 1
 - ID: `automations`
 - Status: shipped
 - Purpose: Scheduled Jobs opens on Schedules in a Carbon product shell. Scan job name, schedule status, next run, live run status and agent. Run/Stop applies to one job and works independently of Enabled/Paused. Expand for the saved prompt, cadence, repository, branch, timeout and allowed tools. The row actions menu offers Edit job, Enable/Pause schedule, View history and Delete. New scheduled job and Refresh are in the schedules toolbar. Create and edit use a dedicated form. The Execution history tab supports current-page search, sorting, single execution selection and Older/Latest paging. View history opens an explicit schedule filter. Show all schedules clears it. Select a run to open Transcript or Changes beside its row, including live, assembled execution transcripts. Legacy saved grid preferences stay stored.
-- Access: Automation → Scheduled Jobs (also Apps → Scheduled Jobs)
+- Access: Automate → Scheduled Jobs (also Apps → Scheduled Jobs)
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Human installation and schedule consent.
@@ -359,11 +359,11 @@ Schema version: 1
 - ID: `workflows`
 - Status: shipped
 - Purpose: Inspect saved definitions or edit a copy for fresh review. Open Workflow sign-in for the host terminal authentication step. Use Execution history to open the player for one run. Create ordered coding workflows manually or through Create with prompt, review and explicitly start them in dedicated saved-file worktrees. Track independent verification, repairs, decisions and accepted diffs.
-- Access: Automation → Workflows (also Apps → Workflows)
+- Access: Develop → Workflows (also Apps → Workflows)
 - Prerequisite: runtime
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
-- Limits: The player shows run activity with tool calls collapsed until expanded, recorded execution time, accepted-task progress and ordered task configuration/results. Pause and resume are available for new Transmission 0.1.0-staging.20 workflows. Existing staging.18 records use their original engine. Stop is terminal. Execution runs on macOS Apple Silicon or Linux x64 with glibc using recorded Node >=24.22 <25 and platform-specific bundled engines, locked dependencies and native Codex. Engine launch uses bundled dependencies without downloading or compiling them. Workflow Codex login/configuration is separate from Code60 provider verification; code60 workflows login explicitly opens the bundled Codex login in an interactive terminal without starting an engine. Immutable engine bindings remain outside application releases. Workflow execution selects the verified cached native Codex, independently of application CODEX_PATH overrides. Automatic permission approvals default on. Work continues after closing the browser or stopping the Code60 backend; the backend stop confirmation explains this. No login service is installed. Prompt drafting uses the verified primary provider, bounded root README/package scripts and no tools; generated fields never start work. Source files, HEAD and index stay unchanged; worktrees/evidence remain. No automatic apply or Undo integration. Read-only views never restart the engine. The staging.18 restart path can exceed retry allowances. One active or uncertain workflow per source checkout; at most 100 ordered tasks with 30 checks each, repair/retry allowances 0–30 (default two), and 200 retained workflows within 8 MiB. Activity is paginated with labelled excerpts above 32,768 characters per detail and a display window of 1,000 events within one million characters. Drafting is bounded to 20 messages, 120 seconds, and 160,000 characters each for composed context and output.
+- Limits: The player shows run activity with tool calls collapsed until expanded, recorded execution time, accepted-task progress and ordered task configuration/results. Pause and resume are available for new Transmission 0.1.0-staging.20 workflows. Existing staging.18 records use their original engine. Choose Stop workflow to stop permanently. Cancel has initial focus. Execution runs on macOS Apple Silicon or Linux x64 with glibc using recorded Node >=24.22 <25 and platform-specific bundled engines, locked dependencies and native Codex. Engine launch uses bundled dependencies without downloading or compiling them. Workflow Codex login/configuration is separate from Code60 provider verification; code60 workflows login explicitly opens the bundled Codex login in an interactive terminal without starting an engine. Immutable engine bindings remain outside application releases. Workflow execution selects the verified cached native Codex, independently of application CODEX_PATH overrides. Automatic permission approvals default on. Work continues after closing the browser or stopping the Code60 backend; the backend stop confirmation explains this. No login service is installed. Prompt drafting uses the verified primary provider, bounded root README/package scripts and no tools; generated fields never start work. Source files, HEAD and index stay unchanged; worktrees/evidence remain. No automatic apply or Undo integration. Read-only views never restart the engine. The staging.18 restart path can exceed retry allowances. One active or uncertain workflow per source checkout; at most 100 ordered tasks with 30 checks each, repair/retry allowances 0–30 (default two), and 200 retained workflows within 8 MiB. Activity is paginated with labelled excerpts above 32,768 characters per detail and a display window of 1,000 events within one million characters. Drafting is bounded to 20 messages, 120 seconds, and 160,000 characters each for composed context and output.
 - Pages: `workflows`
 - Settings sections: none
 - Tools: none
@@ -400,8 +400,8 @@ Schema version: 1
 
 - ID: `settings`
 - Status: shipped
-- Purpose: Choose Light, Dark or System, interface text size, focus highlights, signal colors and table defaults. Table defaults start at Low density (Carbon 64px rows), with row, column and heading lines off. Saved table settings retain their column order, visibility and density. Browser-native window management is outside Code60.
-- Access: Manage → Settings → Text or Table defaults, Apps → Appearance or Polling, Workspace → Color theme
+- Purpose: Choose Light, Dark or System, interface text size, focus highlights, signal colors and table defaults. Table defaults start at Low density (Carbon 64px rows), with row, column and heading lines off. Saved table settings retain their column order, visibility and density. Apply saves the draft, including a Reset to defaults. Cancel or Escape discards it. Browser-native window management is outside Code60.
+- Access: Personalize → Text, Table Defaults or Appearance, Manage → Polling, Workspace → Color theme
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
@@ -410,12 +410,12 @@ Schema version: 1
 - Settings sections: `appearance`, `table-defaults`, `text`, `polling-settings`, `about`
 - Tools: none
 
-## Update Manager
+## Updates
 
 - ID: `updates`
 - Status: shipped
 - Purpose: Inspect the installed version and terminal update/recovery commands.
-- Access: Apps → Update Manager
+- Access: Manage → Updates (also available from Apps → Updates)
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Local terminal consent is required before interrupting interactive/scheduled work; non-TTY changes require Code60's --yes. Prior releases, histories, custom databases, worktrees, settings and pinned engine/runtime bindings are preserved. The browser shows installed version and terminal instructions only.
@@ -438,26 +438,26 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
-## RAG experiment
+## Retrieval Tests
 
 - ID: `rag`
 - Status: experimental
 - Purpose: Manually index database-associated chat history.
-- Access: Settings → Advanced → Experiments → RAG
+- Access: Contributor Tools → Retrieval Tests
 - Prerequisite: database
 - Agent access: human-only
-- Confirmation: Browser confirmation before Clear.
+- Confirmation: Choose Clear index to remove the derived index. Cancel keeps it.
 - Limits: Excludes Relay; no automatic indexing or agent retrieval.
 - Pages: `rag`
 - Settings sections: none
 - Tools: none
 
-## Episodic Memory experiment
+## Memory Tester
 
 - ID: `episodic-memory`
 - Status: experimental
 - Purpose: Inspect experimental episodic extraction.
-- Access: Settings → Advanced → Experiments → Episodic Memory
+- Access: Contributor Tools → Memory Tester
 - Prerequisite: database
 - Agent access: human-only
 - Confirmation: Existing experiment controls.
@@ -485,10 +485,10 @@ Schema version: 1
 - ID: `search`
 - Status: shipped
 - Purpose: Search all projects saved in the connected database, open or closed, with an optional cited overview.
-- Access: Sidebar → Search
+- Access: Home → Search
 - Prerequisite: database
 - Agent access: human-only
-- Confirmation: Opening a closed project source asks the native Open Project confirmation. Archived conversations remain read-only.
+- Confirmation: Opening a closed project source asks for Open project or Cancel in the controlling browser. Archived conversations remain read-only.
 - Limits: Select a result to read its record alongside the query and results. Open source navigates to the original evidence. Search needs no selected project. Includes project identity, saved project sessions/transcripts and bounded documentation/source evidence; excludes other databases, Relay and Custom Assistant histories. Results have project provenance and Load more pages of 100. Submitted results stay stable across project/page selection; new projects enter the next search. Missing/corrupt sources show partial results. Overview helpers use captured evidence, denied permissions and no gateway; failures preserve literal results. Agents cannot request Search.
 - Pages: `search`
 - Settings sections: none
@@ -502,7 +502,7 @@ Schema version: 1
 - Access: Apps → Data Viewer → Logs; title actions → Pause/Resume viewing, Refresh logs or Clear logs
 - Prerequisite: none
 - Agent access: human-only
-- Confirmation: Browser confirmation before Clear.
+- Confirmation: Choose Clear logs to remove retained diagnostics. Cancel keeps them.
 - Limits: Never exposed to agents, MCP or awareness.
 - Pages: `logs`
 - Settings sections: none

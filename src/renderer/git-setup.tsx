@@ -165,7 +165,50 @@ export function GitSetupDialog({
     if (mounted.current) setBusy(false);
   }
   return (
-    <Modal title="Set up Git" busy={busy} wide onClose={onClose}>
+    <Modal
+      footer={
+        <>
+          {ready ? (
+            <AppButton variant="primary" type="button" onClick={onClose}>
+              Return to Chat
+            </AppButton>
+          ) : (
+            <>
+              {busy ? (
+                <AppButton variant="secondary" type="button" onClick={() => void cancel()}>
+                  Cancel Git setup
+                </AppButton>
+              ) : (
+                <AppButton variant="secondary" type="button" onClick={onClose}>
+                  Close
+                </AppButton>
+              )}
+              {session && (
+                <AppButton
+                  type="button"
+                  className="primary"
+                  disabled={
+                    busy ||
+                    !name.trim() ||
+                    !email.trim() ||
+                    (!selected.length && (session.files.length > 0 || session.excluded.length > 0))
+                  }
+                  onClick={() => void commit()}
+                >
+                  {session.files.length === 0 && session.excluded.length === 0
+                    ? "Create empty initial commit"
+                    : "Create initial commit"}
+                </AppButton>
+              )}
+            </>
+          )}
+        </>
+      }
+      title="Set up Git"
+      busy={busy}
+      wide
+      onClose={onClose}
+    >
       <div className="git-setup-body">
         <p>
           Workers start from committed files. Review the files to include in the initial commit.
@@ -180,15 +223,10 @@ export function GitSetupDialog({
           <p role="status">{session ? "Creating initial commit…" : "Checking project files…"}</p>
         )}
         {ready ? (
-          <>
-            <p>
-              Return to Chat and continue your request. Previous dispatches will not run
-              automatically.
-            </p>
-            <AppButton type="button" onClick={onClose}>
-              Return to Chat
-            </AppButton>
-          </>
+          <p>
+            Return to Chat and continue your request. Previous dispatches will not run
+            automatically.
+          </p>
         ) : (
           <>
             {!busy && (
@@ -283,31 +321,7 @@ export function GitSetupDialog({
                   </div>
                 </div>
                 <p>Missing author settings are saved only in this repository.</p>
-                <AppButton
-                  type="button"
-                  className="primary"
-                  disabled={
-                    busy ||
-                    !name.trim() ||
-                    !email.trim() ||
-                    (!selected.length && (session.files.length > 0 || session.excluded.length > 0))
-                  }
-                  onClick={() => void commit()}
-                >
-                  {session.files.length === 0 && session.excluded.length === 0
-                    ? "Create empty initial commit"
-                    : "Create initial commit"}
-                </AppButton>
               </>
-            )}
-            {busy ? (
-              <AppButton type="button" onClick={() => void cancel()}>
-                Cancel Git setup
-              </AppButton>
-            ) : (
-              <AppButton type="button" onClick={onClose}>
-                Close
-              </AppButton>
             )}
           </>
         )}

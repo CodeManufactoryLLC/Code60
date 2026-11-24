@@ -239,6 +239,7 @@ export function LogsPage({
       />
       {state.selected && (
         <Modal
+          passive
           title="Log record"
           busy={false}
           wide

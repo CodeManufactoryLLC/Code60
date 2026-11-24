@@ -5,6 +5,7 @@ import type {
   Action,
   ActionResult,
   ChatUndoResult,
+  ConfirmationId,
   DesktopRun,
   DetailScope,
   OrchestrationChat,
@@ -156,7 +157,9 @@ export class RelayService {
     private readonly deps: CoreDeps,
     private readonly env: Readonly<Record<string, string | undefined>>,
     private readonly notify: () => void,
-    private readonly dialogs: { confirm(title: string, detail: string): Promise<boolean> } = {
+    private readonly dialogs: {
+      confirm(presentation: ConfirmationId, detail: string): Promise<boolean>;
+    } = {
       confirm: async () => false,
     },
     private readonly memory?: MemoryService,
@@ -928,7 +931,7 @@ export class RelayService {
       throw new Error("This request is no longer the latest checkpoint");
     if (
       !(await this.dialogs.confirm(
-        "Undo this request?",
+        "undo-request",
         `Rewind to before “${checkpoint.text.slice(0, 240)}” and restore this request's changes in:\n${[...new Set([...checkpoint.operations.map((entry) => entry.project), ...checkpoint.direct.map((entry) => entry.project), ...this.currentWorkers().map((worker) => worker.target.cwd)])].join("\n") || "No recorded file changes."}${checkpoint.direct.length ? "\nDirect-folder snapshots also rewind manual edits made in those folders since the checkpoint." : ""}${request.replacesDraft ? "\nYour unsent composer draft will be replaced with the original request." : ""}`,
       ))
     )

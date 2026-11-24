@@ -8,11 +8,16 @@ it("binds a single-use decision to its active page and revokes later async reque
   const emit = vi.fn<(owner: string, value: Interaction) => void>();
   const ended = vi.fn();
   const interactions = new Interactions([], emit, ended);
-  expect(await interactions.run("absent", () => interactions.confirm("Title", "Detail"))).toBe(
+  expect(await interactions.run("absent", () => interactions.confirm("clear-logs", "Detail"))).toBe(
     false,
   );
   interactions.attach("page");
-  const pending = interactions.run("page", () => interactions.confirm("Title", "Detail"));
+  const pending = interactions.run("page", () => interactions.confirm("clear-logs", "Detail"));
+  expect(emit.mock.calls[0]?.[1]).toMatchObject({
+    kind: "confirm",
+    presentation: "clear-logs",
+    title: "Clear logs?",
+  });
   const id = emit.mock.calls[0]?.[1].id as string;
   await expect(interactions.answer("other", { id, accepted: true })).rejects.toThrow("expired");
   await interactions.answer("page", { id, accepted: true });
@@ -24,7 +29,9 @@ it("binds a single-use decision to its active page and revokes later async reque
   expect(interactions.list("other")).toHaveLength(0);
   interactions.detach("page");
   expect(await detached).toBeNull();
-  expect(await interactions.run("page", () => interactions.confirm("Late", "Detail"))).toBe(false);
+  expect(await interactions.run("page", () => interactions.confirm("clear-logs", "Detail"))).toBe(
+    false,
+  );
 });
 
 it("expires unanswered decisions and dismisses the browser dialog", async () => {
@@ -32,7 +39,7 @@ it("expires unanswered decisions and dismisses the browser dialog", async () => 
   const ended = vi.fn();
   const interactions = new Interactions([], () => {}, ended);
   interactions.attach("page");
-  const pending = interactions.run("page", () => interactions.confirm("Title", "Detail"));
+  const pending = interactions.run("page", () => interactions.confirm("clear-logs", "Detail"));
   const id = interactions.list("page")[0]?.id as string;
   await vi.advanceTimersByTimeAsync(GATEWAY_LIMITS.interactionMs);
   expect(await pending).toBe(false);

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
   type BrowserSession,
+  confirmationPresentation,
   connectionStatusSchema,
   GATEWAY_VERSION,
   type GatewayFrame,
@@ -65,18 +66,38 @@ function BrowserInteraction({
         />
       </Suspense>
     );
+  const presentation = confirmationPresentation[interaction.presentation];
   return (
-    <Modal title={interaction.title} busy={busy} onClose={() => void answer(false)}>
+    <Modal
+      size="sm"
+      title={interaction.title}
+      busy={busy}
+      onClose={() => void answer(false)}
+      initialFocus={
+        presentation?.danger ||
+        interaction.presentation === "open-project" ||
+        interaction.presentation === "open-search-project"
+          ? ".cds--btn--secondary"
+          : ".cds--btn--primary"
+      }
+      footer={
+        <>
+          <AppButton variant="secondary" disabled={busy} onClick={() => void answer(false)}>
+            Cancel
+          </AppButton>
+          <AppButton
+            variant="primary"
+            className={presentation?.danger ? "destructive" : ""}
+            disabled={busy || !presentation}
+            onClick={() => void answer(true)}
+          >
+            {presentation?.action ?? "Action unavailable"}
+          </AppButton>
+        </>
+      }
+    >
       <p>{interaction.detail}</p>
       {error && <p role="alert">{error}</p>}
-      <div className="dialog-actions">
-        <AppButton type="button" disabled={busy} onClick={() => void answer(false)}>
-          Cancel
-        </AppButton>
-        <AppButton type="button" disabled={busy} onClick={() => void answer(true)}>
-          Confirm
-        </AppButton>
-      </div>
     </Modal>
   );
 }
@@ -92,6 +113,7 @@ export function BrowserApp() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [link, setLink] = useState<{ url: string; answer(accepted: boolean): void } | null>(null);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const establish = useCallback((value: BrowserSession | null) => {
     saveBrowserSession(value);
@@ -133,12 +155,17 @@ export function BrowserApp() {
       establish(null);
       return;
     }
+    let pendingLink: ((value: boolean) => void) | undefined;
+    const cancelLink = () => pendingLink?.(false);
     const receive = (frame: GatewayFrame) => {
       if (frame.event === "resync") {
         setConnected(true);
         setInteractions([]);
       }
-      if (frame.event === "disconnected") setConnected(false);
+      if (frame.event === "disconnected") {
+        cancelLink();
+        setConnected(false);
+      }
       if (frame.event === "interaction") {
         const next = frame.value as Interaction;
         setInteractions((current) =>
@@ -154,13 +181,27 @@ export function BrowserApp() {
         void bootstrap();
       }
     };
-    const next = createBrowserClient(session, receive);
     let disposed = false;
+    const next = createBrowserClient(session, receive, (url) => {
+      if (disposed || pendingLink) return Promise.resolve(false);
+      return new Promise<boolean>((resolve) => {
+        const answer = (accepted: boolean) => {
+          if (pendingLink !== answer) return;
+          pendingLink = undefined;
+          setLink(null);
+          if (accepted) window.open(url, "_blank", "noopener,noreferrer");
+          resolve(accepted);
+        };
+        pendingLink = answer;
+        setLink({ url, answer });
+      });
+    });
     void next.ready.then(() => {
       if (!disposed) setClient(next);
     });
     return () => {
       disposed = true;
+      cancelLink();
       next.stop();
       setClient(undefined);
     };
@@ -219,7 +260,7 @@ export function BrowserApp() {
           >
             <p>
               {lanPairing ? (
-                "Enter the pairing code from Web Server Beta on the computer running Code60."
+                "Enter the pairing code from Web Server (Beta) on the computer running Code60."
               ) : (
                 <>
                   Run <code>code60 open</code> on this computer and enter its pairing code.
@@ -314,6 +355,26 @@ export function BrowserApp() {
             </div>
           }
         />
+      )}
+      {link && (
+        <Modal
+          size="sm"
+          title="Open web link?"
+          busy={false}
+          onClose={() => link.answer(false)}
+          footer={
+            <>
+              <AppButton variant="secondary" onClick={() => link.answer(false)}>
+                Cancel
+              </AppButton>
+              <AppButton variant="primary" onClick={() => link.answer(true)}>
+                Open link
+              </AppButton>
+            </>
+          }
+        >
+          <p>{link.url}</p>
+        </Modal>
       )}
       {interactions[0] && (
         <BrowserInteraction

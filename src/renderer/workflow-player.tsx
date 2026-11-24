@@ -269,6 +269,8 @@ function WorkflowDialog({
 }) {
   return (
     <Modal
+      passive={!footer}
+      footer={footer}
       title={title}
       busy={false}
       onClose={close}
@@ -277,13 +279,6 @@ function WorkflowDialog({
     >
       {task && <p>{task}</p>}
       <div className="workflow-modal-body">{children}</div>
-      <footer>
-        {footer ?? (
-          <AppButton type="button" onClick={close}>
-            Close
-          </AppButton>
-        )}
-      </footer>
     </Modal>
   );
 }
@@ -583,10 +578,11 @@ export function WorkflowPlayer({
           close={close}
           footer={
             <>
-              <AppButton type="button" onClick={close}>
+              <AppButton variant="secondary" type="button" onClick={close}>
                 Cancel
               </AppButton>
               <AppButton
+                className="destructive"
                 type="button"
                 disabled={!canStop}
                 onClick={() => {
@@ -611,10 +607,11 @@ export function WorkflowPlayer({
           close={close}
           footer={
             <>
-              <AppButton type="button" onClick={close}>
+              <AppButton variant="secondary" type="button" onClick={close}>
                 Cancel
               </AppButton>
               <AppButton
+                variant="primary"
                 type="submit"
                 form="workflow-steer"
                 disabled={!controllable || !message.trim()}

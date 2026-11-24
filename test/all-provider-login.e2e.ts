@@ -111,10 +111,14 @@ for (const [id, name] of [
       expect(JSON.parse(saved).agentSetup.version).toBe(1);
       expect(saved).not.toMatch(/QA60|PRIVATE-STATE/);
       for (const entry of await readdir(join(fixture.directory, "state"), { recursive: true })) {
-        // A live diagnostic writer may release its transient ownership lock after enumeration.
+        // Diagnostics release their lock and run records atomically rename their temporary file.
         const file = await open(join(fixture.directory, "state", entry), "r").catch(
           (error: NodeJS.ErrnoException) => {
-            if (error.code === "ENOENT" && entry.endsWith("/.lock")) return null;
+            if (
+              error.code === "ENOENT" &&
+              (entry.endsWith("/.lock") || /\/runs\/[^/]+\/[a-f0-9-]{36}\.tmp$/.test(entry))
+            )
+              return null;
             throw error;
           },
         );
@@ -182,8 +186,8 @@ test("browser: paired HTTP LAN browser installs and signs in without a secure-co
   try {
     const local = await fixture.open();
     await local.page.getByRole("button", { name: "Close provider setup", exact: true }).click();
-    await local.page.getByRole("button", { name: "Web Server Beta", exact: true }).click();
-    const settings = local.page.getByRole("main", { name: "Web Server Beta", exact: true });
+    await local.page.getByRole("button", { name: "Web Server (Beta)", exact: true }).click();
+    const settings = local.page.getByRole("main", { name: "Web Server (Beta)", exact: true });
     await settings.getByRole("switch").focus();
     await local.page.keyboard.press("Space");
     await expect(settings.locator("p[role=status]")).toHaveText("Listening");
@@ -223,8 +227,7 @@ test("browser: paired HTTP LAN browser installs and signs in without a secure-co
     await expect(wizard.locator("p[role=status]")).toHaveText("Kiro connected");
     await page.screenshot({ path: test.info().outputPath("lan-provider-connected.png") });
     await local.page.getByRole("button", { name: "Take control", exact: true }).click();
-    await expandNavigation(local.page, "Manage");
-    await local.page.locator("#advanced-toggle").click();
+    await expandNavigation(local.page, "Experiments");
     await local.page.locator("#tab-web-server").click();
     await settings.getByRole("switch").focus();
     await local.page.keyboard.press("Space");

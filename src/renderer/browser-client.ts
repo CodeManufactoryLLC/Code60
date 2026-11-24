@@ -81,6 +81,7 @@ class BrowserEvents {
 export function createBrowserClient(
   session: BrowserSession,
   onFrame: (frame: GatewayFrame) => void,
+  requestWebLink: (url: string) => Promise<boolean>,
 ) {
   session.clientId = randomId();
   let ready!: () => void;
@@ -134,20 +135,7 @@ export function createBrowserClient(
     onRagStatus: (listener) => {
       return events.on("rag-status", listener);
     },
-    openWebLink: async (request) => {
-      const { url } = parseWebLink(request);
-      if (
-        !window.confirm(`Open web link?
-${url}`)
-      )
-        return false;
-      const link = document.createElement("a");
-      link.href = url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.click();
-      return true;
-    },
+    openWebLink: async (request) => requestWebLink(parseWebLink(request).url),
     queryLogs: (request: unknown) => rpc("logs-query", request),
     logDetail: (request: unknown) => rpc("logs-detail", request),
     clearLogs: (request: unknown) => rpc("logs-clear", request),

@@ -8,6 +8,7 @@ import {
 import { randomId } from "./browser-platform.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { TextInput as CarbonTextInput } from "./carbon/fields.js";
+import { pageDefinitions } from "./navigation.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
 export function RagPage({
@@ -86,7 +87,7 @@ export function RagPage({
     }
   }
   return (
-    <main className="rag-page" aria-label="RAG">
+    <main className="rag-page" aria-label={pageDefinitions.rag.label}>
       <SettingsHeader
         page="rag"
         tip="This is a manual snapshot of project and legacy orchestration chats and worker conversations in the connected database, including archived chats and registered projects. The application-owned Relay is independent of this database and is not indexed. New messages are included only when you rebuild. Retrieval returns matching text, not generated answers. Scores are cosine similarities, not confidence percentages."

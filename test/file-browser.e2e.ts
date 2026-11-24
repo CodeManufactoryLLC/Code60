@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
@@ -76,6 +77,11 @@ test("browser: host chooser navigates, recovers, and creates and reopens the cho
     await expect(name).toHaveCount(0);
     await expect(button("New folder")).toBeFocused();
     await button("New folder").click();
+    await name.fill("Uncreated");
+    await button("Dismiss").click();
+    await expect(name).toHaveCount(0);
+    await expect(stat(join(root, "Uncreated"))).rejects.toMatchObject({ code: "ENOENT" });
+    await button("New folder").click();
     await name.fill("Archives");
     await name.press("Enter");
     await expect(picker.getByRole("alert").filter({ hasText: /\S/ })).toBeVisible();
@@ -85,7 +91,7 @@ test("browser: host chooser navigates, recovers, and creates and reopens the cho
     await at(join(root, "Data"));
     expect((await stat(join(root, "Data"))).isDirectory()).toBe(true);
     await picker.getByLabel("Database filename").fill("Work.sqlite");
-    await button("Create database").click();
+    await picker.getByLabel("Database filename").press("Enter");
     await expect(picker).toHaveCount(0);
     const target = join(root, "Data", "Work.sqlite");
     expect((await readFile(target)).subarray(0, 16).toString()).toBe("SQLite format 3\0");
@@ -114,6 +120,85 @@ test("browser: host chooser navigates, recovers, and creates and reopens the cho
     await reopen.getByRole("button", { name: "Open", exact: true }).click();
     await expect(reopen).toHaveCount(0);
     expect((await page.evaluate(() => window.code60.snapshot())).database).toBe(target);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("browser: folder chooser keeps its actions visible while browsing and selecting a project", async ({
+  browser,
+}) => {
+  const fixture = await browserApp(browser);
+  try {
+    const name = "A-long-project-folder-name-that-wraps-on-a-phone";
+    const repo = join(fixture.directory, name);
+    await mkdir(repo);
+    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+    commitFixture(repo);
+    for (let n = 0; n < 16; n++) await mkdir(join(fixture.directory, `folder-${n}`));
+
+    const { page } = await fixture.open();
+    await onboard(page);
+    await createDatabase(page, fixture.directory);
+    await expandNavigation(page, "Develop");
+    await page.getByRole("tab", { name: "Projects", exact: true }).click();
+    await page.locator("#panel-projects").getByRole("button", { name: "New Project" }).click();
+    const launch = page
+      .getByRole("dialog", { name: "Open Project", exact: true })
+      .getByRole("button", { name: "Open Folder", exact: true });
+    await launch.click();
+    const chooser = page.getByRole("dialog", { name: "Choose folder", exact: true });
+    await chooser.getByRole("option", { name: fixture.directory, exact: true }).dblclick();
+    const list = chooser.getByRole("listbox");
+    const project = chooser.getByRole("option", { name, exact: true });
+    await project.click();
+    await expect(project).toHaveAttribute("aria-selected", "true");
+    const cancel = chooser.getByRole("button", { name: "Cancel", exact: true });
+    const choose = chooser.getByRole("button", { name: "Choose folder", exact: true });
+    for (const [width, height] of [
+      [1440, 900],
+      [375, 667],
+      [375, 300],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await expect(choose).toBeInViewport({ ratio: 1 });
+      await expect(cancel).toBeInViewport({ ratio: 1 });
+      const left = await cancel.boundingBox();
+      const right = await choose.boundingBox();
+      const modal = await chooser.boundingBox();
+      if (!left || !right || !modal) throw new Error("Missing folder chooser controls");
+      expect(Math.abs(left.y - right.y)).toBeLessThan(1);
+      expect(Math.abs(left.width - right.width)).toBeLessThan(1);
+      expect(Math.abs(right.x + right.width - modal.x - modal.width)).toBeLessThanOrEqual(2);
+      expect(Math.abs(right.y + right.height - modal.y - modal.height)).toBeLessThanOrEqual(2);
+      expect(
+        await list.evaluate(
+          (el) => el.scrollHeight > el.clientHeight && el.scrollWidth <= el.clientWidth + 1,
+        ),
+      ).toBe(true);
+      expect(await chooser.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      if (height > 300)
+        await chooser.screenshot({ path: test.info().outputPath(`choose-folder-${width}.png`) });
+    }
+    await page.keyboard.press("Escape");
+    await expect(chooser).toHaveCount(0);
+    await expect(launch).toBeFocused();
+    expect((await page.evaluate(() => window.code60.snapshot())).directory).not.toBe(repo);
+    await page.setViewportSize({ width: 375, height: 667 });
+    await launch.click();
+    await chooser.getByRole("option", { name: fixture.directory, exact: true }).dblclick();
+    await project.click();
+    await choose.click();
+    await page
+      .getByRole("dialog", { name: "Open project?", exact: true })
+      .getByRole("button", { name: "Open project", exact: true })
+      .click();
+    await expect
+      .poll(async () => (await page.evaluate(() => window.code60.snapshot())).directory)
+      .toBe(repo);
+    expect(execFileSync("git", ["status", "--porcelain"], { cwd: repo, encoding: "utf8" })).toBe(
+      "",
+    );
   } finally {
     await fixture.close();
   }

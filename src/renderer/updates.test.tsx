@@ -8,7 +8,7 @@ it("shows installed version and terminal instructions without browser update aut
     {},
     {
       get() {
-        throw Error("Update Manager attempted an application request");
+        throw Error("Updates attempted an application request");
       },
     },
   ) as ApplicationClient;

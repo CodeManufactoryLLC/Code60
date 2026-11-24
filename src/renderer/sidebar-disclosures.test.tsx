@@ -180,46 +180,26 @@ function tabList(overrides: Partial<ComponentProps<typeof PageTabBar>> = {}) {
   return mount(list.type as (value: typeof props) => ReactNode, list.props as typeof props);
 }
 
-it.each([
-  ["tab-home", "home-pages", "home"],
-  ["tab-apps", "app-pages", "apps"],
-  ["tab-chat", "chat-pages", "projects"],
-  ["tab-settings", "settings-pages", "settings"],
-] as const)("keeps %s open through heading and Left navigation", (header, panel, page) => {
+it("opens Projects and preserves its conversations across navigation", () => {
   const onSelect = vi.fn();
-  const view = tabList({ tabs: { ...initialTabs, active: page }, settingsSection: null, onSelect });
-  expect(byId(view.tree(), panel).props.hidden).toBe(false);
-  click(view.tree(), header);
-  view.render();
-  expect(onSelect).toHaveBeenLastCalledWith(page);
-  press(view.tree(), header, "ArrowLeft");
-  view.render();
-  expect(byId(view.tree(), panel).props.hidden).toBe(false);
+  const view = tabList({ onSelect });
+  click(view.tree(), "tab-chat");
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith("projects");
+  expect(byId(view.tree(), "chat-pages").props.hidden).toBeFalsy();
 });
 
-it("ignores legacy closed card flags while retaining nested disclosure choices", () => {
+it("retains custom assistant disclosure and reveals its rows when opened", () => {
   vi.stubGlobal("localStorage", { getItem: () => "false", setItem: vi.fn() });
-  const view = tabList();
-  for (const panel of [
-    "home-pages",
-    "assistants-pages",
-    "chat-pages",
-    "app-pages",
-    "settings-pages",
-  ])
-    expect(byId(view.tree(), panel).props.hidden).toBe(false);
-  expect(byId(view.tree(), "advanced-pages").props.hidden).toBe(true);
-  expect(byId(view.tree(), "table-pages").props.hidden).toBe(true);
-});
-
-it("navigates Assistants without offering a top-level disclosure", () => {
   const onSelect = vi.fn();
-  const view = tabList({ tabs: { ...initialTabs, active: "home" }, onSelect });
-  click(view.tree(), "tab-assistants");
-  view.render({ tabs: { ...initialTabs, active: "assistants" } });
-  expect(onSelect).toHaveBeenCalledExactlyOnceWith("assistants");
-  expect(byId(view.tree(), "assistants-pages").props.hidden).toBe(false);
-  expect(() => byId(view.tree(), "assistants-toggle")).toThrow("Missing navigation element");
+  const view = tabList({ onSelect });
+  expect(byId(view.tree(), "custom-agent-pages").props.inert).toBe(true);
+  click(view.tree(), "tab-custom-agents");
+  view.render({ tabs: { ...initialTabs, active: "custom-agents" } });
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith("custom-agents");
+  expect(byId(view.tree(), "custom-agent-pages").props.inert).toBe(false);
+  press(view.tree(), "tab-custom-agents", "ArrowLeft");
+  view.render();
+  expect(byId(view.tree(), "custom-agent-pages").props.hidden).toBe(true);
 });
 
 it("keeps an unidentified failed custom assistant reachable through its definition entry", () => {
@@ -385,35 +365,14 @@ it("keeps project worker disclosure independent from chat selection on the leadi
   expect(toggle().props.disabled).toBe(true);
 });
 
-it("closes nested Advanced descendants without closing the Settings card", () => {
-  const view = tabList();
-  press(view.tree(), "advanced-toggle", "ArrowLeft");
-  view.render();
-  expect(byId(view.tree(), "settings-pages").props.hidden).toBe(false);
-  for (const panel of ["advanced-pages", "experiment-pages"]) {
-    expect(byId(view.tree(), panel).props.hidden).toBe(true);
-    expect(byId(view.tree(), panel).props.inert).toBe(true);
-  }
-  press(view.tree(), "advanced-toggle", "ArrowRight");
-  view.render();
-  expect(byId(view.tree(), "advanced-pages").props.hidden).toBe(false);
-  expect(byId(view.tree(), "experiment-pages").props.hidden).toBe(true);
-});
-
-it("keeps Apps and nested choices open when a child navigates to its card parent", () => {
-  const view = tabList();
-  press(view.tree(), "tab-commands", "ArrowLeft");
-  view.render();
-  expect(byId(view.tree(), "app-pages").props.hidden).toBe(false);
-  expect(byId(view.tree(), "table-pages").props.hidden).toBe(false);
-});
-
-it("keeps Projects visible across delayed conversation selection and legacy collapse", () => {
-  vi.stubGlobal("localStorage", { getItem: () => "false", setItem: vi.fn() });
+it("reveals Develop for project conversations and Chat for Relay", () => {
   const view = tabList({ tabs: { ...initialTabs, active: "chat" } });
-  expect(byId(view.tree(), "chat-pages").props.hidden).toBe(false);
+  const group = (title: string) => find(view.tree(), (element) => element.props.title === title);
+  expect(group("Develop").props.destination).toBeDefined();
+  expect(group("Chat").props.destination).toBeUndefined();
   view.render({ selectedId: "relay" });
-  expect(byId(view.tree(), "chat-pages").props.hidden).toBe(false);
+  expect(group("Develop").props.destination).toBeUndefined();
+  expect(group("Chat").props.destination).toBeDefined();
 });
 
 it("keeps the row selected without marking hidden streaming replies read during project selection", () => {
@@ -538,16 +497,10 @@ it("propagates an explicit project-chevron collapse to its retained worker discl
   expect(byId(child.tree(), "workers-chat").props.hidden).toBe(true);
 });
 
-it("publishes provider navigation without an expansion interface", () => {
-  const tabs = { ...initialTabs, active: "provider" as const, providerId: "claude" };
-  const view = tabList({ tabs });
-  const providers = () =>
-    find(
-      view.tree(),
-      (element) => typeof element.type === "function" && element.type.name === "ProvidersSidebar",
-    );
-  expect(providers().props.expanded).toBeUndefined();
-  expect(providers().props.onExpanded).toBeUndefined();
-  view.render({ tabs: { ...tabs, providerId: "codex" } });
-  expect(providers().props.selectedId).toBe("codex");
+it("shows Providers as a single tab in Connect", () => {
+  const view = tabList({ tabs: { ...initialTabs, active: "providers" } });
+  const tab = byId(view.tree(), "tab-providers");
+  expect(tab.props["aria-controls"]).toBe("panel-providers");
+  expect(tab.props["aria-selected"]).toBe(true);
+  expect(tab.props["aria-expanded"]).toBeUndefined();
 });

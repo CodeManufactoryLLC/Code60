@@ -165,7 +165,7 @@
 
   :root:not([data-color-scheme="dark"])
     .sidebar-section
-    > :is(.sidebar-card-toggle, .project-sidebar-open, .provider-sidebar-add) {
+    > :is(.sidebar-card-toggle, .project-sidebar-open) {
     --focus-outline: #1e40af;
   }
 
@@ -191,7 +191,7 @@
 }
 
 .sidebar .sidebar-card-toggle,
-.sidebar :is(.project-sidebar-open, .provider-sidebar-add) {
+.sidebar .project-sidebar-open {
   position: absolute;
   z-index: 1;
   top: calc((var(--nav-row-height) - var(--nav-action-height)) / 2);
@@ -204,11 +204,11 @@
   transition: color var(--motion) var(--ease);
 }
 
-.sidebar :is(.project-sidebar-open, .provider-sidebar-add) {
+.sidebar .project-sidebar-open {
   right: 4px;
 }
 
-.sidebar .sidebar-card-header :is(#tab-chat, #tab-providers) {
+.sidebar .sidebar-card-header #tab-chat {
   padding-right: 44px;
 }
 
@@ -220,12 +220,12 @@
 .sidebar-section:has(
     > .sidebar-card-header:hover,
     > .sidebar-card-toggle:hover,
-    > :is(.project-sidebar-open, .provider-sidebar-add):hover,
+    > .project-sidebar-open:hover,
     > .sidebar-card-header :focus-visible,
     > .sidebar-card-toggle:focus-visible,
-    > :is(.project-sidebar-open, .provider-sidebar-add):focus-visible
+    > .project-sidebar-open:focus-visible
   )
-  > :is(.sidebar-card-toggle, .project-sidebar-open, .provider-sidebar-add)
+  > :is(.sidebar-card-toggle, .project-sidebar-open)
   > :is(.sidebar-card-chevron, .sidebar-card-add),
 .project-chat-heading:is(:hover, :has(:focus-visible))
   > .icon-button
@@ -268,8 +268,7 @@
 }
 
 .sidebar-card-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron,
-:is(.project-sidebar-open, .provider-sidebar-add):is(:hover, :focus-visible, :active):not(:disabled)
-  .sidebar-card-add,
+.project-sidebar-open:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
 .project-session-add:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
 .project-chat-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron,
 .chat-sidebar-action:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-action {
@@ -283,7 +282,7 @@
 }
 
 .sidebar-card-toggle:active .sidebar-card-chevron,
-:is(.project-sidebar-open, .provider-sidebar-add):active:not(:disabled) .sidebar-card-add,
+.project-sidebar-open:active:not(:disabled) .sidebar-card-add,
 .project-folder-stop:active:not(:disabled) .sidebar-card-stop,
 .project-session-add:active:not(:disabled) .sidebar-card-add,
 .project-chat-toggle:active .sidebar-card-chevron,
@@ -293,7 +292,7 @@
 }
 
 .sidebar-card-toggle:focus-visible .sidebar-card-chevron,
-:is(.project-sidebar-open, .provider-sidebar-add):focus-visible .sidebar-card-add,
+.project-sidebar-open:focus-visible .sidebar-card-add,
 .project-folder-stop:focus-visible .sidebar-card-stop,
 .project-session-add:focus-visible .sidebar-card-add,
 .project-chat-toggle:focus-visible .sidebar-card-chevron,
@@ -929,7 +928,6 @@
 #assistants-pages,
 #app-pages,
 #settings-pages,
-#provider-pages,
 #chat-pages {
   --nav-indent: 0px;
 }
@@ -1087,15 +1085,6 @@
   border-radius: 50%;
   color: var(--muted);
   pointer-events: none;
-}
-
-/* Immediate child labels share the card heading's gutter, regardless of artwork size. */
-#provider-pages .chat-sidebar-entry {
-  --nav-label-inset: calc(
-    var(--nav-item-padding) +
-    var(--nav-inset) +
-    var(--nav-borderless-offset)
-  );
 }
 
 .sidebar-navigation-card:has(#tab-chat) {

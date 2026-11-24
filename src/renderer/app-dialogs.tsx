@@ -3,9 +3,10 @@ import { Button as AppButton } from "./carbon/button.js";
 import { Modal } from "./modal.js";
 import { ProjectConfirmation } from "./project-confirmation.js";
 import type { useProjectConnection } from "./project-connection.js";
+import { ProjectDialog } from "./project-dialog.js";
 import { LaunchConfirmation, NewRun, NewSession } from "./run-dialogs.js";
 import type { useUpdateNotice } from "./updates.js";
-import { DatabaseDialog, ProjectDialog } from "./workspace-dialogs.js";
+import { DatabaseDialog } from "./workspace-dialogs.js";
 
 type DialogProps = Pick<
   AppPagesProps,
@@ -72,24 +73,32 @@ export function AppDialogs({
         />
       )}
       {updateNotice.notice && (
-        <Modal title="Update available" busy={false} onClose={updateNotice.dismiss}>
+        <Modal
+          footer={
+            <>
+              <AppButton variant="secondary" type="button" onClick={updateNotice.dismiss}>
+                Later
+              </AppButton>
+              <AppButton
+                variant="primary"
+                type="button"
+                onClick={() => {
+                  updateNotice.dismiss();
+                  openUpdates();
+                  void updates.act("download");
+                }}
+              >
+                Download now
+              </AppButton>
+            </>
+          }
+          size="sm"
+          title="Update available"
+          busy={false}
+          onClose={updateNotice.dismiss}
+        >
           <p>Code60 {updateNotice.notice} is available.</p>
           <p>Download now, or keep working and download later from the footer or Settings.</p>
-          <div className="button-group">
-            <AppButton type="button" onClick={updateNotice.dismiss}>
-              Later
-            </AppButton>
-            <AppButton
-              type="button"
-              onClick={() => {
-                updateNotice.dismiss();
-                openUpdates();
-                void updates.act("download");
-              }}
-            >
-              Download now
-            </AppButton>
-          </div>
         </Modal>
       )}
       {picker === "project" && snapshot && (

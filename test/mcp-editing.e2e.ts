@@ -4,16 +4,14 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import type { McpConfigurationStore as StoreType } from "../src/application/index.js";
-import { expandNavigation } from "./fixtures/browser-actions.js";
+import { openMcpServers } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
 
 const config = (directory: string) => join(directory, "config/code60/mcp.json");
 const text = (label: string, enabled = false) =>
   `{"version":1, "servers":{"docs":{"label":"${label}","enabled":${enabled},"type":"stdio","command":"never-launch"}}}\n`;
 async function app(page: Page) {
-  await expandNavigation(page, "Manage");
-  await page.getByRole("tab", { name: "Apps", exact: true }).click();
-  await page.getByRole("button", { name: "Open MCP Servers", exact: true }).click();
+  await openMcpServers(page);
   await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
 }
 async function json(page: Page) {
@@ -79,8 +77,7 @@ test("MCP JSON: completion, safe validation, exact saves, navigation and guided 
     await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("ArrowRight");
-    await expandNavigation(page, "Manage");
-    await page.getByRole("tab", { name: "Apps", exact: true }).click();
+    await page.getByRole("link", { name: "Code60", exact: true }).click();
     await app(page);
     await expect(page.locator(".mcp-json-editor")).toContainText("Retained draft");
     await page.locator(".mcp-json-editor .inputarea").focus();

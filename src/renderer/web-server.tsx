@@ -3,6 +3,7 @@ import type { ApplicationClient, WebServerCode, WebServerStatus } from "../bridg
 import { copyText } from "./browser-platform.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { Switch as CarbonSwitch } from "./carbon/switch.js";
+import { pageDefinitions } from "./navigation.js";
 import { PageTitle } from "./page-title.js";
 
 export function WebServerPage({ api, visible }: { api: ApplicationClient; visible: boolean }) {
@@ -90,7 +91,7 @@ export function WebServerPage({ api, visible }: { api: ApplicationClient; visibl
       if (next.enabled && next.state === "listening") await newCode();
     });
   return (
-    <main className="web-server-page" aria-label="Web Server Beta">
+    <main className="web-server-page" aria-label={pageDefinitions["web-server"].label}>
       <PageTitle page="web-server" />
       <section className="settings-group web-server-controls" aria-label="LAN access">
         <div className="settings-row">

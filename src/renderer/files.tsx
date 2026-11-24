@@ -253,18 +253,26 @@ function FileSettings({
   onClose(): void;
 }) {
   return (
-    <Modal title="File Explorer settings" busy={false} onClose={onClose} initialFocus="input">
+    <Modal
+      footer={
+        <>
+          <AppButton variant="primary" type="button" onClick={onClose}>
+            Done
+          </AppButton>
+        </>
+      }
+      size="sm"
+      title="File Explorer settings"
+      busy={false}
+      onClose={onClose}
+      initialFocus="input"
+    >
       <div className="files-hidden">
         <CarbonCheckbox
           labelText={<>Show hidden files</>}
           checked={hidden}
           onChange={(event) => onHidden(event.target.checked)}
         />
-      </div>
-      <div className="modal-footer">
-        <AppButton type="button" onClick={onClose}>
-          Done
-        </AppButton>
       </div>
     </Modal>
   );

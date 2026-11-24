@@ -5,7 +5,6 @@ import {
   HeaderName,
   SideNav,
   SideNavItems,
-  SideNavLink,
   SideNavMenu,
   SkipToContent,
 } from "@carbon/react";
@@ -33,20 +32,11 @@ import {
   pageDefinitions,
   settingsIcons,
   settingsLabels,
-  settingsParents,
 } from "./navigation.js";
 import type { NavigationActions } from "./navigation-actions.js";
 import { NavigationIcon } from "./navigation-icons.js";
-import {
-  inNavigationBranch,
-  navigationParent,
-  parentActivation,
-  sidebarPageElementId,
-  staticChildren,
-} from "./navigation-tree.js";
+import { sidebarPageElementId } from "./navigation-tree.js";
 import { ProjectChatSidebar } from "./project-chat-sidebar.js";
-import type { ProviderManagement } from "./provider-management.js";
-import { ProvidersSidebar } from "./providers-sidebar.js";
 
 import type { PageId, PageTabs, SettingsSectionId } from "./tabs.js";
 
@@ -64,8 +54,6 @@ export function PageTabBar({
   onConnectDatabase,
   projectDisabled,
   navigation,
-  providerSetup,
-  providerManagement,
   customAgents = [],
   chats,
   runs,
@@ -97,8 +85,6 @@ export function PageTabBar({
   onConnectDatabase?(): void;
   projectDisabled: boolean;
   navigation: NavigationActions;
-  providerSetup?: import("../bridge/index.js").AgentSetupSnapshot | undefined;
-  providerManagement?: ProviderManagement | undefined;
   customAgents?: readonly import("../bridge/index.js").CustomAgentSummary[] | undefined;
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
@@ -187,7 +173,6 @@ export function PageTabBar({
       >
         <div id="navigation-sidebar-content">
           <PageTabList
-            sidebarOpen={true}
             onOpenProject={database ? onOpenProject : (onConnectDatabase ?? onOpenProject)}
             projectDisabled={projectDisabled}
             tabs={tabs}
@@ -195,8 +180,6 @@ export function PageTabBar({
             onSelect={onSelect}
             onSettingsSectionSelect={onSettingsSectionSelect}
             navigation={navigation}
-            providerSetup={providerSetup}
-            providerManagement={providerManagement}
             customAgents={customAgents}
             chats={chats}
             runs={runs}
@@ -210,7 +193,13 @@ export function PageTabBar({
         </div>
       </SideNav>
       {utilities && (
-        <Modal busy={false} title="Workspace" onClose={() => setUtilities(false)}>
+        <Modal
+          passive
+          initialFocus=".cds--list-box button, select"
+          busy={false}
+          title="Workspace"
+          onClose={() => setUtilities(false)}
+        >
           <div className="product-workspace-actions">
             <CarbonSelect
               labelText="Color theme"
@@ -293,26 +282,24 @@ function HistoryControls({
   );
 }
 
-type NavigationGroup = "Work" | "Automation" | "Inspect" | "Manage";
+const sidebarGroups = {
+  Chat: ["relay", "custom-agents"],
+  Develop: ["projects", "workflows"],
+  Automate: ["automations"],
+  Connect: ["mcp-servers", "providers"],
+  Customize: ["prompts", "commands", "customize-mcp-servers"],
+  Personalize: ["appearance", "table-defaults", "text"],
+  Manage: ["about", "polling-settings", "system-manager", "updates"],
+  "Contributor Tools": ["episodic-memory", "rag"],
+  Experiments: ["web-server"],
+} as const satisfies Record<
+  string,
+  readonly (PageId | SettingsSectionId | "relay" | "customize-mcp-servers")[]
+>;
 
-function productGroup(page: PageId): NavigationGroup {
-  if (page === "automations" || page === "workflows") return "Automation";
-  if (inNavigationBranch(page, "tables")) return "Inspect";
-  if (
-    [
-      "home",
-      "search",
-      "assistants",
-      "custom-agents",
-      "projects",
-      "project",
-      "chat",
-      "files",
-    ].includes(page)
-  )
-    return "Work";
-  return "Manage";
-}
+type NavigationGroup = keyof typeof sidebarGroups;
+type SidebarItem = (typeof sidebarGroups)[NavigationGroup][number];
+const groupNames = Object.keys(sidebarGroups) as NavigationGroup[];
 
 function NavigationSection({
   title,
@@ -332,7 +319,7 @@ function NavigationSection({
   }, [destination]);
   return (
     <SideNavMenu
-      id={`nav-group-${title}`}
+      id={`nav-group-${title.replaceAll(" ", "-")}`}
       title={title}
       ref={button}
       defaultExpanded={Boolean(destination)}
@@ -358,7 +345,6 @@ function NavigationSection({
 }
 
 function PageTabList({
-  sidebarOpen,
   onOpenProject,
   projectDisabled,
   tabs,
@@ -366,8 +352,6 @@ function PageTabList({
   onSelect,
   onSettingsSectionSelect,
   navigation,
-  providerSetup,
-  providerManagement,
   customAgents = [],
   chats,
   runs,
@@ -378,7 +362,6 @@ function PageTabList({
   openProjects,
   selectedProjectId,
 }: {
-  sidebarOpen: boolean;
   onOpenProject(): void;
   projectDisabled: boolean;
   tabs: PageTabs;
@@ -386,8 +369,6 @@ function PageTabList({
   onSelect(id: PageId): void;
   onSettingsSectionSelect(id: SettingsSectionId | null): void;
   navigation: NavigationActions;
-  providerSetup?: import("../bridge/index.js").AgentSetupSnapshot | undefined;
-  providerManagement?: ProviderManagement | undefined;
   customAgents?: readonly import("../bridge/index.js").CustomAgentSummary[] | undefined;
   chats: readonly OrchestrationChat[];
   runs: readonly DesktopRun[];
@@ -399,12 +380,6 @@ function PageTabList({
   selectedProjectId?: string | null | undefined;
 }) {
   const { pending: chatPending, error: chatError, chatAction, projectAction } = navigation;
-  const homeExpanded = true,
-    assistantsExpanded = true,
-    chatExpanded = true,
-    providersExpanded = true,
-    appsExpanded = true,
-    settingsExpanded = true;
   const relay = chats.find((chat) => chat.kind === "relay" && !chat.customAgentId);
   const [customExpanded, setCustomExpanded] = useState(
     () => localStorage.getItem("code60.customAgentsExpanded") !== "false",
@@ -423,146 +398,48 @@ function PageTabList({
   }, [navigation.destination, selectedCustomAgent]);
   const relayId = relay && conversationId(relay);
   const relaySelected = relayId !== undefined && relayId === selectedId;
-  const assistantActive =
-    tabs.active === "custom-agents" ||
-    (tabs.active === "chat" &&
-      (relaySelected || relay?.workers?.includes(selectedId ?? "") || !!selectedCustomAgent));
-  useLayoutEffect(() => {
-    if (chatExpanded && selectedId && !relaySelected)
-      document.querySelector("#chat-pages [aria-current='true']")?.scrollIntoView({
-        block: "nearest",
-      });
-  }, [selectedId, relaySelected]);
-  const [advancedExpanded, setAdvancedExpanded] = useState(
-    () =>
-      (localStorage.getItem("code60.advancedExpanded") ??
-        localStorage.getItem("code60.experimentsExpanded")) === "true",
-  );
-  const [experimentsExpanded, setExperimentsExpanded] = useState(
-    () => localStorage.getItem("code60.experimentsExpanded") === "true",
-  );
-  const [expanded, setExpanded] = useState(
-    () => localStorage.getItem("code60.tablesExpanded") === "true",
-  );
-  const navigationFrame = useRef<number | undefined>(undefined);
-  const experimentActive = inNavigationBranch(tabs.active, "experiments");
-  const advancedActive = inNavigationBranch(tabs.active, "advanced");
-  const tableActive = inNavigationBranch(tabs.active, "tables");
-  const sectionParent =
-    tabs.active === "settings" && settingsSection !== null
-      ? settingsParents[settingsSection]
-      : undefined;
-  const appActive = inNavigationBranch(tabs.active, "apps") || sectionParent === "apps";
-  const settingsActive = (tabs.active === "settings" && sectionParent !== "apps") || advancedActive;
-  const currentGroup = productGroup(tabs.active);
+  const [mcpItem, setMcpItem] = useState<"mcp-servers" | "customize-mcp-servers">("mcp-servers");
+  function activeSidebarItem() {
+    switch (tabs.active) {
+      case "chat":
+        if (selectedCustomAgent) return "custom-agents";
+        if (relaySelected || relay?.workers?.includes(selectedId ?? "")) return "relay";
+        return "projects";
+      case "project":
+        return "projects";
+      case "mcp-servers":
+        return mcpItem;
+      case "settings":
+        return settingsSection;
+      default:
+        return tabs.active;
+    }
+  }
+  const activeItem = activeSidebarItem();
   const destinationFor = (group: NavigationGroup) =>
-    group === currentGroup
+    sidebarGroups[group].some((item) => item === activeItem)
       ? JSON.stringify([
+          activeItem,
           tabs.active,
-          settingsSection,
           tabs.projectId,
-          tabs.providerId,
           tabs.active === "chat" && selectedId,
         ])
       : undefined;
   useLayoutEffect(() => {
-    if (tableActive) setExpanded(true);
-    if (advancedActive) setAdvancedExpanded(true);
-    if (experimentActive) setExperimentsExpanded(true);
-    if (!appActive && !advancedActive && tabs.active !== "settings") return;
-    navigationFrame.current = requestAnimationFrame(() => {
-      navigationFrame.current = undefined;
-      if (document.getElementById(`panel-${tabs.active}`)?.contains(document.activeElement)) return;
-      const id =
-        tabs.active === "settings" && settingsSection !== null
-          ? `tab-settings-${settingsSection}`
-          : sidebarPageElementId(tabs.active, tabs.projectId);
-      const target = document.getElementById(id);
-      if (target !== document.activeElement) target?.focus();
-    });
-    return () => {
-      if (navigationFrame.current !== undefined) cancelAnimationFrame(navigationFrame.current);
-    };
-  }, [tabs, settingsSection, appActive, tableActive, advancedActive, experimentActive]);
-  useEffect(() => {
-    localStorage.setItem("code60.tablesExpanded", String(expanded));
-  }, [expanded]);
-  useEffect(() => {
-    localStorage.setItem("code60.advancedExpanded", String(advancedExpanded));
-  }, [advancedExpanded]);
-  useEffect(() => {
-    localStorage.setItem("code60.experimentsExpanded", String(experimentsExpanded));
-  }, [experimentsExpanded]);
-  const disclosures = {
-    apps: { open: appsExpanded, panel: "app-pages" },
-    settings: { open: settingsExpanded, panel: "settings-pages" },
-    tables: { open: expanded, set: setExpanded, panel: "table-pages" },
-    advanced: { open: advancedExpanded, set: setAdvancedExpanded, panel: "advanced-pages" },
-    experiments: {
-      open: experimentsExpanded,
-      set: setExperimentsExpanded,
-      panel: "experiment-pages",
-    },
-  };
-  type StaticParent = keyof typeof disclosures;
-  const isParent = (id: string): id is StaticParent => Object.hasOwn(disclosures, id);
-  const childIds = (parent: StaticParent) =>
-    staticChildren(parent, database)
-      .filter(({ id }) => parent !== "apps" || !["automations", "workflows", "tables"].includes(id))
-      .flatMap(({ target }) =>
-        target.kind === "page" || target.kind === "settings" ? [target.id] : [],
-      );
-  const setDisclosure = (id: StaticParent, open: boolean) => {
-    const disclosure = disclosures[id];
-    if (!("set" in disclosure)) return;
-    disclosure.set(open);
-    if (!open) for (const child of childIds(id)) if (isParent(child)) setDisclosure(child, false);
-  };
-  const descendants = (parent: StaticParent): (PageId | SettingsSectionId)[] =>
-    childIds(parent).flatMap((id) => [
-      id,
-      ...(isParent(id) && disclosures[id].open ? descendants(id) : []),
-    ]);
-  const destinations: (PageId | SettingsSectionId | "relay" | "assistants")[] = [
-    "home",
-    ...(homeExpanded ? ["search" as const] : []),
-    "assistants",
-    ...(assistantsExpanded
-      ? [...(relay && !chatPending ? ["relay" as const] : []), "custom-agents" as const]
-      : []),
-    "chat",
-    "automations",
-    "workflows",
-    "tables",
-    ...(expanded ? descendants("tables") : []),
-    "providers",
-    "apps",
-    ...(appsExpanded ? descendants("apps") : []),
-    "settings",
-    ...(settingsExpanded ? descendants("settings") : []),
-  ];
-  const activateParent = (id: StaticParent) => {
-    const disclosure = disclosures[id];
-    const active = tabs.active === id && (id !== "settings" || settingsSection === null);
-    const next = parentActivation(active, disclosure.open);
-    setDisclosure(id, next.expanded);
-    if (next.navigate) {
-      if (id === "settings") onSettingsSectionSelect(null);
-      onSelect(id);
-    }
-  };
-  const visible = destinations.filter(
-    (id) =>
-      database ||
-      id === "assistants" ||
-      id === "relay" ||
-      id === "tables" ||
-      id === "advanced" ||
-      isSettingsSection(id) ||
-      pageAvailable(id, database),
-  );
-  const afterChat = visible[visible.indexOf("chat") + 1];
-  const afterRelay = "custom-agents";
+    if (selectedId && !relaySelected)
+      document
+        .querySelector("#chat-pages [aria-current='true']")
+        ?.scrollIntoView({ block: "nearest" });
+  }, [selectedId, relaySelected]);
+  const visible = groupNames
+    .flatMap<SidebarItem>((group) => [...sidebarGroups[group]])
+    .filter((item) =>
+      item === "relay"
+        ? Boolean(relay && !chatPending)
+        : item === "customize-mcp-servers" ||
+          isSettingsSection(item) ||
+          pageAvailable(item, database),
+    );
   const relayButtons = () =>
     [...document.querySelectorAll<HTMLButtonElement>(".relay-sidebar button:enabled")].filter(
       (button) => !button.closest("[hidden]"),
@@ -574,91 +451,23 @@ function PageTabList({
   const selectConversation = (id: string) => {
     void navigation.open({ kind: "conversation", id });
   };
-  function moveTo(target: (typeof visible)[number] | undefined, activate = true) {
-    if (!target) return;
-    const group = isSettingsSection(target)
-      ? "Manage"
-      : target === "relay"
-        ? "Work"
-        : productGroup(target);
-    const toggle = document.getElementById(`nav-group-${group}`)?.firstElementChild;
-    if (toggle?.getAttribute("aria-expanded") === "false" && toggle instanceof HTMLElement) {
+  function moveTo(item: SidebarItem | undefined) {
+    if (!item) return;
+    const row = document.querySelector(`[data-sidebar-item="${item}"]`);
+    const toggle = row?.closest("li[id^=nav-group-]")?.firstElementChild;
+    if (toggle instanceof HTMLButtonElement && toggle.getAttribute("aria-expanded") === "false") {
       toggle.focus();
       return;
     }
-    if (target === "assistants") {
-      if (activate) onSelect("assistants");
-      document.getElementById("tab-assistants")?.focus();
-    } else if (target === "relay") {
+    if (item === "relay") {
       relayButtons()[0]?.focus();
-    } else if (target === "tables" || target === "advanced" || target === "experiments") {
-      if (activate) onSelect(target);
-      document.getElementById(`${target}-toggle`)?.focus();
-    } else if (target && isSettingsSection(target)) {
-      if (activate) {
-        onSelect("settings");
-        onSettingsSectionSelect(target);
-      }
-      document.getElementById(`tab-settings-${target}`)?.focus();
-    } else if (target) {
-      if (target === "chat") {
-        if (activate) onSelect("projects");
-        document.getElementById("tab-chat")?.focus();
-        return;
-      }
-      if (activate) {
-        if (target === "settings") onSettingsSectionSelect(null);
-        onSelect(target);
-      }
-      document.getElementById(`tab-${target}`)?.focus();
+      return;
     }
+    const button = row?.querySelector<HTMLButtonElement>('button[role="tab"]');
+    if (button?.getAttribute("aria-selected") !== "true") button?.click();
+    button?.focus();
   }
-  function navigate(event: KeyboardEvent<HTMLButtonElement>, id: (typeof visible)[number]) {
-    // A delayed reveal must not undo a subsequent keyboard navigation.
-    if (navigationFrame.current !== undefined) {
-      cancelAnimationFrame(navigationFrame.current);
-      navigationFrame.current = undefined;
-    }
-    const providerButtons = () => [
-      ...document.querySelectorAll<HTMLButtonElement>("#provider-pages button:enabled"),
-    ];
-    if (id === "providers" && ["ArrowLeft", "ArrowRight", "ArrowDown"].includes(event.key)) {
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        return;
-      }
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        providerButtons()[0]?.focus();
-        return;
-      }
-      if (providersExpanded && providerButtons()[0]) {
-        event.preventDefault();
-        providerButtons()[0]?.focus();
-        return;
-      }
-    }
-    if (id === "apps" && event.key === "ArrowUp" && providersExpanded && providerButtons().length) {
-      event.preventDefault();
-      providerButtons().at(-1)?.focus();
-      return;
-    }
-    if (id === "home" && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
-      event.preventDefault();
-      if (event.key === "ArrowRight") moveTo("search", false);
-      return;
-    }
-    if (id === "search" && event.key === "ArrowLeft") {
-      event.preventDefault();
-      moveTo("home", false);
-      return;
-    }
-    if (id === "assistants" && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
-      event.preventDefault();
-      if (event.key === "ArrowRight")
-        document.querySelector<HTMLButtonElement>("#assistants-pages button:enabled")?.focus();
-      return;
-    }
+  function navigate(event: KeyboardEvent<HTMLButtonElement>, id: SidebarItem) {
     if (id === "custom-agents" && event.key === "ArrowRight") {
       event.preventDefault();
       setCustomExpanded(true);
@@ -668,7 +477,7 @@ function PageTabList({
     if (id === "custom-agents" && event.key === "ArrowLeft") {
       event.preventDefault();
       if (customExpanded) setCustomExpanded(false);
-      else document.getElementById("tab-assistants")?.focus();
+      else document.querySelector<HTMLButtonElement>("#nav-group-Chat > button")?.focus();
       return;
     }
     if (id === "custom-agents" && event.key === "ArrowDown" && customExpanded) {
@@ -679,19 +488,7 @@ function PageTabList({
         return;
       }
     }
-    if (id === "chat" && event.key === "ArrowUp" && assistantsExpanded && customExpanded) {
-      const last = [
-        ...document.querySelectorAll<HTMLButtonElement>("#custom-agent-pages button:enabled"),
-      ]
-        .filter((b) => !b.closest("[hidden]"))
-        .at(-1);
-      if (last) {
-        event.preventDefault();
-        last.focus();
-        return;
-      }
-    }
-    if (id === afterRelay && event.key === "ArrowUp") {
+    if (id === "custom-agents" && event.key === "ArrowUp") {
       const lastRelayButton = relayButtons().at(-1);
       if (lastRelayButton) {
         event.preventDefault();
@@ -699,7 +496,7 @@ function PageTabList({
         return;
       }
     }
-    if (id === afterChat && event.key === "ArrowUp" && chatExpanded) {
+    if (id === "workflows" && event.key === "ArrowUp") {
       const lastChild = chatButtons().at(-1);
       if (lastChild) {
         event.preventDefault();
@@ -707,7 +504,7 @@ function PageTabList({
         return;
       }
     }
-    if (id === "chat" && event.key === "ArrowDown" && chatExpanded) {
+    if (id === "projects" && event.key === "ArrowDown") {
       const child = chatButtons()[0];
       if (child) {
         event.preventDefault();
@@ -715,47 +512,17 @@ function PageTabList({
         return;
       }
     }
-    if (id === "chat" && event.key === "ArrowLeft") {
-      event.preventDefault();
-      return;
-    }
-    if (id === "chat" && event.key === "ArrowRight") {
+    if (id === "projects" && event.key === "ArrowRight") {
       event.preventDefault();
       chatButtons()[0]?.focus();
       return;
     }
     if (event.key === "ArrowLeft") {
-      if (isParent(id)) {
-        event.preventDefault();
-        const disclosure = disclosures[id];
-        if (disclosure.open) setDisclosure(id, false);
-        else {
-          const owner = navigationParent(id);
-          if (owner) document.getElementById(sidebarPageElementId(owner))?.focus();
-        }
-        return;
-      }
-      const owner = isSettingsSection(id)
-        ? settingsParents[id]
-        : id === "relay" || id === "assistants"
-          ? undefined
-          : navigationParent(id);
-      if (owner && isParent(owner)) {
-        event.preventDefault();
-        setDisclosure(owner, false);
-        document.getElementById(sidebarPageElementId(owner))?.focus();
-        return;
-      }
-    }
-    if (event.key === "ArrowRight" && isParent(id)) {
       event.preventDefault();
-      const disclosure = disclosures[id];
-      if (disclosure.open)
-        moveTo(
-          childIds(id).find((child) => isSettingsSection(child) || pageAvailable(child, database)),
-          false,
-        );
-      else setDisclosure(id, true);
+      event.currentTarget
+        .closest("li[id^=nav-group-]")
+        ?.querySelector<HTMLButtonElement>(":scope > button")
+        ?.focus();
       return;
     }
     const index = visible.indexOf(id);
@@ -773,217 +540,99 @@ function PageTabList({
     event.preventDefault();
     moveTo(visible[next]);
   }
-  function page(id: PageId) {
+  function link(item: Exclude<SidebarItem, "relay">) {
+    const id = item === "customize-mcp-servers" ? "mcp-servers" : item;
+    const setting = isSettingsSection(id);
+    const label = setting ? settingsLabels[id] : pageDefinitions[id].label;
+    const selected = activeItem === item && (id !== "custom-agents" || tabs.active === id);
+    const panel = setting ? `panel-settings-${id}` : `panel-${id}`;
+    const icon = setting ? settingsIcons[id] : pageDefinitions[id].icon;
     return (
-      <div
-        className="page-tab"
-        role="presentation"
-        key={id}
-        data-nav-active={
-          (tabs.active === id &&
-            (id !== "settings" ||
-              (settingsActive && settingsSection === null && settingsExpanded))) ||
-          (id === "apps" && appActive && !appsExpanded) ||
-          (id === "assistants" && assistantActive && !assistantsExpanded) ||
-          (id === "home" && tabs.active === "search" && !homeExpanded)
-        }
-      >
-        <SideNavLink
-          as="button"
+      <div className="page-tab" data-nav-active={selected}>
+        <AppButton
           type="button"
           role="tab"
-          id={sidebarPageElementId(id)}
-          className={id === "apps" ? "page-group-toggle" : ""}
-          aria-controls={
-            id === "custom-agents" ? "panel-custom-agents custom-agent-pages" : `panel-${id}`
+          id={
+            setting
+              ? `tab-settings-${id}`
+              : id === "mcp-servers" && item !== mcpItem
+                ? "tab-mcp-servers-alternate"
+                : sidebarPageElementId(id)
           }
+          aria-controls={id === "custom-agents" ? `${panel} custom-agent-pages` : panel}
           aria-expanded={id === "custom-agents" ? customExpanded : undefined}
-          aria-selected={
-            tabs.active === id &&
-            (id !== "settings" ||
-              (settingsActive && (settingsSection === null || !settingsExpanded)))
-          }
-          data-active={
-            id === "apps" ? tabs.active === id || (appActive && !appsExpanded) : undefined
-          }
-          title={pageDefinitions[id].label}
-          disabled={!pageAvailable(id, database)}
-          tabIndex={0}
-          onClick={() => {
-            if (id === "tables") {
-              activateParent("tables");
-              return;
-            }
-            if (id === "custom-agents") {
-              if (tabs.active === id) setCustomExpanded((v) => !v);
-              else {
-                setCustomExpanded(true);
-                onSelect(id);
-              }
-              return;
-            }
-            if (id === "settings" || id === "apps") {
-              if (id === "settings") onSettingsSectionSelect(null);
-              onSelect(id);
-              return;
-            }
-            onSelect(id);
-          }}
-          onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => navigate(event, id)}
-        >
-          <span className="page-tab-label">{pageDefinitions[id].label}</span>
-        </SideNavLink>
-      </div>
-    );
-  }
-  function settingsPage(id: SettingsSectionId) {
-    const selected = tabs.active === "settings" && settingsSection === id;
-    return (
-      <div className="page-tab" role="presentation" key={id} data-nav-active={selected}>
-        <SideNavLink
-          as="button"
-          type="button"
-          role="tab"
-          id={`tab-settings-${id}`}
-          aria-controls={`panel-settings-${id}`}
           aria-selected={selected}
-          title={settingsLabels[id]}
+          title={label}
+          disabled={!setting && !pageAvailable(id, database)}
           tabIndex={0}
           onClick={() => {
-            onSettingsSectionSelect(id);
-            onSelect("settings");
+            if (isSettingsSection(id)) {
+              onSettingsSectionSelect(id);
+              onSelect("settings");
+            } else if (id === "custom-agents" && tabs.active === id) {
+              setCustomExpanded((open) => !open);
+            } else {
+              if (item === "mcp-servers" || item === "customize-mcp-servers") setMcpItem(item);
+              if (id === "custom-agents") setCustomExpanded(true);
+              onSelect(id);
+            }
           }}
-          onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => navigate(event, id)}
+          onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => navigate(event, item)}
         >
-          <NavigationIcon name={settingsIcons[id]} />
-          <span className="page-tab-label">{settingsLabels[id]}</span>
-        </SideNavLink>
+          {icon && <NavigationIcon name={icon} />}
+          <span className="page-tab-label">{label}</span>
+        </AppButton>
       </div>
     );
   }
-  function staticChildrenPanel(parent: StaticParent) {
-    const disclosure = disclosures[parent];
-    return (
-      <div
-        id={disclosure.panel}
-        className="page-tab-list page-group-pages"
-        hidden={!disclosure.open}
-        inert={!disclosure.open}
-        aria-hidden={!disclosure.open}
-      >
-        <div role="tablist" aria-label={pageDefinitions[parent].label} aria-orientation="vertical">
-          {childIds(parent).map((id) => {
-            if (isSettingsSection(id)) return settingsPage(id);
-            if (!isParent(id)) return page(id);
-            const child = disclosures[id];
-            const active =
-              tabs.active === id || (inNavigationBranch(tabs.active, id) && !child.open);
-            return (
-              <div key={id}>
-                <div className="page-tab" data-nav-active={active}>
-                  <AppButton
-                    type="button"
-                    id={sidebarPageElementId(id)}
-                    className="page-group-toggle"
-                    aria-expanded={child.open}
-                    aria-controls={`panel-${id} ${child.panel}`}
-                    aria-current={tabs.active === id ? "page" : undefined}
-                    data-active={active}
-                    onClick={() => activateParent(id)}
-                    onKeyDown={(event) => navigate(event, id)}
-                  >
-                    <span className="page-tab-label">{pageDefinitions[id].label}</span>
-                  </AppButton>
-                </div>
-                {staticChildrenPanel(id)}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-  return (
-    <SideNavItems className="page-tabs">
-      <NavigationSection title="Work" destination={destinationFor("Work")}>
-        <Card size="sm" className="sidebar-navigation-card sidebar-section">
-          <div
-            className="sidebar-card-header"
-            role="tablist"
-            aria-label="Home page"
-            aria-orientation="vertical"
-          >
-            {page("home")}
+  function entry(item: SidebarItem) {
+    switch (item) {
+      case "relay":
+        return relay ? (
+          <ChatSidebar
+            relayNavigation
+            chats={[relay]}
+            runs={runs.filter((run) => run.relay?.conversationId === relay.conversationId)}
+            selectedId={selectedId}
+            navigationSerial={navigationSerial}
+            database={database}
+            eventsByRun={eventsByRun}
+            open={tabs.active === "chat"}
+            conversationVisible={tabs.active === "chat" && !navigation.projectPending}
+            pending={chatPending}
+            ancestorsExpanded={true}
+            onSelect={selectConversation}
+            onKeyDown={(event) => {
+              if (event.defaultPrevented) return;
+              const buttons = relayButtons();
+              const index = buttons.indexOf(event.target as HTMLButtonElement);
+              if (index < 0) return;
+              if (event.key === "ArrowLeft" && index === 0) {
+                event.preventDefault();
+                document.querySelector<HTMLButtonElement>("#nav-group-Chat > button")?.focus();
+              } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                event.preventDefault();
+                const next = buttons[index + (event.key === "ArrowDown" ? 1 : -1)];
+                if (next) next.focus();
+                else if (event.key === "ArrowDown") moveTo("custom-agents");
+                else document.querySelector<HTMLButtonElement>("#nav-group-Chat > button")?.focus();
+              } else if (event.key === "Home" || event.key === "End") {
+                event.preventDefault();
+                moveTo(event.key === "Home" ? visible[0] : visible.at(-1));
+              }
+            }}
+          />
+        ) : (
+          <div className="page-tab">
+            <AppButton role="tab" aria-selected={false} disabled>
+              Relay
+            </AppButton>
           </div>
-          <div
-            id="home-pages"
-            className="page-group-pages sidebar-home-pages"
-            role="tablist"
-            aria-label="Search page"
-            aria-orientation="vertical"
-            hidden={!homeExpanded}
-            inert={!homeExpanded}
-            aria-hidden={!homeExpanded}
-          >
-            {page("search")}
-          </div>
-        </Card>
-        <Card size="sm" className="sidebar-navigation-card sidebar-section">
-          <div
-            className="sidebar-card-header"
-            role="tablist"
-            aria-label="Assistants page"
-            aria-orientation="vertical"
-          >
-            {page("assistants")}
-          </div>
-          {/* biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset. */}
-          <div
-            role="group"
-            aria-label="Assistants"
-            id="assistants-pages"
-            className="page-group-pages"
-            hidden={!assistantsExpanded}
-            inert={!assistantsExpanded}
-            aria-hidden={!assistantsExpanded}
-          >
-            {relay && (
-              <ChatSidebar
-                relayNavigation
-                chats={[relay]}
-                runs={runs.filter((run) => run.relay?.conversationId === relay.conversationId)}
-                selectedId={selectedId}
-                navigationSerial={navigationSerial}
-                database={database}
-                eventsByRun={eventsByRun}
-                open={tabs.active === "chat"}
-                conversationVisible={tabs.active === "chat" && !navigation.projectPending}
-                pending={chatPending}
-                ancestorsExpanded={assistantsExpanded}
-                onSelect={selectConversation}
-                onKeyDown={(event) => {
-                  if (event.defaultPrevented) return;
-                  const buttons = relayButtons();
-                  const index = buttons.indexOf(event.target as HTMLButtonElement);
-                  if (index < 0) return;
-                  if (event.key === "ArrowLeft" && index === 0) {
-                    event.preventDefault();
-                    moveTo("assistants", false);
-                  } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-                    event.preventDefault();
-                    const next = buttons[index + (event.key === "ArrowDown" ? 1 : -1)];
-                    if (next) next.focus();
-                    else moveTo(event.key === "ArrowDown" ? afterRelay : "assistants");
-                  } else if (event.key === "Home" || event.key === "End") {
-                    event.preventDefault();
-                    moveTo(event.key === "Home" ? visible[0] : visible.at(-1));
-                  }
-                }}
-              />
-            )}
-            <div role="tablist" aria-label="Custom Assistants page" aria-orientation="vertical">
-              {page("custom-agents")}
-            </div>
+        );
+      case "custom-agents":
+        return (
+          <>
+            {link(item)}
             {/* biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset. */}
             <div
               role="group"
@@ -1008,7 +657,7 @@ function PageTabList({
                   event.preventDefault();
                   const next = buttons[index + (event.key === "ArrowDown" ? 1 : -1)];
                   if (next) next.focus();
-                  else moveTo("chat");
+                  else moveTo("projects");
                 } else if (event.key === "Home" || event.key === "End") {
                   event.preventDefault();
                   moveTo(event.key === "Home" ? visible[0] : visible.at(-1));
@@ -1032,7 +681,7 @@ function PageTabList({
                       pending={chatPending}
                       conversationVisible={tabs.active === "chat" && !navigation.projectPending}
                       onSelect={selectConversation}
-                      ancestorsExpanded={assistantsExpanded && customExpanded}
+                      ancestorsExpanded={customExpanded}
                     />
                   ) : (
                     <div key={agent.id} className="chat-sidebar-row">
@@ -1051,197 +700,152 @@ function PageTabList({
                   );
                 })}
             </div>
-          </div>
-        </Card>
-        <Card size="sm" className="sidebar-navigation-card sidebar-section">
-          <div
-            className="chat-page-heading sidebar-card-header"
-            data-nav-active={
-              tabs.active === "projects" || (tabs.active === "project" && !chatExpanded)
-            }
-          >
+          </>
+        );
+      case "projects":
+        return (
+          <Card size="sm" className="sidebar-navigation-card sidebar-section">
             <div
-              className="page-tab"
-              role="tablist"
-              aria-label="Projects page"
-              aria-orientation="vertical"
+              className="chat-page-heading sidebar-card-header"
+              data-nav-active={tabs.active === "projects"}
             >
-              <AppButton
-                type="button"
-                role="tab"
-                aria-selected={tabs.active === "projects"}
-                title="Projects"
-                id="tab-chat"
-                className="page-group-toggle"
-                aria-controls="panel-projects"
-                data-active={
-                  tabs.active === "projects" || (tabs.active === "project" && !chatExpanded)
-                }
-                onClick={() => onSelect("projects")}
-                onKeyDown={(event) => navigate(event, "chat")}
+              <div
+                className="page-tab"
+                role="tablist"
+                aria-label="Projects page"
+                aria-orientation="vertical"
               >
-                {pageDefinitions.projects.icon && (
-                  <NavigationIcon name={pageDefinitions.projects.icon} />
-                )}
-                <span className="page-tab-label">{pageDefinitions.projects.label}</span>
-              </AppButton>
+                <AppButton
+                  type="button"
+                  role="tab"
+                  aria-selected={tabs.active === "projects"}
+                  title="Projects"
+                  id="tab-chat"
+                  className="page-group-toggle"
+                  aria-controls="panel-projects"
+                  data-active={tabs.active === "projects"}
+                  onClick={() => onSelect("projects")}
+                  onKeyDown={(event) => navigate(event, "projects")}
+                >
+                  {pageDefinitions.projects.icon && (
+                    <NavigationIcon name={pageDefinitions.projects.icon} />
+                  )}
+                  <span className="page-tab-label">{pageDefinitions.projects.label}</span>
+                </AppButton>
+              </div>
             </div>
-          </div>
-          <AppButton
-            type="button"
-            className="icon-button project-sidebar-open"
-            aria-label="Add Project"
-            title={database ? "Add Project" : "Connect to database to add a project"}
-            aria-haspopup="dialog"
-            disabled={projectDisabled}
-            onClick={onOpenProject}
-          >
-            <span className="sidebar-card-add" aria-hidden="true">
-              <Icon name="add" />
-            </span>
-          </AppButton>
-          {chatError && (
-            <p className="error-banner" role="alert">
-              {chatError}
-            </p>
-          )}
-          {/* biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset. */}
-          <div
-            id="chat-pages"
-            role="group"
-            aria-label="Chat conversations"
-            className="page-group-pages"
-            hidden={!chatExpanded}
-            inert={!chatExpanded}
-            aria-hidden={!chatExpanded}
-            onKeyDown={(event) => {
-              const buttons = [
-                ...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
-              ].filter((button) => !button.closest("[hidden]"));
-              const index = buttons.indexOf(event.target as HTMLButtonElement);
-              if (index < 0) return;
-              if (event.key === "ArrowLeft" || (event.key === "ArrowUp" && index === 0)) {
-                event.preventDefault();
-                document.getElementById("tab-chat")?.focus();
-              } else if (
-                event.key === "ArrowDown" ||
-                event.key === "ArrowUp" ||
-                event.key === "Home" ||
-                event.key === "End"
-              ) {
-                event.preventDefault();
-                if (event.key === "Home") {
-                  moveTo(visible[0]);
-                  return;
-                }
-                if (event.key === "End") {
-                  moveTo(visible.at(-1));
-                  return;
-                }
-                const next = index + (event.key === "ArrowDown" ? 1 : -1);
-                if (next >= buttons.length) moveTo(afterChat);
-                else buttons[next]?.focus();
-              }
-            }}
-          >
-            {openProjects ? (
-              <ProjectChatSidebar
-                ancestorsExpanded={chatExpanded}
-                projects={openProjects}
-                selectedProjectId={selectedProjectId}
-                onProjectAction={projectAction}
-                homeProjectId={tabs.active === "project" ? tabs.projectId : undefined}
-                onProjectOpen={(id) => void navigation.open({ kind: "project", id })}
-                onAction={chatAction}
-                chats={chats}
-                runs={runs}
-                selectedId={selectedId}
-                navigationSerial={navigationSerial}
-                database={database}
-                eventsByRun={eventsByRun}
-                open={tabs.active === "chat"}
-                conversationVisible={tabs.active === "chat" && !navigation.projectPending}
-                pending={chatPending}
-                onSelect={selectConversation}
-              />
-            ) : (
-              <ChatSidebar
-                ancestorsExpanded={chatExpanded}
-                onAction={chatAction}
-                chats={chats.filter((chat) => chat.kind !== "relay")}
-                runs={runs.filter((run) => !run.relay)}
-                selectedId={selectedId}
-                navigationSerial={navigationSerial}
-                database={database}
-                eventsByRun={eventsByRun}
-                open={tabs.active === "chat"}
-                conversationVisible={tabs.active === "chat" && !navigation.projectPending}
-                pending={chatPending}
-                onSelect={selectConversation}
-              />
-            )}
-          </div>
-        </Card>
-      </NavigationSection>
-      <NavigationSection title="Automation" destination={destinationFor("Automation")}>
-        <div role="tablist" aria-label="Automation">
-          {page("automations")}
-          {page("workflows")}
-        </div>
-      </NavigationSection>
-      <NavigationSection title="Inspect" destination={destinationFor("Inspect")}>
-        <div role="tablist" aria-label="Inspect">
-          {page("tables")}
-          {staticChildrenPanel("tables")}
-        </div>
-      </NavigationSection>
-      <NavigationSection title="Manage" destination={destinationFor("Manage")}>
-        <ProvidersSidebar
-          menuScope={`${sidebarOpen}:${tabs.active}:${tabs.providerId ?? ""}`}
-          sidebarOpen={sidebarOpen}
-          setup={providerSetup}
-          management={providerManagement}
-          selectedId={tabs.active === "provider" ? tabs.providerId : undefined}
-          active={tabs.active === "providers" || tabs.active === "provider"}
-          onHome={() => onSelect("providers")}
-          onOpen={(id) => void navigation.open({ kind: "provider", id })}
-          onKeyDown={(event) => navigate(event, "providers")}
-          onNext={() => moveTo("apps")}
-          onFirst={() => moveTo(visible[0])}
-          onLast={() => moveTo(visible.at(-1))}
-        />
-        <Card size="sm" className="sidebar-navigation-card sidebar-section">
-          <div
-            className="sidebar-card-header"
-            role="tablist"
-            aria-label="Apps page"
-            aria-orientation="vertical"
-          >
-            {page("apps")}
-          </div>
-          {staticChildrenPanel("apps")}
-        </Card>
-        <Card
-          size="sm"
-          className="page-tab-list sidebar-settings sidebar-navigation-card sidebar-section"
-        >
-          <div
-            className="sidebar-settings-heading sidebar-card-header"
-            data-active={settingsActive && !settingsExpanded}
-            data-nav-active={settingsActive && !settingsExpanded}
-          >
-            <div
-              className="page-tab-list"
-              role="tablist"
-              aria-label="Settings page"
-              aria-orientation="vertical"
+            <AppButton
+              type="button"
+              className="icon-button project-sidebar-open"
+              aria-label="Add Project"
+              title={database ? "Add Project" : "Connect to database to add a project"}
+              aria-haspopup="dialog"
+              disabled={projectDisabled}
+              onClick={onOpenProject}
             >
-              {page("settings")}
+              <span className="sidebar-card-add" aria-hidden="true">
+                <Icon name="add" />
+              </span>
+            </AppButton>
+            {chatError && (
+              <p className="error-banner" role="alert">
+                {chatError}
+              </p>
+            )}
+            {/* biome-ignore lint/a11y/useSemanticElements: navigation disclosure, not a form fieldset. */}
+            <div
+              id="chat-pages"
+              role="group"
+              aria-label="Chat conversations"
+              className="page-group-pages"
+              onKeyDown={(event) => {
+                const buttons = [
+                  ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                    "button:not(:disabled)",
+                  ),
+                ].filter((button) => !button.closest("[hidden]"));
+                const index = buttons.indexOf(event.target as HTMLButtonElement);
+                if (index < 0) return;
+                if (event.key === "ArrowLeft" || (event.key === "ArrowUp" && index === 0)) {
+                  event.preventDefault();
+                  document.getElementById("tab-chat")?.focus();
+                } else if (
+                  event.key === "ArrowDown" ||
+                  event.key === "ArrowUp" ||
+                  event.key === "Home" ||
+                  event.key === "End"
+                ) {
+                  event.preventDefault();
+                  if (event.key === "Home") {
+                    moveTo(visible[0]);
+                    return;
+                  }
+                  if (event.key === "End") {
+                    moveTo(visible.at(-1));
+                    return;
+                  }
+                  const next = index + (event.key === "ArrowDown" ? 1 : -1);
+                  if (next >= buttons.length) moveTo("workflows");
+                  else buttons[next]?.focus();
+                }
+              }}
+            >
+              {openProjects ? (
+                <ProjectChatSidebar
+                  ancestorsExpanded={true}
+                  projects={openProjects}
+                  selectedProjectId={selectedProjectId}
+                  onProjectAction={projectAction}
+                  homeProjectId={tabs.active === "project" ? tabs.projectId : undefined}
+                  onProjectOpen={(id) => void navigation.open({ kind: "project", id })}
+                  onAction={chatAction}
+                  chats={chats}
+                  runs={runs}
+                  selectedId={selectedId}
+                  navigationSerial={navigationSerial}
+                  database={database}
+                  eventsByRun={eventsByRun}
+                  open={tabs.active === "chat"}
+                  conversationVisible={tabs.active === "chat" && !navigation.projectPending}
+                  pending={chatPending}
+                  onSelect={selectConversation}
+                />
+              ) : (
+                <ChatSidebar
+                  ancestorsExpanded={true}
+                  onAction={chatAction}
+                  chats={chats.filter((chat) => chat.kind !== "relay")}
+                  runs={runs.filter((run) => !run.relay)}
+                  selectedId={selectedId}
+                  navigationSerial={navigationSerial}
+                  database={database}
+                  eventsByRun={eventsByRun}
+                  open={tabs.active === "chat"}
+                  conversationVisible={tabs.active === "chat" && !navigation.projectPending}
+                  pending={chatPending}
+                  onSelect={selectConversation}
+                />
+              )}
             </div>
+          </Card>
+        );
+      default:
+        return link(item);
+    }
+  }
+  return (
+    <SideNavItems className="page-tabs">
+      {groupNames.map((group) => (
+        <NavigationSection key={group} title={group} destination={destinationFor(group)}>
+          <div role="tablist" aria-label={group} aria-orientation="vertical">
+            {sidebarGroups[group].map((item) => (
+              <div key={item} data-sidebar-item={item}>
+                {entry(item)}
+              </div>
+            ))}
           </div>
-          {staticChildrenPanel("settings")}
-        </Card>
-      </NavigationSection>
+        </NavigationSection>
+      ))}
     </SideNavItems>
   );
 }

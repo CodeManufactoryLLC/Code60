@@ -61,7 +61,7 @@ export function SettingsPage({
     <div
       role="tabpanel"
       id={`panel-settings-${page}`}
-      aria-labelledby={`tab-settings-${page}`}
+      aria-label={settingsLabels[page]}
       hidden={section !== page}
     >
       {children}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button as AppButton } from "./carbon/button.js";
 import { TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { Modal } from "./modal.js";
@@ -12,6 +12,7 @@ export function RenameChat({
   onSave(title: string): Promise<boolean>;
   onClose(): void;
 }) {
+  const formId = useId();
   const input = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState(title);
   const [pending, setPending] = useState(false);
@@ -20,8 +21,29 @@ export function RenameChat({
     input.current?.select();
   }, []);
   return (
-    <Modal title="Rename chat" busy={pending} onClose={onClose}>
+    <Modal
+      footer={
+        <>
+          <AppButton variant="secondary" type="button" onClick={onClose} disabled={pending}>
+            Cancel
+          </AppButton>
+          <AppButton
+            variant="primary"
+            form={formId}
+            type="submit"
+            disabled={pending || !value.trim()}
+          >
+            Save
+          </AppButton>
+        </>
+      }
+      size="sm"
+      title="Rename chat"
+      busy={pending}
+      onClose={onClose}
+    >
       <form
+        id={formId}
         onSubmit={async (event) => {
           event.preventDefault();
           if (pending || !value.trim()) return;
@@ -30,6 +52,8 @@ export function RenameChat({
           try {
             if (await onSave(value.trim())) onClose();
             else setError("Could not rename this chat. Try again.");
+          } catch {
+            setError("Could not rename this chat. Try again.");
           } finally {
             setPending(false);
           }
@@ -47,14 +71,6 @@ export function RenameChat({
           />
         </div>
         {error && <p role="alert">{error}</p>}
-        <div className="button-group">
-          <AppButton type="button" onClick={onClose} disabled={pending}>
-            Cancel
-          </AppButton>
-          <AppButton type="submit" disabled={pending || !value.trim()}>
-            Save
-          </AppButton>
-        </div>
       </form>
     </Modal>
   );

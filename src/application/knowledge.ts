@@ -231,7 +231,7 @@ export class DesktopKnowledge {
       reason =
         "Assistant management is database-independent and human-only. Chat requires the shared verified provider; saved history grants no execution authority.";
       action =
-        "Home → Custom Assistants or Sidebar → Assistants → Custom Assistants; New Assistant; stop work before Edit; Archived → Restore.";
+        "Home → Custom Assistants or Sidebar → Chat → Custom Assistants; New Assistant; stop work before Edit; Archived → Restore.";
     } else if (cap.id === "memory-recall") {
       reason =
         "Read-only tab available in Relay, project chats and workers, including without a database for Relay. Only recorded recall IDs are resolved. Memory contents are human-only.";
@@ -269,7 +269,7 @@ export class DesktopKnowledge {
       reason =
         "The page is available without a database or provider. Listener availability depends on the host LAN and, in a container, the owned start launcher; awareness does not probe or enable it.";
       action =
-        "Open Settings → Advanced → Web Server Beta from the controlling localhost browser. Before provider setup, close the setup dialog and choose Web Server Beta on the start screen. Enable access and pair the remote browser with a short-lived code.";
+        "Open Experiments → Web Server (Beta) from the controlling localhost browser. Before provider setup, close the setup dialog and choose Web Server (Beta) on the start screen. Enable access and pair the remote browser with a short-lived code.";
     } else if (cap.id === "providers") {
       reason =
         "Provider setup is available without a database or verified provider; Codex installation and device-code login require an explicit action in the controlling setup dialog.";
@@ -284,7 +284,7 @@ export class DesktopKnowledge {
       reason =
         "Human-only controls require a connected idle session and connector-advertised choices; provider verification alone does not establish model switching availability.";
       action =
-        "Inspect the session's Model picker. Clear saved defaults in Providers → provider details.";
+        "Inspect the session's Model picker. Clear saved defaults in Connect → Providers under the provider’s name.";
     } else if (cap.id === "browser") {
       status = "unknown";
       reason =
@@ -328,7 +328,7 @@ export class DesktopKnowledge {
     } else if (cap.id === "updates") {
       reason =
         "Explicit code60 update verifies the stable npm bootstrap and payload before consent and shutdown. Read-only code60 update status and explicit code60 update recover diagnose interruption; awareness never checks, downloads or replaces code.";
-      action = "Apps → Update Manager.";
+      action = "Apps → Updates.";
     } else if (cap.prerequisite === "runtime") {
       status = "unknown";
       reason =

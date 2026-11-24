@@ -500,7 +500,7 @@ export function SearchPage({
         )}
       </div>
       {preview && (
-        <Modal title={preview.title} busy={false} onClose={() => setPreview(null)}>
+        <Modal passive title={preview.title} busy={false} onClose={() => setPreview(null)}>
           <p>{preview.project.name} · Archived conversation</p>
           <pre>{preview.text}</pre>
         </Modal>

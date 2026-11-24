@@ -4,6 +4,7 @@ import { AgentSetupWizard } from "./agent-setup.js";
 import type { Theme } from "./appearance.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { DatabaseNotice } from "./database-notice.js";
+import { pageDefinitions } from "./navigation.js";
 import { hasOrchestrationProvider } from "./snapshot-state.js";
 
 export function Splash({
@@ -96,7 +97,7 @@ export function Splash({
                   )}
                   {!configured && onOpenWebServer && (
                     <AppButton type="button" disabled={busy} onClick={onOpenWebServer}>
-                      Web Server Beta
+                      {pageDefinitions["web-server"].label}
                     </AppButton>
                   )}
                   {configured ? (

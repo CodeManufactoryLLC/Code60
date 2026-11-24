@@ -223,7 +223,18 @@ export function WorkflowsPage({
       </PageTitle>
       {(creating || selected) && actions}
       {active && showLogin && (
-        <Modal title="Workflow sign-in" busy={false} onClose={() => setShowLogin(false)}>
+        <Modal
+          footer={
+            <>
+              <AppButton variant="primary" onClick={() => setShowLogin(false)}>
+                Done
+              </AppButton>
+            </>
+          }
+          title="Workflow sign-in"
+          busy={false}
+          onClose={() => setShowLogin(false)}
+        >
           <p>Run this command in a terminal on the computer hosting Code60.</p>
           <pre>
             <code>code60 workflows login</code>
@@ -232,29 +243,33 @@ export function WorkflowsPage({
             Complete the Codex sign-in there, then return to review and start your workflow.
             Transmission uses its own Codex credentials.
           </p>
-          <AppButton onClick={() => setShowLogin(false)}>Done</AppButton>
         </Modal>
       )}
       {record && reconnect === record.id && active && (
         <Modal
+          footer={
+            <>
+              <AppButton variant="secondary" type="button" onClick={() => setReconnect(undefined)}>
+                Cancel
+              </AppButton>
+              <AppButton
+                variant="primary"
+                type="button"
+                onClick={() => {
+                  setReconnect(undefined);
+                  void act({ action: "reconnect", id: record.id });
+                }}
+              >
+                Reconnect engine
+              </AppButton>
+            </>
+          }
           key={record.id}
           title="Reconnect engine?"
           busy={!!busy}
           onClose={() => setReconnect(undefined)}
         >
           <p>Starting this engine can resume unfinished approved workflows.</p>
-          <AppButton type="button" onClick={() => setReconnect(undefined)}>
-            Cancel
-          </AppButton>
-          <AppButton
-            type="button"
-            onClick={() => {
-              setReconnect(undefined);
-              void act({ action: "reconnect", id: record.id });
-            }}
-          >
-            Reconnect engine
-          </AppButton>
         </Modal>
       )}
       <div className="workflow-content">
