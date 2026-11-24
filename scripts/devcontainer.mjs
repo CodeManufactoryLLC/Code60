@@ -70,6 +70,8 @@ export function containerConfiguration(root, common, uid = 1000, gid = 1000, pai
           depends_on: { "cache-init": { condition: "service_completed_successfully" } },
           environment: {
             HOME: "/home/node",
+            // ONNX ships the CPU runtime used by Code60 in its npm package.
+            ONNXRUNTIME_NODE_INSTALL: "skip",
             NPM_CONFIG_PREFIX: "/home/node/.local",
             PATH: "/home/node/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             SHELL: "/bin/bash",
@@ -337,8 +339,7 @@ export async function manageContainer(directory, action, args = [], ports = {}) 
           },
         );
       write("Preparing container dependencies and offline models…\n");
-      // The CPU runtime is bundled; this container does not expose a GPU.
-      await executeInContainer(["env", "ONNXRUNTIME_NODE_INSTALL=skip", "npm", "ci"]);
+      await executeInContainer(["npm", "ci"]);
       await executeInContainer(["npm", "run", "prepare:models"]);
       const running = (
         await invoke("docker", [

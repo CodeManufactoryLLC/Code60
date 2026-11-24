@@ -8,7 +8,7 @@ contributor acceptance.
 
 ## Build candidates
 
-Use Node >=24.22.0 <25, npm and Git. Prepare dependencies with `npm ci` and pinned
+Use Node >=24.22.0 <25, npm and Git. Prepare dependencies with `ONNXRUNTIME_NODE_INSTALL=skip npm ci` and pinned
 models with `npm run prepare:models`. Build macOS arm64 payloads on Apple Silicon.
 Build Linux x64 payloads in the pinned Debian amd64 development container:
 
