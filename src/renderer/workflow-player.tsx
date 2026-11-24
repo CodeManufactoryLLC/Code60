@@ -1,3 +1,4 @@
+import { DirectionStraightRight, Pause, Play, Stop } from "@carbon/icons-react";
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   type ApplicationClient,
@@ -6,7 +7,10 @@ import {
   type WorkflowRecord,
   type WorkflowRequest,
 } from "../bridge/index.js";
-import { DialogContent } from "./neobrutalism/dialog.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Select as CarbonSelect } from "./carbon/fields.js";
+import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
+import { Modal } from "./modal.js";
 import {
   type emptyWorkflowClock,
   workflowActivityRows,
@@ -25,7 +29,9 @@ export const statusLabel = (value: string) =>
   })[value] ?? value.charAt(0).toUpperCase() + value.slice(1).replaceAll("_", " ");
 
 type Activity = { events: WorkflowEvent[]; trimmed: boolean; clock: typeof emptyWorkflowClock };
-type Modal = { kind: "configuration" | "results"; task: number } | { kind: "stop" | "steer" };
+type WorkflowModal =
+  | { kind: "configuration" | "results"; task: number }
+  | { kind: "stop" | "steer" };
 type DiffPage = { content: string; nextOffset: number | null; revision?: string };
 
 function eventDescription(event: WorkflowEvent) {
@@ -84,14 +90,14 @@ function ActivityStream({ events, trimmed }: Activity) {
     <section className="workflow-activity-box">
       <div className="workflow-activity-heading">
         <h3>Activity</h3>
-        <button
+        <AppButton
           type="button"
           aria-expanded={expanded}
           aria-controls={logId}
           onClick={() => setExpanded(!expanded)}
         >
           {expanded ? "Collapse tool calls" : "Expand tool calls"}
-        </button>
+        </AppButton>
       </div>
       <div
         className="workflow-live-log"
@@ -217,18 +223,7 @@ function Progress({ accepted, total }: { accepted: number | undefined; total: nu
   );
 }
 
-const transportIcons = {
-  play: <path d="M6 3 21 12 6 21Z" />,
-  pause: <path d="M5 3h5v18H5zm9 0h5v18h-5z" />,
-  stop: <path d="M4 4h16v16H4z" />,
-  steer: (
-    <g fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="9.5" />
-      <circle cx="12" cy="12" r="2.5" />
-      <path d="m3.5 8 6.5 3m4 0 6.5-3M12 14.5v7" />
-    </g>
-  ),
-};
+const transportIcons = { play: Play, pause: Pause, stop: Stop, steer: DirectionStraightRight };
 function Transport({
   icon,
   label,
@@ -242,9 +237,10 @@ function Transport({
   reason?: string | undefined;
   onClick(): void;
 }) {
+  const Glyph = transportIcons[icon];
   return (
-    <button
-      className="workflow-transport"
+    <AppButton
+      className="workflow-transport icon-button"
       data-icon={icon}
       type="button"
       disabled={disabled}
@@ -253,10 +249,8 @@ function Transport({
       aria-haspopup={icon === "stop" || icon === "steer" ? "dialog" : undefined}
       onClick={onClick}
     >
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        {transportIcons[icon]}
-      </svg>
-    </button>
+      <Glyph size={20} aria-hidden="true" />
+    </AppButton>
   );
 }
 
@@ -273,36 +267,24 @@ function WorkflowDialog({
   footer?: ReactNode;
   close(): void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useLayoutEffect(() => {
-    const element = dialog.current;
-    if (!element) return;
-    element.showModal();
-    return () => element.close();
-  }, []);
   return (
-    <DialogContent
+    <Modal
+      title={title}
+      busy={false}
+      onClose={close}
       className={task ? "workflow-task-modal" : "workflow-control-modal"}
-      ref={dialog}
-      aria-label={title}
-      onCancel={(event) => {
-        event.preventDefault();
-        close();
-      }}
+      wide={!!task}
     >
-      <header>
-        <h2>{title}</h2>
-        {task && <p>{task}</p>}
-      </header>
+      {task && <p>{task}</p>}
       <div className="workflow-modal-body">{children}</div>
       <footer>
         {footer ?? (
-          <button type="button" onClick={close}>
+          <AppButton type="button" onClick={close}>
             Close
-          </button>
+          </AppButton>
         )}
       </footer>
-    </DialogContent>
+    </Modal>
   );
 }
 
@@ -354,13 +336,13 @@ function AcceptedDiff({
   return (
     <details>
       <summary>Accepted diff</summary>
-      <button
+      <AppButton
         type="button"
         disabled={!connected || busy || offset === null}
         onClick={() => void load()}
       >
         Load accepted diff
-      </button>
+      </AppButton>
       {error && <p role="alert">{error}</p>}
       <pre>{diff}</pre>
     </details>
@@ -390,7 +372,7 @@ export function WorkflowPlayer({
   busy: string;
   act(request: WorkflowRequest): Promise<boolean>;
 }) {
-  const [modal, setModal] = useState<Modal | null>(null);
+  const [modal, setModal] = useState<WorkflowModal | null>(null);
   const [message, setMessage] = useState("");
   const [reply, setReply] = useState({ questionId: "", text: "" });
   const snapshot = record.snapshot;
@@ -426,12 +408,12 @@ export function WorkflowPlayer({
         </p>
       )}
       {!snapshot && ["starting", "uncertain"].includes(record.state) && (
-        <button type="button" disabled={!!busy} onClick={() => void command("recover")}>
+        <AppButton type="button" disabled={!!busy} onClick={() => void command("recover")}>
           Recover same start request
-        </button>
+        </AppButton>
       )}
       <section className="workflow-player">
-        <h2>“{record.name}”</h2>
+        <h2>Execution status</h2>
         <div className="workflow-player-panels">
           <div className="workflow-player-left">
             <div className="workflow-transport-row">
@@ -495,16 +477,16 @@ export function WorkflowPlayer({
                   <span>{statusLabel(snapshot?.tasks[i]?.state ?? "Unconfirmed")}</span>
                 </summary>
                 <div>
-                  <button
+                  <AppButton
                     type="button"
                     onClick={() => setModal({ kind: "configuration", task: i })}
                   >
                     View Configuration
-                  </button>
+                  </AppButton>
                   {verdictFor(i) && (
-                    <button type="button" onClick={() => setModal({ kind: "results", task: i })}>
+                    <AppButton type="button" onClick={() => setModal({ kind: "results", task: i })}>
                       View Results
-                    </button>
+                    </AppButton>
                   )}
                 </div>
               </details>
@@ -521,7 +503,7 @@ export function WorkflowPlayer({
         >
           <label htmlFor={decision.id}>{decision.text}</label>
           {decision.options ? (
-            <select
+            <CarbonSelect
               id={decision.id}
               value={answer}
               onChange={(e) => setReply({ questionId: decision.id, text: e.target.value })}
@@ -532,18 +514,18 @@ export function WorkflowPlayer({
                   {o.name}
                 </option>
               ))}
-            </select>
+            </CarbonSelect>
           ) : (
-            <textarea
+            <CarbonTextArea
               id={decision.id}
               maxLength={65536}
               value={answer}
               onChange={(e) => setReply({ questionId: decision.id, text: e.target.value })}
             />
           )}
-          <button type="submit" disabled={!controllable || !answer.trim()}>
+          <AppButton type="submit" disabled={!controllable || !answer.trim()}>
             Send answer
-          </button>
+          </AppButton>
         </form>
       )}
       {snapshot?.reason && <p role="status">{snapshot.reason}</p>}
@@ -601,10 +583,10 @@ export function WorkflowPlayer({
           close={close}
           footer={
             <>
-              <button type="button" onClick={close}>
+              <AppButton type="button" onClick={close}>
                 Cancel
-              </button>
-              <button
+              </AppButton>
+              <AppButton
                 type="button"
                 disabled={!canStop}
                 onClick={() => {
@@ -613,7 +595,7 @@ export function WorkflowPlayer({
                 }}
               >
                 Stop workflow
-              </button>
+              </AppButton>
             </>
           }
         >
@@ -629,16 +611,16 @@ export function WorkflowPlayer({
           close={close}
           footer={
             <>
-              <button type="button" onClick={close}>
+              <AppButton type="button" onClick={close}>
                 Cancel
-              </button>
-              <button
+              </AppButton>
+              <AppButton
                 type="submit"
                 form="workflow-steer"
                 disabled={!controllable || !message.trim()}
               >
                 Queue guidance
-              </button>
+              </AppButton>
             </>
           }
         >
@@ -653,14 +635,14 @@ export function WorkflowPlayer({
             }}
           >
             {actionError && <p role="alert">{actionError}</p>}
-            <label>
-              Guidance for a subsequent turn
-              <textarea
+            <div>
+              <CarbonTextArea
+                labelText={<>Guidance for a subsequent turn</>}
                 value={message}
                 maxLength={65536}
                 onChange={(e) => setMessage(e.target.value)}
               />
-            </label>
+            </div>
           </form>
         </WorkflowDialog>
       )}

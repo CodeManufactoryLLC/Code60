@@ -6,6 +6,9 @@ import type {
   GitSetupSession,
   ProjectRequestIdentity,
 } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Checkbox as CarbonCheckbox } from "./carbon/choices.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { Modal } from "./modal.js";
 
 export function GitReadinessNotice({
@@ -26,16 +29,16 @@ export function GitReadinessNotice({
         <p>Install Git using your system tools, then check again.</p>
       ) : null}
       <div className="review-actions">
-        <button
+        <AppButton
           type="button"
           disabled={!["not_repository", "no_commits"].includes(state.status)}
           onClick={onSetup}
         >
           Set up Git
-        </button>
-        <button type="button" onClick={onCheck}>
+        </AppButton>
+        <AppButton type="button" onClick={onCheck}>
           Check again
-        </button>
+        </AppButton>
       </div>
     </section>
   );
@@ -182,30 +185,30 @@ export function GitSetupDialog({
               Return to Chat and continue your request. Previous dispatches will not run
               automatically.
             </p>
-            <button type="button" onClick={onClose}>
+            <AppButton type="button" onClick={onClose}>
               Return to Chat
-            </button>
+            </AppButton>
           </>
         ) : (
           <>
             {!busy && (
-              <button type="button" onClick={() => setAttempt((value) => value + 1)}>
+              <AppButton type="button" onClick={() => setAttempt((value) => value + 1)}>
                 Refresh setup preview
-              </button>
+              </AppButton>
             )}
             {session && (
               <>
                 <div className="review-actions">
-                  <button
+                  <AppButton
                     type="button"
                     disabled={busy}
                     onClick={() => setSelected(session.files.map((file) => file.id))}
                   >
                     Select all files
-                  </button>
-                  <button type="button" disabled={busy} onClick={() => setSelected([])}>
+                  </AppButton>
+                  <AppButton type="button" disabled={busy} onClick={() => setSelected([])}>
                     Clear selection
-                  </button>
+                  </AppButton>
                   <span>
                     {selected.length} {selected.length === 1 ? "file" : "files"} selected
                   </span>
@@ -215,9 +218,9 @@ export function GitSetupDialog({
                     <legend>Files for the initial commit</legend>
                     {session.files.map((file) => (
                       <div className="git-setup-file" key={file.id}>
-                        <label>
-                          <input
-                            type="checkbox"
+                        <div>
+                          <CarbonCheckbox
+                            labelText={<>{file.path}</>}
                             checked={selected.includes(file.id)}
                             onChange={(event) =>
                               setSelected((ids) =>
@@ -227,15 +230,14 @@ export function GitSetupDialog({
                               )
                             }
                           />
-                          {file.path}
-                        </label>
-                        <button
+                        </div>
+                        <AppButton
                           type="button"
                           onClick={() => setFileId(file.id)}
                           aria-label={`Preview ${file.path}`}
                         >
                           Preview
-                        </button>
+                        </AppButton>
                       </div>
                     ))}
                   </fieldset>
@@ -263,25 +265,25 @@ export function GitSetupDialog({
                   </details>
                 )}
                 <div className="git-setup-author">
-                  <label>
-                    Git author name
-                    <input
+                  <div>
+                    <CarbonTextInput
+                      labelText={<>Git author name</>}
                       value={name}
                       disabled={busy || !!session.author.name}
                       onChange={(event) => setName(event.target.value)}
                     />
-                  </label>
-                  <label>
-                    Git author email
-                    <input
+                  </div>
+                  <div>
+                    <CarbonTextInput
+                      labelText={<>Git author email</>}
                       value={email}
                       disabled={busy || !!session.author.email}
                       onChange={(event) => setEmail(event.target.value)}
                     />
-                  </label>
+                  </div>
                 </div>
                 <p>Missing author settings are saved only in this repository.</p>
-                <button
+                <AppButton
                   type="button"
                   className="primary"
                   disabled={
@@ -295,17 +297,17 @@ export function GitSetupDialog({
                   {session.files.length === 0 && session.excluded.length === 0
                     ? "Create empty initial commit"
                     : "Create initial commit"}
-                </button>
+                </AppButton>
               </>
             )}
             {busy ? (
-              <button type="button" onClick={() => void cancel()}>
+              <AppButton type="button" onClick={() => void cancel()}>
                 Cancel Git setup
-              </button>
+              </AppButton>
             ) : (
-              <button type="button" onClick={onClose}>
+              <AppButton type="button" onClick={onClose}>
                 Close
-              </button>
+              </AppButton>
             )}
           </>
         )}

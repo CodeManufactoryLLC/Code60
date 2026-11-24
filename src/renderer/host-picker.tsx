@@ -2,6 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
 import type { BrowserSession, Choices, Interaction } from "../bridge/index.js";
 import { browserRequest } from "./browser-client.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { Icon } from "./icons.js";
 import { Modal } from "./modal.js";
 
@@ -133,50 +135,57 @@ export default function HostPicker({
     >
       <nav className="picker-navigation" aria-label="Folder navigation">
         <div className="picker-directions">
-          <button
+          <AppButton
             type="button"
+            className="icon-button"
             aria-label="Back"
             title="Back"
             disabled={locked || !listing?.index}
             onClick={() => listing && travel(listing.index - 1)}
           >
             <Icon name="arrow--left" />
-          </button>
-          <button
+          </AppButton>
+          <AppButton
             type="button"
+            className="icon-button"
             aria-label="Forward"
             title="Forward"
             disabled={locked || !listing || listing.index >= listing.history.length - 1}
             onClick={() => listing && travel(listing.index + 1)}
           >
             <Icon name="arrow--right" />
-          </button>
-          <button
+          </AppButton>
+          <AppButton
             type="button"
+            className="icon-button"
             aria-label="Up"
             title="Up"
             disabled={locked || !current}
             onClick={() => void load({ directory: parent?.id })}
           >
             <Icon name="arrow--up" />
-          </button>
+          </AppButton>
         </div>
         <span className="picker-location" title={choices?.directory}>
           <bdi dir="ltr">{choices?.directory ?? "Workspace roots"}</bdi>
         </span>
         {item?.directory && (
-          <button type="button" disabled={locked} onClick={() => void load({ directory: item.id })}>
+          <AppButton
+            type="button"
+            disabled={locked}
+            onClick={() => void load({ directory: item.id })}
+          >
             Open folder
-          </button>
+          </AppButton>
         )}
-        <button
+        <AppButton
           type="button"
           ref={newFolder}
           disabled={locked || !current}
           onClick={() => setFolderName("")}
         >
           New folder
-        </button>
+        </AppButton>
       </nav>
       {folderName !== null && (
         <form
@@ -194,21 +203,21 @@ export default function HostPicker({
               void load({ directory: current.id, createDirectory: folderName });
           }}
         >
-          <label>
-            New folder name
-            <input
+          <div>
+            <CarbonTextInput
+              labelText={<>New folder name</>}
               ref={formInput}
               maxLength={200}
               value={folderName}
               onChange={(e) => setFolderName(e.target.value)}
             />
-          </label>
-          <button type="submit" disabled={locked || !validName(folderName)}>
+          </div>
+          <AppButton type="submit" disabled={locked || !validName(folderName)}>
             Create folder
-          </button>
-          <button type="button" disabled={locked} onClick={closeEditor}>
+          </AppButton>
+          <AppButton type="button" disabled={locked} onClick={closeEditor}>
             Dismiss
-          </button>
+          </AppButton>
         </form>
       )}
       <div
@@ -264,9 +273,9 @@ export default function HostPicker({
         <div className="picker-error" role="alert">
           {failure.message}{" "}
           {!failure.visit.createDirectory && (
-            <button type="button" disabled={locked} onClick={() => void load(failure.visit)}>
+            <AppButton type="button" disabled={locked} onClick={() => void load(failure.visit)}>
               Retry
-            </button>
+            </AppButton>
           )}
         </div>
       )}
@@ -283,18 +292,22 @@ export default function HostPicker({
         }}
       >
         {creating && (
-          <label>
-            Database filename
-            <input value={filename} maxLength={200} onChange={(e) => setFilename(e.target.value)} />
-          </label>
+          <div>
+            <CarbonTextInput
+              labelText={<>Database filename</>}
+              value={filename}
+              maxLength={200}
+              onChange={(e) => setFilename(e.target.value)}
+            />
+          </div>
         )}
         <div className="picker-actions">
-          <button type="button" disabled={locked} onClick={() => void submit(false)}>
+          <AppButton type="button" disabled={locked} onClick={() => void submit(false)}>
             Cancel
-          </button>
-          <button type="submit" className="primary" disabled={locked || !target || editing}>
+          </AppButton>
+          <AppButton type="submit" className="primary" disabled={locked || !target || editing}>
             {creating ? "Create database" : folder ? "Choose folder" : "Open"}
-          </button>
+          </AppButton>
         </div>
       </form>
     </Modal>

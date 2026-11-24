@@ -1,3 +1,4 @@
+import { Tab, TabList, TabPanel, TabPanels, Tabs } from "@carbon/react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   type ApplicationClient,
@@ -13,6 +14,8 @@ import {
   type McpTextIssue,
 } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
+import { Button } from "./carbon/button.js";
+import { Select } from "./carbon/fields.js";
 import type { TableOptions } from "./data-table.js";
 import {
   type McpDraft,
@@ -91,6 +94,7 @@ export function McpWorkspace({
   >();
   const [reset, setReset] = useState<McpResetPreview>();
   const sequence = useRef(0);
+  const reloadToken = useRef<number | undefined>(undefined);
   const requests = useRef<{ key: string; id: string } | undefined>(undefined);
   const pending = useRef(false);
   const awake = useRef(active && visible);
@@ -105,7 +109,7 @@ export function McpWorkspace({
   const context = useRef(contextKey);
   context.current = contextKey;
   const load = useCallback(async () => {
-    if (!awake.current) return;
+    if (!awake.current || reloadToken.current !== undefined) return;
     const token = ++sequence.current;
     try {
       const list = await api.mcpTargets();
@@ -140,6 +144,7 @@ export function McpWorkspace({
     if (active && visible) void load();
     return () => {
       sequence.current++;
+      reloadToken.current = undefined;
     };
   }, [load, active, visible]);
   useEffect(
@@ -167,12 +172,22 @@ export function McpWorkspace({
     if (!target) throw new Error("MCP configuration conflict");
     const token = ++sequence.current;
     const ownerContext = context.current;
-    const value = await api.mcpReadText(target.address);
-    if (token !== sequence.current || !awake.current || ownerContext !== context.current)
-      throw new Error("MCP configuration conflict");
-    setDraft(newMcpDraft(value));
-    setError("");
-    setCompare(false);
+    // Background connection notifications can arrive while discarding a draft.
+    // Let the explicit read finish, then observe any newer revision normally.
+    reloadToken.current = token;
+    try {
+      const value = await api.mcpReadText(target.address);
+      if (token !== sequence.current || !awake.current || ownerContext !== context.current)
+        throw new Error("MCP configuration conflict");
+      setDraft(newMcpDraft(value));
+      setError("");
+      setCompare(false);
+    } finally {
+      if (reloadToken.current === token) {
+        reloadToken.current = undefined;
+        void load();
+      }
+    }
   }
   async function mutate(
     value: unknown,
@@ -274,30 +289,21 @@ export function McpWorkspace({
   }
   return (
     <section className="mcp-workspace">
-      <div className="mcp-workspace-controls">
-        <fieldset className="segmented">
-          <legend className="sr-only">MCP configuration view</legend>
-          <button
-            type="button"
-            aria-pressed={mode === "servers"}
-            disabled={busy}
-            onClick={() => navigate(() => setMode("servers"))}
-          >
-            Servers
-          </button>
-          <button
-            type="button"
-            aria-pressed={mode === "json"}
-            disabled={busy}
-            onClick={() => setMode("json")}
-          >
-            JSON
-          </button>
-        </fieldset>
+      <Tabs
+        selectedIndex={mode === "servers" ? 0 : 1}
+        onChange={({ selectedIndex }) => {
+          if (selectedIndex === 0) navigate(() => setMode("servers"));
+          else setMode("json");
+        }}
+      >
+        <TabList aria-label="MCP configuration view" activation="manual">
+          <Tab disabled={busy}>Servers</Tab>
+          <Tab disabled={busy}>JSON</Tab>
+        </TabList>
         {mode === "json" && (
-          <label>
-            Configuration
-            <select
+          <div className="mcp-workspace-controls">
+            <Select
+              labelText="Configuration"
               aria-label="Configuration"
               value={scope}
               disabled={busy}
@@ -314,200 +320,231 @@ export function McpWorkspace({
               {scope !== "user" && !targets?.targets.some((t) => t.address.targetId === scope) && (
                 <option value={scope}>Unavailable project</option>
               )}
-            </select>
-          </label>
+            </Select>
+          </div>
         )}
-        <button type="button" disabled={busy || !draft} onClick={() => void openBackups()}>
-          Restore backup
-        </button>
-        <button
-          type="button"
-          disabled={
-            busy || !draft || Boolean(draft.latest.pendingRecovery.length) || draft.ownerLost
-          }
-          onClick={() => void openReset(false)}
-        >
-          Reset this configuration
-        </button>
-        {target?.address.scope === "project" && (
-          <button
+        {error && <p role="alert">{error}</p>}
+        {draft?.ownerLost && (
+          <Button
+            variant="quiet"
+            type="button"
+            disabled={busy}
+            onClick={() => setGuard({ title: "Reload MCP configuration?", proceed: () => {} })}
+          >
+            Reload configuration
+          </Button>
+        )}
+        <TabPanels>
+          <TabPanel>
+            {mode === "servers" && (
+              <McpServersPage
+                api={api}
+                active={active && visible}
+                contextKey={contextKey}
+                configuration={{ scope, select }}
+                onFormDirty={setFormDirty}
+                readOnly={draft?.ownerLost ?? false}
+                {...table}
+              />
+            )}
+          </TabPanel>
+          <TabPanel>
+            {mode === "json" && (
+              <>
+                <PageTitle page="mcp-servers" />
+                <p>
+                  Save writes this dedicated configuration exactly for future sessions. Existing
+                  connections keep their captured state. Use credential references; resolved
+                  credentials are never inserted here.
+                </p>
+                {draft && state && (
+                  <>
+                    <div className="mcp-json-actions">
+                      <Button
+                        variant="primary"
+                        type="button"
+                        disabled={busy || !state.canSave}
+                        onClick={() => void saveText()}
+                      >
+                        Save configuration
+                      </Button>
+                      <Button
+                        type="button"
+                        disabled={busy || !state.editable || !state.validation.valid}
+                        onClick={() =>
+                          setDraft((v) =>
+                            v
+                              ? { ...v, text: `${JSON.stringify(JSON.parse(v.text), null, 2)}\n` }
+                              : v,
+                          )
+                        }
+                      >
+                        Format JSON
+                      </Button>
+                      <Button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          setGuard({ title: "Discard MCP changes?", proceed: () => {} })
+                        }
+                      >
+                        Discard changes
+                      </Button>
+                      <Button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          setCompare(true);
+                          void load();
+                        }}
+                      >
+                        Compare saved and draft
+                      </Button>
+                      <span role="status">{state.dirty ? "Unsaved changes" : "Saved"}</span>
+                    </div>
+                    {state.stale && (
+                      <p role="alert">
+                        Configuration or owner changed. Your draft is retained. Compare or
+                        explicitly discard/reload before saving.
+                      </p>
+                    )}
+                    {state.blocked && (
+                      <p role="alert">
+                        Pending recovery blocks writes. Preserve private evidence and follow the MCP
+                        configuration recovery runbook.
+                      </p>
+                    )}
+                    {!state.editable && (
+                      <p role="alert">
+                        The original file is not valid UTF-8. Use a valid backup or a confirmed
+                        reset; the original bytes remain protected.
+                      </p>
+                    )}
+                    {!state.validation.valid && (
+                      <ul aria-label="Configuration issues">
+                        {state.validation.issues.map((issue) => (
+                          <li
+                            key={`${issue.code}:${issue.line}:${issue.column}:${issue.path.join(".")}`}
+                          >
+                            <Button
+                              type="button"
+                              onClick={() => setIssueLocation({ issue, key: randomId() })}
+                            >
+                              {issue.message} Line {issue.line}, column {issue.column}.
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <Suspense fallback={<p role="status">Loading JSON editor…</p>}>
+                      <JsonEditor
+                        text={draft.text}
+                        issues={state.validation.issues}
+                        reveal={issueLocation}
+                        active={active && visible}
+                        key={JSON.stringify(draft.saved.target)}
+                        editable={state.editable && !busy}
+                        canSave={state.canSave && !busy}
+                        view={view}
+                        onChange={(text) => setDraft((v) => (v ? { ...v, text } : v))}
+                        onSave={() => void saveText()}
+                      />
+                    </Suspense>
+                    {compare && (
+                      <section aria-label="Saved versus draft">
+                        <h2>Saved versus Draft</h2>
+                        <Suspense fallback={<p>Loading comparison…</p>}>
+                          <Diff
+                            original={
+                              draft.latest.contentBase64 === null
+                                ? draft.latest.exists
+                                  ? ""
+                                  : MCP_EMPTY_TEXT
+                                : decodeMcpText(draft.latest.contentBase64)
+                            }
+                            modified={draft.text}
+                            path="mcp.json"
+                            address={`mcp:${draft.latest.revision}`}
+                            originalLabel="Saved configuration"
+                            modifiedLabel="Your configuration draft"
+                          />
+                        </Suspense>
+                        <Button variant="quiet" type="button" onClick={() => setCompare(false)}>
+                          Close comparison
+                        </Button>
+                      </section>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
+      <section className="mcp-maintenance" aria-label="Configuration maintenance">
+        <h2>Configuration maintenance</h2>
+        <div className="mcp-workspace-controls">
+          <Button
+            variant="quiet"
+            type="button"
+            disabled={busy || !draft}
+            onClick={() => void openBackups()}
+          >
+            Restore backup
+          </Button>
+          <Button
             type="button"
             disabled={
               busy || !draft || Boolean(draft.latest.pendingRecovery.length) || draft.ownerLost
             }
-            onClick={() => void openReset(true)}
+            onClick={() => void openReset(false)}
           >
-            Reset User and this project
-          </button>
-        )}
-      </div>
-      {target && (
-        <McpTroubleshooting api={api} target={target.address} active={active && visible} />
-      )}
-      {target && (
-        <McpRecoveryPanel
-          api={api}
-          target={target.address}
-          active={active && visible}
-          dirty={Boolean(state?.dirty || formDirty)}
-          onChanged={() => {
-            void load();
-          }}
-        />
-      )}
-      {error && <p role="alert">{error}</p>}
-      {draft?.ownerLost && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => setGuard({ title: "Reload MCP configuration?", proceed: () => {} })}
-        >
-          Reload configuration
-        </button>
-      )}
-      {mode === "servers" ? (
-        <McpServersPage
-          api={api}
-          active={active && visible}
-          contextKey={contextKey}
-          configuration={{ scope, select }}
-          onFormDirty={setFormDirty}
-          readOnly={draft?.ownerLost ?? false}
-          {...table}
-        />
-      ) : (
-        <>
-          <PageTitle page="mcp-servers" />
-          <p>
-            Save writes this dedicated configuration exactly for future sessions. Existing
-            connections keep their captured state. Use credential references; resolved credentials
-            are never inserted here.
-          </p>
-          {draft && state && (
-            <>
-              <div className="mcp-json-actions">
-                <button
-                  type="button"
-                  disabled={busy || !state.canSave}
-                  onClick={() => void saveText()}
-                >
-                  Save configuration
-                </button>
-                <button
-                  type="button"
-                  disabled={busy || !state.editable || !state.validation.valid}
-                  onClick={() =>
-                    setDraft((v) =>
-                      v ? { ...v, text: `${JSON.stringify(JSON.parse(v.text), null, 2)}\n` } : v,
-                    )
-                  }
-                >
-                  Format JSON
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => setGuard({ title: "Discard MCP changes?", proceed: () => {} })}
-                >
-                  Discard changes
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setCompare(true);
-                    void load();
-                  }}
-                >
-                  Compare saved and draft
-                </button>
-                <span role="status">{state.dirty ? "Unsaved changes" : "Saved"}</span>
-              </div>
-              {state.stale && (
-                <p role="alert">
-                  Configuration or owner changed. Your draft is retained. Compare or explicitly
-                  discard/reload before saving.
-                </p>
-              )}
-              {state.blocked && (
-                <p role="alert">
-                  Pending recovery blocks writes. Preserve private evidence and follow the MCP
-                  configuration recovery runbook.
-                </p>
-              )}
-              {!state.editable && (
-                <p role="alert">
-                  The original file is not valid UTF-8. Use a valid backup or a confirmed reset; the
-                  original bytes remain protected.
-                </p>
-              )}
-              {!state.validation.valid && (
-                <ul aria-label="Configuration issues">
-                  {state.validation.issues.map((issue) => (
-                    <li key={`${issue.code}:${issue.line}:${issue.column}:${issue.path.join(".")}`}>
-                      <button
-                        type="button"
-                        onClick={() => setIssueLocation({ issue, key: randomId() })}
-                      >
-                        {issue.message} Line {issue.line}, column {issue.column}.
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <Suspense fallback={<p role="status">Loading JSON editor…</p>}>
-                <JsonEditor
-                  text={draft.text}
-                  issues={state.validation.issues}
-                  reveal={issueLocation}
-                  active={active && visible}
-                  key={JSON.stringify(draft.saved.target)}
-                  editable={state.editable && !busy}
-                  canSave={state.canSave && !busy}
-                  view={view}
-                  onChange={(text) => setDraft((v) => (v ? { ...v, text } : v))}
-                  onSave={() => void saveText()}
-                />
-              </Suspense>
-              {compare && (
-                <section aria-label="Saved versus draft">
-                  <h2>Saved versus Draft</h2>
-                  <Suspense fallback={<p>Loading comparison…</p>}>
-                    <Diff
-                      original={
-                        draft.latest.contentBase64 === null
-                          ? draft.latest.exists
-                            ? ""
-                            : MCP_EMPTY_TEXT
-                          : decodeMcpText(draft.latest.contentBase64)
-                      }
-                      modified={draft.text}
-                      path="mcp.json"
-                      address={`mcp:${draft.latest.revision}`}
-                      originalLabel="Saved configuration"
-                      modifiedLabel="Your configuration draft"
-                    />
-                  </Suspense>
-                  <button type="button" onClick={() => setCompare(false)}>
-                    Close comparison
-                  </button>
-                </section>
-              )}
-            </>
+            Reset this configuration
+          </Button>
+          {target?.address.scope === "project" && (
+            <Button
+              type="button"
+              disabled={
+                busy || !draft || Boolean(draft.latest.pendingRecovery.length) || draft.ownerLost
+              }
+              onClick={() => void openReset(true)}
+            >
+              Reset User and this project
+            </Button>
           )}
-        </>
-      )}
+        </div>
+        {target && (
+          <McpTroubleshooting api={api} target={target.address} active={active && visible} />
+        )}
+        {target && (
+          <McpRecoveryPanel
+            api={api}
+            target={target.address}
+            active={active && visible}
+            dirty={Boolean(state?.dirty || formDirty)}
+            onChanged={() => {
+              void load();
+            }}
+          />
+        )}
+      </section>
       {active && visible && guard && (
         <Modal title={guard.title} busy={busy} onClose={() => setGuard(undefined)}>
+          {error && <p role="alert">{error}</p>}
           <p>
             Save the JSON draft, discard it and read the latest saved configuration, or cancel.
             Discard never writes the file.
           </p>
           <div className="dialog-actions">
-            <button type="button" disabled={busy} onClick={() => setGuard(undefined)}>
+            <Button
+              variant="quiet"
+              type="button"
+              disabled={busy}
+              onClick={() => setGuard(undefined)}
+            >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               disabled={busy}
               onClick={() => {
@@ -521,8 +558,8 @@ export function McpWorkspace({
               }}
             >
               Discard
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               disabled={busy || !state?.canSave}
               onClick={() => {
@@ -535,7 +572,7 @@ export function McpWorkspace({
               }}
             >
               Save
-            </button>
+            </Button>
           </div>
         </Modal>
       )}
@@ -554,53 +591,51 @@ export function McpWorkspace({
             private recovery evidence.
           </p>
           {backups.length ? (
-            <label>
-              Backup
-              <select
-                aria-label="Backup"
-                defaultValue=""
-                disabled={busy}
-                onChange={(e) => {
-                  const backupId = e.target.value;
-                  setBackup(undefined);
-                  if (draft) {
-                    const token = ++sequence.current;
-                    const captured = draft.saved;
-                    const ownerContext = context.current;
-                    void api.mcpPreviewBackup({ target: draft.saved.target, backupId }).then(
-                      (value) => {
-                        if (
-                          awake.current &&
-                          token === sequence.current &&
-                          ownerContext === context.current &&
-                          sameMcpOwner(current.current?.saved.target, captured.target)
-                        )
-                          setBackup({
-                            ...value,
-                            target: captured.target,
-                            expectedRevision: captured.revision,
-                          });
-                      },
-                      (cause) => setError(failure(cause)),
-                    );
-                  }
-                }}
-              >
-                <option value="" disabled>
-                  Choose backup
+            <Select
+              labelText="Backup"
+              aria-label="Backup"
+              defaultValue=""
+              disabled={busy}
+              onChange={(e) => {
+                const backupId = e.target.value;
+                setBackup(undefined);
+                if (draft) {
+                  const token = ++sequence.current;
+                  const captured = draft.saved;
+                  const ownerContext = context.current;
+                  void api.mcpPreviewBackup({ target: draft.saved.target, backupId }).then(
+                    (value) => {
+                      if (
+                        awake.current &&
+                        token === sequence.current &&
+                        ownerContext === context.current &&
+                        sameMcpOwner(current.current?.saved.target, captured.target)
+                      )
+                        setBackup({
+                          ...value,
+                          target: captured.target,
+                          expectedRevision: captured.revision,
+                        });
+                    },
+                    (cause) => setError(failure(cause)),
+                  );
+                }
+              }}
+            >
+              <option value="" disabled>
+                Choose backup
+              </option>
+              {backups.map((b) => (
+                <option key={b.backupId} value={b.backupId} disabled={!b.valid || b.pinned}>
+                  {new Date(b.createdAt).toLocaleString()} —{" "}
+                  {b.pinned
+                    ? "Pending recovery"
+                    : b.valid
+                      ? "Valid configuration"
+                      : "Malformed recovery evidence"}
                 </option>
-                {backups.map((b) => (
-                  <option key={b.backupId} value={b.backupId} disabled={!b.valid || b.pinned}>
-                    {new Date(b.createdAt).toLocaleString()} —{" "}
-                    {b.pinned
-                      ? "Pending recovery"
-                      : b.valid
-                        ? "Valid configuration"
-                        : "Malformed recovery evidence"}
-                  </option>
-                ))}
-              </select>
-            </label>
+              ))}
+            </Select>
           ) : (
             <p>No backups available.</p>
           )}
@@ -621,7 +656,8 @@ export function McpWorkspace({
           )}
           {error && <p role="alert">{error}</p>}
           <div className="dialog-actions">
-            <button
+            <Button
+              variant="quiet"
               type="button"
               disabled={busy}
               onClick={() => {
@@ -630,8 +666,8 @@ export function McpWorkspace({
               }}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               disabled={
                 busy ||
@@ -659,7 +695,7 @@ export function McpWorkspace({
               }}
             >
               Confirm restore
-            </button>
+            </Button>
           </div>
         </Modal>
       )}
@@ -698,10 +734,16 @@ export function McpWorkspace({
           {reset.blocked && <p role="alert">Pending recovery blocks reset.</p>}
           {error && <p role="alert">{error}</p>}
           <div className="dialog-actions">
-            <button type="button" disabled={busy} onClick={() => setReset(undefined)}>
+            <Button
+              variant="quiet"
+              type="button"
+              disabled={busy}
+              onClick={() => setReset(undefined)}
+            >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              className="destructive"
               type="button"
               disabled={busy || reset.blocked}
               onClick={() => {
@@ -714,7 +756,7 @@ export function McpWorkspace({
               }}
             >
               Confirm reset
-            </button>
+            </Button>
           </div>
         </Modal>
       )}

@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useRef, useState } from "react";
 import { randomId } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Select as CarbonSelect, TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { Icon } from "./icons.js";
-import { DialogContent } from "./neobrutalism/dialog.js";
+import { Modal } from "./modal.js";
 import {
   editableFilter,
   type FilterField,
@@ -30,17 +31,11 @@ export function FilterControls({
   preview(filter: SavedFilter, now: number): number;
   retained?: boolean;
 }) {
-  const titleId = useId();
   const [open, setOpen] = useState(false);
   const now = useTicker(open, 30000);
   const [selected, setSelected] = useState("");
   const [draft, setDraft] = useState<SavedFilter>();
-  const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (open) dialog.current?.showModal();
-    else dialog.current?.close();
-  }, [open]);
   const entry = library.definitions.find((item) => filterIdentity(item).id === selected);
   const active = library.definitions.find((item) => filterIdentity(item).id === library.active);
   const problem = draft ? filterProblem(draft, fields) : "";
@@ -81,7 +76,7 @@ export function FilterControls({
   };
   return (
     <>
-      <button
+      <AppButton
         type="button"
         className="icon-button"
         ref={trigger}
@@ -93,9 +88,9 @@ export function FilterControls({
         }}
       >
         <Icon name="filter" />
-      </button>
+      </AppButton>
       {library.active && (
-        <button
+        <AppButton
           type="button"
           className="filter-chip"
           aria-label="Unapply filter"
@@ -105,29 +100,15 @@ export function FilterControls({
             {active ? filterIdentity(active).name : "Filter"}
           </span>
           <Icon name="close" />
-        </button>
+        </AppButton>
       )}
-      {createPortal(
-        <DialogContent
-          ref={dialog}
-          className="filter-dialog setup-dialog"
-          aria-labelledby={titleId}
-          onCancel={(event) => {
-            event.preventDefault();
-            close();
-          }}
-        >
-          <header className="modal-heading">
-            <h2 id={titleId}>Filters</h2>
-            <button type="button" onClick={close}>
-              Close
-            </button>
-          </header>
+      {open && (
+        <Modal title="Filters" busy={false} onClose={close} className="filter-dialog" wide>
           <div className="filter-content">
             {error && (
               <div role="alert">
                 <p>{error}</p>
-                <button
+                <AppButton
                   type="button"
                   onClick={() => {
                     onChange({ version: 1, definitions: [], active: null });
@@ -135,13 +116,13 @@ export function FilterControls({
                   }}
                 >
                   Reset saved filters
-                </button>
+                </AppButton>
               </div>
             )}
             <div className="filter-library">
-              <label>
-                Definition
-                <select
+              <div>
+                <CarbonSelect
+                  labelText={<>Definition</>}
                   aria-label="Filter definition"
                   value={selected}
                   onChange={(event) => {
@@ -162,9 +143,9 @@ export function FilterControls({
                       </option>
                     );
                   })}
-                </select>
-              </label>
-              <button
+                </CarbonSelect>
+              </div>
+              <AppButton
                 type="button"
                 disabled={!!error}
                 onClick={() => {
@@ -173,7 +154,7 @@ export function FilterControls({
                 }}
               >
                 New filter
-              </button>
+              </AppButton>
             </div>
             {selected &&
               !draft &&
@@ -205,21 +186,21 @@ export function FilterControls({
                       </>
                     )}
                     <div className="button-group">
-                      <button
+                      <AppButton
                         type="button"
                         disabled={!!issue || !!error}
                         onClick={() => onChange({ ...library, active: value.id })}
                       >
                         Apply filter
-                      </button>
-                      <button
+                      </AppButton>
+                      <AppButton
                         type="button"
                         disabled={!editableFilter(item) || !!error}
                         onClick={() => setDraft(structuredClone(value))}
                       >
                         Edit filter
-                      </button>
-                      <button
+                      </AppButton>
+                      <AppButton
                         type="button"
                         disabled={!!error}
                         onClick={() => {
@@ -235,7 +216,7 @@ export function FilterControls({
                         }}
                       >
                         Delete filter
-                      </button>
+                      </AppButton>
                     </div>
                   </section>
                 );
@@ -247,18 +228,18 @@ export function FilterControls({
                   save();
                 }}
               >
-                <label>
-                  Name
-                  <input
+                <div>
+                  <CarbonTextInput
+                    labelText={<>Name</>}
                     aria-label="Filter name"
                     value={draft.name}
                     required
                     onChange={(event) => setDraft({ ...draft, name: event.target.value })}
                   />
-                </label>
-                <label>
-                  Conditions
-                  <select
+                </div>
+                <div>
+                  <CarbonSelect
+                    labelText={<>Conditions</>}
                     value={draft.mode}
                     onChange={(event) =>
                       setDraft({ ...draft, mode: event.target.value as "all" | "any" })
@@ -266,8 +247,8 @@ export function FilterControls({
                   >
                     <option value="all">Match all</option>
                     <option value="any">Match any</option>
-                  </select>
-                </label>
+                  </CarbonSelect>
+                </div>
                 <div className="filter-rules">
                   {draft.conditions.map((rule, index) => {
                     const change = (value: typeof rule) =>
@@ -277,9 +258,9 @@ export function FilterControls({
                       });
                     return (
                       <div className="filter-rule" key={rule.id}>
-                        <label>
-                          Column
-                          <select
+                        <div>
+                          <CarbonSelect
+                            labelText={<>Column</>}
                             value={
                               fields.some(
                                 (field) => field.key === rule.column && field.kind === rule.kind,
@@ -313,11 +294,11 @@ export function FilterControls({
                                 {field.title}
                               </option>
                             ))}
-                          </select>
-                        </label>
-                        <label>
-                          Comparison
-                          <select
+                          </CarbonSelect>
+                        </div>
+                        <div>
+                          <CarbonSelect
+                            labelText={<>Comparison</>}
                             value={rule.op}
                             onChange={(event) =>
                               change({ ...rule, op: event.target.value as ColumnFilter["op"] })
@@ -333,12 +314,12 @@ export function FilterControls({
                                 {filterLabels[op]}
                               </option>
                             ))}
-                          </select>
-                        </label>
+                          </CarbonSelect>
+                        </div>
                         {rule.op !== "empty" && rule.op !== "present" && (
-                          <label>
-                            Value
-                            <input
+                          <div>
+                            <CarbonTextInput
+                              labelText="Value"
                               aria-label={`Condition ${index + 1} value`}
                               type={
                                 rule.kind === "number" ||
@@ -353,9 +334,9 @@ export function FilterControls({
                               value={rule.value}
                               onChange={(event) => change({ ...rule, value: event.target.value })}
                             />
-                          </label>
+                          </div>
                         )}
-                        <button
+                        <AppButton
                           type="button"
                           aria-label={`Remove condition ${index + 1}`}
                           onClick={() =>
@@ -366,19 +347,19 @@ export function FilterControls({
                           }
                         >
                           Remove
-                        </button>
+                        </AppButton>
                       </div>
                     );
                   })}
                 </div>
-                <button
+                <AppButton
                   type="button"
                   onClick={() =>
                     setDraft({ ...draft, conditions: [...draft.conditions, ...fresh().conditions] })
                   }
                 >
                   Add condition
-                </button>
+                </AppButton>
                 <p role="status">
                   {problem ||
                     (retained
@@ -386,18 +367,17 @@ export function FilterControls({
                       : `${preview(draft, now)} matching rows`)}
                 </p>
                 <div className="button-group">
-                  <button type="submit" className="primary" disabled={!!problem || !!error}>
+                  <AppButton type="submit" className="primary" disabled={!!problem || !!error}>
                     Save filter
-                  </button>
-                  <button type="button" onClick={() => setDraft(undefined)}>
+                  </AppButton>
+                  <AppButton type="button" onClick={() => setDraft(undefined)}>
                     Cancel edit
-                  </button>
+                  </AppButton>
                 </div>
               </form>
             )}
           </div>
-        </DialogContent>,
-        document.querySelector(".app") ?? document.body,
+        </Modal>
       )}
     </>
   );

@@ -10,23 +10,19 @@ import {
 import { PageTitle, PageTitleNavigationContext } from "./page-title.js";
 import { SettingsHeader } from "./settings-layout.js";
 
-it("puts every page's navigation artwork before its sole content title without a breadcrumb menu", () => {
+it("puts every page's label in its sole content title without a breadcrumb menu", () => {
   for (const page of pages) {
     const html = renderToStaticMarkup(<PageTitle page={page.id} id="title" />);
     expect(html).toContain('<h1 id="title" class="content-page-title"');
-    expect(html).toContain(`data-icon="${pageDefinitions[page.id].icon}"`);
+    expect(html).not.toContain(`data-icon="${pageDefinitions[page.id].icon}"`);
     expect(html).toContain(`<span class="page-title-text">${page.label}</span>`);
-    expect(html.indexOf('class="navigation-icon"')).toBeLessThan(
-      html.indexOf('class="page-title-text"'),
-    );
-    expect(html.match(/data-icon=/g)).toHaveLength(1);
     expect(html.match(/<h1\b/g)).toHaveLength(1);
     expect(html).not.toMatch(/role="combobox"|<nav|<button/);
   }
   for (const page of settingsSectionIds) {
     const html = renderToStaticMarkup(<SettingsHeader page={page} />);
     expect(html).toContain('<h1 class="content-page-title"');
-    expect(html).toContain(`data-icon="${settingsIcons[page]}"`);
+    expect(html).not.toContain(`data-icon="${settingsIcons[page]}"`);
     expect(html).toContain(`<span class="page-title-text">${settingsLabels[page]}</span>`);
   }
 });
@@ -43,14 +39,14 @@ it.each([
   ["worker", "app-down-right"],
   ["project", "app-folder"],
   ["provider", "app-helmet"],
-] as const)("uses a safe actual %s title with decorative artwork", (page, icon) => {
+] as const)("uses a safe actual %s title without artwork", (page, icon) => {
   const html = renderToStaticMarkup(
     <PageTitle page={page} as="h2">
       {"<custom title>"}
     </PageTitle>,
   );
-  expect(html).toContain(`data-icon="${icon}"`);
-  expect(html).toContain('alt="" aria-hidden="true" draggable="false"');
+  expect(html).not.toContain(`data-icon="${icon}"`);
+  expect(html).not.toContain("<img");
   expect(html).toContain('<span class="page-title-text">&lt;custom title&gt;</span>');
   expect(html).not.toMatch(/<custom title>|role="combobox"/);
 });

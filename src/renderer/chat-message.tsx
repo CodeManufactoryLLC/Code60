@@ -1,9 +1,9 @@
 import { type ReactNode, useEffect, useState } from "react";
 import type { ApplicationClient } from "../bridge/index.js";
+import { BubbleContent } from "./carbon/transcript-content.js";
 import { ChatMarkdown } from "./chat-markdown.js";
 import { McpBadge } from "./mcp-badge.js";
 import { MessageCopy } from "./message-controls.js";
-import { BubbleContent } from "./neobrutalism/bubble.js";
 import type { Block } from "./transcript.js";
 export function ChatMessage({
   block,

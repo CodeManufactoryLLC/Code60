@@ -1,54 +1,22 @@
-import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import type { ApplicationClient } from "../bridge/index.js";
 import { AutomationsPage } from "./automations.js";
-import { defaultTextStyles } from "./typography.js";
 
-vi.mock("./data-table.js", () => ({
-  DataTable: ({ tableId }: { tableId: string }) =>
-    createElement("div", { "data-test-table": tableId }),
-}));
-
-it("keeps service controls and explanatory notes out of Scheduled Jobs", () => {
+it("offers direct Carbon job controls and bounded history without service management or grid settings", () => {
   const markup = renderToStaticMarkup(
-    <AutomationsPage
-      api={{} as ApplicationClient}
-      active={false}
-      agents={[]}
-      lines={{ horizontal: false, vertical: false, heading: false }}
-      density="high"
-      fit
-      textStyles={defaultTextStyles}
-    />,
+    <AutomationsPage api={{} as ApplicationClient} active={false} agents={[]} />,
   );
-
-  expect(markup).toContain('<h1 class="content-page-title"');
-  expect(markup).toContain('data-icon="app-robotic-arm"');
-  expect(markup).toContain('<span class="page-title-text">Scheduled Jobs</span>');
-  expect(markup).not.toContain("Runs continue after you quit Code60.");
-  expect(markup).not.toContain("A finished run means the agent turn ended");
-  expect(markup).not.toContain("Background service");
-  expect(markup).not.toContain("Service options");
-  expect(markup).not.toContain("Install service");
-  expect(markup).not.toContain('data-test-table="automations"');
-  expect(markup).toContain('data-slot="accordion"');
-  expect(markup).toContain('aria-haspopup="menu"');
-  const trigger = markup.match(
-    /<button[^>]*aria-label="Scheduled Jobs actions"[^>]*>([\s\S]*?)<\/button>/,
-  );
-  expect(trigger).not.toBeNull();
-  expect(trigger?.[1]).toContain('<svg class="carbon-icon"');
-  expect(trigger?.[1]).toContain('aria-hidden="true"');
-  expect(trigger?.[1]).not.toContain("Actions");
-  expect(markup).not.toContain("Refresh scheduled jobs");
-  expect(markup).not.toContain("New scheduled job");
-  expect(markup).toContain('data-test-table="automation-history"');
-  expect(markup.match(/automation-table-card/g)).toHaveLength(1);
+  expect(markup).toMatch(/<h1[^>]*>Scheduled Jobs<\/h1>/);
+  expect(markup).toContain('aria-label="Scheduled job controls"');
+  expect(markup).toContain("New scheduled job");
+  expect(markup).toContain("Refresh");
   expect(markup).toContain('aria-label="Schedules"');
-  expect(markup).toContain('aria-label="Execution history"');
-  expect(markup).not.toContain("Cancel active run");
-  expect(markup).not.toContain("Delete automation");
-  expect(markup).not.toContain("Read transcript");
-  expect(markup).not.toContain("Read changes");
+  expect(markup).toContain("Execution history");
+  expect(markup).toContain("Scheduled Jobs views");
+  expect(markup).toContain("cds--data-table");
+  expect(markup).not.toContain("Scheduled Jobs actions");
+  expect(markup).not.toContain("Install service");
+  expect(markup).not.toContain("Table settings");
+  expect(markup).not.toContain("Saved filters");
 });

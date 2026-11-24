@@ -5,11 +5,10 @@ import { migrateAppearance, parseTheme } from "./appearance.js";
 import { sessionRows } from "./session-presentation.js";
 import { applyUpdate, hasOrchestrationProvider } from "./snapshot-state.js";
 import {
-  fitWidths,
   parseFitColumns,
   parseRowDensity,
   parseTableLines,
-  rowHeight,
+  rowDensities,
 } from "./table-preferences.js";
 import { transcript } from "./transcript.js";
 import {
@@ -680,18 +679,6 @@ describe("fit columns to width", () => {
   it("is off unless stored as true", () => {
     expect([null, "false", "1", "true"].map(parseFitColumns)).toEqual([false, false, false, true]);
   });
-
-  it("scales widths to fill the space exactly, keeping proportions", () => {
-    expect(fitWidths([100, 200, 100], 800)).toEqual([200, 400, 200]);
-    expect(fitWidths([100, 200, 100], 200)).toEqual([50, 100, 50]);
-    const odd = fitWidths([95, 125, 70], 1001);
-    expect(odd.reduce((sum, width) => sum + width, 0)).toBe(1001);
-  });
-
-  it("keeps a minimum width when the space is too small", () => {
-    expect(fitWidths([100, 200, 100], 30)).toEqual([20, 20, 20]);
-    expect(fitWidths([], 500)).toEqual([]);
-  });
 });
 
 describe("row density setting", () => {
@@ -703,7 +690,7 @@ describe("row density setting", () => {
   });
 
   it("gives denser settings shorter rows", () => {
-    expect([rowHeight("high"), rowHeight("medium"), rowHeight("low")]).toEqual([24, 32, 44]);
+    expect(rowDensities.map((entry) => entry.height)).toEqual([32, 48, 64]);
   });
 });
 

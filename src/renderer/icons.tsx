@@ -461,19 +461,3 @@ export function Icon({ name, ...props }: { name: IconName } & SVGProps<SVGSVGEle
     </svg>
   );
 }
-
-const canvasPaths = new Map<IconName, Path2D[]>();
-/** Draws an icon on a canvas at 16px, for the grid, which cannot render SVG elements. */
-export function drawIcon(ctx: CanvasRenderingContext2D, name: IconName, x: number, y: number) {
-  const icon = carbonIcons[name];
-  let paths = canvasPaths.get(name);
-  if (!paths) {
-    paths = icon.paths.filter((path) => !("transform" in path)).map((path) => new Path2D(path.d));
-    canvasPaths.set(name, paths);
-  }
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(16 / icon.size, 16 / icon.size);
-  for (const path of paths) ctx.fill(path);
-  ctx.restore();
-}

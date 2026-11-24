@@ -28,7 +28,7 @@ const PACKAGE_OWNERS: Readonly<Record<string, string>> = {
   "react-dom": "renderer",
   "react-markdown": "renderer",
   "remark-gfm": "renderer",
-  "@glideapps/glide-data-grid": "renderer",
+  "@carbon/react": "renderer",
   "@headless-tree/core": "renderer",
   "@headless-tree/react": "renderer",
   "monaco-editor": "renderer",

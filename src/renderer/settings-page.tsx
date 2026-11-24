@@ -1,14 +1,15 @@
 import { type ReactNode, useId } from "react";
 import type { Versions } from "../bridge/index.js";
 import { AboutSection } from "./about-section.js";
-import { parseTheme, type SidebarAppearance, type Theme } from "./appearance.js";
-import { type IconAppearance, iconContrastBounds } from "./icon-appearance.js";
+import { parseTheme, type Theme } from "./appearance.js";
+import { RadioButton as CarbonRadioButton } from "./carbon/choices.js";
+import { Select as CarbonSelect } from "./carbon/fields.js";
+import { Switch as CarbonSwitch } from "./carbon/switch.js";
 import { type SettingsSectionId, settingsLabels } from "./navigation.js";
 import { ControlDescription } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 import { type RowDensity, rowDensities, type TableLines } from "./table-preferences.js";
 import { TextSettings } from "./text-settings.js";
-import { TransitionSettings } from "./transition-settings.js";
 import type { TextStyles } from "./typography.js";
 export function SettingsPage({
   section,
@@ -18,14 +19,6 @@ export function SettingsPage({
   pollingControls,
   theme,
   onTheme,
-  iconAppearance,
-  iconAppearanceSaved,
-  onIconAppearance,
-  sidebarAppearance,
-  sidebarAppearanceSaved,
-  sidebarBlurSupported,
-  sidebarBlurError,
-  onSidebarAppearance,
   textStyles,
   onTextStyles,
   lines,
@@ -54,14 +47,6 @@ export function SettingsPage({
   onCharts(on: boolean): void;
   theme: Theme;
   onTheme(theme: Theme): void;
-  iconAppearance: IconAppearance;
-  iconAppearanceSaved: boolean;
-  onIconAppearance(appearance: IconAppearance): void;
-  sidebarAppearance: SidebarAppearance;
-  sidebarAppearanceSaved: boolean;
-  sidebarBlurSupported: boolean | undefined;
-  sidebarBlurError: string;
-  onSidebarAppearance(appearance: SidebarAppearance): void;
   textStyles: TextStyles;
   onTextStyles(styles: TextStyles): void;
   lines: TableLines;
@@ -93,70 +78,10 @@ export function SettingsPage({
         "appearance",
         <section className="settings-section" aria-labelledby={`${id}-appearance`}>
           <SettingsHeader page="appearance" id={`${id}-appearance`} />
-          <SettingsCard title="Icons">
-            <label className="settings-row">
-              Monochrome
-              <input
-                type="checkbox"
-                role="switch"
-                checked={iconAppearance.monochrome}
-                aria-checked={iconAppearance.monochrome}
-                onChange={(event) =>
-                  onIconAppearance({ ...iconAppearance, monochrome: event.target.checked })
-                }
-              />
-            </label>
-            <label className="settings-row">
-              Icon color
-              <input
-                type="color"
-                value={iconAppearance.color}
-                disabled={!iconAppearance.monochrome}
-                onChange={(event) =>
-                  onIconAppearance({ ...iconAppearance, color: event.target.value })
-                }
-              />
-            </label>
-            <div className="icon-contrast-setting">
-              <div className="icon-contrast-heading">
-                <span className="settings-label">
-                  <label htmlFor={`${id}-icon-contrast`}>Icon contrast</label>
-                  <ControlDescription id={`${id}-icon-contrast-tip`}>
-                    Spreads the selected color into darker shadows and lighter highlights. Zero uses
-                    one flat color; 100% keeps the standard shades; 200% reaches black and white.
-                    Applies immediately while Monochrome is on.
-                  </ControlDescription>
-                </span>
-                <output htmlFor={`${id}-icon-contrast`}>{iconAppearance.contrast}%</output>
-              </div>
-              <div className="transition-range">
-                <input
-                  id={`${id}-icon-contrast`}
-                  type="range"
-                  min={iconContrastBounds.min}
-                  max={iconContrastBounds.max}
-                  step={1}
-                  value={iconAppearance.contrast}
-                  disabled={!iconAppearance.monochrome}
-                  aria-valuetext={`${iconAppearance.contrast}%`}
-                  aria-describedby={`${id}-icon-contrast-tip`}
-                  onChange={(event) =>
-                    onIconAppearance({ ...iconAppearance, contrast: event.target.valueAsNumber })
-                  }
-                />
-              </div>
-            </div>
-            {!iconAppearanceSaved && (
-              <p className="error" role="alert">
-                Icon appearance could not be saved. Changes apply for this window only.
-              </p>
-            )}
-          </SettingsCard>
-          <TransitionSettings />
-          <SettingsCard title="Window">
-            <label className="settings-row">
-              Theme
-              <select
+          <SettingsCard title="Color theme">
+            <div className="settings-row">
+              <CarbonSelect
+                labelText={<>Theme</>}
                 aria-label="Theme"
                 value={theme}
                 onChange={(event) => onTheme(parseTheme(event.target.value))}
@@ -164,38 +89,36 @@ export function SettingsPage({
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
                 <option value="system">System</option>
-              </select>
-            </label>
+              </CarbonSelect>
+            </div>
           </SettingsCard>
           <SettingsCard title="Accessibility">
-            <label className="settings-row">
-              Focus highlight border
-              <input
-                type="checkbox"
-                role="switch"
+            <div className="settings-row">
+              <CarbonSwitch
+                labelText={<>Focus highlight border</>}
                 checked={focusHighlight}
-                aria-checked={focusHighlight}
-                onChange={(event) => onFocusHighlight(event.target.checked)}
+                onChange={(checked) => onFocusHighlight(checked)}
               />
-            </label>
-            <label className="settings-row">
-              <span className="settings-label">
-                <span id={`${id}-signals-label`}>Signal colors</span>
-                <ControlDescription id={`${id}-signals`}>
-                  Adds color to status labels, banners, and toasts. Every state keeps its icon and
-                  written label, so nothing depends on color alone.
-                </ControlDescription>
-              </span>
-              <input
-                type="checkbox"
-                role="switch"
+            </div>
+            <div className="settings-row">
+              <CarbonSwitch
+                labelText={
+                  <>
+                    <span className="settings-label">
+                      <span id={`${id}-signals-label`}>Signal colors</span>
+                      <ControlDescription id={`${id}-signals`}>
+                        Adds color to status labels, banners, and toasts. Every state keeps its icon
+                        and written label, so nothing depends on color alone.
+                      </ControlDescription>
+                    </span>
+                  </>
+                }
                 checked={signals}
-                aria-checked={signals}
                 aria-labelledby={`${id}-signals-label`}
                 aria-describedby={`${id}-signals`}
-                onChange={(event) => onSignals(event.target.checked)}
+                onChange={(checked) => onSignals(checked)}
               />
-            </label>
+            </div>
           </SettingsCard>
         </section>,
       )}
@@ -215,16 +138,13 @@ export function SettingsPage({
                 ["heading", "Heading lines"],
               ] as const
             ).map(([key, label]) => (
-              <label key={key} className="settings-row">
-                {label}
-                <input
-                  type="checkbox"
-                  role="switch"
-                  aria-checked={lines[key]}
+              <div key={key} className="settings-row">
+                <CarbonSwitch
+                  labelText={<>{label}</>}
                   checked={lines[key]}
-                  onChange={(event) => onLines({ ...lines, [key]: event.target.checked })}
+                  onChange={(checked) => onLines({ ...lines, [key]: checked })}
                 />
-              </label>
+              </div>
             ))}
           </SettingsCard>
           <SettingsCard title="Layout">
@@ -236,47 +156,44 @@ export function SettingsPage({
                 aria-labelledby={`${id}-density`}
               >
                 {rowDensities.map((entry) => (
-                  <label key={entry.id} className="segmented-option">
-                    <input
-                      type="radio"
+                  <div key={entry.id} className="segmented-option">
+                    <CarbonRadioButton
+                      labelText={<>{entry.label}</>}
                       name="row-density"
                       value={entry.id}
                       checked={density === entry.id}
                       onChange={() => onDensity(entry.id)}
                     />
-                    {entry.label}
-                  </label>
+                  </div>
                 ))}
               </div>
             </div>
-            <label className="settings-row">
-              Fit columns to width
-              <input
-                type="checkbox"
-                role="switch"
-                aria-checked={fit}
+            <div className="settings-row">
+              <CarbonSwitch
+                labelText={<>Fit columns to width</>}
                 checked={fit}
-                onChange={(event) => onFit(event.target.checked)}
+                onChange={(checked) => onFit(checked)}
               />
-            </label>
-            <label className="settings-row">
-              <span className="settings-label">
-                <span id={`${id}-charts-label`}>Inline charts</span>
-                <ControlDescription id={`${id}-charts`}>
-                  Shows turn time, event activity, and the last two minutes of state for each
-                  session.
-                </ControlDescription>
-              </span>
-              <input
-                type="checkbox"
-                role="switch"
-                aria-checked={charts}
+            </div>
+            <div className="settings-row">
+              <CarbonSwitch
+                labelText={
+                  <>
+                    <span className="settings-label">
+                      <span id={`${id}-charts-label`}>Inline charts</span>
+                      <ControlDescription id={`${id}-charts`}>
+                        Shows turn time, event activity, and the last two minutes of state for each
+                        session.
+                      </ControlDescription>
+                    </span>
+                  </>
+                }
                 checked={charts}
                 aria-labelledby={`${id}-charts-label`}
                 aria-describedby={`${id}-charts`}
-                onChange={(event) => onCharts(event.target.checked)}
+                onChange={(checked) => onCharts(checked)}
               />
-            </label>
+            </div>
           </SettingsCard>
         </section>,
       )}

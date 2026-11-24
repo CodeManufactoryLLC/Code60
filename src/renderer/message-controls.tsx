@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { copyText } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { durationText, messageAgeText, type TurnTiming, timingText } from "./chat-presentation.js";
 import { Icon } from "./icons.js";
 import { useTicker } from "./ticker.js";
@@ -75,7 +76,7 @@ export function MessageCopy({
   return (
     <div className="message-copy">
       <MessageTime at={at} visible={visible} />
-      <button
+      <AppButton
         type="button"
         className="icon-button"
         title={`${state === "failed" ? "Retry Copy" : "Copy"} ${readSource ? "original message" : "message"}`}
@@ -87,7 +88,7 @@ export function MessageCopy({
         <span className="message-copy-glyph" key={press} data-clicked={press > 0 || undefined}>
           <Icon name="copy" />
         </span>
-      </button>
+      </AppButton>
       {actions}
       <span className="message-copy-feedback" role={state === "failed" ? "status" : undefined}>
         {state === "failed"
@@ -114,7 +115,7 @@ export function TurnTimer({
   return (
     <>
       {disclosure ? (
-        <button
+        <AppButton
           type="button"
           id={disclosure.id}
           className="turn-timer activity-history-toggle"
@@ -123,7 +124,7 @@ export function TurnTimer({
           onClick={disclosure.toggle}
         >
           <span className="turn-timer-text">{timingText(timing, now)}</span>
-        </button>
+        </AppButton>
       ) : (
         <p className="turn-timer" aria-live="off">
           <span className="turn-timer-text">{timingText(timing, now)}</span>

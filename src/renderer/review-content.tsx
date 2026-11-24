@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { ApplicationClient, ProjectRequestIdentity, ReviewContent } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
 import type { PreviewViewState } from "./monaco-preview.js";
 
 const MonacoPreview = lazy(() => import("./monaco-preview.js"));
@@ -109,9 +110,9 @@ export function ReviewFilePreview({
     return (
       <div role="alert">
         {result.error}
-        <button type="button" onClick={result.retry}>
+        <AppButton type="button" onClick={result.retry}>
           Retry
-        </button>
+        </AppButton>
       </div>
     );
   if (!result.content) return <p role="status">Loading…</p>;

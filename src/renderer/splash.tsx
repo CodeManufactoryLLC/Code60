@@ -2,10 +2,12 @@ import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import type { ApplicationClient, Snapshot } from "../bridge/index.js";
 import { AgentSetupWizard } from "./agent-setup.js";
 import type { Theme } from "./appearance.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { hasOrchestrationProvider } from "./snapshot-state.js";
 
 export function Splash({
+  onSetupChange,
   windowControls,
   ready,
   snapshot,
@@ -18,6 +20,7 @@ export function Splash({
   onConnectDatabase,
   onOpenWebServer,
 }: {
+  onSetupChange?(open: boolean): void;
   windowControls?: ReactNode;
   ready: boolean;
   snapshot: Snapshot | undefined;
@@ -30,21 +33,20 @@ export function Splash({
   onConnectDatabase(): void;
   onOpenWebServer?(): void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const screen = useRef<HTMLElement>(null);
   const setupButton = useRef<HTMLButtonElement>(null);
   const id = useId();
   const configured = hasOrchestrationProvider(snapshot);
   const providerLoaded = snapshot !== undefined;
   const [setup, setSetup] = useState(false);
-  // Keep the workspace behind the splash inert; nested native modals remain usable.
   useEffect(() => {
-    dialog.current?.showModal();
-  }, []);
+    onSetupChange?.(setup);
+  }, [setup, onSetupChange]);
   useEffect(() => {
     if (!ready || setup) return;
     if (configured && !snapshot?.database)
-      dialog.current?.querySelector<HTMLButtonElement>(".database-notice button")?.focus();
-    else if (configured) dialog.current?.querySelector<HTMLButtonElement>(".splash-enter")?.focus();
+      screen.current?.querySelector<HTMLButtonElement>(".database-notice button")?.focus();
+    else if (configured) screen.current?.querySelector<HTMLButtonElement>(".splash-enter")?.focus();
     else setupButton.current?.focus();
   }, [ready, configured, snapshot?.database, setup]);
   useEffect(() => {
@@ -57,17 +59,15 @@ export function Splash({
   };
   return (
     <>
-      <dialog
-        ref={dialog}
-        className="splash"
+      <main
+        ref={screen}
+        className="splash splash-overlay"
         data-theme={theme}
         data-ready={ready}
         aria-labelledby={`${id}-title`}
         aria-describedby={`${id}-subtitle`}
-        onCancel={(event) => {
-          if (event.target !== event.currentTarget) return;
-          event.preventDefault();
-          if (configured) enter();
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && configured && !event.defaultPrevented) enter();
         }}
       >
         {!setup && windowControls}
@@ -81,11 +81,11 @@ export function Splash({
           )}
           <div className="splash-logo">
             <div className="splash-lockup">
-              <span id={`${id}-title`} className="wordmark splash-title">
-                Code<b>60</b>
-              </span>
+              <h1 id={`${id}-title`} className="wordmark splash-title">
+                Code60
+              </h1>
               <p id={`${id}-subtitle`} className="splash-subtitle">
-                v0.2 Paddock (Beta)
+                {configured ? "Workspace setup" : "Connect a provider to start working"}
               </p>
               {ready && (
                 <>
@@ -95,16 +95,21 @@ export function Splash({
                     </p>
                   )}
                   {!configured && onOpenWebServer && (
-                    <button type="button" disabled={busy} onClick={onOpenWebServer}>
+                    <AppButton type="button" disabled={busy} onClick={onOpenWebServer}>
                       Web Server Beta
-                    </button>
+                    </AppButton>
                   )}
                   {configured ? (
-                    <button type="button" className="splash-enter" disabled={busy} onClick={enter}>
+                    <AppButton
+                      type="button"
+                      className="splash-enter"
+                      disabled={busy}
+                      onClick={enter}
+                    >
                       Start
-                    </button>
+                    </AppButton>
                   ) : (
-                    <button
+                    <AppButton
                       type="button"
                       className="splash-enter"
                       ref={setupButton}
@@ -112,7 +117,7 @@ export function Splash({
                       onClick={enter}
                     >
                       Set up agents
-                    </button>
+                    </AppButton>
                   )}
                 </>
               )}
@@ -121,7 +126,7 @@ export function Splash({
         </div>
         <div className="window-drag-strip" aria-hidden="true" />
         {ready && <SplashThemeToggle theme={theme} onChange={onThemeChange} />}
-      </dialog>
+      </main>
       {setup && snapshot && (
         <AgentSetupWizard
           snapshot={snapshot}
@@ -152,22 +157,22 @@ function SplashThemeToggle({ theme, onChange }: { theme: Theme; onChange(theme: 
   return (
     // biome-ignore lint/a11y/useSemanticElements: These buttons select appearance, not form inputs.
     <div className="button-group splash-theme-toggle" role="group" aria-label="Color theme">
-      <button
+      <AppButton
         type="button"
         aria-label="Light mode"
         aria-pressed={!dark}
         onClick={() => onChange("light")}
       >
         Light
-      </button>
-      <button
+      </AppButton>
+      <AppButton
         type="button"
         aria-label="Dark mode"
         aria-pressed={dark}
         onClick={() => onChange("dark")}
       >
         Dark
-      </button>
+      </AppButton>
     </div>
   );
 }

@@ -41,8 +41,8 @@ function render(
 describe("splash entry", () => {
   it("shows Start beneath the wordmark without a project selector", () => {
     const html = render();
-    expect(html).toContain('class="splash-brand"');
-    expect(html).not.toContain('class="splash-projects"');
+    expect(html).toContain('class="splash-brand');
+    expect(html).not.toContain('class="splash-projects');
     expect(html).not.toContain("Recent projects");
     expect(html).not.toContain("/projects/recent");
     expect(html).toContain(">Start</button>");
@@ -54,14 +54,15 @@ describe("splash entry", () => {
   });
 
   it("does not expose Start until initial loading finishes", () => {
-    expect(render({}, false)).not.toContain('class="splash-enter"');
+    expect(render({}, false)).not.toContain('class="splash-enter');
     expect(render({}, false)).not.toContain("Color theme");
     expect(render({}, false)).not.toContain('aria-label="Splash background"');
   });
 
   it("keeps Light/Dark controls without a photo or background selector", () => {
     const html = render();
-    expect(html).toContain('class="splash" data-theme="light"');
+    expect(html).toContain('data-theme="light');
+    expect(html).toContain("splash-overlay");
     expect(html).not.toContain("data-background");
     expect(html).not.toContain("<img");
     expect(html).not.toContain('aria-label="Splash background"');
@@ -83,12 +84,12 @@ describe("splash entry", () => {
     expect(render({}, true, "", "system")).toContain('aria-label="Dark mode" aria-pressed="true"');
   });
 
-  it("groups the exact release subtitle beneath the wordmark and describes the splash with it", () => {
+  it("groups the workspace setup subtitle beneath the wordmark and describes the splash with it", () => {
     const html = render();
     const subtitleId = html.match(/aria-describedby="([^"]+)"/)?.[1];
     expect(subtitleId).toBeDefined();
-    expect(html).toContain('class="splash-lockup"');
-    expect(html).toContain(`<p id="${subtitleId}" class="splash-subtitle">v0.2 Paddock (Beta)</p>`);
+    expect(html).toContain('class="splash-lockup');
+    expect(html).toContain(`<p id="${subtitleId}" class="splash-subtitle">Workspace setup</p>`);
     expect(html.indexOf('class="splash-subtitle"')).toBeGreaterThan(
       html.indexOf('class="wordmark splash-title"'),
     );
@@ -142,18 +143,22 @@ describe("splash entry", () => {
     expect(html).toContain("Database connection required");
     expect(html).toContain("Connect to database");
     expect(html).not.toContain("/projects/recent");
-    expect(html.match(/<button[^>]*class="splash-enter"[^>]*>/)?.[0]).not.toContain("disabled");
+    expect(html.match(/<button[^>]*class="splash-enter[^"]*"[^>]*>/)?.[0]).not.toContain(
+      "disabled",
+    );
   });
 
   it("retains errors and allows Start while runs are active", () => {
     const html = render({ active: true }, true, "Connection unavailable");
     expect(html).toContain('role="alert">Connection unavailable</p>');
     expect(html).not.toContain("Finish or stop all runs before switching projects.");
-    expect(html.match(/<button[^>]*class="splash-enter"[^>]*>/)?.[0]).not.toContain("disabled");
+    expect(html.match(/<button[^>]*class="splash-enter[^"]*"[^>]*>/)?.[0]).not.toContain(
+      "disabled",
+    );
   });
 
   it("disables Start during an in-flight operation", () => {
     const html = render({ active: true }, true, "", "light", true);
-    expect(html.match(/<button[^>]*class="splash-enter"[^>]*>/)?.[0]).toContain("disabled");
+    expect(html.match(/<button[^>]*class="splash-enter[^"]*"[^>]*>/)?.[0]).toContain("disabled");
   });
 });

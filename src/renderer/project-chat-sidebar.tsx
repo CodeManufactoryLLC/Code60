@@ -1,5 +1,6 @@
 import { type ComponentProps, useLayoutEffect, useRef, useState } from "react";
 import type { OpenProject, ProjectAction } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { ChatSidebar } from "./chat-sidebar.js";
 import { Icon } from "./icons.js";
 import { NavigationIcon } from "./navigation-icons.js";
@@ -74,7 +75,7 @@ export function ProjectChatSidebar({
                 }
               }}
             >
-              <button
+              <AppButton
                 type="button"
                 className="project-chat-name"
                 id={`project-${project.id}`}
@@ -89,8 +90,8 @@ export function ProjectChatSidebar({
                   <span className="project-chat-title">{name}</span>
                 </span>
                 {project.active && <span className="project-chat-activity">Active</span>}
-              </button>
-              <button
+              </AppButton>
+              <AppButton
                 type="button"
                 className="icon-button project-session-add"
                 aria-label={`New Session in ${name}`}
@@ -102,8 +103,8 @@ export function ProjectChatSidebar({
                 <span className="sidebar-card-add" aria-hidden="true">
                   <Icon name="add" />
                 </span>
-              </button>
-              <button
+              </AppButton>
+              <AppButton
                 type="button"
                 className="icon-button project-folder-stop"
                 aria-label={`Close Project: ${project.path}`}
@@ -115,8 +116,8 @@ export function ProjectChatSidebar({
                 <span className="sidebar-card-stop" aria-hidden="true">
                   <Icon name="close" />
                 </span>
-              </button>
-              <button
+              </AppButton>
+              <AppButton
                 type="button"
                 className="icon-button project-chat-toggle"
                 id={`project-toggle-${project.id}`}
@@ -135,7 +136,7 @@ export function ProjectChatSidebar({
                 <span className="sidebar-card-chevron" aria-hidden="true">
                   <Icon name="chevron--down" />
                 </span>
-              </button>
+              </AppButton>
             </div>
             <div
               id={panelId}

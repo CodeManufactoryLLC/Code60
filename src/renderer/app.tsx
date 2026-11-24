@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Action, ApplicationClient, DesktopRun } from "../bridge/index.js";
 import { AgentSetupWizard } from "./agent-setup.js";
 import { useAppActions } from "./app-actions.js";
@@ -7,14 +15,12 @@ import { AppDialogs } from "./app-dialogs.js";
 import { AppFooter } from "./app-footer.js";
 import { AppMenus } from "./app-menus.js";
 import { AppPages } from "./app-pages.js";
-import { useAppPreferences } from "./app-preferences.js";
+import type { useAppPreferences } from "./app-preferences.js";
 import { builtinRelayId, conversationId } from "./chats.js";
 import { bindDatabaseWrites } from "./database-api.js";
 import { DatabaseNotice } from "./database-notice.js";
 import { useDesktopSnapshot } from "./desktop-snapshot.js";
 import { useHistoryNavigation } from "./history-navigation.js";
-import { IconAnimations } from "./icon-animations.js";
-import { IconColorFilter } from "./icon-appearance.js";
 import { useKnowledgeNavigation } from "./knowledge-report.js";
 import { pageAvailable } from "./navigation.js";
 import { useNavigationActions } from "./navigation-actions.js";
@@ -33,6 +39,8 @@ import { usePressFeedback } from "./press-feedback.js";
 import { useProjectConnection } from "./project-connection.js";
 import { useProjectWorkspace } from "./project-workspace.js";
 import { useProviderManagement } from "./provider-management.js";
+
+import { useResumeDestination } from "./resume-destination.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
 import { useScopedDetails } from "./scoped-details.js";
 import { createSessionCommands } from "./session-commands.js";
@@ -42,7 +50,17 @@ import { useSplashEntry } from "./splash-entry.js";
 import { initialTabs, type SettingsSectionId, updateTabs } from "./tabs.js";
 import { useUpdateNotice, useUpdates } from "./updates.js";
 
-export function App({ api: transport }: { api: ApplicationClient }) {
+export function App({
+  api: transport,
+  preferences,
+  connected,
+  backendControls,
+}: {
+  api: ApplicationClient;
+  preferences: ReturnType<typeof useAppPreferences>;
+  connected?: boolean;
+  backendControls?: ReactNode;
+}) {
   usePressFeedback();
   const [error, setError] = useState("");
   const { state: appState, accept } = useDesktopSnapshot(transport, setError);
@@ -63,7 +81,6 @@ export function App({ api: transport }: { api: ApplicationClient }) {
     [transport, snapshot?.databaseEpoch],
   );
   const providerManagement = useProviderManagement(api, snapshot);
-  const appearance = { sidebarBlurSupported: false, customWindowControls: false };
 
   const [palette, setPalette] = useState(false);
   const [notifications, setNotifications] = useState<ToastMessage[]>([]);
@@ -78,11 +95,9 @@ export function App({ api: transport }: { api: ApplicationClient }) {
     [],
   );
   const { busy, attempt, setBusy } = useAppActions(setError);
-  const preferences = useAppPreferences();
   const { theme, setTheme } = preferences;
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId | null>(null);
-  const { splash, splashReady, enterApp, returnSplash } = useSplashEntry(snapshot);
-  const sidebarBlurError = "";
+  const { splash, splashReady, setSetupOpen, enterApp, returnSplash } = useSplashEntry(snapshot);
   const returnToSplash = () => {
     returnSplash();
     setPicker(undefined);
@@ -208,6 +223,14 @@ export function App({ api: transport }: { api: ApplicationClient }) {
     navigation,
     setError,
   });
+  useResumeDestination(
+    !splash && snapshot && orchestratorConfigured && connected !== false
+      ? `code60.resume.${JSON.stringify(database)}`
+      : undefined,
+    history,
+    builtinRelayId(snapshot?.chats ?? []),
+    setError,
+  );
   useEffect(() => {
     if (
       snapshot &&
@@ -235,7 +258,7 @@ export function App({ api: transport }: { api: ApplicationClient }) {
         : tabs.active === "chat" && navigationSelectedId
           ? `conversation-${navigationSelectedId}`
           : sidebarPageElementId(tabs.active, tabs.projectId, tabs.providerId);
-    return focusNavigation(id);
+    return focusNavigation(tabs.active === "automations" ? "jobs-page-heading" : id);
   }, [tabs.active, tabs.projectId, tabs.providerId, settingsSection, splash, navigationSelectedId]);
 
   useEffect(() => {
@@ -305,13 +328,26 @@ export function App({ api: transport }: { api: ApplicationClient }) {
     setSetup,
     setExplorerOpen,
   });
+
+  const footer = (close: () => void) => (
+    <AppFooter
+      api={api}
+      state={state}
+      transcripts={transcripts}
+      tabs={tabs}
+      workerId={workerId}
+      busy={busy}
+      showPicker={showPicker}
+      navigation={navigation}
+      navigationRuns={navigationRuns}
+      updates={updates}
+      openUpdates={openUpdates}
+      closeWorkspace={close}
+      onReturn={returnToSplash}
+    />
+  );
   const content = (
-    <div className="app">
-      <IconColorFilter
-        color={preferences.iconAppearance.color}
-        contrast={preferences.iconAppearance.contrast}
-      />
-      {!splash && <div className="window-background" aria-hidden="true" />}
+    <div className="app" data-product-screen={!splash || undefined}>
       <Tooltips />
       <Toasts messages={notifications} onDismiss={dismissNotification} />
       <AppMenus
@@ -329,6 +365,7 @@ export function App({ api: transport }: { api: ApplicationClient }) {
       {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} />}
       {splash && (
         <Splash
+          onSetupChange={setSetupOpen}
           ready={splashReady && (snapshot !== undefined || error !== "")}
           snapshot={snapshot}
           api={api}
@@ -354,14 +391,22 @@ export function App({ api: transport }: { api: ApplicationClient }) {
           onConnect={() => showPicker("database")}
         />
       )}
-      <div className="app-workspace" data-chat={!splash && tabs.active === "chat"}>
+      <div
+        className="app-workspace"
+        hidden={splash}
+        inert={splash}
+        data-chat={!splash && tabs.active === "chat"}
+      >
         {!splash && (
           <PageTabBar
-            iconAnimations={preferences.iconAppearance.animations}
-            iconAnimationsSaved={preferences.iconAppearanceSaved}
-            onIconAnimationsChange={(animations) =>
-              preferences.setIconAppearance((current) => ({ ...current, animations }))
-            }
+            commands={() => setPalette(true)}
+            workspace={(close) => (
+              <>
+                {footer(close)}
+                {backendControls}
+              </>
+            )}
+            connected={connected}
             theme={theme}
             onThemeChange={setTheme}
             tabs={tabs}
@@ -398,8 +443,6 @@ export function App({ api: transport }: { api: ApplicationClient }) {
           state={state}
           project={project}
           preferences={preferences}
-          sidebarBlurError={sidebarBlurError}
-          appearance={appearance}
           tabs={tabs}
           settingsSection={settingsSection}
           navigation={navigation}
@@ -430,22 +473,7 @@ export function App({ api: transport }: { api: ApplicationClient }) {
           accept={accept}
         />
       </div>
-      {!splash && (
-        <AppFooter
-          api={api}
-          state={state}
-          transcripts={transcripts}
-          tabs={tabs}
-          workerId={workerId}
-          busy={busy}
-          showPicker={showPicker}
-          navigation={navigation}
-          navigationRuns={navigationRuns}
-          updates={updates}
-          openUpdates={openUpdates}
-          onReturn={returnToSplash}
-        />
-      )}
+      {splash && backendControls}
       {!splash &&
         snapshot &&
         (providerManagement.mode ||
@@ -474,5 +502,5 @@ export function App({ api: transport }: { api: ApplicationClient }) {
       />
     </div>
   );
-  return <IconAnimations value={preferences.iconAppearance.animations}>{content}</IconAnimations>;
+  return content;
 }

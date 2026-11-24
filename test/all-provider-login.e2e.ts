@@ -1,6 +1,7 @@
 import { open, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { browserApp } from "./fixtures/browser-app.js";
 import { syntheticProviderDownload } from "./fixtures/provider-artifacts.js";
 
@@ -127,7 +128,7 @@ for (const [id, name] of [
       }
       await stopped(fixture.processLog, join(fixture.directory, "state/code60/relay/workspace"));
       await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
-      await page.getByRole("button", { name: "Start", exact: true }).click();
+      await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Relay", exact: true })).toBeVisible();
       await fixture.restart();
       const reopened = await fixture.open();
@@ -183,7 +184,8 @@ test("browser: paired HTTP LAN browser installs and signs in without a secure-co
     await local.page.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await local.page.getByRole("button", { name: "Web Server Beta", exact: true }).click();
     const settings = local.page.getByRole("main", { name: "Web Server Beta", exact: true });
-    await settings.getByRole("switch").click();
+    await settings.getByRole("switch").focus();
+    await local.page.keyboard.press("Space");
     await expect(settings.locator("p[role=status]")).toHaveText("Listening");
     const url = await settings.getByRole("link").getAttribute("href");
     const pairing = await settings.getByLabel("LAN pairing code", { exact: true }).textContent();
@@ -221,9 +223,11 @@ test("browser: paired HTTP LAN browser installs and signs in without a secure-co
     await expect(wizard.locator("p[role=status]")).toHaveText("Kiro connected");
     await page.screenshot({ path: test.info().outputPath("lan-provider-connected.png") });
     await local.page.getByRole("button", { name: "Take control", exact: true }).click();
+    await expandNavigation(local.page, "Manage");
     await local.page.locator("#advanced-toggle").click();
     await local.page.locator("#tab-web-server").click();
-    await settings.getByRole("switch").click();
+    await settings.getByRole("switch").focus();
+    await local.page.keyboard.press("Space");
     await expect(settings.locator("p[role=status]")).toHaveText("Off");
     expect(fixture.gateway.application.snapshot().agentSetup?.enabled).toEqual(["kiro"]);
     expect((await fetch(fixture.gateway.origin)).status).toBe(200);

@@ -1,11 +1,12 @@
+import { Menu, MenuItem, MenuItemRadioGroup } from "@carbon/react";
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { defaultableSelections } from "../bridge/index.js";
 import type { ModeChange, SessionState } from "../core/index.js";
 import { AgentLogo } from "./agent-logo.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Toggle } from "./carbon/toggle-button.js";
 import { Icon } from "./icons.js";
 import { menuAnchorMoved } from "./menu-anchor.js";
-import { Button } from "./neobrutalism/button.js";
-import { Toggle } from "./neobrutalism/toggle.js";
 
 export function contextUsage(usage: SessionState["usage"]): string {
   if (!usage) return "N/A";
@@ -57,11 +58,9 @@ export function SessionOptionPicker({
   onSave?: (() => void) | undefined;
   saveLabel?: string;
 }) {
-  const harnessMenu = label === "Harness mode";
-  const Trigger = harnessMenu ? Button : "button";
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
-  const menu = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLUListElement>(null);
   const [open, setOpen] = useState(false);
   const modeKey = JSON.stringify([source, confirmed, controls]);
   const enabled =
@@ -78,22 +77,9 @@ export function SessionOptionPicker({
     const popup = menu.current;
     const button = trigger.current;
     if (!open || !popup || !button) return;
-    popup.showPopover();
-    const place = () => {
-      const rect = button.getBoundingClientRect();
-      popup.style.maxHeight = `${Math.max(80, rect.top - 16)}px`;
-      const box = popup.getBoundingClientRect();
-      popup.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - box.width - 8))}px`;
-      popup.style.top = `${Math.max(8, rect.top - box.height - 6)}px`;
-    };
-    place();
     // Press feedback scales the trigger; its layout container is the stationary anchor.
     const anchorElement = button.parentElement ?? button;
     const anchor = anchorElement.getBoundingClientRect();
-    (
-      popup.querySelector<HTMLButtonElement>('[aria-checked="true"]') ??
-      popup.querySelector<HTMLButtonElement>('[role="menuitemradio"]')
-    )?.focus({ preventScroll: true });
     const dismiss = (event: PointerEvent) => {
       if (
         event.target instanceof Node &&
@@ -119,18 +105,18 @@ export function SessionOptionPicker({
     document.addEventListener("pointerdown", dismiss, true);
     document.addEventListener("focusin", leave);
     document.addEventListener("scroll", scroll, true);
-    window.addEventListener("resize", place);
+    const resize = () => setOpen(false);
+    window.addEventListener("resize", resize);
     return () => {
-      popup.hidePopover();
       document.removeEventListener("pointerdown", dismiss, true);
       document.removeEventListener("focusin", leave);
       document.removeEventListener("scroll", scroll, true);
-      window.removeEventListener("resize", place);
+      window.removeEventListener("resize", resize);
     };
   }, [open]);
   return (
     <div className={label === "Model" ? "composer-model" : "session-option-picker"}>
-      <Trigger
+      <AppButton
         ref={trigger}
         type="button"
         className="mode-trigger"
@@ -152,92 +138,63 @@ export function SessionOptionPicker({
       >
         <span className="mode-value">{selected}</span>
         <Icon name="chevron--down" />
-      </Trigger>
+      </AppButton>
       {changing && (
         <span className="sr-only" role="status">
           Changing session option…
         </span>
       )}
       {open && (
-        <div
+        <Menu
           ref={menu}
           id={id}
-          role="menu"
-          aria-label={menuLabel}
-          popover="manual"
-          className={harnessMenu ? "harness-mode-menu neo-dropdown-menu" : "harness-mode-menu"}
-          onKeyDown={(event) => {
-            const buttons = [
-              ...(menu.current?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ?? []),
-            ];
-            const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-            if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-              event.preventDefault();
-              const next =
-                event.key === "Home"
-                  ? 0
-                  : event.key === "End"
-                    ? buttons.length - 1
-                    : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
-                      buttons.length;
-              buttons[next]?.focus();
-            } else if (event.key === "Escape") {
+          open
+          label={menuLabel}
+          onClose={() => close()}
+          x={trigger.current?.getBoundingClientRect().left ?? 0}
+          y={[
+            trigger.current?.getBoundingClientRect().top ?? 0,
+            trigger.current?.getBoundingClientRect().bottom ?? 0,
+          ]}
+          onKeyDownCapture={(event) => {
+            if (event.key !== "Home" && event.key !== "End") return;
+            const items = menu.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]');
+            const item = event.key === "Home" ? items?.[0] : items?.[items.length - 1];
+            if (item) {
               event.preventDefault();
               event.stopPropagation();
-              close();
-            } else if (event.key === "Tab") close();
+              item.focus();
+            }
           }}
         >
           {controls.map((control) => (
-            <fieldset className="mode-menu-control" aria-label={control.name} key={control.id}>
-              {controls.length > 1 && <div className="mode-menu-heading">{control.name}</div>}
-              {control.options.map((option, index) => {
-                const previous = control.options[index - 1];
-                const groupStart =
-                  option.group !== previous?.group || option.groupId !== previous?.groupId;
-                return (
-                  <div key={option.value}>
-                    {groupStart && option.group && (
-                      <div className="mode-menu-heading">{option.group}</div>
-                    )}
-                    <button
-                      type="button"
-                      role="menuitemradio"
-                      tabIndex={-1}
-                      aria-checked={confirmed && option.value === control.currentValue}
-                      onClick={() => {
-                        close();
-                        onMode({
-                          source,
-                          configId: control.id,
-                          value: option.value,
-                        });
-                      }}
-                    >
-                      <span>{option.name}</span>
-                      {confirmed && option.value === control.currentValue && (
-                        <Icon name="checkmark" />
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </fieldset>
+            <MenuItemRadioGroup
+              key={control.id}
+              label={control.name}
+              items={control.options.map((option) => option.value)}
+              selectedItem={confirmed ? control.currentValue : null}
+              itemToString={(value) => {
+                const option = control.options.find((option) => option.value === value);
+                return option
+                  ? [option.group, option.name].filter(Boolean).join(" / ")
+                  : String(value);
+              }}
+              onChange={(value) => {
+                close();
+                onMode({ source, configId: control.id, value: String(value) });
+              }}
+            />
           ))}
           {onSave && (
-            <button
-              type="button"
-              role="menuitem"
-              tabIndex={-1}
+            <MenuItem
+              label={saveLabel ?? "Save default"}
               onClick={() => {
                 close();
                 onSave();
               }}
-            >
-              {saveLabel}
-            </button>
+            />
           )}
-        </div>
+        </Menu>
       )}
     </div>
   );

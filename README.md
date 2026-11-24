@@ -39,7 +39,9 @@ Installations use fixed, integrity-verified releases in private versioned backen
 
 Codex installation uses non-root npm with lifecycle scripts disabled and the official registry, pinned to `@openai/codex@0.171.0`. Code60 activates its private copy under `~/.local/share/code60/providers/codex/0.171.0` and prefers it for the standard Codex connector without changing configuration or replacing an existing CLI. Codex stores credentials in its normal backend-user home. Closing/cancelling setup, reloading, taking control in another tab or stopping the backend cancels the owned installation/login process; it does not log out an account or remove issued credentials. Retry requests a new attempt. Unsupported CLIs offer the compatible installation; custom launch commands retain manual setup. Account switching, logout and API-key entry are outside this setup flow.
 
- Create or select a database and open a project through the host-side chooser. Project workers require Git with an initial commit. Relay can explicitly target a direct folder. Accept the displayed plan to dispatch work, inspect the automatically integrated changes, and use message Undo to restore covered files and return the request unsent. Undo does not reverse external website effects.
+After verification Code60 returns to your last available destination for that database and browser. If it is gone, Code60 opens Relay. Use **Workspace** in the header for database selection and theme. **Work** keeps your projects and conversations directly reachable, **Automation** contains Scheduled Jobs and Workflows, **Inspect** opens Data Viewer, and **Manage** provides setup and recovery.
+
+Create or select a database and open a project through the host-side chooser. Project workers require Git with an initial commit. Relay can explicitly target a direct folder. Accept the displayed plan to dispatch work, inspect the automatically integrated changes, and use message Undo to restore covered files and return the request unsent. Undo does not reverse external website effects.
 
 ## LAN access (beta)
 
@@ -147,3 +149,16 @@ project approval, connection tests, secure credentials/OAuth, backup/reset, revi
 transaction recovery and safe troubleshooting reports. Configuration validity,
 authentication and observed connection health are separate. See
 [MCP configuration](MCP.md) and the [recovery runbook](docs/runbooks/mcp-configuration.md).
+
+### Scheduled Jobs Carbon trial
+
+Apps → Scheduled Jobs opens on Schedules. Scan schedule status, next run and live run status. Expand a row to read the saved prompt and settings. Use Run or Stop directly, or open the row menu to edit, pause, enable, inspect history or delete the job. New scheduled job opens a dedicated form.
+
+Execution history shows all schedules by default. View history on a job applies an explicit filter. Search the loaded page, sort its columns, or select an execution for Transcript and Changes. Older and Latest page through retained records. The Code60 header offers Commands and Workspace, including connection and appearance controls.
+
+### Application-wide Carbon migration
+
+Code60 uses upstream Carbon controls and White/G100 themes across its browser UI. Home, Apps, Settings and project/provider homes
+use destination rows with direct creation buttons. Backend operations, retained
+conversations and saved appearance records are preserved. See the
+[migration ledger](docs/carbon-migration.md) for implementation, validation and explicit QA limits.

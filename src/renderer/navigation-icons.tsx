@@ -1,347 +1,127 @@
-import { useContext, useEffect, useId, useRef, useState } from "react";
-import { IconAnimations } from "./icon-animations.js";
-import animationWheel from "./icons/apps/animation-wheel.gif?no-inline";
-import animationWheelStill from "./icons/apps/animation-wheel.png?no-inline";
-import booksAnimation from "./icons/apps/books.gif?no-inline";
-import booksStill from "./icons/apps/books.png?no-inline";
-import chemicalIcon from "./icons/apps/chemical.svg?no-inline";
-import databaseTableAnimation from "./icons/apps/database-table.gif?no-inline";
-import databaseTableStill from "./icons/apps/database-table.png?no-inline";
-import downloadAnimation from "./icons/apps/download.gif?no-inline";
-import downloadStill from "./icons/apps/download.png?no-inline";
-import droneAnimation from "./icons/apps/drone.gif?no-inline";
-import droneStill from "./icons/apps/drone.png?no-inline";
-import folderAnimation from "./icons/apps/folder.gif?no-inline";
-import folderStill from "./icons/apps/folder.png?no-inline";
-import fontSizeAnimation from "./icons/apps/font-size.gif?no-inline";
-import fontSizeStill from "./icons/apps/font-size.png?no-inline";
-import gearWheelAnimation from "./icons/apps/gear-wheel.gif?no-inline";
-import gearWheelStill from "./icons/apps/gear-wheel.png?no-inline";
-import heartbeatAnimation from "./icons/apps/heartbeat.gif?no-inline";
-import heartbeatStill from "./icons/apps/heartbeat.png?no-inline";
-import historyBackAnimation from "./icons/apps/history-back.gif?no-inline";
-import historyBackStill from "./icons/apps/history-back.png?no-inline";
-import historyForwardAnimation from "./icons/apps/history-forward.gif?no-inline";
-import historyForwardStill from "./icons/apps/history-forward.png?no-inline";
-import homeAnimation from "./icons/apps/home.gif?no-inline";
-import homeStill from "./icons/apps/home.png?no-inline";
-import infoAnimation from "./icons/apps/info.gif?no-inline";
-import infoStill from "./icons/apps/info.png?no-inline";
-import labourDayAnimation from "./icons/apps/labour-day.gif?no-inline";
-import labourDayStill from "./icons/apps/labour-day.png?no-inline";
-import laptopAnimation from "./icons/apps/laptop.gif?no-inline";
-import laptopStill from "./icons/apps/laptop.png?no-inline";
-import marketingAutomationAnimation from "./icons/apps/marketing-automation.gif?no-inline";
-import marketingAutomationStill from "./icons/apps/marketing-automation.png?no-inline";
-import menuAnimation from "./icons/apps/menu.gif?no-inline";
-import menuStill from "./icons/apps/menu.png?no-inline";
-import optionsAnimation from "./icons/apps/options.gif?no-inline";
-import optionsStill from "./icons/apps/options.png?no-inline";
-import paintingAnimation from "./icons/apps/painting.gif?no-inline";
-import paintingStill from "./icons/apps/painting.png?no-inline";
-import petAnimation from "./icons/apps/pet.gif?no-inline";
-import petStill from "./icons/apps/pet.png?no-inline";
-import projectInitiationAnimation from "./icons/apps/project-initiation.gif?no-inline";
-import projectInitiationStill from "./icons/apps/project-initiation.png?no-inline";
-import robotAnimation from "./icons/apps/robot.gif?no-inline";
-import robotStill from "./icons/apps/robot.png?no-inline";
-import searchAnimation from "./icons/apps/search.gif?no-inline";
-import searchStill from "./icons/apps/search.png?no-inline";
-import settingAnimation from "./icons/apps/setting.gif?no-inline";
-import settingStill from "./icons/apps/setting.png?no-inline";
-import speechBubbleAnimation from "./icons/apps/speech-bubble.gif?no-inline";
-import speechBubbleStill from "./icons/apps/speech-bubble.png?no-inline";
-import spellBookAnimation from "./icons/apps/spell-book.gif?no-inline";
-import spellBookStill from "./icons/apps/spell-book.png?no-inline";
-import tableAnimation from "./icons/apps/table.gif?no-inline";
-import tableStill from "./icons/apps/table.png?no-inline";
-import themeSystemAnimation from "./icons/apps/theme-eclipse.gif?no-inline";
-import themeSystemStill from "./icons/apps/theme-eclipse.png?no-inline";
-import themeDarkAnimation from "./icons/apps/theme-night.gif?no-inline";
-import themeDarkStill from "./icons/apps/theme-night.png?no-inline";
-import themeLightAnimation from "./icons/apps/theme-sun.gif?no-inline";
-import themeLightStill from "./icons/apps/theme-sun.png?no-inline";
-import timeManagementAnimation from "./icons/apps/time-management.gif?no-inline";
-import timeManagementStill from "./icons/apps/time-management.png?no-inline";
-import underConstructionIcon from "./icons/apps/under-construction.svg?no-inline";
-import viewBoxes from "./navigation-icon-viewboxes.json" with { type: "json" };
+import {
+  Activity,
+  Analytics,
+  Application,
+  ArrowDownRight,
+  ArrowLeft,
+  ArrowRight,
+  Book,
+  Bot,
+  Branch,
+  Bullhorn,
+  Calendar,
+  Chat,
+  ChatBot,
+  Chemistry,
+  CloudDownload,
+  Code,
+  ColorPalette,
+  Construction,
+  Dashboard,
+  DataBase,
+  Development,
+  Download,
+  Edit,
+  Flash,
+  Folder,
+  Grid,
+  Group,
+  Home,
+  Information,
+  Light,
+  ListBulleted,
+  MachineLearning,
+  Moon,
+  Play,
+  Renew,
+  Screen,
+  Search,
+  Settings,
+  SettingsAdjust,
+  Switcher,
+  Table,
+  Task,
+  Terminal,
+  TextFont,
+  Tools,
+  UserAvatar,
+} from "@carbon/icons-react";
 
-const artwork = {
-  "app-chemical": chemicalIcon,
-  "app-under-construction": underConstructionIcon,
+/** Route descriptors keep their stable names across renderer upgrades. */
+const glyphs = {
+  "app-chemical": Chemistry,
+  "app-under-construction": Construction,
+  "app-icon-animations": Play,
+  "app-theme-system": Screen,
+  "app-theme-dark": Moon,
+  "app-theme-light": Light,
+  "app-history-back": ArrowLeft,
+  "app-history-forward": ArrowRight,
+  "app-cloud-computing": CloudDownload,
+  "app-heart-rate": Activity,
+  "app-color-palette": ColorPalette,
+  "app-text-size": TextFont,
+  "app-info": Information,
+  "app-analyze": Analytics,
+  "app-helmet": Development,
+  "app-bookshelf": Book,
+  "app-ai": MachineLearning,
+  "app-assistants": Group,
+  "app-apps": Switcher,
+  "app-backlog": Task,
+  "app-cogwheel": Settings,
+  "app-communication": Chat,
+  "app-custom-agents": UserAvatar,
+  "app-database": DataBase,
+  "app-down-right": ArrowDownRight,
+  "app-folder": Folder,
+  "app-home2": Home,
+  "app-megaphone": Bullhorn,
+  "app-robotic-arm": Calendar,
+  "app-search": Search,
+  "app-steering-wheel": ChatBot,
+  "app-system-manager": Dashboard,
+  "app-table": Table,
+  "grid-nine": Grid,
+  "app-window": Application,
+  "chat-circle": Chat,
+  "arrow-elbow-down-right": ArrowDownRight,
+  house: Home,
+  clipboard: Task,
+  "pencil-line": Edit,
+  megaphone: Bullhorn,
+  gear: Settings,
+  "magnifying-glass": Search,
+  database: DataBase,
+  "arrows-clockwise": Renew,
+  brain: MachineLearning,
+  "chat-text": Chat,
+  code: Code,
+  "download-simple": Download,
+  flask: Chemistry,
+  "git-branch": Branch,
+  info: Information,
+  lightning: Flash,
+  "list-bullets": ListBulleted,
+  palette: ColorPalette,
+  robot: Bot,
+  "sliders-horizontal": SettingsAdjust,
+  table: Table,
+  "terminal-window": Terminal,
+  "text-aa": TextFont,
+  wrench: Tools,
 } as const;
 
-const animatedArtwork = {
-  "app-icon-animations": { animation: animationWheel, still: animationWheelStill },
-  "app-theme-system": { animation: themeSystemAnimation, still: themeSystemStill },
-  "app-theme-dark": { animation: themeDarkAnimation, still: themeDarkStill },
-  "app-theme-light": { animation: themeLightAnimation, still: themeLightStill },
-  "app-history-back": { animation: historyBackAnimation, still: historyBackStill },
-  "app-history-forward": { animation: historyForwardAnimation, still: historyForwardStill },
-  "app-cloud-computing": { animation: downloadAnimation, still: downloadStill },
-  "app-heart-rate": { animation: heartbeatAnimation, still: heartbeatStill },
-  "app-color-palette": { animation: paintingAnimation, still: paintingStill },
-  "app-text-size": { animation: fontSizeAnimation, still: fontSizeStill },
-  "app-info": { animation: infoAnimation, still: infoStill },
-  "app-analyze": { animation: laptopAnimation, still: laptopStill },
-  "app-helmet": { animation: settingAnimation, still: settingStill },
-  "app-bookshelf": { animation: booksAnimation, still: booksStill },
-  "app-ai": { animation: spellBookAnimation, still: spellBookStill },
-  "app-assistants": { animation: speechBubbleAnimation, still: speechBubbleStill },
-  "app-apps": { animation: menuAnimation, still: menuStill },
-  "app-backlog": { animation: projectInitiationAnimation, still: projectInitiationStill },
-  "app-cogwheel": { animation: optionsAnimation, still: optionsStill },
-  "app-communication": { animation: labourDayAnimation, still: labourDayStill },
-  "app-custom-agents": { animation: robotAnimation, still: robotStill },
-  "app-database": { animation: databaseTableAnimation, still: databaseTableStill },
-  "app-down-right": { animation: droneAnimation, still: droneStill },
-  "app-folder": { animation: folderAnimation, still: folderStill },
-  "app-home2": { animation: homeAnimation, still: homeStill },
-  "app-megaphone": { animation: marketingAutomationAnimation, still: marketingAutomationStill },
-  "app-robotic-arm": { animation: timeManagementAnimation, still: timeManagementStill },
-  "app-search": { animation: searchAnimation, still: searchStill },
-  "app-steering-wheel": { animation: petAnimation, still: petStill },
-  "app-system-manager": { animation: gearWheelAnimation, still: gearWheelStill },
-  "app-table": { animation: tableAnimation, still: tableStill },
-} as const;
-
-/** Phosphor duotone, @phosphor-icons/core 2.1.1 (MIT; see icons/phosphor/). */
-const shapes = {
-  "grid-nine": [
-    "M224,64V192a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V64a8,8,0,0,1,8-8H216A8,8,0,0,1,224,64Z",
-    "M216,48H40A16,16,0,0,0,24,64V192a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V64A16,16,0,0,0,216,48ZM104,144V112h48v32Zm48,16v32H104V160ZM40,112H88v32H40Zm64-16V64h48V96Zm64,16h48v32H168Zm48-16H168V64h48ZM88,64V96H40V64ZM40,160H88v32H40Zm176,32H168V160h48v32Z",
-  ],
-  "app-window": [
-    "M224,56V200a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V56a8,8,0,0,1,8-8H216A8,8,0,0,1,224,56Z",
-    "M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200ZM80,84A12,12,0,1,1,68,72,12,12,0,0,1,80,84Zm40,0a12,12,0,1,1-12-12A12,12,0,0,1,120,84Z",
-  ],
-  "chat-circle": [
-    "M224,128A96,96,0,0,1,79.93,211.11h0L42.54,223.58a8,8,0,0,1-10.12-10.12l12.47-37.39h0A96,96,0,1,1,224,128Z",
-    "M128,24A104,104,0,0,0,36.18,176.88L24.83,210.93a16,16,0,0,0,20.24,20.24l34.05-11.35A104,104,0,1,0,128,24Zm0,192a87.87,87.87,0,0,1-44.06-11.81,8,8,0,0,0-6.54-.67L40,216,52.47,178.6a8,8,0,0,0-.66-6.54A88,88,0,1,1,128,216Z",
-  ],
-  "arrow-elbow-down-right": [
-    "M216,176l-48,48V128Z",
-    "M221.66,170.34l-48-48A8,8,0,0,0,160,128v40H80V32a8,8,0,0,0-16,0V176a8,8,0,0,0,8,8h88v40a8,8,0,0,0,13.66,5.66l48-48A8,8,0,0,0,221.66,170.34ZM176,204.69V147.31L204.69,176Z",
-  ],
-  house: [
-    "M216,120v96H152V152H104v64H40V120a8,8,0,0,1,2.34-5.66l80-80a8,8,0,0,1,11.32,0l80,80A8,8,0,0,1,216,120Z",
-    "M219.31,108.68l-80-80a16,16,0,0,0-22.62,0l-80,80A15.87,15.87,0,0,0,32,120v96a8,8,0,0,0,8,8h64a8,8,0,0,0,8-8V160h32v56a8,8,0,0,0,8,8h64a8,8,0,0,0,8-8V120A15.87,15.87,0,0,0,219.31,108.68ZM208,208H160V152a8,8,0,0,0-8-8H104a8,8,0,0,0-8,8v56H48V120l80-80,80,80Z",
-  ],
-  clipboard: [
-    "M208,48V216a8,8,0,0,1-8,8H56a8,8,0,0,1-8-8V48a8,8,0,0,1,8-8H96a39.83,39.83,0,0,0-8,24v8h80V64a39.83,39.83,0,0,0-8-24h40A8,8,0,0,1,208,48Z",
-    "M200,32H163.74a47.92,47.92,0,0,0-71.48,0H56A16,16,0,0,0,40,48V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm-72,0a32,32,0,0,1,32,32H96A32,32,0,0,1,128,32Zm72,184H56V48H82.75A47.93,47.93,0,0,0,80,64v8a8,8,0,0,0,8,8h80a8,8,0,0,0,8-8V64a47.93,47.93,0,0,0-2.75-16H200Z",
-  ],
-  "pencil-line": [
-    "M221.66,90.34,192,120,136,64l29.66-29.66a8,8,0,0,1,11.31,0L221.66,79A8,8,0,0,1,221.66,90.34Z",
-    "M227.32,73.37,182.63,28.69a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H216a8,8,0,0,0,0-16H115.32l112-112A16,16,0,0,0,227.32,73.37ZM79.32,188,164,103.31,180.69,120,96,204.69ZM68,176.69,51.31,160,136,75.31,152.69,92Zm-20,2.62L76.69,208H48Zm144-70.62L147.32,64l24-24L216,84.69Z",
-  ],
-  megaphone: [
-    "M240,120a40,40,0,0,1-40,40H160V80h40A40,40,0,0,1,240,120Z",
-    "M248,120a48.05,48.05,0,0,0-48-48H160.2c-2.91-.17-53.62-3.74-101.91-44.24A16,16,0,0,0,32,40V200a16,16,0,0,0,26.29,12.25c37.77-31.68,77-40.76,93.71-43.3v31.72A16,16,0,0,0,159.12,214l11,7.33A16,16,0,0,0,194.5,212l11.77-44.36A48.07,48.07,0,0,0,248,120ZM48,199.93V40h0c42.81,35.91,86.63,45,104,47.24v65.48C134.65,155,90.84,164.07,48,199.93Zm131,8,0,.11-11-7.33V168h21.6ZM200,152H168V88h32a32,32,0,1,1,0,64Z",
-  ],
-  gear: [
-    "M207.86,123.18l16.78-21a99.14,99.14,0,0,0-10.07-24.29l-26.7-3a81,81,0,0,0-6.81-6.81l-3-26.71a99.43,99.43,0,0,0-24.3-10l-21,16.77a81.59,81.59,0,0,0-9.64,0l-21-16.78A99.14,99.14,0,0,0,77.91,41.43l-3,26.7a81,81,0,0,0-6.81,6.81l-26.71,3a99.43,99.43,0,0,0-10,24.3l16.77,21a81.59,81.59,0,0,0,0,9.64l-16.78,21a99.14,99.14,0,0,0,10.07,24.29l26.7,3a81,81,0,0,0,6.81,6.81l3,26.71a99.43,99.43,0,0,0,24.3,10l21-16.77a81.59,81.59,0,0,0,9.64,0l21,16.78a99.14,99.14,0,0,0,24.29-10.07l3-26.7a81,81,0,0,0,6.81-6.81l26.71-3a99.43,99.43,0,0,0,10-24.3l-16.77-21A81.59,81.59,0,0,0,207.86,123.18ZM128,168a40,40,0,1,1,40-40A40,40,0,0,1,128,168Z",
-    "M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm88-29.84q.06-2.16,0-4.32l14.92-18.64a8,8,0,0,0,1.48-7.06,107.6,107.6,0,0,0-10.88-26.25,8,8,0,0,0-6-3.93l-23.72-2.64q-1.48-1.56-3-3L186,40.54a8,8,0,0,0-3.94-6,107.29,107.29,0,0,0-26.25-10.86,8,8,0,0,0-7.06,1.48L130.16,40Q128,40,125.84,40L107.2,25.11a8,8,0,0,0-7.06-1.48A107.6,107.6,0,0,0,73.89,34.51a8,8,0,0,0-3.93,6L67.32,64.27q-1.56,1.49-3,3L40.54,70a8,8,0,0,0-6,3.94,107.71,107.71,0,0,0-10.87,26.25,8,8,0,0,0,1.49,7.06L40,125.84Q40,128,40,130.16L25.11,148.8a8,8,0,0,0-1.48,7.06,107.6,107.6,0,0,0,10.88,26.25,8,8,0,0,0,6,3.93l23.72,2.64q1.49,1.56,3,3L70,215.46a8,8,0,0,0,3.94,6,107.71,107.71,0,0,0,26.25,10.87,8,8,0,0,0,7.06-1.49L125.84,216q2.16.06,4.32,0l18.64,14.92a8,8,0,0,0,7.06,1.48,107.21,107.21,0,0,0,26.25-10.88,8,8,0,0,0,3.93-6l2.64-23.72q1.56-1.48,3-3L215.46,186a8,8,0,0,0,6-3.94,107.71,107.71,0,0,0,10.87-26.25,8,8,0,0,0-1.49-7.06Zm-16.1-6.5a73.93,73.93,0,0,1,0,8.68,8,8,0,0,0,1.74,5.48l14.19,17.73a91.57,91.57,0,0,1-6.23,15L187,173.11a8,8,0,0,0-5.1,2.64,74.11,74.11,0,0,1-6.14,6.14,8,8,0,0,0-2.64,5.1l-2.51,22.58a91.32,91.32,0,0,1-15,6.23l-17.74-14.19a8,8,0,0,0-5-1.75h-.48a73.93,73.93,0,0,1-8.68,0,8.06,8.06,0,0,0-5.48,1.74L100.45,215.8a91.57,91.57,0,0,1-15-6.23L82.89,187a8,8,0,0,0-2.64-5.1,74.11,74.11,0,0,1-6.14-6.14,8,8,0,0,0-5.1-2.64L46.43,170.6a91.32,91.32,0,0,1-6.23-15l14.19-17.74a8,8,0,0,0,1.74-5.48,73.93,73.93,0,0,1,0-8.68,8,8,0,0,0-1.74-5.48L40.2,100.45a91.57,91.57,0,0,1,6.23-15L69,82.89a8,8,0,0,0,5.1-2.64,74.11,74.11,0,0,1,6.14-6.14A8,8,0,0,0,82.89,69L85.4,46.43a91.32,91.32,0,0,1,15-6.23l17.74,14.19a8,8,0,0,0,5.48,1.74,73.93,73.93,0,0,1,8.68,0,8.06,8.06,0,0,0,5.48-1.74L155.55,40.2a91.57,91.57,0,0,1,15,6.23L173.11,69a8,8,0,0,0,2.64,5.1,74.11,74.11,0,0,1,6.14,6.14,8,8,0,0,0,5.1,2.64l22.58,2.51a91.32,91.32,0,0,1,6.23,15l-14.19,17.74A8,8,0,0,0,199.87,123.66Z",
-  ],
-  "magnifying-glass": [
-    "M192,112a80,80,0,1,1-80-80A80,80,0,0,1,192,112Z",
-    "M229.66,218.34,179.6,168.28a88.21,88.21,0,1,0-11.32,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z",
-  ],
-  database: [
-    "M216,80c0,26.51-39.4,48-88,48S40,106.51,40,80s39.4-48,88-48S216,53.49,216,80Z",
-    "M128,24C74.17,24,32,48.6,32,80v96c0,31.4,42.17,56,96,56s96-24.6,96-56V80C224,48.6,181.83,24,128,24Zm80,104c0,9.62-7.88,19.43-21.61,26.92C170.93,163.35,150.19,168,128,168s-42.93-4.65-58.39-13.08C55.88,147.43,48,137.62,48,128V111.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64ZM69.61,53.08C85.07,44.65,105.81,40,128,40s42.93,4.65,58.39,13.08C200.12,60.57,208,70.38,208,80s-7.88,19.43-21.61,26.92C170.93,115.35,150.19,120,128,120s-42.93-4.65-58.39-13.08C55.88,99.43,48,89.62,48,80S55.88,60.57,69.61,53.08ZM186.39,202.92C170.93,211.35,150.19,216,128,216s-42.93-4.65-58.39-13.08C55.88,195.43,48,185.62,48,176V159.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64V176C208,185.62,200.12,195.43,186.39,202.92Z",
-  ],
-  "arrows-clockwise": [
-    "M216,128a88,88,0,1,1-88-88A88,88,0,0,1,216,128Z",
-    "M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z",
-  ],
-  brain: [
-    "M240,124a48,48,0,0,1-32,45.27h0V176a40,40,0,0,1-80,0,40,40,0,0,1-80,0v-6.73h0a48,48,0,0,1,0-90.54V72a40,40,0,0,1,80,0,40,40,0,0,1,80,0v6.73A48,48,0,0,1,240,124Z",
-    "M248,124a56.11,56.11,0,0,0-32-50.61V72a48,48,0,0,0-88-26.49A48,48,0,0,0,40,72v1.39a56,56,0,0,0,0,101.2V176a48,48,0,0,0,88,26.49A48,48,0,0,0,216,176v-1.41A56.09,56.09,0,0,0,248,124ZM88,208a32,32,0,0,1-31.81-28.56A55.87,55.87,0,0,0,64,180h8a8,8,0,0,0,0-16H64A40,40,0,0,1,50.67,86.27,8,8,0,0,0,56,78.73V72a32,32,0,0,1,64,0v68.26A47.8,47.8,0,0,0,88,128a8,8,0,0,0,0,16,32,32,0,0,1,0,64Zm104-44h-8a8,8,0,0,0,0,16h8a55.87,55.87,0,0,0,7.81-.56A32,32,0,1,1,168,144a8,8,0,0,0,0-16,47.8,47.8,0,0,0-32,12.26V72a32,32,0,0,1,64,0v6.73a8,8,0,0,0,5.33,7.54A40,40,0,0,1,192,164Zm16-52a8,8,0,0,1-8,8h-4a36,36,0,0,1-36-36V80a8,8,0,0,1,16,0v4a20,20,0,0,0,20,20h4A8,8,0,0,1,208,112ZM60,120H56a8,8,0,0,1,0-16h4A20,20,0,0,0,80,84V80a8,8,0,0,1,16,0v4A36,36,0,0,1,60,120Z",
-  ],
-  "chat-text": [
-    "M224,64V192a8,8,0,0,1-8,8H80L45.15,230.11A8,8,0,0,1,32,224V64a8,8,0,0,1,8-8H216A8,8,0,0,1,224,64Z",
-    "M216,48H40A16,16,0,0,0,24,64V224a15.85,15.85,0,0,0,9.24,14.5A16.13,16.13,0,0,0,40,240a15.89,15.89,0,0,0,10.25-3.78l.09-.07L83,208H216a16,16,0,0,0,16-16V64A16,16,0,0,0,216,48ZM40,224h0ZM216,192H80a8,8,0,0,0-5.23,1.95L40,224V64H216ZM88,112a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H96A8,8,0,0,1,88,112Zm0,32a8,8,0,0,1,8-8h64a8,8,0,1,1,0,16H96A8,8,0,0,1,88,144Z",
-  ],
-  code: [
-    "M240,128l-48,40H64L16,128,64,88H192Z",
-    "M69.12,94.15,28.5,128l40.62,33.85a8,8,0,1,1-10.24,12.29l-48-40a8,8,0,0,1,0-12.29l48-40a8,8,0,0,1,10.24,12.3Zm176,27.7-48-40a8,8,0,1,0-10.24,12.3L227.5,128l-40.62,33.85a8,8,0,1,0,10.24,12.29l48-40a8,8,0,0,0,0-12.29ZM162.73,32.48a8,8,0,0,0-10.25,4.79l-64,176a8,8,0,0,0,4.79,10.26A8.14,8.14,0,0,0,96,224a8,8,0,0,0,7.52-5.27l64-176A8,8,0,0,0,162.73,32.48Z",
-  ],
-  "download-simple": [
-    "M216,48V208H40V48A16,16,0,0,1,56,32H200A16,16,0,0,1,216,48Z",
-    "M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0Zm-101.66,5.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,124.69V32a8,8,0,0,0-16,0v92.69L93.66,98.34a8,8,0,0,0-11.32,11.32Z",
-  ],
-  flask: [
-    "M208,216H48a8,8,0,0,1-6.86-12.12l30.48-50.8h0c13.23-2.48,32-1.41,56.37,10.92,32.25,16.33,54.75,12.91,67.5,7.65h0l19.34,32.23A8,8,0,0,1,208,216Z",
-    "M221.69,199.77,160,96.92V40h8a8,8,0,0,0,0-16H88a8,8,0,0,0,0,16h8V96.92L34.31,199.77A16,16,0,0,0,48,224H208a16,16,0,0,0,13.72-24.23ZM110.86,103.25A7.93,7.93,0,0,0,112,99.14V40h32V99.14a7.93,7.93,0,0,0,1.14,4.11L183.36,167c-12,2.37-29.07,1.37-51.75-10.11-15.91-8.05-31.05-12.32-45.22-12.81ZM48,208l28.54-47.58c14.25-1.73,30.31,1.85,47.82,10.72,19,9.61,35,12.88,48,12.88a69.89,69.89,0,0,0,19.55-2.7L208,208Z",
-  ],
-  "git-branch": [
-    "M224,64a24,24,0,1,1-24-24A24,24,0,0,1,224,64Z",
-    "M232,64a32,32,0,1,0-40,31v17a8,8,0,0,1-8,8H96a23.84,23.84,0,0,0-8,1.38V95a32,32,0,1,0-16,0v66a32,32,0,1,0,16,0V144a8,8,0,0,1,8-8h88a24,24,0,0,0,24-24V95A32.06,32.06,0,0,0,232,64ZM64,64A16,16,0,1,1,80,80,16,16,0,0,1,64,64ZM96,192a16,16,0,1,1-16-16A16,16,0,0,1,96,192ZM200,80a16,16,0,1,1,16-16A16,16,0,0,1,200,80Z",
-  ],
-  info: [
-    "M224,128a96,96,0,1,1-96-96A96,96,0,0,1,224,128Z",
-    "M144,176a8,8,0,0,1-8,8,16,16,0,0,1-16-16V128a8,8,0,0,1,0-16,16,16,0,0,1,16,16v40A8,8,0,0,1,144,176Zm88-48A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128ZM124,96a12,12,0,1,0-12-12A12,12,0,0,0,124,96Z",
-  ],
-  lightning: [
-    "M96,240l16-80L48,136,160,16,144,96l64,24Z",
-    "M215.79,118.17a8,8,0,0,0-5-5.66L153.18,90.9l14.66-73.33a8,8,0,0,0-13.69-7l-112,120a8,8,0,0,0,3,13l57.63,21.61L88.16,238.43a8,8,0,0,0,13.69,7l112-120A8,8,0,0,0,215.79,118.17ZM109.37,214l10.47-52.38a8,8,0,0,0-5-9.06L62,132.71l84.62-90.66L136.16,94.43a8,8,0,0,0,5,9.06l52.8,19.8Z",
-  ],
-  "list-bullets": [
-    "M216,64V192H88V64Z",
-    "M80,64a8,8,0,0,1,8-8H216a8,8,0,0,1,0,16H88A8,8,0,0,1,80,64Zm136,56H88a8,8,0,1,0,0,16H216a8,8,0,0,0,0-16Zm0,64H88a8,8,0,1,0,0,16H216a8,8,0,0,0,0-16ZM44,52A12,12,0,1,0,56,64,12,12,0,0,0,44,52Zm0,64a12,12,0,1,0,12,12A12,12,0,0,0,44,116Zm0,64a12,12,0,1,0,12,12A12,12,0,0,0,44,180Z",
-  ],
-  palette: [
-    "M224,127.17a96.48,96.48,0,0,1-2.39,22.18A24,24,0,0,1,198.21,168H152a24,24,0,0,0-24,24,24,24,0,0,1-32,22.61C58.73,201.44,32,169.81,32,128a96,96,0,0,1,95-96C179.84,31.47,223.55,74.35,224,127.17Z",
-    "M200.77,53.89A103.27,103.27,0,0,0,128,24h-1.07A104,104,0,0,0,24,128c0,43,26.58,79.06,69.36,94.17A32,32,0,0,0,136,192a16,16,0,0,1,16-16h46.21a31.81,31.81,0,0,0,31.2-24.88,104.43,104.43,0,0,0,2.59-24A103.28,103.28,0,0,0,200.77,53.89Zm13,93.71A15.89,15.89,0,0,1,198.21,160H152a32,32,0,0,0-32,32,16,16,0,0,1-21.31,15.07C62.49,194.3,40,164,40,128a88,88,0,0,1,87.09-88h.9a88.35,88.35,0,0,1,88,87.25A88.86,88.86,0,0,1,213.81,147.6ZM140,76a12,12,0,1,1-12-12A12,12,0,0,1,140,76ZM96,100A12,12,0,1,1,84,88,12,12,0,0,1,96,100Zm0,56a12,12,0,1,1-12-12A12,12,0,0,1,96,156Zm88-56a12,12,0,1,1-12-12A12,12,0,0,1,184,100Z",
-  ],
-  robot: [
-    "M200,56H56A24,24,0,0,0,32,80V192a24,24,0,0,0,24,24H200a24,24,0,0,0,24-24V80A24,24,0,0,0,200,56ZM164,184H92a20,20,0,0,1,0-40h72a20,20,0,0,1,0,40Z",
-    "M200,48H136V16a8,8,0,0,0-16,0V48H56A32,32,0,0,0,24,80V192a32,32,0,0,0,32,32H200a32,32,0,0,0,32-32V80A32,32,0,0,0,200,48Zm16,144a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V80A16,16,0,0,1,56,64H200a16,16,0,0,1,16,16ZM72,108a12,12,0,1,1,12,12A12,12,0,0,1,72,108Zm88,0a12,12,0,1,1,12,12A12,12,0,0,1,160,108Zm4,28H92a28,28,0,0,0,0,56h72a28,28,0,0,0,0-56Zm-24,16v24H116V152ZM80,164a12,12,0,0,1,12-12h8v24H92A12,12,0,0,1,80,164Zm84,12h-8V152h8a12,12,0,0,1,0,24Z",
-  ],
-  "sliders-horizontal": [
-    "M128,80a24,24,0,1,1-24-24A24,24,0,0,1,128,80Zm40,72a24,24,0,1,0,24,24A24,24,0,0,0,168,152Z",
-    "M40,88H73a32,32,0,0,0,62,0h81a8,8,0,0,0,0-16H135a32,32,0,0,0-62,0H40a8,8,0,0,0,0,16Zm64-24A16,16,0,1,1,88,80,16,16,0,0,1,104,64ZM216,168H199a32,32,0,0,0-62,0H40a8,8,0,0,0,0,16h97a32,32,0,0,0,62,0h17a8,8,0,0,0,0-16Zm-48,24a16,16,0,1,1,16-16A16,16,0,0,1,168,192Z",
-  ],
-  table: [
-    "M88,104v96H32V104Z",
-    "M224,48H32a8,8,0,0,0-8,8V192a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A8,8,0,0,0,224,48ZM40,112H80v32H40Zm56,0H216v32H96ZM216,64V96H40V64ZM40,160H80v32H40Zm176,32H96V160H216v32Z",
-  ],
-  "terminal-window": [
-    "M224,56V200a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V56a8,8,0,0,1,8-8H216A8,8,0,0,1,224,56Z",
-    "M128,128a8,8,0,0,1-3,6.25l-40,32a8,8,0,1,1-10-12.5L107.19,128,75,102.25a8,8,0,1,1,10-12.5l40,32A8,8,0,0,1,128,128Zm48,24H136a8,8,0,0,0,0,16h40a8,8,0,0,0,0-16Zm56-96V200a16,16,0,0,1-16,16H40a16,16,0,0,1-16-16V56A16,16,0,0,1,40,40H216A16,16,0,0,1,232,56ZM216,200V56H40V200H216Z",
-  ],
-  "text-aa": [
-    "M232,164c0,15.46-14.33,28-32,28s-32-12.54-32-28,14.33-28,32-28S232,148.54,232,164ZM34.82,152h90.36L80,56Z",
-    "M87.24,52.59a8,8,0,0,0-14.48,0l-64,136a8,8,0,1,0,14.48,6.81L39.9,160h80.2l16.66,35.4a8,8,0,1,0,14.48-6.81ZM47.43,144,80,74.79,112.57,144ZM200,96c-12.76,0-22.73,3.47-29.63,10.32a8,8,0,0,0,11.26,11.36c3.8-3.77,10-5.68,18.37-5.68,13.23,0,24,9,24,20v3.22A42.76,42.76,0,0,0,200,128c-22.06,0-40,16.15-40,36s17.94,36,40,36a42.73,42.73,0,0,0,24-7.25,8,8,0,0,0,16-.75V132C240,112.15,222.06,96,200,96Zm0,88c-13.23,0-24-9-24-20s10.77-20,24-20,24,9,24,20S213.23,184,200,184Z",
-  ],
-  wrench: [
-    "M224,96a64,64,0,0,1-94.94,56L73,217A24,24,0,0,1,39,183L104,126.94a64,64,0,0,1,80-90.29L144,80l5.66,26.34L176,112l43.35-40A63.8,63.8,0,0,1,224,96Z",
-    "M226.76,69a8,8,0,0,0-12.84-2.88l-40.3,37.19-17.23-3.7-3.7-17.23,37.19-40.3A8,8,0,0,0,187,29.24,72,72,0,0,0,88,96,72.34,72.34,0,0,0,94,124.94L33.79,177c-.15.12-.29.26-.43.39a32,32,0,0,0,45.26,45.26c.13-.13.27-.28.39-.42L131.06,162A72,72,0,0,0,232,96,71.56,71.56,0,0,0,226.76,69ZM160,152a56.14,56.14,0,0,1-27.07-7,8,8,0,0,0-9.92,1.77L67.11,211.51a16,16,0,0,1-22.62-22.62L109.18,133a8,8,0,0,0,1.77-9.93,56,56,0,0,1,58.36-82.31l-31.2,33.81a8,8,0,0,0-1.94,7.1L141.83,108a8,8,0,0,0,6.14,6.14l26.35,5.66a8,8,0,0,0,7.1-1.94l33.81-31.2A56.06,56.06,0,0,1,160,152Z",
-  ],
-} as const;
-
-export type NavigationIconName =
-  | keyof typeof shapes
-  | keyof typeof artwork
-  | keyof typeof animatedArtwork;
-
-function AnimatedNavigationIcon({
-  name,
-  playOnEnable = false,
-}: {
-  name: keyof typeof animatedArtwork;
-  playOnEnable?: boolean;
-}) {
-  const enabled = useContext(IconAnimations);
-  const previous = useRef(enabled);
-  const { animation, still } = animatedArtwork[name];
-  const enlarged =
-    name === "app-steering-wheel" ||
-    name === "app-search" ||
-    name === "app-backlog" ||
-    name === "app-custom-agents";
-  const image = useRef<HTMLImageElement>(null);
-  const id = useId();
-  const sequence = useRef(0);
-  const [playback, setPlayback] = useState(0);
-  useEffect(() => {
-    const element = image.current;
-    if (!element) return;
-    const target =
-      element.closest("button, a, [role='tab'], [role='button']") ??
-      element.closest(".sidebar-section")?.querySelector(".sidebar-card-toggle");
-    if (!target) return;
-    const motion = window.matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)");
-    const reset = () => setPlayback(0);
-    const play = () => {
-      if (
-        enabled &&
-        !motion.matches &&
-        !document.hidden &&
-        !element.closest("[hidden], [inert]") &&
-        !target.matches(":disabled, [aria-disabled='true']")
-      )
-        setPlayback(++sequence.current);
-    };
-    const visibility = () => {
-      if (document.hidden) reset();
-    };
-    const hoverControl = target.matches(".home-card");
-    if (!enabled) reset();
-    else if (!previous.current && playOnEnable) play();
-    previous.current = enabled;
-    const trigger = hoverControl ? "pointerenter" : "click";
-    const focus = () => {
-      if (target.matches(":focus-visible")) play();
-    };
-    target.addEventListener(trigger, play);
-    if (hoverControl) target.addEventListener("focus", focus);
-    motion.addEventListener("change", reset);
-    document.addEventListener("visibilitychange", visibility);
-    return () => {
-      target.removeEventListener(trigger, play);
-      if (hoverControl) target.removeEventListener("focus", focus);
-      motion.removeEventListener("change", reset);
-      document.removeEventListener("visibilitychange", visibility);
-    };
-  }, [enabled, playOnEnable]);
+export type NavigationIconName = keyof typeof glyphs;
+export function NavigationIcon({ name }: { name: NavigationIconName }) {
+  const Glyph = glyphs[name];
   return (
-    <img
-      ref={image}
-      src={enabled && playback ? `${animation}?play=${encodeURIComponent(id)}-${playback}` : still}
-      className="navigation-icon"
-      data-icon={name}
-      data-animated="true"
-      data-enlarged={enlarged || undefined}
-      alt=""
-      aria-hidden="true"
-      draggable={false}
-    />
-  );
-}
-
-export function NavigationIcon({
-  name,
-  playOnEnable = false,
-}: {
-  name: NavigationIconName;
-  playOnEnable?: boolean;
-}) {
-  if (name in animatedArtwork)
-    return (
-      <AnimatedNavigationIcon
-        name={name as keyof typeof animatedArtwork}
-        playOnEnable={playOnEnable}
-      />
-    );
-  if (name in artwork) {
-    return (
-      <img
-        src={artwork[name as keyof typeof artwork]}
-        className="navigation-icon"
-        data-icon={name}
-        alt=""
-        aria-hidden="true"
-        draggable={false}
-      />
-    );
-  }
-  const [tone, outline] = shapes[name as keyof typeof shapes];
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox={viewBoxes[name as keyof typeof shapes]}
-      width="1em"
-      height="1em"
-      fill="currentColor"
+    <Glyph
+      size={16}
       className="navigation-icon"
       data-icon={name}
       aria-hidden="true"
       focusable="false"
-    >
-      <path d={tone} opacity="0.2" />
-      <path d={outline} />
-    </svg>
+    />
   );
 }

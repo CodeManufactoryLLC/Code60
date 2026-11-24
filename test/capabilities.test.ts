@@ -22,6 +22,7 @@ describe("browser capability catalog", () => {
     expect(mcp).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });
     expect(PAGE_CAPABILITIES["mcp-servers"]).toBe("mcp-servers");
     expect(pages.find((page) => page.id === "mcp-servers")?.database).toBe(false);
+    expect(mcp?.purpose).toContain("table toolbar");
     expect(mcp?.limitations).toContain("open project and captured runtime/database identity");
     expect(mcp?.limitations).toContain("valid unpinned backup");
     expect(mcp?.limitations).toContain("Pending recovery blocks affected writes");
@@ -47,17 +48,19 @@ describe("browser capability catalog", () => {
       prerequisite: "none",
       agentAccess: "human-only",
       access: expect.stringContaining("Left navigation sidebar"),
-      limitations: expect.stringContaining("no current-page dropdown"),
+      limitations: expect.stringMatching(
+        /Work, Automation, Inspect and Manage.*Skip to main content/,
+      ),
     });
     expect(
       APPLICATION_CAPABILITIES.find((cap) => cap.id === "page-navigation")?.limitations,
-    ).toContain("navigation icon on its left");
+    ).toContain("Commands and Workspace");
   });
   it("describes content-title commands while keeping navigation and availability human-only", () => {
     const navigation = APPLICATION_CAPABILITIES.find((cap) => cap.id === "page-navigation");
-    expect(navigation?.limitations).toContain("chevron-only title actions menu");
+    expect(navigation?.limitations).toContain("Projects and conversations keep their own actions");
     expect(navigation?.limitations).toContain(
-      "Table tools, scope selectors, creation cards and corner panel toggles remain visible",
+      "Restoring a view never sends a request or grants approval",
     );
     expect(navigation?.prerequisite).toBe("none");
     expect(navigation?.agentAccess).toBe("human-only");
@@ -67,14 +70,14 @@ describe("browser capability catalog", () => {
   });
   it("classifies bounded human-only navigation history without database prerequisites", () => {
     expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "navigation-history")).toMatchObject({
-      access: "Workspace header card → Back / Forward",
+      access: "Workspace header → Back / Forward",
       prerequisite: "none",
       agentAccess: "human-only",
       limitations: expect.stringContaining("100 destinations"),
     });
     expect(
       APPLICATION_CAPABILITIES.find((cap) => cap.id === "navigation-history")?.limitations,
-    ).toContain("An empty circle replaces the arrow artwork");
+    ).toContain("Restoring a chat preserves drafts");
   });
   it("exposes conversational browser modes only through the orchestrator gateway", () => {
     expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "browser")).toMatchObject({
@@ -96,6 +99,18 @@ describe("browser capability catalog", () => {
     expect(search?.limitations).toContain("pages of 100");
     expect(search?.confirmation).toContain("Open Project");
   });
+  it("describes Carbon table search, bounded paging and named column controls without changing access", () => {
+    const data = APPLICATION_CAPABILITIES.find((capability) => capability.id === "data");
+    expect(data).toMatchObject({ prerequisite: "database", agentAccess: "read" });
+    for (const detail of [
+      "single-row selection",
+      "backend paging scopes",
+      "Earlier/Later",
+      "toolbar buttons",
+      "not agent-readable",
+    ])
+      expect(data?.limitations).toContain(detail);
+  });
   it("describes Low density and line-free table defaults without replacing saved choices", () => {
     expect(
       APPLICATION_CAPABILITIES.find((capability) => capability.id === "settings"),
@@ -103,13 +118,13 @@ describe("browser capability catalog", () => {
       prerequisite: "none",
       agentAccess: "human-only",
       purpose: expect.stringContaining(
-        "Table defaults start at Low density (44px rows), with row, column and heading lines off",
+        "Table defaults start at Low density (Carbon 64px rows), with row, column and heading lines off",
       ),
     });
   });
-  it("describes Scientifica in human-only text settings", () => {
+  it("describes interface text size in human-only settings", () => {
     const settings = APPLICATION_CAPABILITIES.find((capability) => capability.id === "settings");
-    expect(settings?.purpose).toContain("locally bundled Scientifica");
+    expect(settings?.purpose).toContain("interface text size");
     expect(settings?.agentAccess).toBe("human-only");
     expect(SETTINGS_CAPABILITIES.text).toBe("settings");
   });
@@ -122,7 +137,7 @@ describe("browser capability catalog", () => {
       APPLICATION_CAPABILITIES.find((capability) => capability.id === "automations"),
     ).toMatchObject({
       label: "Scheduled Jobs",
-      access: "Apps → Scheduled Jobs",
+      access: "Automation → Scheduled Jobs (also Apps → Scheduled Jobs)",
       prerequisite: "none",
       agentAccess: "human-only",
       confirmation: "Human installation and schedule consent.",
@@ -130,8 +145,11 @@ describe("browser capability catalog", () => {
   });
   it("describes scheduled-job controls independently from recurring enablement", () => {
     const jobs = APPLICATION_CAPABILITIES.find((capability) => capability.id === "automations");
-    expect(jobs?.purpose).toContain("Play starts one run");
-    expect(jobs?.purpose).toContain("separate schedule enable/pause");
+    expect(jobs?.purpose).toContain("Run/Stop applies to one job");
+    expect(jobs?.purpose).toContain("New scheduled job and Refresh are in the schedules toolbar");
+    expect(jobs?.purpose).toContain("current-page search");
+    expect(jobs?.purpose).toContain("Legacy saved grid preferences stay stored");
+    expect(jobs?.purpose).toContain("View history opens an explicit schedule filter");
     expect(jobs?.limitations).toContain("Delete requires browser confirmation");
   });
   it("uses the Custom Assistants name with the existing stable capability ID", () => {
@@ -147,8 +165,8 @@ describe("browser capability catalog", () => {
   });
   it("describes per-card custom assistant management", () => {
     const access = APPLICATION_CAPABILITIES.find((c) => c.id === "custom-agents")?.access;
-    expect(access).toContain("assistant card → More actions → Edit or Archive");
-    expect(access).toContain("title actions → Archived → card → More actions → Restore");
+    expect(access).toContain("assistant row → More actions → Edit or Archive");
+    expect(access).toContain("title actions → Archived → row → More actions → Restore");
   });
   it("describes human-only browser appearance without native window effects", () => {
     const settings = APPLICATION_CAPABILITIES.find((cap) => cap.id === "settings");
@@ -167,29 +185,12 @@ describe("browser capability catalog", () => {
       "Apps → Memory",
     );
   });
-  it("describes the global icon playback switch without changing authority", () => {
+  it("exposes theme and reading controls with local storage compatibility", () => {
     expect(APPLICATION_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
       prerequisite: "none",
       agentAccess: "human-only",
-      access: expect.stringContaining("Color theme or Icon animations"),
-      limitations: expect.stringContaining("freezes GIF artwork and CSS icon pulses app-wide"),
-    });
-  });
-  it("describes the human-only breadcrumb theme shortcut without changing availability", () => {
-    expect(APPLICATION_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
-      prerequisite: "none",
-      agentAccess: "human-only",
-      access: expect.stringContaining("breadcrumb card → Color theme"),
-      limitations: expect.stringContaining("System → Dark → Light → System"),
-    });
-  });
-  it("describes locally saved monochrome icons without database prerequisites", () => {
-    expect(APPLICATION_CAPABILITIES.find((c) => c.id === "settings")).toMatchObject({
-      prerequisite: "none",
-      agentAccess: "human-only",
-      purpose: expect.stringContaining("Monochrome icons with a color selector"),
-      access: expect.stringContaining("Icons"),
-      limitations: expect.stringContaining("Icon contrast spreads its shades"),
+      access: expect.stringContaining("Workspace → Color theme"),
+      limitations: expect.stringContaining("Legacy decorative preferences remain stored"),
     });
   });
   it("describes chooser and Explorer navigation", () => {
@@ -214,8 +215,10 @@ describe("browser capability catalog", () => {
   it("keeps navigation disclosures human-only and independent from execution", () => {
     const settings = APPLICATION_CAPABILITIES.find((capability) => capability.id === "settings");
     expect(settings).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });
-    expect(settings?.limitations).toContain("Home/Search is also collapsible");
-    expect(settings?.limitations).toContain("Header navigation never toggles expansion");
+    expect(settings?.limitations).toContain("Navigation groups expand or collapse independently");
+    expect(settings?.limitations).toContain(
+      "Project and conversation disclosures retain their own state",
+    );
     expect(settings?.limitations).not.toContain("Native desktop blur is macOS-only");
   });
   it("describes browser-only distribution and retained scheduler controls", () => {

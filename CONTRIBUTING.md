@@ -318,12 +318,10 @@ advisory without a fix.
 
 | Override | Parents | Reason |
 | --- | --- | --- |
-| `minimatch@>=7 <11.0.1` → `11.0.1` | `@linaria/react`, `@wyw-in-js/shared`, `@electron/universal`, `app-builder-lib` | GHSA-g3hv-75wg-m249 in the 9.x and 10.x copies. Unaffected 3.x and 5.x copies are unchanged. |
 | `dompurify` → `3.4.17` | `monaco-editor` | Monaco pins DOMPurify 3.4.15, which has a critical advisory. |
 
-An override that crosses a major version needs tests of the APIs its callers use,
-as in `test/dependency-compatibility.test.ts`. Remove an override once every listed
-parent's own dependency range resolves a fixed version. Delete it, run
+An override that crosses a major version needs tests of the APIs its callers use.
+Remove an override once every listed parent's own dependency range resolves a fixed version. Delete it, run
 `npm install`, and confirm the result:
 
 ```sh

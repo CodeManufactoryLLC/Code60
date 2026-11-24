@@ -1,6 +1,7 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { clampMenuPosition, menuAnchorMoved } from "./menu-anchor.js";
+import { Menu, MenuItem, MenuItemSelectable } from "@carbon/react";
+import { useLayoutEffect, useRef } from "react";
+import { Icon, type IconName } from "./icons.js";
+import { menuAnchorMoved } from "./menu-anchor.js";
 import { menuTypeahead } from "./menu-typeahead.js";
 
 export function AnchoredMenu({
@@ -13,7 +14,6 @@ export function AnchoredMenu({
   id,
   align = "start",
   initialFocus = "first",
-  appearance,
   anchor,
 }: {
   className?: string;
@@ -26,6 +26,9 @@ export function AnchoredMenu({
     disabled?: boolean | undefined;
     reason?: string | undefined;
     checked?: boolean;
+    icon?: IconName;
+    keys?: string | undefined;
+    danger?: boolean | undefined;
     describedBy?: string;
     run(): void;
   }[];
@@ -33,59 +36,28 @@ export function AnchoredMenu({
   id?: string;
   align?: "start" | "end";
   initialFocus?: "first" | "last";
-  appearance?: "neobrutalism";
   anchor?: HTMLElement | null;
 }) {
-  const menu = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ left: x, top: y });
+  const menu = useRef<HTMLUListElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
   useLayoutEffect(() => {
     const previous = anchor ?? document.activeElement;
-    let bounds = previous instanceof HTMLElement ? previous.getBoundingClientRect() : undefined;
-    const rect = menu.current?.getBoundingClientRect();
-    if (rect) setPosition(clampMenuPosition(align === "end" ? x - rect.width : x, y, rect));
-    // A live title can change the trigger's position without changing its owner.
-    // Reposition the same menu without resetting the highlighted item or focus.
-    let disposed = false;
-    let resize: ResizeObserver | undefined;
-    if (anchor && bounds && typeof ResizeObserver !== "undefined") {
-      const offsetX = x - (align === "end" ? bounds.right : bounds.left);
-      const offsetY = y - bounds.bottom;
-      resize = new ResizeObserver(() => {
-        if (disposed) return;
-        const rect = menu.current?.getBoundingClientRect();
-        if (!rect) return;
-        bounds = anchor.getBoundingClientRect();
-        const next = clampMenuPosition(
-          (align === "end" ? bounds.right - rect.width : bounds.left) + offsetX,
-          bounds.bottom + offsetY,
-          rect,
-        );
-        setPosition((current) =>
-          current.left === next.left && current.top === next.top ? current : next,
-        );
+    const bounds = previous instanceof HTMLElement ? previous.getBoundingClientRect() : undefined;
+    const dismiss = () => close.current();
+    let observer: ResizeObserver | undefined;
+    if (anchor && typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => {
+        if (bounds && menuAnchorMoved(anchor, bounds)) dismiss();
       });
-      resize.observe(anchor);
-      const title = anchor.closest(".content-page-heading")?.querySelector(".content-page-title");
-      if (title) resize.observe(title);
+      observer.observe(anchor);
     }
-    menu.current
-      ?.querySelector<HTMLButtonElement>(initialFocus === "last" ? "button:last-child" : "button")
-      ?.focus({ preventScroll: true });
-    let restore = true;
-    const dismiss = () => {
-      restore = false;
-      close.current();
-    };
     const outside = (event: Event) => {
       if (
-        event.type === "pointerdown" &&
         event.target instanceof Node &&
-        anchor?.contains(event.target)
+        (menu.current?.contains(event.target) || anchor?.contains(event.target))
       )
         return;
-      // A scroll queued before opening is not movement of this menu's anchor.
       if (
         event.type === "scroll" &&
         bounds &&
@@ -93,85 +65,87 @@ export function AnchoredMenu({
         !menuAnchorMoved(previous, bounds)
       )
         return;
-      if (!(event.target instanceof Node) || !menu.current?.contains(event.target)) dismiss();
+      dismiss();
     };
     window.addEventListener("pointerdown", outside, true);
     window.addEventListener("scroll", outside, true);
     window.addEventListener("resize", dismiss);
     window.addEventListener("blur", dismiss);
     return () => {
-      disposed = true;
-      resize?.disconnect();
+      observer?.disconnect();
       window.removeEventListener("pointerdown", outside, true);
       window.removeEventListener("scroll", outside, true);
       window.removeEventListener("resize", dismiss);
       window.removeEventListener("blur", dismiss);
-      if (
-        restore &&
-        previous instanceof HTMLElement &&
-        previous.isConnected &&
-        !previous.closest("[hidden], [inert]")
-      )
-        previous.focus();
     };
-  }, [x, y, align, initialFocus, anchor]);
-  return createPortal(
-    <div
+  }, [anchor]);
+  return (
+    <Menu
       ref={menu}
-      id={id}
-      className={["actions-menu", appearance && "neo-dropdown-menu", className]
-        .filter(Boolean)
-        .join(" ")}
-      role="menu"
-      aria-label={label}
-      style={position}
-      onKeyDown={(event) => {
-        event.stopPropagation();
-        const buttons = [...(menu.current?.querySelectorAll("button") ?? [])];
-        const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-        if (event.key === "Escape" || event.key === "Tab") {
+      open
+      label={label}
+      x={x}
+      y={y}
+      size="md"
+      {...(id ? { id } : {})}
+      {...(className ? { className } : {})}
+      menuAlignment={align === "end" ? "bottom-end" : "bottom-start"}
+      onClose={onClose}
+      onOpen={() => {
+        if (initialFocus === "last")
+          [
+            ...(menu.current?.querySelectorAll<HTMLElement>(
+              '[role^="menuitem"]:not([aria-disabled="true"])',
+            ) ?? []),
+          ]
+            .at(-1)
+            ?.focus();
+      }}
+      onKeyDownCapture={(event) => {
+        const entries = [
+          ...(menu.current?.querySelectorAll<HTMLElement>(
+            '[role^="menuitem"]:not([aria-disabled="true"])',
+          ) ?? []),
+        ];
+        let next: HTMLElement | undefined;
+        if (event.key === "Home") next = entries[0];
+        else if (event.key === "End") next = entries.at(-1);
+        else if (/^\p{L}$/u.test(event.key) && !event.metaKey && !event.ctrlKey)
+          next = menuTypeahead(
+            entries,
+            entries.indexOf(document.activeElement as HTMLElement),
+            event.key,
+          );
+        if (next) {
           event.preventDefault();
-          onClose();
-        } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-          event.preventDefault();
-          const next =
-            event.key === "Home"
-              ? 0
-              : event.key === "End"
-                ? buttons.length - 1
-                : (index + (event.key === "ArrowDown" ? 1 : buttons.length - 1)) % buttons.length;
-          buttons[next]?.focus();
-        } else if (/^\p{L}$/u.test(event.key) && !event.metaKey && !event.ctrlKey) {
-          const next = menuTypeahead(buttons, index, event.key);
-          if (next) {
-            event.preventDefault();
-            next.focus();
-          }
+          event.stopPropagation();
+          next.focus();
         }
       }}
     >
-      {items.map((item) => (
-        <button
-          type="button"
-          {...(item.checked === undefined
-            ? { role: "menuitem" as const }
-            : { role: "menuitemcheckbox" as const, "aria-checked": item.checked })}
-          aria-describedby={item.describedBy}
-          key={item.id ?? item.label}
-          aria-disabled={item.disabled || undefined}
-          aria-description={item.reason}
-          title={item.reason}
-          data-tooltip={item.reason}
-          onClick={() => {
-            if (item.disabled) return;
-            onClose();
-            item.run();
-          }}
-        >
-          <span className="chat-menu-label">{item.label}</span>
-        </button>
-      ))}
-    </div>,
-    document.body,
+      {items.map((item) => {
+        const icon = item.icon;
+        const props = {
+          label: item.label,
+          kind: item.danger ? ("danger" as const) : ("default" as const),
+          ...(item.keys ? { shortcut: item.keys } : {}),
+          ...(icon ? { renderIcon: () => <Icon name={icon} /> } : {}),
+          disabled: item.disabled ?? false,
+          ...(item.reason ? { title: item.reason, "aria-description": item.reason } : {}),
+          ...(item.describedBy ? { "aria-describedby": item.describedBy } : {}),
+          onClick: () => {
+            if (!item.disabled) {
+              onClose();
+              item.run();
+            }
+          },
+        };
+        return item.checked === undefined ? (
+          <MenuItem key={item.id ?? item.label} {...props} />
+        ) : (
+          <MenuItemSelectable key={item.id ?? item.label} {...props} selected={item.checked} />
+        );
+      })}
+    </Menu>
   );
 }

@@ -6,6 +6,7 @@ import {
   mcpTroubleshootingReportSchema,
 } from "../bridge/index.js";
 import { copyText, randomId } from "./browser-platform.js";
+import { Button } from "./carbon/button.js";
 import { Modal } from "./modal.js";
 
 export function McpTroubleshooting({
@@ -73,12 +74,12 @@ export function McpTroubleshooting({
   }
   return (
     <section aria-label="MCP troubleshooting">
-      <button type="button" disabled={busy || !active} onClick={() => void run("report")}>
+      <Button type="button" disabled={busy || !active} onClick={() => void run("report")}>
         Review troubleshooting report
-      </button>
-      <button type="button" disabled={busy || !active} onClick={() => setCleanup(true)}>
+      </Button>
+      <Button type="button" disabled={busy || !active} onClick={() => setCleanup(true)}>
         Verify cleanup
-      </button>
+      </Button>
       {notice && <p role="status">{notice}</p>}
       {cleanup && (
         <Modal title="Verify owned MCP cleanup?" busy={busy} onClose={() => setCleanup(false)}>
@@ -87,12 +88,12 @@ export function McpTroubleshooting({
             stays revoked. This does not reconnect, replay calls, delete locks or stop unrelated
             processes. Remote cleanup may still be unverifiable.
           </p>
-          <button type="button" disabled={busy} onClick={() => setCleanup(false)}>
+          <Button variant="quiet" type="button" disabled={busy} onClick={() => setCleanup(false)}>
             Cancel cleanup verification
-          </button>
-          <button type="button" disabled={busy} onClick={() => void run("verify-cleanup")}>
+          </Button>
+          <Button type="button" disabled={busy} onClick={() => void run("verify-cleanup")}>
             Confirm cleanup verification
-          </button>
+          </Button>
         </Modal>
       )}
       {report && (
@@ -110,7 +111,7 @@ export function McpTroubleshooting({
             output are excluded.
           </p>
           <pre>{JSON.stringify(report, null, 2)}</pre>
-          <button
+          <Button
             type="button"
             onClick={() => {
               const token = epoch.current;
@@ -126,10 +127,10 @@ export function McpTroubleshooting({
             }}
           >
             Copy safe report
-          </button>
-          <button type="button" onClick={() => setReport(undefined)}>
+          </Button>
+          <Button variant="quiet" type="button" onClick={() => setReport(undefined)}>
             Close report
-          </button>
+          </Button>
         </Modal>
       )}
     </section>

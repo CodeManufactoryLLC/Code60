@@ -28,6 +28,8 @@ main {
 }
 
 .navigation-icon {
+  width: 1em;
+  height: 1em;
   position: static;
   transform: none;
   display: block;

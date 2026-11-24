@@ -136,6 +136,10 @@ export class NavigationRecorder {
     this.history = { entries: [current], index: 0 };
   }
 
+  get settled(): boolean {
+    return !this.pending;
+  }
+
   get traversing(): boolean {
     return this.pending?.traversal === true;
   }

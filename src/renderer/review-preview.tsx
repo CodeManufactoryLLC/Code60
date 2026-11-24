@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { ApplicationClient, Review, TaskView } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { type ReviewPreview, reviewRequest } from "./review-actions.js";
 import { ReviewPanel } from "./review-panel.js";
 
@@ -21,14 +22,14 @@ export function ReviewPreviewPanel({
       {preview.related && (
         <nav aria-label="Changed targets">
           {preview.related.map((item, index) => (
-            <button
+            <AppButton
               type="button"
               key={JSON.stringify([item.scope, item.revisionId])}
               aria-current={selected === index ? "true" : undefined}
               onClick={() => select(index)}
             >
               Target {index + 1}
-            </button>
+            </AppButton>
           ))}
         </nav>
       )}
@@ -90,9 +91,9 @@ function PinnedReviewPreview({ api, preview }: { api: ApplicationClient; preview
     return (
       <div role="alert">
         {value.error}
-        <button type="button" onClick={() => retry((count) => count + 1)}>
+        <AppButton type="button" onClick={() => retry((count) => count + 1)}>
           Retry preview
-        </button>
+        </AppButton>
       </div>
     );
   if (value?.review)

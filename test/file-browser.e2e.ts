@@ -42,7 +42,7 @@ test("browser: host chooser navigates, recovers, and creates and reopens the cho
     await expect(row("Archives")).toBeFocused();
     await rename(join(root, "Archives"), join(root, "Moved"));
     await row("Archives").press("Enter");
-    await expect(picker.getByRole("alert")).toBeVisible();
+    await expect(picker.getByRole("alert").filter({ hasText: /\S/ })).toBeVisible();
     await at(root);
     await rename(join(root, "Moved"), join(root, "Archives"));
     await button("Retry").click();
@@ -78,7 +78,7 @@ test("browser: host chooser navigates, recovers, and creates and reopens the cho
     await button("New folder").click();
     await name.fill("Archives");
     await name.press("Enter");
-    await expect(picker.getByRole("alert")).toBeVisible();
+    await expect(picker.getByRole("alert").filter({ hasText: /\S/ })).toBeVisible();
     await expect(name).toHaveValue("Archives");
     await name.fill("Data");
     await name.press("Enter");
@@ -90,7 +90,8 @@ test("browser: host chooser navigates, recovers, and creates and reopens the cho
     const target = join(root, "Data", "Work.sqlite");
     expect((await readFile(target)).subarray(0, 16).toString()).toBe("SQLite format 3\0");
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
+    await page.getByRole("button", { name: "Workspace", exact: true }).click();
     const databases = page.getByRole("button", { name: "Select or create database" });
     await databases.click();
     await launch.click();
@@ -99,7 +100,7 @@ test("browser: host chooser navigates, recovers, and creates and reopens the cho
     await picker.getByLabel("Database filename").fill("Work.sqlite");
     const before = await readFile(target);
     await button("Create database").click();
-    await expect(picker.getByRole("alert")).toBeVisible();
+    await expect(picker.getByRole("alert").filter({ hasText: /\S/ })).toBeVisible();
     expect(await readFile(target)).toEqual(before);
     await button("Cancel").click();
     await expect(picker).toHaveCount(0);
@@ -135,7 +136,7 @@ test("browser: project Explorer selects, expands and reuses an owned preview", a
     const { page } = await fixture.open();
     await onboard(page);
     await createDatabase(page, fixture.directory);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     const explorer = page.getByRole("region", { name: "File Explorer", exact: true });
     const selector = page.getByRole("combobox", { name: "Files view", exact: true });
     const tree = explorer.getByRole("tree");
@@ -156,6 +157,11 @@ test("browser: project Explorer selects, expands and reuses an owned preview", a
       if (!(await selector.isVisible()))
         await toggle.and(page.locator('[aria-expanded="false"]')).click();
       await expect(toggle).toHaveAttribute("aria-expanded", "true");
+      const grip = page.getByRole("button", { name: "Resize files panel", exact: true });
+      await expect(grip).toBeVisible();
+      const bounds = await grip.boundingBox();
+      expect(bounds?.width).toBeLessThanOrEqual(8);
+      expect(bounds?.height).toBeGreaterThan(100);
       await selector.click();
       await page.getByRole("option", { name: "File Explorer", exact: true }).click();
       await folder.click();

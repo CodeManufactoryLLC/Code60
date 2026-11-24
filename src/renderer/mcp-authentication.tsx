@@ -6,6 +6,9 @@ import type {
   McpManagementRead,
 } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
+import { Button } from "./carbon/button.js";
+import { Checkbox, RadioButton } from "./carbon/choices.js";
+import { Select, TextInput } from "./carbon/fields.js";
 import { Modal } from "./modal.js";
 
 /** Secret fields are transient; only backend metadata survives submission or navigation. */
@@ -173,7 +176,7 @@ export function McpAuthenticationPanel({
   const selected = review?.references?.find((item) => item.reference === reference);
   return (
     <section aria-label="MCP authentication controls" className="mcp-details">
-      <button
+      <Button
         type="button"
         disabled={blocked || busy}
         onClick={() => {
@@ -182,7 +185,7 @@ export function McpAuthenticationPanel({
         }}
       >
         Manage authentication
-      </button>
+      </Button>
       {open && (
         <Modal
           title={`Authentication — ${definition.label}`}
@@ -223,40 +226,35 @@ export function McpAuthenticationPanel({
           {oauth && (
             <fieldset disabled={busy || status?.status === "pending"}>
               <legend>Authorization server</legend>
-              <label>
-                Issuer
-                <select
-                  aria-label="OAuth issuer"
-                  value={issuer}
-                  onChange={(event) => {
-                    setIssuer(event.target.value);
-                    setReview((value) =>
-                      value
-                        ? {
-                            ...(value.issuers ? { issuers: value.issuers } : {}),
-                            ...(value.references ? { references: value.references } : {}),
-                          }
-                        : undefined,
-                    );
-                  }}
-                >
-                  <option value="">Select an issuer</option>
-                  {(review?.issuers ?? []).map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={allowPrivateIssuer}
-                  onChange={(event) => setAllowPrivateIssuer(event.target.checked)}
-                />
-                Allow this selected local/LAN issuer if it differs from the configured MCP origin
-              </label>
-              <button
+              <Select
+                labelText="Issuer"
+                aria-label="OAuth issuer"
+                value={issuer}
+                onChange={(event) => {
+                  setIssuer(event.target.value);
+                  setReview((value) =>
+                    value
+                      ? {
+                          ...(value.issuers ? { issuers: value.issuers } : {}),
+                          ...(value.references ? { references: value.references } : {}),
+                        }
+                      : undefined,
+                  );
+                }}
+              >
+                <option value="">Select an issuer</option>
+                {(review?.issuers ?? []).map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </Select>
+              <Checkbox
+                labelText="Allow this selected local/LAN issuer if it differs from the configured MCP origin"
+                checked={allowPrivateIssuer}
+                onChange={(event) => setAllowPrivateIssuer(event.target.checked)}
+              />
+              <Button
                 type="button"
                 disabled={!issuer}
                 onClick={() =>
@@ -264,7 +262,7 @@ export function McpAuthenticationPanel({
                 }
               >
                 Review issuer and scopes
-              </button>
+              </Button>
               {review?.issuer && (
                 <>
                   <p>Issuer: {review.issuer}</p>
@@ -285,44 +283,40 @@ export function McpAuthenticationPanel({
           {(review?.references?.length ?? 0) > 0 && (
             <fieldset disabled={busy || status?.status === "pending"}>
               <legend>Credential references</legend>
-              <label>
-                Reference
-                <select
-                  aria-label="Credential reference"
-                  value={reference}
-                  onChange={(event) => {
-                    setReference(event.target.value);
-                    setSecret("");
-                  }}
-                >
-                  {review?.references?.map((item) => (
-                    <option key={item.reference} value={item.reference}>
-                      {item.reference} ({item.purpose})
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <Select
+                labelText="Reference"
+                aria-label="Credential reference"
+                value={reference}
+                onChange={(event) => {
+                  setReference(event.target.value);
+                  setSecret("");
+                }}
+              >
+                {review?.references?.map((item) => (
+                  <option key={item.reference} value={item.reference}>
+                    {item.reference} ({item.purpose})
+                  </option>
+                ))}
+              </Select>
               <p>
                 Recorded state: {selected?.state.replaceAll("-", " ") ?? "Not checked"}
                 {selected?.storage ? ` — ${selected.storage}` : ""}. Secure-store availability is
                 checked on use.
               </p>
-              <label>
-                Secret
-                <input
-                  aria-label="Credential secret"
-                  type="password"
-                  autoComplete="new-password"
-                  spellCheck={false}
-                  value={secret}
-                  onChange={(event) => setSecret(event.target.value)}
-                  maxLength={8192}
-                />
-              </label>
+              <TextInput
+                labelText="Secret"
+                aria-label="Credential secret"
+                type="password"
+                autoComplete="new-password"
+                spellCheck={false}
+                value={secret}
+                onChange={(event) => setSecret(event.target.value)}
+                maxLength={8192}
+              />
               {selected?.purpose === "client-secret" && !review?.issuer && (
                 <p>Review the selected issuer before entering its client secret.</p>
               )}
-              <button
+              <Button
                 type="button"
                 disabled={
                   !secret ||
@@ -346,8 +340,8 @@ export function McpAuthenticationPanel({
                 }}
               >
                 Save credential
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 disabled={!review?.previewId || !reference}
                 onClick={() => {
@@ -356,36 +350,31 @@ export function McpAuthenticationPanel({
                 }}
               >
                 Forget credential…
-              </button>
+              </Button>
             </fieldset>
           )}
           <fieldset disabled={busy || status?.status === "pending"}>
             <legend>Credential storage</legend>
-            <label>
-              <input
-                type="radio"
-                name="mcp-credential-storage"
-                checked={storage === "persistent"}
-                onChange={() => setStorage("persistent")}
-              />
-              Secure OS storage (macOS Keychain or Linux Secret Service)
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="mcp-credential-storage"
-                checked={storage === "temporary"}
-                onChange={() => setStorage("temporary")}
-              />
-              Temporary backend memory — explicitly keep until backend restart or Sign out
-            </label>
+            <RadioButton
+              labelText="Secure OS storage (macOS Keychain or Linux Secret Service)"
+              name="mcp-credential-storage"
+              checked={storage === "persistent"}
+              onChange={() => setStorage("persistent")}
+            />
+            <RadioButton
+              labelText="Temporary backend memory — explicitly keep until backend restart or Sign out"
+              name="mcp-credential-storage"
+              checked={storage === "temporary"}
+              onChange={() => setStorage("temporary")}
+            />
             <p>
               Locked or unavailable OS storage never falls back to temporary storage automatically.
             </p>
           </fieldset>
           {oauth && (
             <>
-              <button
+              <Button
+                variant="primary"
                 type="button"
                 disabled={
                   busy ||
@@ -406,7 +395,7 @@ export function McpAuthenticationPanel({
                 }}
               >
                 Start sign-in
-              </button>
+              </Button>
               {authorization?.authorizationUrl && status?.status === "pending" && (
                 <p>
                   <a
@@ -419,7 +408,8 @@ export function McpAuthenticationPanel({
                 </p>
               )}
               {status?.status === "pending" && (status.attemptId ?? authorization?.attemptId) && (
-                <button
+                <Button
+                  variant="quiet"
                   type="button"
                   disabled={busy}
                   onClick={() =>
@@ -430,12 +420,12 @@ export function McpAuthenticationPanel({
                   }
                 >
                   Cancel sign-in
-                </button>
+                </Button>
               )}
             </>
           )}
           {status?.status === "pending" && (
-            <button
+            <Button
               type="button"
               disabled={busy}
               onClick={() => {
@@ -444,9 +434,9 @@ export function McpAuthenticationPanel({
               }}
             >
               Continue in background
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             type="button"
             disabled={busy}
             onClick={() => {
@@ -455,7 +445,7 @@ export function McpAuthenticationPanel({
             }}
           >
             Sign out…
-          </button>
+          </Button>
           {confirmation && (
             <fieldset aria-label="Confirm authentication change">
               <p>
@@ -463,10 +453,15 @@ export function McpAuthenticationPanel({
                   ? `Sign out ${definition.label} in this configuration? This revokes affected connections, clears temporary credentials and attempts removal of owned secure entries. Configured enablement is unchanged.`
                   : `Forget ${reference} for ${definition.label}? Affected connections and OAuth grants are revoked. Other manual references are retained; this reference remains in mcp.json.`}
               </p>
-              <button type="button" disabled={busy} onClick={() => setConfirmation(undefined)}>
+              <Button
+                variant="quiet"
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirmation(undefined)}
+              >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 disabled={busy}
                 onClick={() => {
@@ -483,7 +478,7 @@ export function McpAuthenticationPanel({
                 }}
               >
                 Confirm {confirmation === "sign-out" ? "sign out" : "forget"}
-              </button>
+              </Button>
             </fieldset>
           )}
         </Modal>

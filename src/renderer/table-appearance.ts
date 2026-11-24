@@ -1,9 +1,6 @@
-import type { Theme } from "@glideapps/glide-data-grid";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { TableLines } from "./table-preferences.js";
-import { resolveText, type TextStyles } from "./typography.js";
+import { useEffect, useMemo, useState } from "react";
 
-/** The grid draws on a canvas, so the app's CSS variables are resolved to concrete colors. */
+/** Monaco requires concrete color values rather than CSS token references. */
 export function useCssColors(): (name: string) => string {
   const [version, setVersion] = useState(0);
   useEffect(() => {
@@ -51,58 +48,4 @@ export function useCssColors(): (name: string) => string {
       return value;
     };
   }, [version]);
-}
-
-/** Shared canvas colors, text roles and tracking for real tables and settings previews. */
-export function useTableAppearance(textStyles: TextStyles, lines: TableLines) {
-  const color = useCssColors();
-  const heading = useMemo(() => resolveText(textStyles, "tableHeadings"), [textStyles]);
-  const normal = useMemo(() => resolveText(textStyles, "normalText"), [textStyles]);
-  const cellSize = textStyles.normalText.size ?? 12;
-  const cellTheme = useMemo(() => ({ fontFamily: normal.family }), [normal.family]);
-  const theme = useMemo<Partial<Theme>>(
-    () => ({
-      roundingRadius: 0,
-      accentColor: color("--accent"),
-      accentLight: color("--accent-bg"),
-      textDark: color("--text"),
-      textMedium: color("--muted"),
-      textLight: color("--muted"),
-      textHeader: color("--text"),
-      textHeaderSelected: color("--text"),
-      bgCell: color("--surface"),
-      bgCellMedium: color("--surface-hover"),
-      bgHeader: color("--surface-band"),
-      bgHeaderHasFocus: color("--accent-bg"),
-      bgHeaderHovered: color("--hover-bg"),
-      borderColor: color("--border"),
-      horizontalBorderColor: lines.horizontal ? color("--border") : "transparent",
-      headerBottomBorderColor: lines.heading ? color("--border") : "transparent",
-      fontFamily: heading.family,
-      baseFontStyle: `${normal.weight} ${cellSize}px`,
-      headerFontStyle: `${heading.weight} ${heading.size}px`,
-    }),
-    [color, lines.horizontal, lines.heading, heading, normal.weight, cellSize],
-  );
-
-  // Canvas text ignores CSS letter-spacing, so the typeface's tracking is applied while each cell
-  // and header draws, converted to pixels for the grid's font sizes.
-  const tracking = useMemo(() => {
-    const draw =
-      (pixels: number, spacing: string) =>
-      ({ ctx }: { ctx: CanvasRenderingContext2D }, content: () => void) => {
-        const em = spacing.endsWith("em") ? Number.parseFloat(spacing) : 0;
-        ctx.letterSpacing = `${em * pixels}px`;
-        content();
-        ctx.letterSpacing = "0px";
-      };
-    return { cell: draw(cellSize, "normal"), header: draw(heading.size, heading.spacing) };
-  }, [cellSize, heading]);
-  // Both row tokens use the same resting fill in Light and Dark; selection is separate.
-  const rowTheme = useMemo<Partial<Theme>>(() => ({ bgCell: color("--row-alt") }), [color]);
-  const getRowThemeOverride = useCallback(
-    (row: number) => (row % 2 === 1 ? rowTheme : undefined),
-    [rowTheme],
-  );
-  return { color, heading, normal, cellSize, cellTheme, theme, tracking, getRowThemeOverride };
 }

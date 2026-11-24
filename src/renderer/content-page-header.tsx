@@ -1,7 +1,6 @@
 import { type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { NavigationIcon, type NavigationIconName } from "./navigation-icons.js";
-import { DropdownMenu } from "./neobrutalism/dropdown-menu.js";
+import { DropdownMenu } from "./carbon/dropdown-menu.js";
 
 export interface PageAction {
   id: string;
@@ -70,21 +69,14 @@ function useContentHeader(source: RefObject<HTMLElement | null>, enabled: boolea
   return owner;
 }
 
-export function ContentHeaderSlot({
-  fallback,
-  icon,
-}: {
-  fallback?: string;
-  icon?: NavigationIconName | undefined;
-}) {
+export function ContentHeaderSlot({ fallback }: { fallback?: string }) {
   return (
     <div className="content-page-header-slot">
       {fallback && (
         <header className="content-page-heading content-page-header-fallback">
-          <h2 className="content-page-title">
-            {icon && <NavigationIcon name={icon} />}
+          <h1 className="content-page-title">
             <span className="page-title-text">{fallback}</span>
-          </h2>
+          </h1>
         </header>
       )}
     </div>
@@ -93,7 +85,6 @@ export function ContentHeaderSlot({
 
 export function ContentPageHeader({
   title,
-  icon,
   id,
   as: Heading = "h2",
   ownerKey,
@@ -103,7 +94,6 @@ export function ContentPageHeader({
   pending = false,
 }: {
   title: string;
-  icon?: NavigationIconName | undefined;
   id?: string | undefined;
   as?: "h1" | "h2";
   ownerKey: string;
@@ -118,7 +108,6 @@ export function ContentPageHeader({
   const content = (
     <header className="content-page-heading" inert={pending || undefined}>
       <Heading id={id} className="content-page-title">
-        {icon && <NavigationIcon name={icon} />}
         <span className="page-title-text">{title}</span>
       </Heading>
       {actions.length > 0 && (

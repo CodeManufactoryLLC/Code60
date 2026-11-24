@@ -21,47 +21,40 @@ const render = (changes: Partial<AutomationSummary> = {}, legacy = false) =>
           : { ...job, ...changes }
       }
       api={{} as ApplicationClient}
-      agents={[]}
       active={false}
       open={false}
       busy={false}
       onToggle={vi.fn()}
       onAction={vi.fn()}
-      onSaved={vi.fn()}
+      onHistory={vi.fn()}
+      onEdit={vi.fn()}
     />,
   );
-it("keeps independent run and delete buttons outside a collapsed disclosure", () => {
-  const html = render();
-  expect(html).toContain('aria-expanded="false"');
-  expect(html).toContain('aria-label="Run Daily checks"');
-  expect(html).toContain('aria-label="Delete Daily checks"');
-  expect(html).toContain('hidden=""');
-  const heading = html.slice(html.indexOf("<h3"), html.indexOf("</h3>"));
-  expect(heading).not.toContain("<button");
-  expect(html).toContain('aria-label="Expand Daily checks"');
-  const run = html.indexOf('aria-label="Run Daily checks"');
-  const remove = html.indexOf('aria-label="Delete Daily checks"');
-  const expand = html.indexOf('aria-label="Expand Daily checks"');
-  expect(run).toBeLessThan(remove);
-  expect(remove).toBeLessThan(expand);
-  expect(html).toContain('class="neo-accordion-indicator"');
-  expect(html).toContain("Daily checks (Paused)");
-  expect(html).not.toContain("automation-job-meta");
-  expect(html).not.toContain("droid");
+it("exposes job settings and live state in separate cells before expansion", () => {
+  const html = render({ enabled: true, nextRunAt: "2027-05-16T09:00:00.000Z" });
+  for (const value of [
+    "Expand Daily checks",
+    "Run Daily checks",
+    "Actions for Daily checks",
+    "Enabled",
+    "May",
+    "Idle",
+    "droid",
+  ])
+    expect(html).toContain(value);
+  expect(html).not.toContain("Saved prompt");
 });
-it("uses live run ownership even for a paused schedule and disables deletion", () => {
+it("shows active manual runs independently of paused schedules", () => {
   const html = render({ running: true });
-  expect(html).toContain('aria-label="Stop Daily checks"');
-  expect(html).toContain("is-running");
-  expect(html).toContain("Daily checks (Paused)");
-  expect(html).toMatch(/aria-label="Delete Daily checks"[^>]+disabled=""/);
+  for (const value of ["Stop Daily checks", "Paused", "Running"]) expect(html).toContain(value);
 });
 it("never infers a running job from schedule enablement", () => {
   const html = render({ enabled: true });
   expect(html).toContain('aria-label="Run Daily checks"');
-  expect(html).not.toContain("is-running");
-  expect(html).not.toContain("(Paused)");
+  expect(html).not.toContain(">Running<");
+  expect(html).not.toContain(">Paused<");
 });
 it("disables run controls when an older service cannot report live ownership", () => {
+  expect(render({}, true)).toContain("Unknown");
   expect(render({}, true)).toMatch(/aria-label="Run Daily checks"[^>]+disabled=""/);
 });

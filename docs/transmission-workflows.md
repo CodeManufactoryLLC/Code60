@@ -42,7 +42,7 @@ unstaged and eligible untracked files in an isolated worktree, preserving source
 files, HEAD and staging. Existing snapshot exclusions remain in effect. A worktree
 is not a sandbox. Transmission's Codex harness owns execution permissions.
 
-Use the menu beside **Workflows** for New workflow, Refresh and Workflow history.
+Choose **Workflow sign-in** for the terminal authentication step. Open **Definitions** to create a workflow or edit a copy of a saved definition. Open **Execution history** and select a run to inspect progress, evidence or recovery actions. **Refresh** requests current engine state.
 The player shows accepted tasks, execution time and newest activity. Consecutive tool updates are collapsed by default. Use **Expand tool calls** in the activity card to inspect each update. Expand a
 numbered task for **View Configuration** and available verifier **View Results**.
 Reports include the verifier's verdict and check evidence. Expand **Workflow details**

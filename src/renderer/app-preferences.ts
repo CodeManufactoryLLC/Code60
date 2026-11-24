@@ -1,13 +1,5 @@
-import { useEffect, useLayoutEffect, useState } from "react";
-import {
-  defaultSidebarAppearance,
-  observeColorScheme,
-  parseSidebarAppearance,
-  parseTheme,
-  sidebarAppearanceProperties,
-  type Theme,
-} from "./appearance.js";
-import { defaultIconAppearance, parseIconAppearance } from "./icon-appearance.js";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { observeColorScheme, parseTheme, type Theme } from "./appearance.js";
 import {
   parseFitColumns,
   parseRowDensity,
@@ -16,55 +8,25 @@ import {
   type TableLines,
 } from "./table-preferences.js";
 import { parseChartTick } from "./ticker.js";
-import { transitionTimeProperties, useTransitionTimes } from "./transition-times.js";
-import { parseTextStyles, type TextStyles, textStyleProperties } from "./typography.js";
+import { defaultTextStyles, parseTextStyles, type TextStyles } from "./typography.js";
 
 export function useAppPreferences() {
   const [theme, setTheme] = useState<Theme>(() => parseTheme(localStorage.getItem("code60.theme")));
-  const [sidebarAppearance, setSidebarAppearance] = useState(() => {
-    try {
-      return parseSidebarAppearance(localStorage.getItem("code60.sidebarAppearance"));
-    } catch {
-      return defaultSidebarAppearance;
-    }
-  });
-  const [sidebarAppearanceSaved, setSidebarAppearanceSaved] = useState(true);
-  useLayoutEffect(() => {
-    for (const [property, value] of Object.entries(sidebarAppearanceProperties(sidebarAppearance)))
-      document.documentElement.style.setProperty(property, value);
-    try {
-      localStorage.setItem("code60.sidebarAppearance", JSON.stringify(sidebarAppearance));
-      setSidebarAppearanceSaved(true);
-    } catch {
-      setSidebarAppearanceSaved(false);
-    }
-  }, [sidebarAppearance]);
-  const [iconAppearance, setIconAppearance] = useState(() => {
-    try {
-      return parseIconAppearance(localStorage.getItem("code60.iconAppearance"));
-    } catch {
-      return defaultIconAppearance;
-    }
-  });
-  const [iconAppearanceSaved, setIconAppearanceSaved] = useState(true);
-  useLayoutEffect(() => {
-    document.documentElement.dataset.monochrome = iconAppearance.monochrome ? "on" : "off";
-    document.documentElement.dataset.iconAnimations = iconAppearance.animations ? "on" : "off";
-    try {
-      localStorage.setItem("code60.iconAppearance", JSON.stringify(iconAppearance));
-      setIconAppearanceSaved(true);
-    } catch {
-      setIconAppearanceSaved(false);
-    }
-  }, [iconAppearance]);
-  const transitionTimes = useTransitionTimes();
-  useLayoutEffect(() => {
-    for (const [property, value] of Object.entries(transitionTimeProperties(transitionTimes)))
-      document.documentElement.style.setProperty(property, value);
-  }, [transitionTimes]);
-  const [textStyles, setTextStyles] = useState<TextStyles>(() =>
+  const [storedText, setStoredText] = useState<TextStyles>(() =>
     parseTextStyles(localStorage.getItem("code60.textStyles")),
   );
+  const textStyles = useMemo(
+    () => ({ ...defaultTextStyles, normalText: { size: storedText.normalText.size } }),
+    [storedText.normalText.size],
+  );
+  const setTextStyles = (next: TextStyles) => {
+    const saved = {
+      ...storedText,
+      normalText: { ...storedText.normalText, size: next.normalText.size },
+    };
+    localStorage.setItem("code60.textStyles", JSON.stringify(saved));
+    setStoredText(saved);
+  };
   const [focusHighlight, setFocusHighlight] = useState(
     () => localStorage.getItem("code60.focusHighlight") === "on",
   );
@@ -93,12 +55,10 @@ export function useAppPreferences() {
   }, [theme]);
 
   useEffect(() => {
-    for (const [key, value] of Object.entries(textStyleProperties(textStyles))) {
-      if (value === undefined) document.documentElement.style.removeProperty(key);
-      else document.documentElement.style.setProperty(key, value);
-    }
-    localStorage.setItem("code60.textStyles", JSON.stringify(textStyles));
-  }, [textStyles]);
+    document.documentElement.style.fontSize = storedText.normalText.size
+      ? `${storedText.normalText.size}px`
+      : "";
+  }, [storedText.normalText.size]);
 
   useEffect(() => {
     document.documentElement.dataset.focusHighlight = focusHighlight ? "on" : "off";
@@ -127,12 +87,6 @@ export function useAppPreferences() {
   }, [fit]);
 
   return {
-    iconAppearance,
-    setIconAppearance,
-    iconAppearanceSaved,
-    sidebarAppearance,
-    setSidebarAppearance,
-    sidebarAppearanceSaved,
     theme,
     setTheme,
     textStyles,

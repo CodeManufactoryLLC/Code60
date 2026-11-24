@@ -1,107 +1,60 @@
-.mcp-servers-page {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
+.mcp-workspace {
   flex: 1;
-}
-.mcp-notice {
-  margin: 0;
-}
-.mcp-details {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 12px;
-}
-.mcp-form {
-  max-height: 70vh;
+  min-height: 0;
   overflow: auto;
-  padding: 4px;
+  padding-block-end: 2rem;
 }
-.mcp-form > fieldset {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  border: 0;
-  margin: 0;
-  padding: 0;
-}
-.mcp-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.mcp-form textarea,
-.mcp-form input,
-.mcp-form select {
-  width: 100%;
-  box-sizing: border-box;
-}
+.mcp-workspace-controls,
+.mcp-json-actions,
+.mcp-details,
 .mcp-binding {
   display: flex;
   align-items: end;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-block: 8px;
-}
-.mcp-binding label {
-  flex: 1;
-  min-width: 120px;
-}
-
-.mcp-workspace {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  flex: 1;
-  min-height: 0;
+  gap: 0.5rem 1rem;
 }
 .mcp-workspace-controls,
-.mcp-json-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
+.mcp-details,
+.mcp-maintenance > [aria-label="MCP troubleshooting"] {
+  margin-block-start: 1rem;
+}
+.mcp-servers-page,
+.mcp-form > fieldset,
+.mcp-form .settings-group,
+.mcp-authentication fieldset {
+  display: grid;
+  min-inline-size: 0;
+  gap: 1rem;
+}
+.mcp-notice,
+.mcp-form fieldset,
+.mcp-authentication fieldset {
+  margin: 0;
+}
+.mcp-form fieldset,
+.mcp-authentication fieldset {
+  padding: 0;
+  border: 0;
+}
+.mcp-form .cds--btn,
+.mcp-authentication fieldset > .cds--btn {
+  justify-self: start;
+}
+.mcp-binding > .cds--form-item,
+.mcp-binding > .cds--select {
+  flex: 1 1 9rem;
+  min-inline-size: 0;
 }
 .mcp-json-editor {
-  min-height: 360px;
-  flex: 1;
+  min-block-size: 24rem;
+  block-size: 50vh;
 }
 .mcp-backup-preview {
-  max-height: 40vh;
+  max-block-size: 40vh;
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-
 .mcp-authentication p {
   overflow-wrap: anywhere;
-}
-.mcp-authentication fieldset {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border: 0;
-  padding: 0;
-  margin-block: 16px;
-}
-.mcp-authentication label {
-  display: block;
-}
-.mcp-authentication select {
-  width: 100%;
-}
-.mcp-authentication label:has(input[type="radio"]),
-.mcp-authentication label:has(input[type="checkbox"]) {
-  display: flex;
-  align-items: start;
-  gap: 8px;
-}
-.setup-dialog.mcp-authentication input[type="radio"] {
-  display: inline-grid;
-  width: 18px;
-  flex: 0 0 18px;
-  margin: 2px 0 0;
 }

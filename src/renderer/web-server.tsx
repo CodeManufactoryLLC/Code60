@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ApplicationClient, WebServerCode, WebServerStatus } from "../bridge/index.js";
 import { copyText } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Switch as CarbonSwitch } from "./carbon/switch.js";
 import { PageTitle } from "./page-title.js";
 
 export function WebServerPage({ api, visible }: { api: ApplicationClient; visible: boolean }) {
@@ -91,17 +93,14 @@ export function WebServerPage({ api, visible }: { api: ApplicationClient; visibl
     <main className="web-server-page" aria-label="Web Server Beta">
       <PageTitle page="web-server" />
       <section className="settings-group web-server-controls" aria-label="LAN access">
-        <label className="settings-row">
-          Enable Web Server Beta
-          <input
-            type="checkbox"
-            role="switch"
+        <div className="settings-row">
+          <CarbonSwitch
+            labelText={<>Enable Web Server Beta</>}
             checked={status?.enabled ?? false}
-            aria-checked={status?.enabled ?? false}
             disabled={busy || !status?.canManage}
-            onChange={(event) => void change(event.target.checked)}
+            onChange={(checked) => void change(checked)}
           />
-        </label>
+        </div>
         <p role="status">
           {!status
             ? "Loading…"
@@ -120,9 +119,9 @@ export function WebServerPage({ api, visible }: { api: ApplicationClient; visibl
         )}
         {(error || status?.error) && <p role="alert">{error || status?.error}</p>}
         {status?.canManage && status.state === "unavailable" && (
-          <button type="button" disabled={busy} onClick={() => void change(true)}>
+          <AppButton type="button" disabled={busy} onClick={() => void change(true)}>
             Retry
-          </button>
+          </AppButton>
         )}
         {status?.state === "listening" && status.canManage && (
           <div className="web-server-pairing">
@@ -132,18 +131,18 @@ export function WebServerPage({ api, visible }: { api: ApplicationClient; visibl
                 <span>
                   Expires in {Math.max(0, Math.ceil((code.expiresAt - now) / 1000))} seconds
                 </span>
-                <button
+                <AppButton
                   type="button"
                   disabled={busy}
                   onClick={() => void action(() => copyText(code.code))}
                 >
                   Copy code
-                </button>
+                </AppButton>
               </>
             )}
-            <button type="button" disabled={busy} onClick={() => void action(newCode)}>
+            <AppButton type="button" disabled={busy} onClick={() => void action(newCode)}>
               {code ? "New code" : "Generate pairing code"}
-            </button>
+            </AppButton>
           </div>
         )}
         {status && !status.canManage && (

@@ -6,8 +6,8 @@ it("offers four labelled sliders, exact 0–30000 ms fields, help and reset in A
   const html = renderToStaticMarkup(<TransitionSettings />);
   expect(html).toContain("Transitions");
   expect(html).toContain("Reset transitions");
-  expect(html.match(/type="range"/g)).toHaveLength(4);
-  expect(html.match(/type="number" min="0" max="30000" step="1"/g)).toHaveLength(4);
+  expect(html.match(/role="slider"/g)).toHaveLength(4);
+  expect(html.match(/<input[^>]*type="number"[^>]*min="0" max="30000" step="1"/g)).toHaveLength(4);
   for (const label of ["Reply entrance", "Scroll response", "Activity fade", "Activity dropdown"]) {
     expect(html).toContain(label);
     expect(html).toContain(`aria-label="${label} in milliseconds"`);

@@ -69,7 +69,7 @@ it("provides labelled guided fields, unverified credential guidance and stale-sa
   expect(html).toContain('aria-label="Headers prefix 1"');
   expect(html).toContain("Credential references are unverified");
   expect(html).toContain("Reload before saving");
-  expect(html).toMatch(/type="submit" disabled/);
+  expect(html.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).toMatch(/\sdisabled(?:=|\s|>)/);
   expect(html).not.toContain("Sign in");
   expect(html).not.toContain("Test connection");
 });
