@@ -74,10 +74,33 @@ describe("browser and package validation", () => {
       ),
     ).toBe(true);
     for (const command of ["npm run test:uninstall", "npm run test:uninstall:engines"])
-      expect(nativeTests.jobs.test.steps.some((step) => step.run === command)).toBe(true);
+      expect(nativeTests.jobs.uninstall.steps.some((step) => step.run === command)).toBe(true);
+    expect(nativeTests.jobs.uninstall.needs).toBe("test");
+    expect(nativeTests.jobs.test["timeout-minutes"]).toBe(45);
+    expect(nativeTests.jobs.uninstall["timeout-minutes"]).toBe(35);
+    expect(nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:uninstall")).toBe(
+      false,
+    );
+    const steps = nativeTests.jobs.uninstall.steps;
+    const download = steps.findIndex((step) => step.uses?.startsWith("actions/download-artifact@"));
+    expect(steps[download].with).toEqual({
+      name: "code60-darwin-payload",
+      path: "release/payloads/",
+    });
+    const verify = steps.findIndex(
+      (step) => step.run === "npm run verify:artifact -- release/payloads/darwin-arm64.json",
+    );
+    expect(download).toBeLessThan(verify);
+    expect(verify).toBeLessThan(steps.findIndex((step) => step.run === "npm run test:uninstall"));
+    expect(steps[0].with).toMatchObject({
+      ref: expect.stringMatching(/^\$\{\{ inputs\.ref \}\}$/),
+      "persist-credentials": false,
+    });
+    expect(steps[0].with.ref).toBe(nativeTests.jobs.test.steps[0].with.ref);
     expect(
-      nativeTests.jobs.test.steps.find((step) => step.with?.name === "native-installation-evidence")
-        .with.path,
+      nativeTests.jobs.uninstall.steps.find(
+        (step) => step.with?.name === "native-uninstall-evidence",
+      ).with.path,
     ).toContain("test-results/uninstall/");
     expect(
       ci.jobs.payload.steps.find((step) => step.with?.name === "payload-acceptance-evidence").with

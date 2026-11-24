@@ -36,8 +36,6 @@ jobs:
       - run: npm run test:payload
       - run: npm run test:setup
       - run: npm run test:update
-      - run: npm run test:uninstall
-      - run: npm run test:uninstall:engines
       # Payload verification makes each actual update expensive on this runner.
       # Keep whole journeys and their existing deadlines; retain every batch.
       - name: Native retained and restart regressions
@@ -60,8 +58,6 @@ jobs:
             test-results/installation/
             test-results/setup/
             test-results/update/
-            test-results/uninstall/
-            test-results/uninstall-engines/
             test-results/payload/
             test-results/transmission-native/
           retention-days: 7
@@ -75,3 +71,38 @@ jobs:
             retention-days: 7,
             if-no-files-found: ignore,
           }
+  uninstall:
+    name: Native installed uninstall acceptance
+    needs: test
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with: { node-version: "24", cache: npm, package-manager-cache: false }
+      - name: Verify Apple Silicon runner
+        run: test "$(uname -m)" = arm64
+      - run: npm ci
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: code60-darwin-payload
+          path: release/payloads/
+      - run: npm run verify:artifact -- release/payloads/darwin-arm64.json
+      - run: npm run build
+      - run: npm run build:distribution
+      - run: npx --no-install playwright install chromium
+      - run: npm run test:uninstall
+      - run: npm run test:uninstall:engines
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: native-uninstall-evidence
+          path: |
+            test-results/artifact-handoff/
+            test-results/uninstall/
+            test-results/uninstall-engines/
+          retention-days: 7
+          if-no-files-found: warn

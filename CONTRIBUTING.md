@@ -477,3 +477,6 @@ provider-boundary request counts must show no repeated work. The Linux golden
 journey keeps application trees read-only; only the separately inspected maintenance
 customer receives writable test installation volumes. Keep Docker cleanup failures
 unresolved until exact run-labelled inventories can be inspected again.
+Manual native CI validates uninstall on a fresh dependent runner using the exact
+payload from its baseline job. The artifact handoff must match the clean source
+commit/version/platform and archive hash before tests run; both jobs are required.

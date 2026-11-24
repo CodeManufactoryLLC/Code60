@@ -85,4 +85,10 @@ The [native workflow](.github/workflows/native-tests.yml) runs existing regressi
 and each complete update journey in separate, sequential single-worker batches.
 This preserves their original per-journey and suite deadlines on the slower hosted
 runner; all batches are required and retain separate trace directories.
+Uninstall and idle-engine removal run in a separate dependent Apple Silicon job,
+using that same tested payload. `npm run verify:artifact` checks its clean commit,
+version, platform, byte count and SHA-256 against the consumer's source checkout
+before installation. Both native jobs must pass. The baseline job retains its
+45-minute limit and existing journey deadlines; the extra job retains its own
+bounded acceptance and always uploads handoff/uninstall evidence.
 This validation installs no real login service and uses no live provider.
