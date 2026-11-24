@@ -36,6 +36,7 @@ describe("page tabs", () => {
         "provider",
         "mcp-servers",
         "workflows",
+        "web-server",
       ],
       active: "chat",
     });

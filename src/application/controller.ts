@@ -7,6 +7,7 @@ import type {
   Action,
   ActionResult,
   ChatUndoResult,
+  CodexSetupIdentity,
   Command,
   DeleteCommand,
   DesktopRun,
@@ -209,6 +210,7 @@ import { BrowserAutomation } from "./browser-automation.js";
 import { ChatCheckpoints } from "./chat-checkpoints.js";
 import { savedChatReferences } from "./chat-reference.js";
 import { ChatStore } from "./chat-store.js";
+import { createCodexProvider } from "./codex-provider.js";
 import {
   type ChatSession,
   ConversationCoordinator,
@@ -256,6 +258,7 @@ import { ProjectSessionStore } from "./project-session.js";
 import { type OpenProjectDatabase, type ProjectDatabase, SCHEMA } from "./projects.js";
 import { effectivePrompts, promptStates } from "./prompt-templates.js";
 import { desktopConfig, detectProvider } from "./provider-catalog.js";
+import { createProviderRuntime, providerAgents } from "./provider-runtime.js";
 import { type RagExecutor, RagService } from "./rag-service.js";
 import { mergeRagEvents, ragProjectSources } from "./rag-sources.js";
 import { RAG_LIMITS } from "./rag-store.js";
@@ -264,6 +267,7 @@ import { RelayFiles } from "./relay-files.js";
 import { ReviewStore } from "./reviews.js";
 import { summarizeRun } from "./run-summary.js";
 import { type PollOwner, ScopedPoller } from "./scoped-poller.js";
+import { inspectSetupDatabase, prepareSetupDatabase } from "./setup-database.js";
 import { captureTask, taskDelivery } from "./tactic-context.js";
 
 export interface DesktopDialogs {
@@ -282,6 +286,8 @@ export interface DesktopStorage {
   openDatabase: OpenProjectDatabase;
   preferences: DesktopPreferences;
   detectAgent?: typeof detectProvider;
+  providerFetch?: typeof fetch;
+  providerDownload?: typeof import("./provider-archive.js").downloadProviderArtifact;
   refreshPath?: (signal: AbortSignal) => Promise<void>;
 }
 
@@ -2417,8 +2423,9 @@ export class ApplicationHost {
       });
   }
 
+  private readonly deps: CoreDeps;
   constructor(
-    private readonly deps: CoreDeps,
+    dependencies: CoreDeps,
     private readonly env: Readonly<Record<string, string | undefined>>,
     private readonly dialogs: DesktopDialogs,
     private readonly storage: DesktopStorage,
@@ -2469,6 +2476,9 @@ export class ApplicationHost {
       ),
       this.authentication,
     );
+
+    const deps = { ...dependencies, agents: providerAgents(dependencies.agents, this.env) };
+    this.deps = deps;
     this.modelDefaults = new ModelDefaults(storage.preferences, () => this.changed(null));
     this.memory = new MemoryService(
       join(stateHome(env), "code60", "memory"),
@@ -2517,7 +2527,14 @@ export class ApplicationHost {
       storage.ragModelRoot ?? fileURLToPath(new URL("../../models/", import.meta.url)),
       storage.ragExecutor,
     );
+    const codexProvider = createCodexProvider(this.env);
+    const providers = createProviderRuntime(this.env, {
+      fetch: storage.providerFetch,
+      download: storage.providerDownload,
+    });
     this.agentSetup = new AgentSetup({
+      codex: codexProvider,
+      providers: providers.policies,
       command: (id) => this.config?.agents[id]?.command,
       detect: async (id, command, signal) => {
         if (this.storage.refreshPath) await this.storage.refreshPath(signal);
@@ -2527,7 +2544,15 @@ export class ApplicationHost {
             await desktopPath({ env: this.env, signal }),
           );
         signal.throwIfAborted();
-        await (this.storage.detectAgent ?? detectProvider)(id, command, this.env);
+        if (id === "codex") {
+          const managed = await codexProvider.environment();
+          if (managed.PATH) setEnvironmentPath(this.env as NodeJS.ProcessEnv, managed.PATH);
+        }
+        await (this.storage.detectAgent ?? detectProvider)(
+          id,
+          command,
+          id === "codex" ? this.env : await providers.environment(id),
+        );
         signal.throwIfAborted();
       },
       probe: (id, command, signal) =>
@@ -2853,6 +2878,37 @@ export class ApplicationHost {
   }
   cancelAgentSetup(request?: SetupIdentity): Promise<void> {
     return this.agentSetup.cancel(request);
+  }
+  startCodexSetup(request: SetupIdentity, owner: string, install: boolean) {
+    return this.exclusive(async () => {
+      await this.setConfig(desktopConfig(await loadConfig(this.deps.fs, this.env)));
+      return this.agentSetup.startCodex(request, owner, install);
+    });
+  }
+  startProviderSetup(
+    request: import("../bridge/index.js").ProviderSetupStart,
+    owner: string,
+    install: boolean,
+  ) {
+    return this.agentSetup.startProvider(request, owner, install);
+  }
+  readProviderSetup(request: import("../bridge/index.js").ProviderSetupIdentity, owner: string) {
+    return this.agentSetup.readProvider(request, owner);
+  }
+  submitProviderSetup(
+    request: import("../bridge/index.js").ProviderSetupSubmission,
+    owner: string,
+  ) {
+    this.agentSetup.submitProvider(request, owner);
+  }
+  cancelProviderSetup(request: import("../bridge/index.js").ProviderSetupIdentity, owner: string) {
+    return this.agentSetup.cancelProvider(request, owner);
+  }
+  readCodexSetup(request: CodexSetupIdentity, owner: string) {
+    return this.agentSetup.readCodex(request, owner);
+  }
+  cancelCodexSetup(request: CodexSetupIdentity, owner: string) {
+    return this.agentSetup.cancelCodex(request, owner);
   }
   abandonAgentSetup(request: SetupIdentity): Promise<void> {
     return this.exclusive(() => this.agentSetup.abandon(request));
@@ -5197,12 +5253,15 @@ export class ApplicationHost {
       }
       let path: string | undefined;
       try {
-        path = await this.storage.preferences.read();
+        path = this.storage.preferences.selection
+          ? (await this.storage.preferences.selection()).path
+          : await this.storage.preferences.read();
       } catch (error) {
         this.databaseError = `Could not read the saved database setting: ${message(error)}`;
       }
       if (path !== undefined) {
         try {
+          if (this.storage.preferences.selection) await inspectSetupDatabase(path);
           const database = this.storage.openDatabase(path, false);
           this.attach(database);
           emitLog(this.deps.log, {
@@ -5225,6 +5284,43 @@ export class ApplicationHost {
       this.changed();
       this.poller.context(this.active);
     });
+  }
+
+  /** Private management-only setup; never replaces a connected database or invokes browser dialogs. */
+  prepareInitialDatabase(): Promise<{ state: "ready" }> {
+    return this.exclusive(async () => {
+      const path = await prepareSetupDatabase(
+        this.env,
+        this.storage.preferences,
+        this.database?.path,
+      );
+      if (!this.database) {
+        const database = this.storage.openDatabase(path, false);
+        try {
+          this.projectHost.replaceDatabase();
+          this.projectHost.run(this.projectHost.fallback, () => {
+            this.attach(database);
+            this.changed();
+          });
+        } catch (error) {
+          database.close();
+          throw error;
+        }
+      }
+      return { state: "ready" as const };
+    });
+  }
+
+  async initialDatabaseStatus(): Promise<{ state: "ready" | "not-selected" | "unavailable" }> {
+    try {
+      const selected = await this.storage.preferences.selection?.();
+      if (!selected) return { state: "unavailable" };
+      if (!selected.path) return { state: "not-selected" };
+      await inspectSetupDatabase(selected.path);
+      return { state: this.database?.path === selected.path ? "ready" : "unavailable" };
+    } catch {
+      return { state: "unavailable" };
+    }
   }
 
   /** Connects to another database. On failure the current connection stays in use. */

@@ -151,7 +151,10 @@ test("browser: custom assistant, memory settings and manual update information s
     await memory.check();
     await expect(memory).toBeChecked();
     await app(page, "Update Manager");
-    await expect(page.locator(".updates-page, #app-updates").first()).toContainText("manual");
+    await expect(page.locator(".updates-page, #app-updates").first()).toContainText(
+      "code60 update",
+    );
+    await expect(page.locator("#app-updates")).toContainText("Installed version:");
     await page.setViewportSize({ width: 900, height: 760 });
     await page.screenshot({ path: test.info().outputPath("browser-manual-update.png") });
     expect(await readFile(join(fixture.directory, "projects.sqlite"))).toBeTruthy();

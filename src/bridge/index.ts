@@ -431,6 +431,13 @@ export interface ApplicationClient {
     request: import("./index.js").McpMoveRequest,
   ): Promise<import("./index.js").McpManagementResult>;
   onMcpChanged(listener: () => void): () => void;
+
+  webServerStatus?(): Promise<import("./web-server.js").WebServerStatus>;
+  setWebServerEnabled?(request: {
+    enabled: boolean;
+  }): Promise<import("./web-server.js").WebServerStatus>;
+  createWebServerCode?(): Promise<import("./web-server.js").WebServerCode>;
+
   workflow(request: import("./workflows.js").WorkflowRequest): Promise<unknown>;
   modelDefault?(request: import("./model-defaults.js").ModelDefaultAction): Promise<void>;
   customAgent?(
@@ -505,6 +512,27 @@ export interface ApplicationClient {
   providerAction(request: import("./agent-setup.js").ProviderAction): Promise<void>;
   beginAgentSetup(request: SetupBegin): Promise<void>;
   attemptAgentSetup(request: SetupAttempt): Promise<void>;
+  installProviderForSetup?(
+    request: import("./agent-setup.js").ProviderSetupStart,
+  ): Promise<import("./agent-setup.js").CodexSetupStarted>;
+  loginProviderForSetup?(
+    request: import("./agent-setup.js").ProviderSetupStart,
+  ): Promise<import("./agent-setup.js").CodexSetupStarted>;
+  readProviderSetup?(
+    request: import("./agent-setup.js").ProviderSetupIdentity,
+  ): Promise<import("./agent-setup.js").ProviderSetupProgress>;
+  submitProviderSetup?(request: import("./agent-setup.js").ProviderSetupSubmission): Promise<void>;
+  cancelProviderSetup?(request: import("./agent-setup.js").ProviderSetupIdentity): Promise<void>;
+  installCodexForSetup?(
+    request: SetupIdentity,
+  ): Promise<import("./agent-setup.js").CodexSetupStarted>;
+  loginCodexForSetup?(
+    request: SetupIdentity,
+  ): Promise<import("./agent-setup.js").CodexSetupStarted>;
+  readCodexSetup?(
+    request: import("./agent-setup.js").CodexSetupIdentity,
+  ): Promise<import("./agent-setup.js").CodexSetupProgress>;
+  cancelCodexSetup?(request: import("./agent-setup.js").CodexSetupIdentity): Promise<void>;
   cancelAgentSetup(request: SetupIdentity): Promise<void>;
   finishAgentSetup(request: SetupIdentity): Promise<void>;
   abandonAgentSetup(request: SetupIdentity): Promise<void>;
@@ -1130,4 +1158,6 @@ export {
 export * from "./gateway.js";
 export * from "./reviews.js";
 export { parseTaskAction, type TaskAction, type TaskView } from "./tasks.js";
+
+export * from "./web-server.js";
 export * from "./workflows.js";

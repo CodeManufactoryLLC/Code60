@@ -168,7 +168,8 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     expect(Object.keys(metadata.approvals)).toHaveLength(1);
     await page.getByRole("button", { name: "JSON", exact: true }).click();
     await page.locator(".mcp-json-editor .inputarea").focus();
-    await page.keyboard.press("Control+End");
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.press("ArrowRight");
     await page.keyboard.insertText(" ");
     await page.getByRole("tab", { name: "Apps", exact: true }).click();
     await apps(page);

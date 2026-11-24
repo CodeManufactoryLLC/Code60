@@ -735,9 +735,40 @@ results establish completion. No assertions, timeouts, coverage floors or Knip
 exclusions were relaxed. Capability descriptors/availability tests and the generated
 catalog describe the delivered human-only recovery and troubleshooting operations.
 
-Delivery is one DCO-signed phase 7 commit on `mcp-connectors`, pushed to existing
-**draft PR #317**. The PR remains draft; known conflicts with main are a separate
-integration task and no merge/release-readiness claim is made. Dedicated integrations,
+Phase 7 delivery was one DCO-signed commit on `mcp-connectors`, pushed to existing
+**draft PR #317**. At that delivery checkpoint the PR remained draft, with main
+integration outstanding and no merge/release-readiness claim. Dedicated integrations,
 Code60-owned/shared registrations/client IDs/secrets, hosted authentication,
 migrations and legacy SSE remain excluded. Runtime support remains tools only;
 pre-bundled Playwright/Context7 definitions remain optional disabled templates.
+
+### Main integration follow-up — 2026-11-24
+
+At the user's request, integrate `origin/main` at
+`fb74080e7d2d9eb216fc1cec23c3f43548fa6024` and prepare PR #317 for review.
+Preserve phases 1–7 alongside the newer setup, update, provider installation/login,
+Transmission and LAN workflows. MCP screens use the shared HTTP-safe ID/clipboard
+helpers. The installer distribution selects an explicit Node-only platform index;
+its closure verifier continues to reject third-party/application dependencies.
+Native fixtures use canonical roots and platform-aware editor shortcuts. The fake
+ACP provider rejects requests after adapter exit instead of waiting for its timer.
+
+Native macOS arm64 / Node 24 validation: full one-worker `npm run check` PASS,
+350 files / 3,433 tests, all four unchanged coverage gates. Full browser rerun PASS,
+53 journeys with the Linux-only unavailable-Secret-Service scenario skipped;
+separate first-use/acceptance/automatic edits/reload/Undo PASS. Native package,
+installed CLI/backend/assets/local JSON worker/offline model, and packaged MCP
+adapter initialization/discovery/call/revocation PASS. Independently verified the
+owned native prefix, PID and listener were removed. Fixture contexts, gateways and
+processes closed. Retain caches, previous/new tarballs and failed evidence under
+`test-results/qa/mcp-connectors-main-merge/`.
+
+Docker validation remains BLOCKED by the unavailable/hung daemon. No containers or
+images were created, restarted or removed for this integration; only the owned
+hung read-only Docker CLI was terminated. The documented native workflow supplied
+the validation above, without changing shared Docker settings. No test assertion,
+timeout, coverage floor or broad Knip exclusion was relaxed. The capability catalog
+was regenerated with both branches' existing product operations. Delivery is a
+DCO-signed merge commit, followed by the requested push and ready-for-review PR
+transition. This does not merge the PR into main or prepare a release; all agreed
+MCP scope exclusions remain unchanged.

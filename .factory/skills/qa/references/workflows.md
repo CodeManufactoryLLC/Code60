@@ -1,5 +1,55 @@
 # User workflow cards
 
+## Explicit update and recovery
+
+- Start from a real isolated managed installation with a valid custom database,
+  verified fake provider and synthetic Git project. Obtain a newer stable
+  bootstrap through internal registry transport injection; verify its integrity
+  and embedded descriptors as data, without executing its code.
+- Assert that preparation and declined consent preserve the original backend PID
+  and current activation. With consent, verify full quiescence and PID exit before
+  publication, then new-version authenticated readiness through the durable launcher.
+  Complete the shared golden journey, including attachment, refresh and both Undo decisions.
+- Compare database/preferences, Git/index/HEAD/worktrees and retained prior files
+  independently. On native macOS, keep staging.18/.20 version/Node/run/start-key/PID
+  identities through the update while approved independent work continues.
+- Fault registry/hash, shutdown, registration, readiness and publication boundaries.
+  Recovery retains whichever generation was published, never downgrades a database,
+  replays work, overwrites outside service edits or reclaims uncertain locks.
+- Use bounded supervisor fixtures only; retain logs/traces and unique artifact,
+  process/container/image/volume identities. Verify cleanup without touching other
+  agents' state. Real login/reboot certification remains separate Phase 9 work.
+
+## Bundled Transmission
+
+- **Start:** native macOS arm64, freshly prepared locked bundle, isolated HOME,
+  config/data/state and synthetic Git repository with staged and unstaged edits.
+  Use the real pinned Transmission, ACP adapter and native Codex; fake only the
+  external model endpoint and the separate application provider.
+- **Actions:** verify the application provider visibly, manually review/start a
+  workflow, pause/resume and queue guidance. Close the browser and stop/restart
+  the backend while the engine is active; reopen through visible Start/history.
+  Complete verification and inspect the retained worktree and accepted diff.
+  Separately exercise cancellation, uncertain starts and both legacy versions.
+- **Invariants:** reads/review do not launch anything. Original state roots,
+  start keys, run IDs, engine PID and executable/runtime bindings survive backend
+  replacement. Wait for guidance acknowledgement and its persisted engine event
+  before detaching. Source files/index/HEAD stay unchanged; native tools write only
+  the dedicated worktree. After visible Start, distinguish cold bundle/engine
+  readiness from the first model request with bounded read-only health checks;
+  a readiness probe must never launch the engine or replace user approval.
+  Trap runtime npm/npx/compiler calls. Do not seed login
+  or infer Transmission credentials from application provider verification. An
+  unavailable application CODEX_PATH must not replace the bundled workflow runtime.
+- **Evidence:** `npm run test:transmission` after native packaging, with traces,
+  screenshots, artifact/native identities, independent Git/filesystem assertions
+  and every owned engine/provider/helper PID verified gone. Preserve failures;
+  scripted HTTP engine tests remain independent protocol/UI regression coverage.
+  Hosted native validation runs the original regressions and two complete update
+  shards sequentially with one worker and separate output directories. Verify
+  collection covers the full suite exactly once before changing selectors;
+  Playwright matches file-prefixed titles. Keep journey/suite deadlines unchanged.
+
 Use synthetic projects and isolated private state. Each card is a user journey,
 not a claim that all of its steps are already automated. Check current selectors
 and supported controls before extending tests. Retain evidence under ignored
@@ -32,6 +82,18 @@ and supported controls before extending tests. Retain evidence under ignored
   in synthetic artifacts, Git/index comparisons, retained failure trace.
 - **Cleanup:** close the isolated backend, verify owned processes gone, remove isolated fixture
   only after checks; retain artifacts/cache; no native service is installed.
+
+## Setup-created database first use
+
+- Start with isolated empty state and invoke the actual packaged setup entry with
+  internal artifact transport injection and a bounded backend supervisor fixture.
+- Default-no/non-TTY setup reports files-only success; explicit service consent
+  reaches authenticated readiness and database preparation without provider authority.
+- Remove transient caches, run the persistent launcher elsewhere and complete the
+  shared golden journey with provider verification and project choice through UI.
+- Compare database/preferences, exact Git/index/HEAD/worktree state, process identity,
+  repeat/restart/pairing behavior and owned cleanup. Keep manual-database coverage.
+- Real native login lifecycle remains separately isolated Phase 9 coverage.
 
 ## First use and reopening
 

@@ -6,6 +6,7 @@ import type {
   McpRecoveryReview,
   McpTargetAddress,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import { Modal } from "./modal.js";
 
 /** Reviewing recovery never replaces a working draft or grants connector authority. */
@@ -224,7 +225,7 @@ export function McpRecoveryPanel({
                           target,
                           expectedRevision,
                         })),
-                        requestId: crypto.randomUUID(),
+                        requestId: randomId(),
                       })
                     }
                   >

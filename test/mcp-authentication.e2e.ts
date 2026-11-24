@@ -31,8 +31,8 @@ async function edit(page: Page, text: string) {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.evaluate((value) => navigator.clipboard.writeText(value), text);
   await page.locator(".mcp-json-editor .inputarea").focus();
-  await page.keyboard.press("Control+a");
-  await page.keyboard.press("Control+v");
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("ControlOrMeta+v");
 }
 const reachable = (port: number) =>
   new Promise<boolean>((resolve) => {
@@ -132,7 +132,7 @@ test("MCP credentials: unavailable persistent storage never silently becomes tem
     "Uses a deliberately absent private Linux Secret Service address",
   );
   const remote = await oauthServer(),
-    fixture = await browserApp(browser, ["--relay", "--session-info"], true, {
+    fixture = await browserApp(browser, ["--relay", "--session-info"], true, false, undefined, {
       DBUS_SESSION_BUS_ADDRESS: "unix:path=/tmp/code60-nonexistent-synthetic-secret-service",
     });
   const secret = `synthetic-${randomUUID()}`;

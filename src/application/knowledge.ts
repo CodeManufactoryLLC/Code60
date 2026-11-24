@@ -263,6 +263,17 @@ export class DesktopKnowledge {
       reason =
         "Project homes remain available without an open chat; closing the last chat creates no replacement.";
       action = "Use New Session on the project home to explicitly create a chat.";
+    } else if (cap.id === "web-server") {
+      status = "unknown";
+      reason =
+        "The page is available without a database or provider. Listener availability depends on the host LAN and, in a container, the owned start launcher; awareness does not probe or enable it.";
+      action =
+        "Open Settings → Advanced → Web Server Beta from the controlling localhost browser. Before provider setup, close the setup dialog and choose Web Server Beta on the start screen. Enable access and pair the remote browser with a short-lived code.";
+    } else if (cap.id === "providers") {
+      reason =
+        "Provider setup is available without a database or verified provider; Codex installation and device-code login require an explicit action in the controlling setup dialog.";
+      action =
+        "Providers → Add Provider → Codex. Install if missing, sign in on the official page, and wait for connection verification. Custom commands require manual setup.";
     } else if (cap.prerequisite === "provider" && !state.providers.length) {
       status = "blocked";
       reason = "No verified enabled provider.";
@@ -306,9 +317,9 @@ export class DesktopKnowledge {
     } else if (cap.id === "workflows") {
       status = "available";
       reason =
-        process.platform === "darwin"
-          ? "New staging.20 workflows support pause and resume; staging.18 history stays on its original engine. Workflow execution requires external Node >=24.22 <25 and Codex login; prompt drafting requires a verified primary provider."
-          : "Workflow history is readable; Transmission execution requires macOS. Prompt drafting requires a verified primary provider.";
+        process.platform === "darwin" && process.arch === "arm64"
+          ? "New staging.20 workflows support pause and resume; staging.18 history stays on its original engine. Workflow engine launch uses bundled pinned engines with recorded Node >=24.22 <25 and separate Codex login/configuration (code60 workflows login), without runtime npm downloads or compilation; prompt drafting requires a verified primary provider."
+          : "Workflow history is readable; Transmission execution requires macOS Apple Silicon. Prompt drafting requires a verified primary provider.";
       action = "Open Apps → Workflows.";
     } else if (cap.id === "system-manager") {
       reason =
@@ -316,7 +327,7 @@ export class DesktopKnowledge {
       action = "Apps → System Manager.";
     } else if (cap.id === "updates") {
       reason =
-        "Manual npm package updates require Node 24. Stop, replace, repair registration and start; awareness never checks or downloads.";
+        "Explicit code60 update verifies the stable npm bootstrap and payload before consent and shutdown. Read-only code60 update status and explicit code60 update recover diagnose interruption; awareness never checks, downloads or replaces code.";
       action = "Apps → Update Manager.";
     } else if (cap.prerequisite === "runtime") {
       status = "unknown";

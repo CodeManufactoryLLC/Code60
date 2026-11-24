@@ -5,6 +5,7 @@ import type {
   McpAuthenticationResponse,
   McpManagementRead,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import { Modal } from "./modal.js";
 
 /** Secret fields are transient; only backend metadata survives submission or navigation. */
@@ -340,7 +341,7 @@ export function McpAuthenticationPanel({
                     reference,
                     secret: value,
                     storage,
-                    requestId: crypto.randomUUID(),
+                    requestId: randomId(),
                   });
                 }}
               >
@@ -400,7 +401,7 @@ export function McpAuthenticationPanel({
                       ...captured,
                       previewId: review.previewId,
                       storage,
-                      requestId: crypto.randomUUID(),
+                      requestId: randomId(),
                     });
                 }}
               >
@@ -470,14 +471,14 @@ export function McpAuthenticationPanel({
                 disabled={busy}
                 onClick={() => {
                   if (confirmation === "sign-out")
-                    void act({ action: "sign-out", ...captured, requestId: crypto.randomUUID() });
+                    void act({ action: "sign-out", ...captured, requestId: randomId() });
                   else if (review?.previewId)
                     void act({
                       action: "credential-forget",
                       ...captured,
                       previewId: review.previewId,
                       reference,
-                      requestId: crypto.randomUUID(),
+                      requestId: randomId(),
                     });
                 }}
               >

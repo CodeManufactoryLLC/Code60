@@ -272,3 +272,91 @@ npm run scan:secrets
 The command downloads the pinned scanner without installing npm dependencies.
 Exit code 0 means no findings, 1 means findings, and 2 means the scan could not
 complete. Do not treat a download, checksum, execution, or report error as clean.
+
+
+## Scoped Codex setup
+
+The authenticated controlling browser can explicitly request installation of the
+fixed `@openai/codex@0.171.0` package from `https://registry.npmjs.org`. No browser
+operation accepts a command, path, package name or environment override. This is
+a narrow exception to application/package installation restrictions, not a general
+installer. Installation runs as the non-root backend user, with npm lifecycle
+scripts disabled, isolated npm configuration, private staging and atomic activation
+under `~/.local/share/code60/providers/codex/0.171.0`. Existing CLIs and user
+configuration are preserved. The managed copy is preferred by the standard connector.
+
+A short-lived owned Codex app-server process performs only initialization and
+structured ChatGPT device-code login over bounded stdio. Only the exact HTTPS
+verification destination `https://auth.openai.com/codex/device` is accepted. The
+provider owns credentials in its normal backend-user storage. Code60 receives a
+temporary device challenge, not the account password or credentials. Challenges
+are returned only by setup/attempt-bound requests owned by the controlling page;
+they are excluded from shared snapshots, browser storage, diagnostics and transcripts.
+Provider output and errors are discarded or mapped to fixed messages. Normal agent
+work and the fresh post-login verification use ACP, without login-process tools.
+
+One setup attempt runs at a time. Installation has a ten-minute deadline, login
+fifteen minutes and protocol requests fifteen seconds. Cancel, dismissal, reload,
+control loss, configuration replacement and shutdown abort owned work and await
+process-group cleanup. Late/stale results cannot verify membership. Cancellation
+does not log out the provider or erase credentials it has already issued. The
+persistent dev-container home retains both managed binaries and credentials;
+it must be treated as private user state, not a disposable cache. Custom commands
+require manual authentication; standard catalog harnesses use the scoped provider setup policy below.
+
+
+## Web Server Beta
+
+An explicit localhost-only switch can publish the same Code60 application on the
+host's primary RFC1918 IPv4 address and existing gateway port. This is a scoped
+exception to loopback-only access; it does not bind wildcard/public addresses,
+configure a router/firewall or install another service. HTTP is unencrypted and
+intended only for trusted LANs. The switch is off by default and stores only the
+enabled preference in private gateway settings.
+
+LAN always requires a single-use 60-second pairing code, independently of local
+pairing policy. Codes belong to an exact LAN activation/origin; rotation, disable,
+address change and backend restart invalidate them. Ten pairing submissions per
+minute are permitted. Codes use six cryptographically random digits, displayed
+as `123-456`, and accept entry with or without the hyphen. Local pairing retains
+its existing hexadecimal format. Rotation excludes the immediately previous code
+and generation rejects active collisions with a finite retry limit.
+Sessions are ingress/origin-bound, use the existing per-tab
+session storage and require explicit control takeover. A local session cannot be
+replayed on LAN, nor a LAN session on localhost. Only the controlling localhost
+page can change LAN policy or generate a code; codes never enter shared snapshots,
+diagnostics, transcripts, persistent settings or links. The LAN ingress rejects
+private management routes even with a management token. Host/Origin/schema checks,
+CSP and existing quotas remain enforced. Top-level LAN navigation serves only the
+bundled asset manifest, with no maps, Vite/HMR or development filesystem proxy.
+
+Paired devices receive the full application authority, including agent dispatch
+and backend-owned file choosers, subject to the same confirmations and single
+controller rules. Disabling LAN or losing its address cancels affected view reads
+and pending human/setup interactions and invalidates remote sessions, while
+approved execution and scheduled work continue. Local access remains available.
+
+For dev containers, the owned host launcher derives the host address/port and
+forwards to a separate loopback ingress in its own container. A private user-owned
+Unix socket and bounded stdio channel carry fixed address/publish/withdraw/heartbeat
+messages. No browser controls commands, ports, paths or environments. Protocol
+requests have ten-second deadlines; the host withdraws unrenewed publication after
+fifteen seconds and on backend/launcher loss. Cleanup uncertainty remains an error,
+not a claim that exposure stopped. Provider storage and approved execution records
+are independent of this policy. TLS, passwords, public hosting and automatic
+firewall changes are outside this beta.
+
+## Scoped provider setup
+
+An explicit human setup action may install only the catalog harness release artifacts
+fixed in application policy into versioned private Code60 storage. Verify integrity,
+archive containment, ownership and executable layout before atomic activation; refuse
+root, external overwrite, lifecycle scripts and shell-profile/service edits.
+Authentication belongs to the controlling page's single setup attempt, including LAN.
+Allow only fixed provider login operations and validated HTTPS destinations. Device
+codes, OAuth URLs and pasted codes are ephemeral owner-bound responses/inputs, excluded
+from shared state, request-receipt caches, diagnostics, transcripts and browser storage.
+No generic terminal, shell, provider-server proxy, package selector or credential reader
+is exposed. Providers own persistent credentials and container home retains them.
+Cancelling never logs out or removes credentials. Cleanup failures block further setup
+until owned processes stop. Custom launch overrides retain external setup.

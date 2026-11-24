@@ -2,6 +2,13 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, unlink } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
+import {
+  createInstallationParents,
+  type FileIdentity,
+  installationFileCode,
+  installationSnapshot,
+  writeInstallationFile,
+} from "./installation-files.js";
 import { atomicReplace, writePrivateFile } from "./storage.js";
 
 export interface ServiceRuntime {
@@ -104,6 +111,13 @@ Restart=on-failure\nRestartSec=30\nTimeoutStopSec=60\nKillMode=control-group
 }
 
 export type ServiceCommand = (argv: readonly string[]) => Promise<boolean>;
+export async function userServiceSnapshot(path: string) {
+  const entry = await lstat(path).catch((error: unknown) => {
+    if (installationFileCode(error) !== "ENOENT") throw error;
+    return null;
+  });
+  return entry ? installationSnapshot(path, 64 * 1024, true) : null;
+}
 type ServiceInspectionCommand = (
   argv: readonly string[],
 ) => Promise<{ ok: boolean; stdout: string }>;
@@ -223,8 +237,16 @@ export async function controlUserService(
   action: "install" | "repair" | "start" | "stop" | "uninstall" | "status",
   command: ServiceCommand = runServiceCommand,
   inspectionCommand: ServiceInspectionCommand = inspectCommand,
+  ownership: { expected?: FileIdentity | null } = {},
 ): Promise<{ available: boolean }> {
   if (action === "status") return { available: await command(definition.status) };
+  const verifyOwnership = async () => {
+    if (!Object.hasOwn(ownership, "expected")) return;
+    const current = await userServiceSnapshot(definition.path);
+    if (JSON.stringify(current?.identity ?? null) !== JSON.stringify(ownership.expected))
+      throw Error("Service definition changed; preserved outside edits");
+  };
+  await verifyOwnership();
   if (action === "install" || action === "repair") {
     if (action === "repair")
       for (const argv of definition.stop)
@@ -235,15 +257,20 @@ export async function controlUserService(
               "Scheduling Service could not stop. Its registration was not replaced.",
             );
         }
-    await mkdir(join(definition.path, ".."), { recursive: true, mode: 0o700 });
-    const temporary = join(definition.path, "..", `${randomUUID()}.tmp`);
-    await writePrivateFile(temporary, definition.contents, { mode: 0o600, flag: "wx" });
-    try {
-      await atomicReplace(temporary, definition.path);
-    } finally {
-      await unlink(temporary).catch((error) => {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      });
+    if (Object.hasOwn(ownership, "expected")) {
+      await createInstallationParents(join(definition.path, ".."));
+      await writeInstallationFile(definition.path, definition.contents, ownership.expected ?? null);
+    } else {
+      await mkdir(join(definition.path, ".."), { recursive: true, mode: 0o700 });
+      const temporary = join(definition.path, "..", `${randomUUID()}.tmp`);
+      await writePrivateFile(temporary, definition.contents, { mode: 0o600, flag: "wx" });
+      try {
+        await atomicReplace(temporary, definition.path);
+      } finally {
+        await unlink(temporary).catch((error) => {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        });
+      }
     }
     for (const argv of definition.install)
       if (!(await command(argv)))
@@ -269,6 +296,9 @@ export async function controlUserService(
       }
       throw new Error("Scheduling Service control failed. Check the native user supervisor.");
     }
-  if (action === "uninstall") await unlink(definition.path);
+  if (action === "uninstall") {
+    await verifyOwnership();
+    await unlink(definition.path);
+  }
   return { available: action === "start" };
 }

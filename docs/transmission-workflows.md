@@ -2,9 +2,25 @@
 
 Open **Apps → Workflows** to create and monitor ordered coding tasks. The page
 and retained history work without a project database. Execution currently requires
-macOS, external Node.js >=24.22.0 <25 with npm/npx, and a working Codex login.
-The first explicit start downloads/caches exactly
-`code60-transmission-server@0.1.0-staging.20` for new workflows from npm. No login service is installed.
+macOS Apple Silicon, the installation's recorded Node.js >=24.22.0 <25, and
+separate Codex workflow authentication. macOS distribution candidates include
+exactly `code60-transmission-server@0.1.0-staging.20` for new workflows and
+staging.18 for retained records, with their locked dependencies and native runtime.
+Starting a workflow needs no npm download or compiler. No Transmission login
+service is installed. Code60 provider verification does not establish workflow
+authentication; the harness uses Codex's own configured credentials. If authentication is needed, run
+`code60 workflows login` in an interactive terminal after setup. It launches only
+the bundled Codex login with its recorded Node; Codex manages its own credentials.
+It starts no workflow or engine, has a ten-minute deadline and propagates exit
+status/interruption. Non-interactive use and extra flags are rejected. Code60
+does not store or copy provider credentials or mark application setup verified.
+If the command is outside PATH, use `"$HOME/.local/bin/code60" workflows login`.
+For a custom existing Codex home, use the same absolute `CODEX_HOME` when running
+setup/service repair and workflow login. Service registration preserves that path,
+without persisting credential variables or configuration payloads. Existing
+engines keep their startup environment; login does not reconfigure them.
+New engines and workflow login select the verified bundled Codex binary explicitly;
+an application-level `CODEX_PATH` override does not replace the workflow runtime.
 
 Choose **New workflow**, select the repository root and enter a workflow name and
 ordered tasks. Each task includes implementation instructions, independent
@@ -55,6 +71,19 @@ requires inspection; the prototype preserves any partial checkout and history.
 State is private beneath `$XDG_STATE_HOME/code60/workflows` (default
 `~/.local/state/code60/workflows`), separately from project databases and Relay.
 History is bounded to 200 workflows and 8 MiB; it is never deleted automatically.
+
+Executable bundles are preserved separately under
+`$XDG_DATA_HOME/code60/engines` (default `~/.local/share/code60/engines`). Their
+private version bindings record the bundle inventory and canonical Node. Do not
+remove this storage, the original versioned state directories or legacy npm
+caches while retaining workflows. A damaged binding or moved Node is an explicit
+recovery condition; execution never falls back to a different Node on PATH.
+
+For source development on native macOS arm64, run `npm run prepare:engines` after
+`npm run build`. Preparation uses a fresh dependency tree and the committed
+`distribution/transmission/package-lock.json`; ordinary build/dev does not fetch
+engine assets. Another full build clears generated assets. Linux builds omit
+the unsupported engines and retain read-only workflow history.
 
 There is no automatic apply, merge, commit, push, message Undo integration
 or alternate execution provider. Retained worktrees can be reviewed

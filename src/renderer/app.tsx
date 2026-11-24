@@ -44,7 +44,6 @@ import { useUpdateNotice, useUpdates } from "./updates.js";
 
 export function App({ api: transport }: { api: ApplicationClient }) {
   usePressFeedback();
-  const updates = useUpdates(transport);
   const [error, setError] = useState("");
   const { state: appState, accept } = useDesktopSnapshot(transport, setError);
   const [detailWorkerId, setDetailWorkerId] = useState<string>();
@@ -58,6 +57,7 @@ export function App({ api: transport }: { api: ApplicationClient }) {
     !isNavigationHome(tabs.active) && !projectNavigationPending.current,
   );
   const snapshot = state?.snapshot;
+  const updates = useUpdates(transport, snapshot?.versions.code60);
   const api = useMemo(
     () => bindDatabaseWrites(transport, snapshot?.databaseEpoch),
     [transport, snapshot?.databaseEpoch],
@@ -337,6 +337,10 @@ export function App({ api: transport }: { api: ApplicationClient }) {
           theme={theme}
           onThemeChange={setTheme}
           onConnectDatabase={() => showPicker("database")}
+          onOpenWebServer={() => {
+            selectPage("web-server");
+            enterApp();
+          }}
           onEnter={() => {
             if (!orchestratorConfigured) return;
             enterApp();

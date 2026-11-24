@@ -6,6 +6,7 @@ import {
   type GatewayFrame,
   parseWebLink,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 
 declare global {
   interface Window {
@@ -81,7 +82,7 @@ export function createBrowserClient(
   session: BrowserSession,
   onFrame: (frame: GatewayFrame) => void,
 ) {
-  session.clientId = crypto.randomUUID();
+  session.clientId = randomId();
   let ready!: () => void;
   const connected = new Promise<void>((resolve) => {
     ready = resolve;
@@ -89,7 +90,7 @@ export function createBrowserClient(
   const events = new BrowserEvents();
   const abort = new AbortController();
   const rpc = <T>(operation: string, value?: unknown): Promise<T> =>
-    browserRequest<T>("/api/operation", session, { id: crypto.randomUUID(), operation, value });
+    browserRequest<T>("/api/operation", session, { id: randomId(), operation, value });
   const api: ApplicationClient = {
     mcpRecovery: (request) => rpc("mcp-recovery", request),
     mcpRuntime: (request) => rpc("mcp-runtime", request),
@@ -107,6 +108,10 @@ export function createBrowserClient(
     mcpPreviewMove: (request) => rpc("mcp-preview-move", request),
     mcpMove: (request) => rpc("mcp-move", request),
     onMcpChanged: (listener) => events.on("mcp-changed", listener),
+
+    webServerStatus: () => rpc("web-server-status"),
+    setWebServerEnabled: (request) => rpc("web-server-enabled", request),
+    createWebServerCode: () => rpc("web-server-code"),
     modelDefault: (request: unknown) => rpc("model-default", request),
     customAgent: (request: unknown) => rpc("custom-agent", request),
     workflow: (request) => rpc("workflow", request),
@@ -169,6 +174,15 @@ ${url}`)
     providerAction: (request: unknown) => rpc("provider-action", request),
     beginAgentSetup: (request: unknown) => rpc("setup-begin", request),
     attemptAgentSetup: (request: unknown) => rpc("setup-attempt", request),
+    installProviderForSetup: (request) => rpc("setup-provider-install", request),
+    loginProviderForSetup: (request) => rpc("setup-provider-login", request),
+    readProviderSetup: (request) => rpc("setup-provider-read", request),
+    submitProviderSetup: (request) => rpc("setup-provider-submit", request),
+    cancelProviderSetup: (request) => rpc("setup-provider-cancel", request),
+    installCodexForSetup: (request) => rpc("setup-codex-install", request),
+    loginCodexForSetup: (request) => rpc("setup-codex-login", request),
+    readCodexSetup: (request) => rpc("setup-codex-read", request),
+    cancelCodexSetup: (request) => rpc("setup-codex-cancel", request),
     cancelAgentSetup: (request: unknown) => rpc("setup-cancel", request),
     finishAgentSetup: (request: unknown) => rpc("setup-finish", request),
     abandonAgentSetup: (request: unknown) => rpc("setup-abandon", request),

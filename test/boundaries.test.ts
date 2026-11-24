@@ -107,7 +107,7 @@ function findViolations(files: readonly SourceFile[]): string[] {
 
 function readSources(dir: string): SourceFile[] {
   return readdirSync(dir, { withFileTypes: true, recursive: true })
-    .filter((e) => e.isFile() && /\.(?:tsx?|cts)$/.test(e.name))
+    .filter((e) => e.isFile() && /\.(?:tsx?|cts|mjs)$/.test(e.name))
     .map((e) => {
       const path = join(e.parentPath, e.name);
       return { path, text: readFileSync(path, "utf8") };

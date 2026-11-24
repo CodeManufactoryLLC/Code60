@@ -1,9 +1,9 @@
-import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CODE60_VERSION } from "../core/index.js";
-import { privateDirectory, writePrivateJson } from "../platform/index.js";
+import { privateDirectory, userServiceDefinition, writePrivateJson } from "../platform/index.js";
 import { backendControl, restoreSchedulerHandoff } from "./registration.js";
 import { gatewayRoot } from "./server.js";
 
@@ -68,6 +68,16 @@ async function fixture(installed = false) {
       undefined,
       16_384,
     );
+    const saved = JSON.parse(await readFile(join(gatewayRoot(env), "registration.json"), "utf8"));
+    const definition = userServiceDefinition(
+      process.platform,
+      env.HOME,
+      gatewayRoot(env),
+      saved.runtime,
+      "backend",
+    );
+    await mkdir(dirname(definition.path), { recursive: true, mode: 0o700 });
+    await writeFile(definition.path, definition.contents, { mode: 0o600 });
   }
   return { env, directory, root: gatewayRoot(env) };
 }
@@ -89,6 +99,31 @@ it("pins plain Node and the backend entrypoint, ignoring Electron/AppImage envir
     process.platform === "darwin" ? "code60.backend" : "code60-backend",
   );
   await expect(backendControl(env, "install", true)).rejects.toThrow("already installed");
+});
+it("preserves the explicit Codex home path without persisting provider credentials or config payloads", async () => {
+  const { env, root } = await fixture();
+  await backendControl(
+    {
+      ...env,
+      CODEX_HOME: join(env.HOME, "workflow's Codex home"),
+      CODEX_CONFIG: "fixture configuration",
+      OPENAI_API_KEY: "fixture value",
+    },
+    "install",
+    true,
+  );
+  const saved = JSON.parse(await readFile(join(root, "registration.json"), "utf8"));
+  expect(saved.runtime.env.CODEX_HOME).toBe(join(env.HOME, "workflow's Codex home"));
+  expect(saved.runtime.env).not.toHaveProperty("CODEX_CONFIG");
+  expect(saved.runtime.env).not.toHaveProperty("OPENAI_API_KEY");
+});
+it("rejects relative workflow provider homes before changing service registration", async () => {
+  const { env, root } = await fixture();
+  await expect(backendControl({ ...env, CODEX_HOME: "relative" }, "install", true)).rejects.toThrow(
+    "absolute",
+  );
+  expect(fake.control).not.toHaveBeenCalled();
+  await expect(readFile(join(root, "registration.json"))).rejects.toMatchObject({ code: "ENOENT" });
 });
 it("refuses an unverified responder before stopping or replacing registration", async () => {
   const { env, root } = await fixture(true);
@@ -141,4 +176,49 @@ it("retains a pinned runtime after partial enrollment and refuses an unowned liv
   fake.control.mockClear();
   await expect(backendControl(env, "repair", true)).rejects.toThrow("ownership");
   expect(fake.control).not.toHaveBeenCalled();
+});
+
+it("reports a same-version registration pointing to another runtime as conflicting without repair", async () => {
+  const { env } = await fixture(true);
+  expect(await backendControl(env, "status")).toMatchObject({ runtimeCurrent: false });
+  expect(fake.control).not.toHaveBeenCalled();
+});
+it("preserves outside service-definition edits before any shutdown or replacement", async () => {
+  const { env, root } = await fixture(true);
+  const saved = await readFile(join(root, "registration.json"), "utf8");
+  const definition = userServiceDefinition(
+    process.platform,
+    env.HOME,
+    root,
+    JSON.parse(saved).runtime,
+    "backend",
+  );
+  await writeFile(definition.path, "unrelated outside edit", { mode: 0o600 });
+  await expect(backendControl(env, "repair", true)).rejects.toThrow("definition ownership changed");
+  await expect(backendControl(env, "status")).rejects.toThrow("definition ownership changed");
+  expect(fake.control).not.toHaveBeenCalled();
+  expect(fake.management).not.toHaveBeenCalled();
+  expect(await readFile(definition.path, "utf8")).toBe("unrelated outside edit");
+  expect(await readFile(join(root, "registration.json"), "utf8")).toBe(saved);
+});
+it("retains the original definition identity across failed replacement and explicit repair", async () => {
+  const { env, root } = await fixture(true);
+  const saved = JSON.parse(await readFile(join(root, "registration.json"), "utf8"));
+  fake.inspect.mockResolvedValue({ definitionPresent: true, state: "stopped" });
+  fake.control.mockRejectedValueOnce(Error("enrollment failed"));
+  await expect(backendControl(env, "repair", true)).rejects.toThrow("enrollment failed");
+  const partial = JSON.parse(await readFile(join(root, "registration.json"), "utf8"));
+  expect(partial.previous).toEqual({ runtime: saved.runtime, appVersion: saved.appVersion });
+  expect(partial.runtime.args[0]).toMatch(/gateway\/main\.js$/);
+  expect(await backendControl(env, "status")).toMatchObject({ runtimeCurrent: false });
+  await expect(backendControl(env, "start")).rejects.toThrow("partial");
+  fake.control.mockImplementation(async (definition, action) => {
+    expect(action).toBe("repair");
+    await writeFile(definition.path, definition.contents, { mode: 0o600 });
+    return { available: true };
+  });
+  await backendControl(env, "repair", true);
+  const repaired = JSON.parse(await readFile(join(root, "registration.json"), "utf8"));
+  expect(repaired.previous).toBeUndefined();
+  expect(await backendControl(env, "status")).toMatchObject({ runtimeCurrent: true });
 });

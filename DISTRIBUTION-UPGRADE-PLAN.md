@@ -35,7 +35,7 @@ service/shell changes still require clear instructions or consent.
 ### Existing implementation
 
 - Code60 is a browser-only Node application supporting macOS Apple Silicon and
-  Linux x64. There is no dev container or current Docker development harness.
+  Linux x64. Phases 1–2 add an isolated dev container and Docker acceptance harness.
 - The management CLI already implements open, service and pairing operations.
   The gateway owns the application and scheduler; native service controls have
   injectable test boundaries.
@@ -71,8 +71,8 @@ service/shell changes still require clear instructions or consent.
 - Install the persistent launcher at `~/.local/bin/code60`. Respect an existing
   unrelated command; never overwrite it or write privileged command directories.
 - Put the first default database at
-  `$XDG_STATE_HOME/code60/database/code60.sqlite`, with the existing
-  `~/.local/state` fallback and adjacent private `.code60_workspace`.
+  `$XDG_DATA_HOME/code60/databases/default.sqlite`, with the
+  `~/.local/share` fallback and adjacent private `.code60_workspace`.
 - Repeat setup reuses a healthy installed release and existing database selection.
   It does not implicitly update an installation, reconnect agents or resume work.
 - Installation and update use exclusive ownership, bounded downloads, staging,
@@ -167,6 +167,13 @@ a linked worktree. No host service, provider credential or shell profile changes
 
 ## Phase 2 — Clean installation acceptance harness
 
+**Status:** implemented. Fresh non-root Linux x64 customer/driver runs pass the
+installed golden journey, offline model and negative probes. Concurrent runs and
+independent cleanup are validated; terminal cancellation exits 130 with verified
+owned cleanup. Installation may access public npm; runtime networking is disabled.
+Real native service validation remains outside this harness. Required PR CI must
+pass before delivery.
+
 **PR outcome:** packaged installation is tested independently of the configured
 development environment.
 
@@ -195,6 +202,15 @@ unproven when a fake supervisor is used.
 **Depends on:** Phase 1.
 
 ## Phase 3 — Platform payloads and bootstrap artifacts
+
+**Status:** implemented and locally validated. Fresh Linux x64 and native macOS
+arm64 payloads pass CLI/backend/assets and real offline CPU/model smoke checks.
+The Linux payload completes the shared first-use golden journey and fault probes;
+two concurrent runs verify independent cleanup. A private bootstrap containing both
+real descriptors passes packed CLI and staging/model acceptance. Required PR CI
+and exact-commit native workflow validation must pass before delivery. No artifact
+publication, real login service or public setup is included. See the
+[artifact workflow](docs/distribution/artifacts.md).
 
 **PR outcome:** release tooling produces verified, installable macOS arm64 and
 Linux x64 application payloads plus a small npm bootstrap.
@@ -225,6 +241,16 @@ platforms, malformed archives and missing assets fail before activation.
 **Depends on:** Phase 2.
 
 ## Phase 4 — Persistent installation, launcher and shell integration
+
+**Status:** implemented and locally validated. Managed installation, cache-independent
+launchers, explicit owned repair, atomic activation, non-reclaiming locks and
+previewed shell integration are covered by focused and full checks. Linux Bash,
+zsh and fish startup cases and concurrent managed golden journeys pass; native
+Bash/zsh and packed-bootstrap managed smoke pass on this Mac. Fish is unavailable
+on this host and is required on the disposable native CI runner. Required PR CI
+and exact-commit native validation must pass before delivery. This is the first
+supported layout, with no legacy recognition, migration or compatibility layer.
+Public setup remains Phase 5. See [installation internals](docs/distribution/installation.md).
 
 **PR outcome:** an installed release has a durable `code60` command independent
 of npm's cache.
@@ -259,6 +285,13 @@ Existing installations remain usable after failed candidates.
 **Depends on:** Phase 3.
 
 ## Phase 5 — One-command setup, database and browser onboarding
+
+**Status:** implemented and merged in PR #320 after required Linux and exact-commit
+native validation.
+The confirmed default uses user data storage; declined/non-TTY service setup exits
+0 with explicit incomplete status and a continuation command. Delivery requires
+packaged setup golden coverage, required Linux CI and exact-commit native fixture
+validation; real native login lifecycle remains Phase 9.
 
 **PR outcome:** the packaged `setup` command completes the developer journey.
 
@@ -299,6 +332,15 @@ restart, change pairing policy and exercise all database failure cases.
 
 ## Phase 6 — Bundled Transmission and version-bound execution
 
+**Status:** implemented and merged in PR #321 after required Linux CI and
+exact-commit native validation passed. Four native real-engine browser
+journeys cover new, retained and original-cache execution; both platforms pass
+package/payload/model/setup smoke and 23 browser regressions. All four Linux
+offline installation modes pass, including concurrent payload/managed runs, with
+independent process/container/image/volume cleanup. The bootstrap assembles from
+both verified platform artifacts. Required Linux CI and exact-commit native
+validation remain delivery gates; packages stay private and unpublished.
+
 **PR outcome:** macOS users receive workflow execution components as part of
 Code60 installation without a separate runtime npm download.
 
@@ -321,6 +363,8 @@ Code60 installation without a separate runtime npm download.
 - Preserve provider authentication boundaries. Workflow-specific configuration is
   requested when enabling workflows, without assuming application provider login
   supplies Transmission credentials.
+  A fixed interactive `code60 workflows login` delegates authentication to the
+  bundled Codex CLI; it grants no application verification or engine execution.
 - Linux payloads omit unsupported engine binaries and retain an accurate macOS-only
   workflow availability explanation.
 
@@ -335,6 +379,11 @@ continuity and original routing. No runtime npm download or compiler invocation 
 this phase; they are not grounds to change engine APIs silently.
 
 ## Phase 7 — Explicit updates and installation recovery
+
+**Status:** implemented on `codex/explicit-updates-and-recovery`; local Linux
+installation/update acceptance, native macOS workflow continuity and browser
+regressions pass. Required CI, clean exact-commit native artifacts and paired
+bootstrap verification remain delivery gates before merge.
 
 **PR outcome:** `code60 update` replaces the manual stop/install/repair/start sequence.
 

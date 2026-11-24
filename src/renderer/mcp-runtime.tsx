@@ -7,6 +7,7 @@ import type {
   McpTargetAddress,
 } from "../bridge/index.js";
 import { mcpFailureGuidance } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import { Modal } from "./modal.js";
 
 /** Controls capture the displayed configuration; selection never retargets a pending decision. */
@@ -160,7 +161,7 @@ export function McpRuntimePanel({
                 ...captured,
                 serverId,
                 enabled: !definition.enabled,
-                requestId: crypto.randomUUID(),
+                requestId: randomId(),
               })
             }
           >
@@ -170,7 +171,7 @@ export function McpRuntimePanel({
             type="button"
             disabled={blocked || busy}
             onClick={() => {
-              const requestId = crypto.randomUUID();
+              const requestId = randomId();
               setTest(requestId);
               void act({ action: "test", ...captured, serverId, requestId });
             }}
@@ -200,7 +201,7 @@ export function McpRuntimePanel({
                 request: {
                   action: status?.approved ? "revoke-approval" : "approve",
                   ...captured,
-                  requestId: crypto.randomUUID(),
+                  requestId: randomId(),
                 },
                 title: status?.approved
                   ? "Revoke project approval"
@@ -267,7 +268,7 @@ export function McpRuntimePanel({
               };
               void preview(
                 { action: "preview-disconnect", ...connection },
-                { action: "disconnect", ...connection, requestId: crypto.randomUUID() },
+                { action: "disconnect", ...connection, requestId: randomId() },
                 "Disconnect server",
               );
             }}
@@ -290,7 +291,7 @@ export function McpRuntimePanel({
               };
               void preview(
                 { action: "preview-reconnect", ...connection },
-                { action: "reconnect", ...connection, requestId: crypto.randomUUID() },
+                { action: "reconnect", ...connection, requestId: randomId() },
                 "Reconnect session servers",
               );
             }}

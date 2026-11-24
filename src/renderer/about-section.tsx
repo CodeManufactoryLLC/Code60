@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { CODE60_COPYRIGHT, type Versions } from "../bridge/index.js";
+import { copyText } from "./browser-platform.js";
 import { SettingsHeader } from "./settings-layout.js";
 export function AboutSection({ versions }: { versions: Versions | undefined }) {
   const id = useId();
@@ -23,7 +24,7 @@ export function AboutSection({ versions }: { versions: Versions | undefined }) {
     : [];
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(
+      await copyText(
         [...rows.map(([label, value]) => `${label}: ${value}`), CODE60_COPYRIGHT].join("\n"),
       );
       setCopyStatus("Version info copied.");

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,7 +22,7 @@ let valid: boolean;
 let captured: AuthenticationCapture;
 const revoke = vi.fn<(targetId: string, serverId: string) => Promise<void>>(async () => {});
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "code60-authentication-"));
+  root = await realpath(await mkdtemp(join(tmpdir(), "code60-authentication-")));
   remote = await oauthServer();
   state = "available";
   storage = new Map();

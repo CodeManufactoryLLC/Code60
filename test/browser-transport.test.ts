@@ -60,9 +60,18 @@ it("routes every application method through an authenticated known gateway opera
     const operations = applicationOperations(
       ...([{}, {}, {}, {}, () => {}, {}] as unknown as Parameters<typeof applicationOperations>),
     );
+    // Listener policy belongs to the gateway rather than ApplicationHost.
+    const networkOperations = new Set([
+      "web-server-status",
+      "web-server-enabled",
+      "web-server-code",
+    ]);
     expect(writes.length).toBeGreaterThan(60);
     for (const request of writes) {
-      expect(operations.has(request.operation), request.operation).toBe(true);
+      expect(
+        operations.has(request.operation) || networkOperations.has(request.operation),
+        request.operation,
+      ).toBe(true);
       expect(request.id).toMatch(/^[a-f0-9-]{36}$/);
     }
     expect(new Set(writes.map((request) => request.id)).size).toBe(writes.length);

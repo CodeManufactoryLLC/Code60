@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { automationClient, schedulerControl } from "../automation/index.js";
 import { CODE60_VERSION } from "../core/index.js";
 import {
+  absoluteInstallationPath,
   controlUserService,
   fileCode,
   inspectUserService,
@@ -13,12 +14,30 @@ import {
   type ServiceRuntime,
   userHome,
   userServiceDefinition,
+  userServiceSnapshot,
   writePrivateJson,
 } from "../platform/index.js";
 import { gatewayRoot, managementRequest } from "./server.js";
 
 export type BackendControl = "install" | "repair" | "start" | "stop" | "uninstall" | "status";
-type Registration = { version: 1; installed: boolean; runtime: ServiceRuntime; appVersion: string };
+type RegisteredRuntime = { runtime: ServiceRuntime; appVersion: string };
+type Registration = RegisteredRuntime & {
+  version: 1;
+  installed: boolean;
+  previous?: RegisteredRuntime;
+};
+function validRuntime(value: RegisteredRuntime) {
+  return (
+    value &&
+    typeof value.appVersion === "string" &&
+    value.runtime &&
+    typeof value.runtime.executable === "string" &&
+    Array.isArray(value.runtime.args) &&
+    value.runtime.args.every((arg) => typeof arg === "string") &&
+    value.runtime.env &&
+    Object.values(value.runtime.env).every((item) => typeof item === "string")
+  );
+}
 
 async function registration(env: Readonly<NodeJS.ProcessEnv>) {
   const value = (await readPrivateJson(join(gatewayRoot(env), "registration.json"), 16_384).catch(
@@ -31,10 +50,8 @@ async function registration(env: Readonly<NodeJS.ProcessEnv>) {
     value &&
     (value.version !== 1 ||
       typeof value.installed !== "boolean" ||
-      !value.runtime ||
-      typeof value.runtime.executable !== "string" ||
-      !Array.isArray(value.runtime.args) ||
-      !value.runtime.env)
+      !validRuntime(value) ||
+      (value.previous !== undefined && !validRuntime(value.previous)))
   )
     throw new Error("Backend registration is invalid. Existing state was preserved.");
   return value;
@@ -43,7 +60,16 @@ async function currentRuntime(env: Readonly<NodeJS.ProcessEnv>): Promise<Service
   if (Number(process.versions.node.split(".")[0]) !== 24)
     throw new Error("Code60 requires Node 24.");
   const runtimeEnv: Record<string, string> = {};
-  for (const name of ["PATH", "HOME", "SHELL", "XDG_STATE_HOME", "XDG_CONFIG_HOME"])
+  if (env.CODEX_HOME) absoluteInstallationPath(env.CODEX_HOME);
+  for (const name of [
+    "PATH",
+    "HOME",
+    "SHELL",
+    "XDG_STATE_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "CODEX_HOME",
+  ])
     if (env[name]) runtimeEnv[name] = env[name];
   return {
     executable: await realpath(process.execPath),
@@ -78,8 +104,23 @@ export async function backendControl(
     runtime,
     "backend",
   );
+  const definitionFile = await userServiceSnapshot(definition.path);
+  const savedDefinitions = saved
+    ? [saved, ...(saved.previous ? [saved.previous] : [])].map((value) =>
+        userServiceDefinition(process.platform, userHome(env), root, value.runtime, "backend"),
+      )
+    : [];
+  const existing =
+    savedDefinitions.find((item) => item.contents === definitionFile?.text) ??
+    savedDefinitions[0] ??
+    definition;
+  if (definitionFile && !savedDefinitions.some((item) => item.contents === definitionFile.text))
+    throw Error(
+      "Backend definition ownership changed; existing registration and outside edits were preserved",
+    );
+  const ownership = { expected: definitionFile?.identity ?? null };
   if (action === "status") {
-    const native = await inspectUserService(definition);
+    const native = await inspectUserService(existing);
     const service = await managementRequest(env, "status").catch(() => null);
     return {
       installed: saved?.installed === true,
@@ -88,7 +129,13 @@ export async function backendControl(
           ? "unavailable"
           : native.state,
       service: native.state === "running" && native.pid === service?.pid ? service : null,
-      runtimeCurrent: saved?.appVersion === CODE60_VERSION,
+      runtimeCurrent:
+        !saved?.previous &&
+        (!definitionFile || definitionFile.text === definition.contents) &&
+        saved?.appVersion === CODE60_VERSION &&
+        saved.runtime.executable === (await realpath(process.execPath)) &&
+        JSON.stringify(saved.runtime.args) ===
+          JSON.stringify([fileURLToPath(new URL("./main.js", import.meta.url))]),
     };
   }
   await privateDirectory(root);
@@ -101,7 +148,9 @@ export async function backendControl(
       await realpath(runtime.executable).catch(() => {
         throw new Error("The registered Node runtime moved. Run code60 service repair.");
       });
-      await controlUserService(definition, action);
+      if (saved.previous)
+        throw Error("Backend registration is partial; use explicit service repair before starting");
+      await controlUserService(existing, action, undefined, undefined, ownership);
       return { installed: true };
     }
     if (action === "install" || action === "repair") {
@@ -143,13 +192,6 @@ export async function backendControl(
       }
     }
     if (saved?.installed && ["stop", "uninstall", "repair"].includes(action)) {
-      const existing = userServiceDefinition(
-        process.platform,
-        userHome(env),
-        root,
-        saved.runtime,
-        "backend",
-      );
       const native = await inspectUserService(existing);
       if (native.state === "unavailable")
         throw new Error("Backend ownership could not be verified. Registration was preserved.");
@@ -158,7 +200,7 @@ export async function backendControl(
         if (!native.pid || live.pid !== native.pid)
           throw new Error("Backend process ownership could not be verified.");
         await managementRequest(env, "shutdown");
-        await controlUserService(existing, "stop");
+        await controlUserService(existing, "stop", undefined, undefined, ownership);
       }
     }
     if (action === "stop") return { installed: true };
@@ -170,10 +212,13 @@ export async function backendControl(
         installed: saved?.installed === true,
         runtime,
         appVersion: CODE60_VERSION,
+        ...(saved
+          ? { previous: saved.previous ?? { runtime: saved.runtime, appVersion: saved.appVersion } }
+          : {}),
       };
       await writePrivateJson(join(root, "registration.json"), previous, saved ?? undefined, 16_384);
     }
-    await controlUserService(definition, action);
+    await controlUserService(definition, action, undefined, undefined, ownership);
     await writePrivateJson(
       join(root, "registration.json"),
       { version: 1, installed: action !== "uninstall", runtime, appVersion: CODE60_VERSION },

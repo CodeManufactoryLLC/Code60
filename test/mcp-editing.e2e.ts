@@ -22,8 +22,8 @@ async function edit(page: Page, value: string) {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.evaluate((text) => navigator.clipboard.writeText(text), value);
   await page.locator(".mcp-json-editor .inputarea").focus();
-  await page.keyboard.press("Control+a");
-  await page.keyboard.press("Control+v");
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("ControlOrMeta+v");
 }
 async function save(page: Page, file: string, value: string) {
   await edit(page, value);
@@ -64,7 +64,7 @@ test("MCP JSON: completion, safe validation, exact saves, navigation and guided 
     await expect(page.getByLabel("Configuration issues", { exact: true })).not.toContainText(
       "synthetic-value",
     );
-    await page.keyboard.press("Control+s");
+    await page.keyboard.press("ControlOrMeta+s");
     await expect(stat(config(fixture.directory))).rejects.toThrow();
     const exact = text("Exact");
     await save(page, config(fixture.directory), exact);
@@ -74,7 +74,8 @@ test("MCP JSON: completion, safe validation, exact saves, navigation and guided 
     await guard.getByRole("button", { name: "Cancel", exact: true }).click();
     expect(await readFile(config(fixture.directory), "utf8")).toBe(exact);
     await page.locator(".mcp-json-editor .inputarea").focus();
-    await page.keyboard.press("Control+Home");
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("ArrowRight");
     await page.getByRole("tab", { name: "Apps", exact: true }).click();
     await app(page);

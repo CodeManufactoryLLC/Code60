@@ -7,6 +7,7 @@ import {
   detailScopeKey,
   type OrchestrationChat,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import { chatEventKey } from "./chats.js";
 import { startDetailStream } from "./detail-stream.js";
 import type { DesktopState } from "./snapshot-state.js";
@@ -277,7 +278,7 @@ export function useScopedDetails(
         key,
         startDetailStream(
           api,
-          { scope, subscriptionId: crypto.randomUUID() },
+          { scope, subscriptionId: randomId() },
           (frame) => setFrames((frames) => ({ ...frames, [key]: frame })),
           fail,
         ),

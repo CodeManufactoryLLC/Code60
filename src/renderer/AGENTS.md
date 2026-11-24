@@ -1,6 +1,17 @@
 # Browser interface
 
+Web Server Beta is a database/provider-independent Settings → Advanced page, also
+reachable from the unconfigured splash. Use PageTitle, one grouped settings surface
+for the switch/status/URL/pairing controls and the requested short Help section about
+trusted-network HTTP and backend file choosers. Only the controlling localhost page
+may manage access; LAN shows read-only status. Keep codes in visible-page memory,
+clear them on owner/URL/visibility changes and use the shared cryptographic ID and
+clipboard helpers on HTTP origins. Never expose Vite or authentication in links.
+
 Use the browser ApplicationClient; no Node, Electron, preload or native window API.
+Update Manager shows the running installed version from existing version metadata
+and the terminal update/recovery commands. It never checks npm, downloads code,
+replaces files or controls native services; there is no browser update authority.
 Pairing, host choosers and confirmations use real accessible UI, with page-bound server
 interactions. Closing the browser never stops approved work. Native window transparency,
 backdrop, caption controls, application menus and automatic update actions have been removed;
@@ -1307,3 +1318,13 @@ and states only, never names/IDs, definitions, paths, endpoints, references or s
 Cleanup verification retries retained revoked handles for the captured scope only,
 coalesces concurrent attempts and retains ownership on failure. It never reconnects,
 launches a process, retries a business call or discovers/kills processes by name.
+
+## Provider sign-in
+
+Use the existing setup dialog for all catalog harnesses. Offer explicit installation
+and browser sign-in with optional provider-owned device codes or authorization-code
+paste-back. Render only typed fixed login steps, never raw terminal output. Poll
+owner-bound progress once per second while open; clear challenge/input state when the
+step or owner changes. Keep codes and URLs out of browser storage and shared snapshots.
+Show Connected only after a fresh ACP probe and automatic membership save. Reuse
+HTTP-safe clipboard handling, keyboard controls, cancellation and save retry.

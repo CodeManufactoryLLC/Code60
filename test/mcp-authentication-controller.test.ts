@@ -32,7 +32,7 @@ const doc: McpConnectorDocument = {
   },
 };
 beforeEach(async () => {
-  root = await fs.mkdtemp(join(tmpdir(), "code60-auth-controller-"));
+  root = await fs.realpath(await fs.mkdtemp(join(tmpdir(), "code60-auth-controller-")));
   remote = await oauthServer();
   native = vi.fn<CredentialStorePort>(async () => ({ status: "locked" }));
   host = new ApplicationHost(

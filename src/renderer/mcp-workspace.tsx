@@ -12,6 +12,7 @@ import {
   type McpTargetAddress,
   type McpTextIssue,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import type { TableOptions } from "./data-table.js";
 import {
   type McpDraft,
@@ -159,7 +160,7 @@ export function McpWorkspace({
   }, [state?.dirty, formDirty]);
   const requestId = (value: unknown) => {
     const key = JSON.stringify(value);
-    if (requests.current?.key !== key) requests.current = { key, id: crypto.randomUUID() };
+    if (requests.current?.key !== key) requests.current = { key, id: randomId() };
     return requests.current.id;
   };
   async function reload() {
@@ -446,7 +447,7 @@ export function McpWorkspace({
                     <li key={`${issue.code}:${issue.line}:${issue.column}:${issue.path.join(".")}`}>
                       <button
                         type="button"
-                        onClick={() => setIssueLocation({ issue, key: crypto.randomUUID() })}
+                        onClick={() => setIssueLocation({ issue, key: randomId() })}
                       >
                         {issue.message} Line {issue.line}, column {issue.column}.
                       </button>

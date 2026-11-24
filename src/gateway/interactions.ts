@@ -38,6 +38,11 @@ export class Interactions {
   run<T>(owner: string, action: () => T): T {
     return this.context.run(owner, action);
   }
+  currentOwner(): string {
+    const owner = this.context.getStore();
+    if (!owner || !this.active.has(owner)) throw new Error("This page is no longer active.");
+    return owner;
+  }
   private ask(
     kind: "confirm" | "pick",
     title: string,

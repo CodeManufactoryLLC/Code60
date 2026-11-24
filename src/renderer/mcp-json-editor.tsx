@@ -1,4 +1,5 @@
 import { jsonDefaults } from "monaco-editor/languages/features/json/register.js";
+import { randomId } from "./browser-platform.js";
 import "monaco-editor/editor/contrib/suggest/browser/suggestController.js";
 import "monaco-editor/editor/contrib/snippet/browser/snippetController2.js";
 import "monaco-editor/editor/contrib/clipboard/browser/clipboard.js";
@@ -76,7 +77,7 @@ export default function McpJsonEditor({
     const model = monaco.editor.createModel(
       current.current.text,
       "json",
-      monaco.Uri.parse(`inmemory://code60-mcp/${crypto.randomUUID()}.json`),
+      monaco.Uri.parse(`inmemory://code60-mcp/${randomId()}.json`),
     );
     instance.setModel(model);
     editor.current = instance;

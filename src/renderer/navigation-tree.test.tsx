@@ -94,6 +94,7 @@ describe("navigation tree", () => {
     expect(staticChildren("advanced", null).map(({ id }) => id)).toEqual([
       "contributor-tools",
       "experiments",
+      "web-server",
     ]);
     expect(staticChildren("experiments", null).map(({ id }) => id)).toEqual([
       "episodic-memory",

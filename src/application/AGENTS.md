@@ -228,7 +228,7 @@ Read [ARCHITECTURE.md](../../ARCHITECTURE.md) before changing it.
 
 - On successful database open or startup reconnection, ensure `.code60_workspace` exists beside the SQLite file, with mode `0700` for a newly created directory. Preserve existing directory contents. Validate the database before creating the directory and surface filesystem conflicts through the database connection error path.
 
-- Own the agent setup transaction in the main process. Require versioned verified setup for every installation; legacy providers do not unlock entry. Atomically persist primary, enabled providers and command identity hashes only on Finish. Keep ACP probes single-flight, cancellable, bounded to 15 seconds and rooted in private temporary directories independent of any database. Send no prompts and create no runs/transcripts/worktrees. Stop the process before directory removal. Ignore stale results on cancellation, config changes, renderer loss/reload and shutdown. Refresh executable discovery on retries; npx alone is not provider detection. Never install provider CLIs or store credentials.
+- Own the agent setup transaction in the main process. Require versioned verified setup for every installation; legacy providers do not unlock entry. Atomically persist primary, enabled providers and command identity hashes only on Finish. Keep ACP probes single-flight, cancellable, bounded to 15 seconds and rooted in private temporary directories independent of any database. Send no prompts and create no runs/transcripts/worktrees. Stop the process before directory removal. Ignore stale results on cancellation, config changes, renderer loss/reload and shutdown. Refresh executable discovery on retries; npx alone is not provider detection. Only explicit standard catalog setup may install fixed, integrity-verified pinned harnesses and required ACP adapters privately using the scoped policy in ARCHITECTURE.md. Disable vendor installation scripts and updates; preserve external installations and overrides. Keep browser/device/paste-back challenges owner/attempt-bound and outside snapshots and persistent state. Providers alone own credentials. Authentication subprocesses grant no file, terminal or model authority. OpenCode authentication uses a private password-protected loopback server with external plugins disabled. Custom launch commands and enterprise endpoints retain manual setup.
 
 - Own multiple independent orchestration Chat sessions, each rooted in a generated private subfolder of `.code60_workspace` beside the database. Restore saved chats as stopped history once verified setup/provider/database are available; start an initial idle chat only when none are saved. New chat adds a session without stopping existing ones. Reuse all chats and selection across renderer reloads and project switches, and replace live sessions on provider/command/database changes without deleting history. New session replaces only its target chat. Use core for run records, streaming, once-only decisions using the live orchestration approval setting, cancellation and process cleanup. Chat actions are the explicit exception to the open-project run rule: accept only IDs of existing orchestration runs, and never accept a workspace path. Keep each chat's event stream separate from project events; stop every chat on Stop all and every shutdown path.
 
@@ -390,3 +390,23 @@ and states only, never names/IDs, definitions, paths, endpoints, references or s
 Cleanup verification retries retained revoked handles for the captured scope only,
 coalesces concurrent attempts and retains ownership on failure. It never reconnects,
 launches a process, retries a business call or discovers/kills processes by name.
+
+Launch only preserved bundled entrypoints with their recorded Node, retaining the
+pinned release's MCP bootstrap and authenticated HTTP operations. Never run npm,
+npx or a compiler at execution time. A missing bundle may be cached from prepared
+local assets only on explicit start/reconnect; damaged bindings require recovery,
+never fallback. Keep Transmission provider authentication separate from Code60's
+verified provider membership. Backend shutdown does not cancel approved workflows.
+Pin CODEX_PATH to the verified cached native Codex for new engines; application
+provider overrides must not replace this runtime. Preserve healthy existing engines.
+
+## Initial database preparation
+
+Only explicit private management setup may prepare the default database under
+XDG_DATA_HOME/code60/databases/default.sqlite. Strictly distinguish absent selection
+from damaged metadata. Validate existing files read-only before initialization;
+never adopt empty/unrelated files or replace a missing/corrupt/custom selection.
+Serialize preparation with application actions and compare preference identities
+before committing. Publish new defaults exclusively from private staged SQLite
+files. Ordinary restore/open must not create replacement databases or provider
+verification/agent authority.

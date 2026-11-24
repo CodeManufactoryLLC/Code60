@@ -247,3 +247,8 @@ and states only, never names/IDs, definitions, paths, endpoints, references or s
 Cleanup verification retries retained revoked handles for the captured scope only,
 coalesces concurrent attempts and retains ownership on failure. It never reconnects,
 launches a process, retries a business call or discovers/kills processes by name.
+
+Provider setup uses strict catalog provider/method IDs and owner-derived setup/attempt/
+challenge identities. Login progress is an ephemeral typed device/browser/code/confirmation
+response, absent shared snapshots. No executable, endpoint, package, path, environment
+or generic terminal fields. Retain Codex operation wrappers and v1 saved membership.

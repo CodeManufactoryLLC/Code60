@@ -241,6 +241,11 @@ async function connectSession(
   const pendingPermissions = new Set<AbortController>();
   let permissionHandler: PermissionHandler | undefined;
   let sessionId: string | undefined;
+  let rejectStartupAuth: (error: Error) => void = () => {};
+  const startupAuth = new Promise<never>((_, reject) => {
+    rejectStartupAuth = reject;
+  });
+  startupAuth.catch(() => {});
   let busy = false;
   let suppressUpdates = false;
   const state = new SessionStateTracker();
@@ -302,6 +307,12 @@ async function connectSession(
         if (update !== undefined) listener(update);
       }
     })
+    .onRequest(methods.client.elicitation.create, async () => {
+      // Login belongs to explicit provider setup, never a connection probe or agent run.
+      if (!sessionId && options.agentName === "droid")
+        rejectStartupAuth(new AcpError(authMessage(options.agentName), true));
+      return { action: "decline" as const };
+    })
     .onRequest(methods.client.session.requestPermission, async ({ params, signal }) => {
       if (params.sessionId !== sessionId || permissionHandler === undefined) return CANCELLED;
       const controller = new AbortController();
@@ -352,7 +363,7 @@ async function connectSession(
 
   const call = async <T>(promise: Promise<T>): Promise<T> => {
     try {
-      return await Promise.race([promise, terminated]);
+      return await Promise.race([promise, terminated, startupAuth]);
     } catch (error) {
       if (isAuthError(error)) throw new AcpError(authMessage(options.agentName), true);
       if (error instanceof AcpError) throw error;
@@ -371,7 +382,11 @@ async function connectSession(
     const init = await call(
       ctx.request(methods.agent.initialize, {
         protocolVersion: PROTOCOL_VERSION,
-        clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+        clientCapabilities: {
+          fs: { readTextFile: false, writeTextFile: false },
+          terminal: false,
+          ...(options.agentName === "droid" ? { elicitation: { url: {} } } : {}),
+        },
         ...(options.clientVersion === undefined
           ? {}
           : { clientInfo: { name: "code60", version: options.clientVersion } }),

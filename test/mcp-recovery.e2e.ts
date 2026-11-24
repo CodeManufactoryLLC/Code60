@@ -18,8 +18,8 @@ async function edit(page: Page, value: string) {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.evaluate((text) => navigator.clipboard.writeText(text), value);
   await page.locator(".mcp-json-editor .inputarea").focus();
-  await page.keyboard.press("Control+a");
-  await page.keyboard.press("Control+v");
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("ControlOrMeta+v");
 }
 for (const direction of ["complete", "roll back", "conflict"] as const) {
   test(`MCP recovery: reviewed interrupted move ${direction}, draft retention and private evidence`, async ({

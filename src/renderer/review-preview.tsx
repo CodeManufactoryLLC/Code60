@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { ApplicationClient, Review, TaskView } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import { type ReviewPreview, reviewRequest } from "./review-actions.js";
 import { ReviewPanel } from "./review-panel.js";
 
@@ -47,7 +48,7 @@ function PinnedReviewPreview({ api, preview }: { api: ApplicationClient; preview
   // biome-ignore lint/correctness/useExhaustiveDependencies: The canonical key includes all preview fields and explicit Retry.
   useEffect(() => {
     let current = true;
-    const requestId = crypto.randomUUID();
+    const requestId = randomId();
     const read = preview.application
       ? reviewRequest(api, preview.scope, {
           type: "task",

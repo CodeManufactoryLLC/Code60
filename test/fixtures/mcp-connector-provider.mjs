@@ -6,6 +6,7 @@ import { Readable, Writable } from "node:stream";
 import { agent, methods, ndJsonStream, PROTOCOL_VERSION } from "@agentclientprotocol/sdk";
 
 let adapter;
+let adapterStopped = true;
 let sequence = 0;
 let cancelled = false;
 let callId;
@@ -13,6 +14,8 @@ const pending = new Map();
 const notify = (method, params) =>
   adapter.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`);
 const request = (method, params = {}) => {
+  if (adapterStopped || adapter?.stdin.destroyed)
+    return Promise.reject(new Error("Fixture adapter stopped"));
   const id = ++sequence;
   if (method === "tools/call") callId = id;
   return new Promise((resolve, reject) => {
@@ -26,6 +29,7 @@ const request = (method, params = {}) => {
 };
 const setup = async (method, params) => {
   const server = params.mcpServers[0];
+  adapterStopped = false;
   adapter = spawn(server.command, server.args, {
     cwd: params.cwd,
     env: {
@@ -36,6 +40,7 @@ const setup = async (method, params) => {
   });
   adapter.stderr.resume();
   const fail = () => {
+    adapterStopped = true;
     for (const { reject, timer } of pending.values()) {
       clearTimeout(timer);
       reject(new Error("Fixture adapter stopped"));
@@ -43,6 +48,7 @@ const setup = async (method, params) => {
     pending.clear();
   };
   adapter.on("error", fail);
+  adapter.stdin.on("error", fail);
   adapter.on("exit", fail);
   const lines = createInterface({ input: adapter.stdout });
   lines.on("line", (line) => {

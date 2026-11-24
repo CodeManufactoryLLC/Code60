@@ -10,6 +10,7 @@ import type {
   McpTargetAddress,
 } from "../bridge/index.js";
 import { AnchoredMenu } from "./anchored-menu.js";
+import { randomId } from "./browser-platform.js";
 import { DataTable, type TableOptions } from "./data-table.js";
 import { McpAuthenticationPanel } from "./mcp-authentication.js";
 import { McpForm, type McpFormDraft, mcpFormFields } from "./mcp-form.js";
@@ -126,7 +127,7 @@ export function McpServersPage({
   awake.current = active && visible;
   const requestId = (value: unknown) => {
     const key = JSON.stringify(value);
-    if (request.current?.key !== key) request.current = { key, id: crypto.randomUUID() };
+    if (request.current?.key !== key) request.current = { key, id: randomId() };
     return request.current.id;
   };
   const refresh = useCallback(async () => {
@@ -209,7 +210,7 @@ export function McpServersPage({
           base: structuredClone(read),
           target: structuredClone(target),
           ...(id ? { originalId: id, initial: structuredClone(read.document.servers[id]) } : {}),
-          key: crypto.randomUUID(),
+          key: randomId(),
         }
       : undefined;
   const stale = (value: Editor) =>
@@ -530,7 +531,7 @@ export function McpServersPage({
                           initial: editor.originalId
                             ? value.document?.servers[editor.originalId]
                             : undefined,
-                          key: crypto.randomUUID(),
+                          key: randomId(),
                         },
                   );
                 },

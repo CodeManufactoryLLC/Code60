@@ -1,4 +1,33 @@
+export type {
+  ProviderLoginAnswer,
+  ProviderLoginChallenge,
+  ProviderLoginMethod,
+  ProviderSetupIdentity,
+  ProviderSetupProgress,
+  ProviderSetupStart,
+  ProviderSetupSubmission,
+  SetupProviderId,
+} from "../contracts/index.js";
+export {
+  parseProviderSetupIdentity,
+  parseProviderSetupStart,
+  parseProviderSetupSubmission,
+  providerLoginChallengeSchema,
+} from "../contracts/index.js";
+
 import { z } from "zod";
+
+export type {
+  CodexChallenge,
+  CodexSetupIdentity,
+  CodexSetupProgress,
+  CodexSetupStarted,
+} from "../contracts/index.js";
+export {
+  CODEX_VERIFICATION_URL,
+  codexChallengeSchema,
+  parseCodexSetupIdentity,
+} from "../contracts/index.js";
 
 z.config({ jitless: true });
 const provider = z
@@ -44,13 +73,32 @@ export interface SetupProvider {
   name: string;
   logo: string;
   guidance: string;
+  loginMethods?: readonly import("../contracts/index.js").ProviderLoginMethod[];
 }
 export interface AgentSetupSession {
   id: string;
   mode: "primary" | "add";
   role: "primary" | "additional";
   candidate: string | null;
-  phase: "select" | "detecting" | "connecting" | "success" | "failed";
+  phase:
+    | "select"
+    | "detecting"
+    | "connecting"
+    | "installing"
+    | "authenticating"
+    | "success"
+    | "failed";
+  setupAction?: "install" | "login";
+  codexAction?: "install" | "login";
+  failureReason?:
+    | "missing"
+    | "authentication"
+    | "install"
+    | "login"
+    | "unsupported"
+    | "timeout"
+    | "connection"
+    | "cleanup";
   detected: boolean;
   error: string | null;
   primary: string | null;

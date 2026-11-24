@@ -4,6 +4,7 @@ import type {
   RelayReviewRequest,
   RelayReviewResponse,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 
 export type ReviewScope =
   | ({
@@ -60,9 +61,7 @@ export async function reviewRequest(
   const review = await api.readReview({
     ...address,
     requestId:
-      request.type === "read" || request.type === "capture"
-        ? request.requestId
-        : crypto.randomUUID(),
+      request.type === "read" || request.type === "capture" ? request.requestId : randomId(),
     ...(request.type === "read" && request.revisionId ? { revisionId: request.revisionId } : {}),
   });
   return { type: "review", review, live: scope.live && review.chatId === scope.chatId };

@@ -205,7 +205,7 @@ describe("DesktopKnowledge", () => {
           id: "updates",
           availability: expect.objectContaining({
             status: "available",
-            reason: expect.stringContaining("Manual npm package updates"),
+            reason: expect.stringContaining("Explicit code60 update"),
           }),
         }),
       ]),
@@ -267,7 +267,12 @@ describe("DesktopKnowledge", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: "providers",
-          availability: expect.objectContaining({ status: "available" }),
+          agentAccess: "read",
+          availability: expect.objectContaining({
+            status: "available",
+            reason: expect.stringContaining("explicit action in the controlling setup dialog"),
+            action: expect.stringContaining("Install if missing"),
+          }),
         }),
       ]),
     );
@@ -733,11 +738,25 @@ it("describes workflow drafting and execution prerequisites without starting the
       availability: expect.objectContaining({
         status: "available",
         reason: expect.stringContaining(
-          process.platform === "darwin" ? "staging.20" : "history is readable",
+          process.platform === "darwin" && process.arch === "arm64"
+            ? "staging.20"
+            : "history is readable",
         ),
       }),
     }),
   );
+  if (process.platform === "darwin" && process.arch === "arm64") {
+    expect(capabilities.entries).toContainEqual(
+      expect.objectContaining({
+        id: "workflows",
+        availability: expect.objectContaining({
+          reason: expect.stringMatching(
+            /bundled pinned engines.*separate Codex login\/configuration.*without runtime npm downloads/,
+          ),
+        }),
+      }),
+    );
+  }
   expect(reads).toEqual([]);
 });
 
@@ -764,4 +783,21 @@ it("describes human MCP authentication prerequisites without exposing definition
   expect(JSON.stringify(capabilities)).toContain("Linux Secret Service");
   expect(JSON.stringify(capabilities)).toContain("Explicit temporary storage");
   expect(JSON.stringify(capabilities)).not.toContain("credentialRef");
+});
+
+it("keeps LAN beta discoverable without probing or granting server authority", async () => {
+  const { knowledge } = setup({ database: null, providers: [] });
+  const capabilities = result(
+    await knowledge.call("code60_get_capabilities", { query: "Web Server Beta" }, relay),
+  );
+  expect(capabilities.entries).toEqual([
+    expect.objectContaining({
+      id: "web-server",
+      agentAccess: "human-only",
+      availability: expect.objectContaining({
+        status: "unknown",
+        reason: expect.stringContaining("does not probe or enable"),
+      }),
+    }),
+  ]);
 });

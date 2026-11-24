@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,7 +24,7 @@ describe("production MCP transports and per-session authority (supporting integr
   let broker: Awaited<ReturnType<typeof createMcpBroker>>;
   const sessions: AgentSession[] = [];
   beforeEach(async () => {
-    directory = await mkdtemp(join(tmpdir(), "code60-production-mcp-"));
+    directory = await realpath(await mkdtemp(join(tmpdir(), "code60-production-mcp-")));
     broker = await createMcpBroker(adapter);
     runtime = new McpRuntime(
       join(directory, "runtime"),

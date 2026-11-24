@@ -4,6 +4,12 @@ Node-only leaf module for native process ownership, executable resolution, path
 identity and private storage. Import no application modules or Electron. Export
 through `index.ts`. Bridge, renderer and contracts must never import this module.
 
+- Payload archive, descriptor and acquisition implementations are shared source
+  ES modules, consumed by both the installed runtime and independent host tools.
+  Keep them Node-only, include them in both builds and validate them with the same
+  archive attack tests. Registry bootstrap metadata is data, never executable
+  update logic. Production registry/release origins have no public override.
+
 - Never use blanket `shell: true` or unverified PID kills.
 - Reject unsupported hosts before process launch; macOS and Linux are the only supported operating systems.
 - Enforce finite startup/cleanup deadlines.
@@ -74,3 +80,20 @@ Network policy failures carry only allowlisted native error codes for phase 7
 network/TLS/deadline guidance; discard raw causes and payloads. Protocol consumers
 must not infer authority or retry from these codes. Keep DNS/socket/redirect and
 HTTPS policy unchanged.
+
+- Installation ownership uses its dedicated non-reclaiming lock. Do not reuse
+  lockPrivateState's stale-owner cleanup for distribution. Preserve uncertain
+  locks and possibly published activations. Validate private receipts, directory
+  containment and file identities; never repair by chmod/chown or sudo.
+
+- Transmission bundle storage is a Node-only filesystem boundary. Validate exact
+  supported artifact identities and the complete regular-file inventory before
+  publication or launch. Version bindings and canonical Node are immutable; keep
+  published engines separate from application activation and workflow state.
+  Never acquire dependencies, compile helpers, reclaim uncertain locks or start
+  engines during inspection. Remove only verified staging owned by the attempt.
+
+- `index.bootstrap.ts` is the Node-only distribution variant of the public index.
+  Keep its installation-only closure free of credential schemas, native keyring
+  loading and application initialization. The distribution compiler selects it
+  via module suffixes and publishes it as index.js; retain closure verification.

@@ -80,14 +80,33 @@ They must never require live agents or credentials.
 assets, foreground backend and offline embedding model without service enrollment.
 `npm run test:rag:model` exercises the actual offline model and worker lifecycle.
 
+For Transmission development on native macOS arm64, run `npm run prepare:engines`
+after building to stage both pinned engines and their native Codex dependency from
+the separate committed lockfile. A full build clears these generated assets.
+Packaging prepares them automatically on macOS; Linux omits them. After native
+packaging, `npm run test:transmission` runs the real engine/ACP/Codex browser
+journey with an isolated fake model endpoint, never a live provider. It retains
+traces, identities and process cleanup evidence under `test-results/transmission-native`.
+
+For independent Linux installation acceptance, build the tarball and run
+`npm run test:packaged:clean` on the host. The [clean-install guide](test/clean-install/README.md)
+describes the fresh customer environment, separate browser driver, online installation
+and offline runtime checks. It reuses the complete golden journey and preserves
+evidence under `test-results/clean-install`. This additional CI gate does not
+replace existing browser, package or model checks.
+
 ### Linux development container
 
 Use the [Linux development container](.devcontainer/README.md) for a non-root
 Linux x64 environment with isolated dependencies and model/browser caches.
-Run `npm run devcontainer -- prepare` after host dependency installation, then
-use the documented editor or terminal workflow. Docker must already be running.
+After host dependency installation, use `npm run devcontainer -- start` to
+prepare dependencies/models and run Code60 with host-browser forwarding, without
+an editor. Ctrl+C cleans up. Alternatively, run `npm run devcontainer -- prepare`
+and use the documented editor or terminal workflow. Docker must already be running.
 Always finish a test session with `npm run devcontainer -- down`; it removes owned
-containers and exported images while preserving caches and test evidence.
+containers and exported images while preserving caches, the private provider home
+and test evidence. Global npm provider tools install to the persistent home prefix;
+sign in inside the container, independently of host credentials.
 
 Preparation reserves a stable gateway/Vite port pair for each worktree and generates
 matching editor forwarding without remapping. Agents in separate worktrees can
@@ -108,7 +127,7 @@ For the container workflow, run these commands from your own checkout:
 
 | Location | Work |
 | --- | --- |
-| Host | Initial `npm ci` for the pinned CLI; `npm run devcontainer -- prepare`, `up`, `exec` and `down`; authenticated Git fetch/commit/push and PR operations. |
+| Host | Initial `npm ci` for the pinned CLI; `npm run devcontainer -- prepare`, `up`, `start`, `exec` and `down`; authenticated Git fetch/commit/push and PR operations. |
 | Container | Explicit dependency/Chromium/model preparation, development, builds and checks through `exec` or the isolated editor terminal. Use synthetic Git identities in test repositories. |
 
 For example, `npm run devcontainer -- exec npm run check` runs Linux checks with
@@ -397,7 +416,47 @@ contribution under the project's license. Use your own name and email.
 ## Browser and package CI
 
 PRs and main pushes run Linux Node 24 unit/static/coverage checks, browser journeys
-and clean-prefix npm package/offline-model smoke tests. The aggregate required
+and clean-prefix npm package/offline-model smoke tests. A dependent clean-install
+job tests that exact package in isolated customer/driver containers. The aggregate required
 check remains **CI passed**. Manual native validation runs on macOS Apple Silicon
 with Node 24. No native installer or automatic publisher remains. Actual launchd
 and systemd login/update lifecycle checks are required before release claims.
+
+## Platform distribution candidates
+
+See the [artifact workflow](docs/distribution/artifacts.md) for `npm run package:payload`,
+`npm run test:payload`, `npm run package:bootstrap` and clean installed-payload
+acceptance. Build Linux in the pinned amd64 container and macOS on Apple Silicon.
+Retain per-run evidence and remove owned test resources; do not publish artifacts,
+install a login service or enable public setup during this contributor workflow.
+
+## Managed installation acceptance
+
+See [installation internals](docs/distribution/installation.md). Standard tests build
+the narrow Node-only distribution closure for real launcher subprocesses.
+`npm run test:installation` exercises isolated shell fixtures; require fish in the
+Linux container and disposable native runner. The managed clean-install mode adds
+the full installed production golden journey after removing bootstrap/npm caches.
+No contributor check edits your profiles or installs your login service.
+
+## Setup development
+
+See [candidate setup behavior](docs/distribution/setup.md) for consent, status,
+database defaults and failure recovery. After preparing a platform payload, run
+`npm run test:setup` for real CLI/backend integration through an isolated supervisor
+fixture. On the Docker host, also run
+`npm run test:packaged:clean -- --setup release/payloads/linux-x64.json` for the full
+setup-created-database browser journey. Keep the manual database journey and all
+existing package/model regressions. No real user service or host profiles are
+changed by acceptance; retain evidence and verify owned resource cleanup.
+
+## Update development
+
+See [explicit updates and recovery](docs/distribution/updates.md). After packaging,
+run `npm run test:update` for installed runtime/browser acceptance with isolated
+state and the bounded supervisor. On the Docker host also run
+`npm run test:packaged:clean -- --update release/payloads/linux-x64.json` for the
+offline customer/driver journey. Preserve custom databases, prior releases,
+workflow bindings and independent filesystem/Git/process evidence. No check
+installs a real host service or edits host profiles. Host tooling and both builds
+share the Node-only platform verifier without importing development dist.

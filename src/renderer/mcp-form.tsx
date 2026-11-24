@@ -6,6 +6,7 @@ import {
   parseMcpConnectorDocument,
   parseMcpDefinitionText,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 
 type Binding = {
   key: string;
@@ -39,7 +40,7 @@ export function mcpFormFields(id: string, definition?: McpConnectorDefinition): 
   ) =>
     Object.entries(values).map(
       ([name, b]): Binding => ({
-        key: crypto.randomUUID(),
+        key: randomId(),
         name,
         kind: "value" in b ? "literal" : "credential",
         value: "value" in b ? b.value : b.credentialRef,
@@ -54,7 +55,7 @@ export function mcpFormFields(id: string, definition?: McpConnectorDefinition): 
     type: definition?.type ?? "stdio",
     command: definition?.type === "stdio" ? definition.command : "",
     args: definition?.type === "stdio" ? [...definition.args] : [],
-    argIds: definition?.type === "stdio" ? definition.args.map(() => crypto.randomUUID()) : [],
+    argIds: definition?.type === "stdio" ? definition.args.map(() => randomId()) : [],
     env: definition?.type === "stdio" ? bindings(definition.env) : [],
     url: definition?.type === "http" ? definition.url : "",
     headers: definition?.type === "http" ? bindings(definition.headers) : [],
@@ -210,10 +211,7 @@ function BindingFields({
         type="button"
         disabled={rows.length >= 64}
         onClick={() =>
-          onChange([
-            ...rows,
-            { key: crypto.randomUUID(), name: "", kind: "literal", value: "", prefix: "" },
-          ])
+          onChange([...rows, { key: randomId(), name: "", kind: "literal", value: "", prefix: "" }])
         }
       >
         Add {header ? "header" : "environment binding"}
@@ -266,7 +264,7 @@ export function McpForm({
       ...f,
       [key]: value,
       ...(key === "args" && Array.isArray(value) && value.length !== f.argIds.length
-        ? { argIds: value.map(() => crypto.randomUUID()) }
+        ? { argIds: value.map(() => randomId()) }
         : {}),
     }));
   let document: McpConnectorDocument | undefined;

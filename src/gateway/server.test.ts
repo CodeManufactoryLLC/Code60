@@ -1,10 +1,11 @@
 import { once } from "node:events";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer, request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { encodeMcpText } from "../contracts/index.js";
+import { readPrivateJson } from "../platform/index.js";
 import { pairingControl } from "./pairing.js";
 import { managementRequest, startGateway } from "./server.js";
 
@@ -19,6 +20,7 @@ async function fixture(
   developmentAssets?: string,
   requirePairing?: boolean,
   developmentPort?: number,
+  refreshPath?: (signal: AbortSignal) => Promise<void>,
 ) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-gateway-")));
   const assets = join(directory, "assets");
@@ -28,6 +30,7 @@ async function fixture(
     ...process.env,
     HOME: directory,
     SHELL: "/bin/sh",
+    XDG_DATA_HOME: join(directory, "data"),
     XDG_STATE_HOME: join(directory, "state"),
     XDG_CONFIG_HOME: join(directory, "config"),
   };
@@ -45,6 +48,7 @@ async function fixture(
     roots: [directory],
     ...(developmentAssets ? { developmentAssets } : {}),
     ...(developmentPort === undefined ? {} : { developmentPort }),
+    ...(refreshPath ? { refreshPath } : {}),
   });
   owned.push({ directory, gateway });
   return { directory, gateway, env };
@@ -163,6 +167,27 @@ it("fences exact-text MCP management, keeps definitions out of snapshots and fit
     events.abort();
     await draining;
   }
+});
+
+it("uses the trusted host path boundary before provider detection", async () => {
+  const refreshPath = vi.fn(async (signal: AbortSignal) => {
+    signal.throwIfAborted();
+    throw Error("Isolated path boundary");
+  });
+  const { directory, gateway } = await fixture(undefined, false, undefined, refreshPath);
+  await mkdir(join(directory, "config/code60"), { recursive: true });
+  await writeFile(
+    join(directory, "config/code60/config.json"),
+    JSON.stringify({
+      agents: { copilot: { command: [join(directory, "never-executable")] } },
+    }),
+  );
+  await gateway.application.beginAgentSetup({ mode: "primary" });
+  const session = gateway.application.snapshot().agentSetup?.session;
+  if (!session) throw Error("Missing provider setup session");
+  await gateway.application.attemptAgentSetup({ provider: "copilot", sessionId: session.id });
+  expect(refreshPath).toHaveBeenCalledOnce();
+  expect(gateway.application.snapshot().agentSetup?.session?.phase).toBe("failed");
 });
 it("restricts explicit ports to valid development asset sessions", async () => {
   await expect(startGateway({ developmentPort: 43160 })).rejects.toThrow(
@@ -658,4 +683,86 @@ it("provides authenticated scoped MCP management without leaking definitions thr
   } finally {
     events.abort();
   }
+});
+
+it("inspects update interruption only through authenticated payload-free private management", async () => {
+  const { gateway, env, directory } = await fixture();
+  const saved = (await readPrivateJson(
+    join(directory, "state/code60/gateway/connection.json"),
+    4096,
+  )) as { token: string };
+  const call = (headers: Record<string, string>, body?: string) =>
+    fetch(`${gateway.origin}/management/update-summary`, {
+      method: "POST",
+      headers,
+      ...(body ? { body } : {}),
+    });
+  expect((await call({})).status).toBe(403);
+  expect((await call({ "X-Code60-Management": saved.token, Origin: gateway.origin })).status).toBe(
+    403,
+  );
+  expect((await call({ "X-Code60-Management": saved.token }, "{}")).status).toBe(400);
+  const before = await readdir(join(directory, "state/code60/gateway"));
+  expect(await managementRequest(env, "update-summary")).toMatchObject({
+    pid: process.pid,
+    interactiveActive: false,
+    scheduledActive: false,
+    schedulerAvailable: true,
+  });
+  expect(await readdir(join(directory, "state/code60/gateway"))).toEqual(before);
+  expect((await managementRequest(env, "status")).database).toEqual({ state: "not-selected" });
+});
+
+it("prepares a database only through authenticated payload-free private management", async () => {
+  const { gateway, env, directory } = await fixture();
+  const saved = (await readPrivateJson(
+    join(directory, "state/code60/gateway/connection.json"),
+    4096,
+  )) as { token: string };
+  const call = (headers: Record<string, string>, body?: string) =>
+    fetch(`${gateway.origin}/management/prepare-database`, {
+      method: "POST",
+      headers,
+      ...(body ? { body } : {}),
+    });
+  expect((await call({})).status).toBe(403);
+  expect((await call({ "X-Code60-Management": saved.token, Origin: gateway.origin })).status).toBe(
+    403,
+  );
+  expect(
+    (
+      await call(
+        { "X-Code60-Management": saved.token },
+        JSON.stringify({ path: "/tmp/untrusted.sqlite" }),
+      )
+    ).status,
+  ).toBe(400);
+  expect(await managementRequest(env, "prepare-database")).toEqual({ state: "ready" });
+  expect((await managementRequest(env, "status")).database).toEqual({ state: "ready" });
+  const path = join(directory, "data/code60/databases/default.sqlite");
+  const before = await readFile(path);
+  await managementRequest(env, "prepare-database");
+  expect(await readFile(path)).toEqual(before);
+});
+it("normal startup preserves an empty selected file and private setup refuses to initialize it", async () => {
+  const { gateway, env, directory } = await fixture();
+  await gateway.stop();
+  const path = join(directory, "empty.sqlite");
+  await writeFile(path, "");
+  await writeFile(
+    join(directory, "state/code60/desktop.json"),
+    JSON.stringify({ database: path }),
+    { mode: 0o600 },
+  );
+  const restarted = await startGateway({
+    env,
+    assets: join(directory, "assets"),
+    roots: [directory],
+  });
+  const current = owned.at(-1);
+  if (!current) throw Error("Missing fixture");
+  current.gateway = restarted;
+  expect(restarted.application.snapshot().database).toBeNull();
+  await expect(managementRequest(env, "prepare-database")).rejects.toThrow();
+  expect(await readFile(path, "utf8")).toBe("");
 });

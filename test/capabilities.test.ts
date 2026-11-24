@@ -39,7 +39,7 @@ describe("browser capability catalog", () => {
   it("describes scheduler upgrade recovery without granting service authority", () => {
     const updates = APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates");
     expect(updates).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });
-    expect(updates?.limitations).toContain("Stop the backend");
+    expect(updates?.limitations).toContain("before shutdown");
     expect(updates?.limitations).toContain("No automatic downloads");
   });
   it("describes human-only sidebar/card navigation without a current-page menu", () => {
@@ -220,7 +220,13 @@ describe("browser capability catalog", () => {
   });
   it("describes browser-only distribution and retained scheduler controls", () => {
     const browser = APPLICATION_CAPABILITIES.find((cap) => cap.id === "browser-runtime");
-    expect(browser?.limitations).toContain("macOS Apple Silicon and Linux x64 require Node 24");
+    expect(browser?.limitations).toContain(
+      "macOS Apple Silicon and Linux x64 setup requires Node >=24.22.0 <25",
+    );
+    expect(browser?.limitations).toContain("code60 setup [--yes] [--no-open]");
+    expect(browser?.limitations).toContain("read-only code60 status");
+    expect(browser?.limitations).toContain("no profiles are edited");
+    expect(browser?.limitations).toContain("preserves valid custom selections");
     expect(browser?.limitations).toContain("starts at login");
     expect(browser?.limitations).toContain("Browsers connect without a code by default");
     expect(browser?.limitations).toContain("code60 pairing on/off/status");
@@ -233,8 +239,10 @@ describe("browser capability catalog", () => {
   });
   it("describes the scheduler update ownership and executable prerequisites without agent authority", () => {
     const updates = APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates");
-    expect(updates?.limitations).toContain("Node 24 and npm");
-    expect(updates?.limitations).toContain("repair the service registration");
+    expect(updates?.limitations).toContain("Node >=24.22.0 <25");
+    expect(updates?.limitations).toContain("repairs service registration");
+    expect(updates?.limitations).toContain("code60 update recover");
+    expect(updates?.limitations).toContain("Setup never updates");
     expect(updates?.agentAccess).toBe("human-only");
   });
   it("classifies Providers navigation and human management without retaining an Agents settings route", () => {
@@ -248,7 +256,29 @@ describe("browser capability catalog", () => {
       prerequisite: "none",
     });
     expect(providers?.limitations).toContain("stopped interactive agent work");
-    expect(providers?.limitations).toContain("No automatic installation or management MCP tools");
+    expect(providers?.limitations).toContain(
+      "explicit installation of pinned @openai/codex@0.171.0",
+    );
+    expect(providers?.limitations).toContain(
+      "Custom launch commands and enterprise endpoints use manual setup",
+    );
+  });
+  it("describes all catalog installation and browser login methods without new agent authority", () => {
+    const capability = APPLICATION_CAPABILITIES.find((item) => item.id === "providers");
+    expect(capability?.prerequisite).toBe("none");
+    for (const label of [
+      "Antigravity",
+      "Claude subscription",
+      "Anthropic Console",
+      "Copilot",
+      "Kiro",
+      "Droid",
+      "OpenCode",
+      "code paste-back",
+      "API-key entry",
+    ])
+      expect(capability?.limitations).toContain(label);
+    expect(capability?.limitations).toContain("controlling setup dialog alone");
   });
   it("classifies model switching as provider-dependent and human-only with role-scoped defaults", () => {
     expect(APPLICATION_CAPABILITIES.find((c) => c.id === "model-settings")).toMatchObject({
@@ -382,5 +412,15 @@ describe("browser capability catalog", () => {
       purpose: expect.stringContaining("custom assistants and Relay"),
       limitations: expect.stringContaining("reduced motion and forced colors"),
     });
+  });
+});
+it("describes LAN beta as human-only and separate from local pairing policy", () => {
+  expect(PAGE_CAPABILITIES["web-server"]).toBe("web-server");
+  expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "web-server")).toMatchObject({
+    agentAccess: "human-only",
+    prerequisite: "none",
+    access: "Settings → Advanced → Web Server Beta",
+    limitations: expect.stringContaining("LAN always requires pairing"),
+    confirmation: expect.stringContaining("123-456"),
   });
 });

@@ -7,6 +7,10 @@ import {
   pairingControl,
 } from "../gateway/index.js";
 
+import { combinedStatus, runSetup } from "./setup.js";
+import { runUpdate } from "./update.js";
+import { workflowLogin } from "./workflow-login.js";
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function confirmChange(description: string, flags: readonly string[]) {
   if (flags.includes("--yes")) return true;
@@ -25,9 +29,26 @@ export async function runManagement(args: readonly string[], env: NodeJS.Process
   if (Number(process.versions.node.split(".")[0]) !== 24)
     throw new Error("Code60 requires Node 24.");
   const [command = "open", action, ...flags] = args;
+  if (command === "setup") {
+    await runSetup(args.slice(1), env);
+    return;
+  }
+  if (command === "status") {
+    if (args.length !== 1) throw Error("Use code60 status.");
+    process.stdout.write(`${JSON.stringify(await combinedStatus(env))}\n`);
+    return;
+  }
+  if (command === "update") {
+    await runUpdate(args.slice(1), env);
+    return;
+  }
+  if (command === "workflows") {
+    process.exitCode = await workflowLogin(args.slice(1), env);
+    return;
+  }
   if (command === "--help" || command === "help") {
     process.stdout.write(
-      "code60 open\ncode60 service install|status|start|stop|repair|uninstall [--yes]\ncode60 pairing on|off|status [--yes]\n",
+      "code60 setup [--yes] [--no-open]\ncode60 status\ncode60 update [--yes]\ncode60 update status\ncode60 update recover [--yes]\ncode60 open\ncode60 workflows login\ncode60 service install|status|start|stop|repair|uninstall [--yes]\ncode60 pairing on|off|status [--yes]\n",
     );
     return;
   }
@@ -66,7 +87,7 @@ export async function runManagement(args: readonly string[], env: NodeJS.Process
     return;
   }
   if (command !== "open" || action !== undefined)
-    throw new Error("Use code60 open, code60 service or code60 pairing. See code60 --help.");
+    throw new Error("Use code60 --help for supported commands.");
   const status = await backendControl(env, "status");
   if (!status.installed) throw new Error("Install the login backend with code60 service install.");
   if (!status.service) await backendControl(env, "start");

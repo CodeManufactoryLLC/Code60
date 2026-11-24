@@ -28,7 +28,9 @@ Use the existing harness, not a new QA plugin or a live agent.
   process. The checked-in golden path is `test/browser-workflow.e2e.ts`.
 - Start first-use journeys in isolated HOME/config/state with **no saved verified
   setup**. A fixture may configure the fake provider executable, but cannot mark
-  setup complete. Create the database and open the project through the UI.
+  setup complete. Manual-database journeys create/select through the UI. The
+  independent setup journey must prepare its database through the actual packaged
+  setup CLI and still verify the provider and open the project through visible UI.
 - Mock only external providers and native service supervisor boundaries. Drive
   host selection and confirmation through the browser dialogs. Use the real
   scriptable fake-agent subprocess, ACP, MCP gateway, filesystem and Git worktree.
@@ -63,15 +65,51 @@ Use the existing harness, not a new QA plugin or a live agent.
   activate Git hooks or call a live provider without separate authorization.
   Inject native service controls for registration and handoff tests. Unit tests
   of service definitions do not establish native login/reboot behavior.
+- Missing-provider journeys must use a clean environment and controlled PATH.
+  Production path recovery adds common host tool directories even with a temporary
+  HOME; use the trusted Node composition port to retain fixture paths while keeping
+  real detection, installation and ACP verification. Never inherit host credentials
+  or let a routine fixture probe an installed provider.
 - Build with `npm run package:app`, then run `npm run test:packaged` to verify an
   installed npm tarball, bundled browser assets and offline embedding assets.
   This smoke test does not install a login service.
+- For clean installation changes, also run `npm run test:packaged:clean` on the host
+  after packaging. Follow the [harness guide](../../../test/clean-install/README.md).
+  Its separate driver reuses the golden scenario against an installed, offline
+  customer runtime; preserve run-specific traces and verified Docker cleanup.
+- Platform payload changes additionally follow the [artifact workflow](../../../docs/distribution/artifacts.md):
+  run `npm run test:payload` on each supported target and the explicit Linux
+  payload mode of the clean-install harness. Preserve the existing tarball journey.
+  Verify extraction needs no npm/compiler/scripts and record both targets' exact
+  descriptors, model results and owned staging/process cleanup. Bootstrap help and
+  version checks alone do not prove acquisition, installation or setup; exercise
+  the affected managed/setup journeys as well.
+- Managed installation changes follow the [installation internals](../../../docs/distribution/installation.md).
+  Exercise the managed clean-install mode after cache removal and real login/
+  interactive shells. Keep artifact-only and legacy journeys independent. Assert
+  owned receipts/current pointer, command identity, preserved profile contents,
+  cancellation and lock behavior. Never edit host profiles or install host fish.
 - If a required runtime, browser, model or platform is unavailable, mark that
   journey BLOCKED. Do not substitute static checks for runtime evidence.
 - Close test browser contexts, isolated gateways and provider processes on every
   exit path. Preserve traces and synthetic evidence. If Docker is used by any
   additional validation, remove only that run's containers and temporary images;
   never globally prune Docker or remove other work's resources.
+
+- Setup changes additionally require `npm run test:setup` and the clean-install
+  `--setup` mode. Assert files-only consent, strict metadata/data preservation,
+  cache removal, repeated/restarted backend identity, read-only status and the full
+  golden journey from a setup-created database. Use the dedicated bounded backend
+  supervisor fixture, never legacy scheduler fixtures or a real host service.
+
+- Update changes additionally require `npm run test:update` and clean-install
+  `--update` mode. Assert verification and consent before interruption, original
+  PID preservation on decline/preparation cancellation, quiescence before
+  publication, authenticated new-version readiness and explicit recovery. Retain
+  custom database/preferences, prior activation and original engine bindings.
+  Exercise the shared golden journey after source caches are removed and while
+  release/activation trees are read-only. On native macOS additionally verify
+  approved workflows survive the actual update on their original engine/runtime.
 
 ## Report what actually happened
 

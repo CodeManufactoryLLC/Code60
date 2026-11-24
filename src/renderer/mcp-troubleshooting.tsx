@@ -5,6 +5,7 @@ import {
   type McpTroubleshootingReport,
   mcpTroubleshootingReportSchema,
 } from "../bridge/index.js";
+import { copyText, randomId } from "./browser-platform.js";
 import { Modal } from "./modal.js";
 
 export function McpTroubleshooting({
@@ -49,9 +50,7 @@ export function McpTroubleshooting({
     setNotice("");
     try {
       const result = await api.mcpRuntime(
-        action === "report"
-          ? { action, target }
-          : { action, target, requestId: crypto.randomUUID() },
+        action === "report" ? { action, target } : { action, target, requestId: randomId() },
       );
       if (token !== epoch.current || capturedOwner.current !== owner) return;
       if (result.report) setReport(mcpTroubleshootingReportSchema.parse(result.report));
@@ -115,7 +114,7 @@ export function McpTroubleshooting({
             type="button"
             onClick={() => {
               const token = epoch.current;
-              void navigator.clipboard.writeText(JSON.stringify(report, null, 2)).then(
+              void copyText(JSON.stringify(report, null, 2)).then(
                 () => {
                   if (token === epoch.current) setNotice("Safe report copied.");
                 },

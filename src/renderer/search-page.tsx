@@ -5,6 +5,7 @@ import {
   type ProjectSearchSource,
   SEARCH_QUERY_LIMIT,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import { Icon } from "./icons.js";
 import { Modal } from "./modal.js";
 import { PageTitle } from "./page-title.js";
@@ -129,7 +130,7 @@ export function SearchPage({
       });
       return;
     }
-    const id = crypto.randomUUID();
+    const id = randomId();
     summaryActive.current = id;
     setOverview({ status: "generating" });
     try {
@@ -160,7 +161,7 @@ export function SearchPage({
     const criteria = { query: query.trim(), kind, sort };
     if (!database || !criteria.query) return;
     cancel();
-    const id = crypto.randomUUID();
+    const id = randomId();
     active.current = id;
     setSubmitted({ ...criteria, results: null, nextCursor: null, warnings: [] });
     setOverview(null);

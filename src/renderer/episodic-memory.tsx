@@ -5,6 +5,7 @@ import {
   type DesktopRun,
   type MemoryExtractionResult,
 } from "../bridge/index.js";
+import { randomId } from "./browser-platform.js";
 import { PageTitle } from "./page-title.js";
 import { TranscriptNotice, type Transcripts } from "./transcripts.js";
 
@@ -102,7 +103,7 @@ export function EpisodicMemoryPage({
       : "";
   async function extract() {
     if (!directory || busy || !count || loading || unavailable || !prompt.trim() || problem) return;
-    const requestId = crypto.randomUUID();
+    const requestId = randomId();
     request.current = requestId;
     setBusy(true);
     setError("");

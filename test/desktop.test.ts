@@ -237,7 +237,7 @@ const controllerDeps = (): CoreDeps => {
 beforeEach(async () => {
   // Project chat roots include a SHA-256 key, UUID and atomic-write suffix.
   // Keep those generated paths below the Windows helper's 248-character limit.
-  directory = await fs.mkdtemp(join(tmpdir(), "c60-"));
+  directory = await fs.realpath(await fs.mkdtemp(join(tmpdir(), "c60-")));
   agents = new FakeAgents();
   connectorStarts = [];
   git = new FakeGit();
