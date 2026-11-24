@@ -10,6 +10,7 @@ import {
   installationFileCode,
   installationLink,
   installationTreeIdentity,
+  installedEngineVersions,
   lockInstallation,
   newerStableRelease,
   preserveTransmissionBundle,
@@ -114,14 +115,23 @@ async function preserveEngines(
   // Legacy tarballs and synthetic installation fixtures have no payload engine
   // declaration. Current macOS payloads must declare it in artifact validation.
   if (metadata.transmissionBundle === undefined) return;
-  if (process.platform !== "darwin" || !/^[a-f0-9]{64}$/.test(metadata.transmissionBundle))
+  if (!/^[a-f0-9]{64}$/.test(metadata.transmissionBundle))
     throw Error("Unsupported installation engine bundle");
   if (retainBindings) {
     // Application updates cannot rebind a running or unfinished engine to a
     // different build's Node, manifest or dependencies, even for the same lock.
-    for (const version of ["0.1.0-staging.18", "0.1.0-staging.20"] as const)
-      await resolveTransmissionRuntime(env, version, signal);
-    return;
+    try {
+      for (const version of installedEngineVersions())
+        await resolveTransmissionRuntime(env, version, signal);
+      return;
+    } catch (error) {
+      // Older Linux installations had workflow history and no engine binding.
+      if (
+        process.platform !== "linux" ||
+        installationFileCode(error) !== "CODE60_ENGINE_UNAVAILABLE"
+      )
+        throw error;
+    }
   }
   await preserveTransmissionBundle(
     join(application, "dist/engines", metadata.transmissionBundle),
@@ -163,13 +173,13 @@ export async function installManagedRelease(options: InstallationOptions) {
     if (initial) {
       const contents = (await readdir(paths.root)).filter((name) => name !== ".install-lock");
       if (contents.length) {
-        if (contents.length !== 1 || contents[0] !== "engines" || process.platform !== "darwin")
+        if (contents.length !== 1 || contents[0] !== "engines")
           throw new Error("Installation directory contains unowned files; preserved contents");
         // Recognize only our own prior source-development cache. No migration
         // or ownership claim is made over unrelated files or legacy npm state.
         await installationDirectory(join(paths.root, "engines"), false, true);
         let verified = false;
-        for (const version of ["0.1.0-staging.18", "0.1.0-staging.20"] as const) {
+        for (const version of installedEngineVersions()) {
           try {
             await resolveTransmissionRuntime(env, version, options.signal);
             verified = true;

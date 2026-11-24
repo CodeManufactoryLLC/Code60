@@ -13,8 +13,9 @@ export type {
   WorkflowSnapshot,
 } from "../contracts/index.js";
 export {
+  defaultWorkflowEngine,
   LEGACY_TRANSMISSION_VERSION,
-  TRANSMISSION_VERSION,
+  supportsWorkflowPause,
   workflowDiffSchema,
   workflowDraftReplySchema,
   workflowDraftSchema,

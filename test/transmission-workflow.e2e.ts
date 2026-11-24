@@ -6,9 +6,11 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { type Browser, expect, type Page, test } from "@playwright/test";
 import type { LocalTransmission as TransmissionFactory } from "../src/application/index.js";
+import { defaultWorkflowEngine, type LEGACY_TRANSMISSION_VERSION } from "../src/contracts/index.js";
 import type { startGateway as GatewayFactory } from "../src/gateway/index.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
+const currentVersion = defaultWorkflowEngine(process.platform);
 const root = resolve(import.meta.dirname, "..");
 function alive(pid: number) {
   try {
@@ -40,8 +42,8 @@ async function launchWorkflowBrowser(browser: Browser, directory: string) {
     XDG_CONFIG_HOME: join(directory, "config"),
     XDG_STATE_HOME: join(directory, "state"),
   };
-  let supported = process.platform === "darwin";
-  const client = (version: "0.1.0-staging.20" | "0.1.0-staging.18") => {
+  let supported = false;
+  const client = (version: typeof currentVersion | typeof LEGACY_TRANSMISSION_VERSION) => {
     const transport = new LocalTransmission(
       join(directory, "state/code60/workflows", `transmission-${version}`),
       env,
@@ -61,7 +63,7 @@ async function launchWorkflowBrowser(browser: Browser, directory: string) {
     env,
     roots: [directory],
     assets: join(root, "dist/renderer"),
-    workflowClients: { current: client("0.1.0-staging.20"), legacy: client("0.1.0-staging.18") },
+    workflowClients: { current: client(currentVersion), legacy: client("0.1.0-staging.18") },
   });
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
   try {
@@ -106,7 +108,7 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
   test.setTimeout(180_000);
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-transmission-ui-")));
   const repo = join(directory, "project");
-  const engineRoot = join(directory, "state/code60/workflows/transmission-0.1.0-staging.20");
+  const engineRoot = join(directory, `state/code60/workflows/transmission-${currentVersion}`);
   const config = join(directory, "config/code60");
   await mkdir(repo);
   await mkdir(config, { recursive: true });
@@ -163,11 +165,9 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     await openWorkflows();
     const workflows = page.locator(".workflows-page");
     await expect(page.getByRole("heading", { name: "Workflows", exact: true })).toBeVisible();
-    if (process.platform === "linux") {
-      await expect(workflows.getByText(/Transmission execution requires macOS/)).toBeVisible();
-      await expect(await menu("New workflow")).toBeDisabled();
-      await page.keyboard.press("Escape");
-    }
+    await expect(workflows.getByText(/Transmission execution requires macOS/)).toBeVisible();
+    await expect(await menu("New workflow")).toBeDisabled();
+    await page.keyboard.press("Escape");
     await attachTransmissionBoundary(application);
     await headerAction("Refresh");
     await headerAction("New workflow");
@@ -629,8 +629,7 @@ test("workflow: Transmission staging.18 retained history and controls use its or
     const view = page.locator(".workflows-page");
     await view.getByRole("button", { name: /Retained legacy workflow/ }).click();
     await expect(view.getByRole("heading", { name: "“Retained legacy workflow”" })).toBeVisible();
-    if (process.platform === "linux")
-      await expect(view.getByText(/Transmission execution requires macOS/)).toBeVisible();
+    await expect(view.getByText(/Transmission execution requires macOS/)).toBeVisible();
     await attachTransmissionBoundary(app);
     await page.getByRole("button", { name: "Workflows actions" }).click();
     await page.getByRole("menuitem", { name: "Refresh" }).click();
@@ -649,7 +648,7 @@ test("workflow: Transmission staging.18 retained history and controls use its or
       plan: { idempotencyKey: key },
     });
     expect(alive(runs[0].workerPid)).toBe(false);
-    expect(await readdir(registry)).not.toContain("transmission-0.1.0-staging.20");
+    expect(await readdir(registry)).not.toContain(`transmission-${currentVersion}`);
   } finally {
     const cleanup = await Promise.allSettled([app?.close()]);
     engine.kill("SIGTERM");

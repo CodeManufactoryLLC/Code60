@@ -3,9 +3,10 @@ import { mkdir, realpath } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import {
+  defaultWorkflowEngine,
   LEGACY_TRANSMISSION_VERSION,
   parseWorkflowRequest,
-  TRANSMISSION_VERSION,
+  supportsWorkflowPause,
   type WorkflowDraft,
   type WorkflowDraftReply,
   type WorkflowRecord,
@@ -77,6 +78,8 @@ type Approval = {
 export class DesktopWorkflows {
   readonly root: string;
   private readonly client: TransmissionClient;
+  private readonly newVersion = defaultWorkflowEngine(process.platform);
+  private readonly otherPlatformClient: TransmissionClient;
   private readonly legacyClient: TransmissionClient;
   private choices = new Map<string, Choice>();
   private approvals = new Map<string, Approval>();
@@ -104,7 +107,13 @@ export class DesktopWorkflows {
   ) {
     this.root = join(stateHome(env), "code60", "workflows");
     this.client =
-      client ?? new LocalTransmission(join(this.root, `transmission-${TRANSMISSION_VERSION}`), env);
+      client ?? new LocalTransmission(join(this.root, `transmission-${this.newVersion}`), env);
+    const otherVersion = defaultWorkflowEngine(process.platform === "linux" ? "darwin" : "linux");
+    this.otherPlatformClient = new LocalTransmission(
+      join(this.root, `transmission-${otherVersion}`),
+      env,
+      otherVersion,
+    );
     this.legacyClient =
       legacyClient ??
       new LocalTransmission(
@@ -114,7 +123,11 @@ export class DesktopWorkflows {
       );
   }
   private engine(record: WorkflowRecord) {
-    return record.engineVersion === TRANSMISSION_VERSION ? this.client : this.legacyClient;
+    return record.engineVersion === this.newVersion
+      ? this.client
+      : supportsWorkflowPause(record.engineVersion)
+        ? this.otherPlatformClient
+        : this.legacyClient;
   }
   observeProvider(identity: string) {
     if (this.provider !== identity) {
@@ -167,7 +180,7 @@ export class DesktopWorkflows {
     await this.loading;
   }
   private async save() {
-    const next = { format: 1, version: TRANSMISSION_VERSION, entries: this.entries };
+    const next = { format: 1, version: this.newVersion, entries: this.entries };
     registrySchema.parse(next);
     await writePrivateJson(join(this.root, "registry.json"), next, this.previous, maximum);
     this.previous = structuredClone(next);
@@ -311,7 +324,7 @@ export class DesktopWorkflows {
       await this.load();
       return {
         supported: this.client.supported,
-        version: TRANSMISSION_VERSION,
+        version: this.newVersion,
         entries: structuredClone(this.entries),
       };
     }
@@ -356,7 +369,8 @@ export class DesktopWorkflows {
     }
     if (request.action === "review") {
       this.form(request.formId, request.revision);
-      if (!this.client.supported) throw new Error("Transmission execution requires macOS");
+      if (!this.client.supported)
+        throw new Error(`Transmission ${this.newVersion} is unavailable on this platform`);
       if (JSON.stringify(request.draft).length > 1_000_000)
         throw new Error("Workflow definition exceeds its limit");
       const choice = this.choice(request.draft.repositoryToken, request.formId);
@@ -398,7 +412,7 @@ export class DesktopWorkflows {
       const record: WorkflowRecord = {
         id,
         name: definition.name,
-        engineVersion: TRANSMISSION_VERSION,
+        engineVersion: this.newVersion,
         repository: approval.choice.path,
         repositoryIdentity: approval.choice.identity,
         repositoryGitIdentity: approval.choice.gitIdentity,
@@ -450,12 +464,21 @@ export class DesktopWorkflows {
       return { connected: true };
     }
     if (request.action === "recover") {
-      if (!client.supported) throw new Error("Transmission execution requires macOS");
+      if (!client.supported)
+        throw new Error(
+          `Transmission ${record.engineVersion ?? LEGACY_TRANSMISSION_VERSION} is unavailable on this platform`,
+        );
       if (record.snapshot || !["starting", "uncertain"].includes(record.state))
         throw new Error("Only an unconfirmed dispatch can be recovered");
       return this.submit(record);
     }
     if (request.action === "read") {
+      if (!client.supported)
+        return {
+          record: structuredClone(record),
+          connected: false,
+          error: `Transmission ${record.engineVersion ?? LEGACY_TRANSMISSION_VERSION} is unavailable on this platform`,
+        };
       if (!record.snapshot)
         return {
           record: structuredClone(record),
@@ -464,7 +487,6 @@ export class DesktopWorkflows {
             "Start is unconfirmed. Recover the same request after checking engine availability.",
         };
       try {
-        if (!client.supported) throw new Error("Transmission execution requires macOS");
         await this.target(record);
         this.snapshot(
           record,
@@ -482,7 +504,10 @@ export class DesktopWorkflows {
       }
     }
     if (!record.snapshot) throw new Error("Recover the workflow start first");
-    if (!client.supported) throw new Error("Transmission execution requires macOS");
+    if (!client.supported)
+      throw new Error(
+        `Transmission ${record.engineVersion ?? LEGACY_TRANSMISSION_VERSION} is unavailable on this platform`,
+      );
     await this.target(record);
     const runId = record.snapshot.runId;
     if (request.action === "events") {
@@ -520,7 +545,7 @@ export class DesktopWorkflows {
     }
     if (
       (request.action === "pause" || request.action === "resume") &&
-      record.engineVersion !== TRANSMISSION_VERSION
+      !supportsWorkflowPause(record.engineVersion)
     )
       throw new Error("Pause and resume require Transmission staging.20");
     if (record.stopPending && request.action !== "cancel")

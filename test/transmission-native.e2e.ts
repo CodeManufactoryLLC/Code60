@@ -3,8 +3,9 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import type { LocalTransmission as ClientFactory } from "../src/application/index.js";
+import { defaultWorkflowEngine } from "../src/contracts/index.js";
 import type { startGateway as GatewayFactory } from "../src/gateway/index.js";
 import type { preserveTransmissionBundle as PreserveFactory } from "../src/platform/index.js";
 import { commitFixture } from "./fixtures/git-repository.js";
@@ -15,7 +16,10 @@ import {
 } from "./fixtures/transmission-processes.js";
 import { transmissionProvider } from "./fixtures/transmission-provider.js";
 
-const root = resolve(import.meta.dirname, "..");
+const checkout = resolve(import.meta.dirname, "..");
+const root = process.env.CODE60_TEST_INSTALLED_ROOT
+  ? resolve(process.env.CODE60_TEST_INSTALLED_ROOT)
+  : checkout;
 const { startGateway } = (await import(
   pathToFileURL(join(root, "dist/gateway/index.js")).href
 )) as {
@@ -32,12 +36,12 @@ const { LocalTransmission } = (await import(
 test("native workflow: bundled engine survives backend restart, pauses, resumes and verifies isolated edits", async ({
   browser,
 }, info) => {
-  if (`${process.platform}-${process.arch}` !== "darwin-arm64")
-    throw Error("Native Transmission acceptance requires macOS arm64");
+  if (!["darwin-arm64", "linux-x64"].includes(`${process.platform}-${process.arch}`))
+    throw Error("Native Transmission acceptance requires macOS arm64 or Linux x64");
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60 native workflow ' ")));
-  const provider = await transmissionProvider();
   const home = join(directory, "home");
   const repo = join(home, "project");
+  const provider = await transmissionProvider(repo + ".worktrees");
   const config = join(home, "config/code60");
   const shell = join(home, "test-shell");
   const forbidden = join(home, "forbidden-runtime-tools.log");
@@ -57,7 +61,10 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
   };
   const git = (...args: string[]) =>
     execFileSync("/usr/bin/git", ["-C", repo, ...args], { env, encoding: "utf8" }).trim();
-  const engineRoot = join(env.XDG_STATE_HOME, "code60/workflows/transmission-0.1.0-staging.20");
+  const engineRoot = join(
+    env.XDG_STATE_HOME,
+    `code60/workflows/transmission-${defaultWorkflowEngine(process.platform)}`,
+  );
   const client = new LocalTransmission(engineRoot, env);
   let gateway: Awaited<ReturnType<typeof startGateway>> | undefined;
   let context: Awaited<ReturnType<typeof browser.newContext>> | undefined;
@@ -89,7 +96,7 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
       join(config, "config.json"),
       JSON.stringify({
         agents: {
-          claude: { command: [process.execPath, join(root, "test/fixtures/fake-agent.mjs")] },
+          claude: { command: [process.execPath, join(checkout, "test/fixtures/fake-agent.mjs")] },
         },
       }),
     );
@@ -97,6 +104,24 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
     if (bundles.length !== 1 || !/^[a-f0-9]{64}$/.test(bundles[0] ?? ""))
       throw Error("Prepare the native engine bundle before acceptance");
     await preserveTransmissionBundle(join(root, "dist/engines", bundles[0] as string), env);
+    if (process.platform === "linux" && process.env.CODE60_TEST_INSTALLED_ROOT) {
+      execFileSync(
+        "/usr/bin/python3",
+        [
+          join(checkout, "test/fixtures/workflow-login-terminal.py"),
+          process.execPath,
+          join(root, "dist/management/main.js"),
+        ],
+        {
+          env,
+          timeout: 70_000,
+          stdio: ["ignore", "ignore", "pipe"],
+        },
+      );
+      await expect(readFile(join(engineRoot, "endpoint.json"))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+    }
     gateway = await startGateway({ env, roots: [home], assets: join(root, "dist/renderer") });
     context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
     const page = await context.newPage();
@@ -115,33 +140,37 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
     await expect(readFile(join(engineRoot, "endpoint.json"))).rejects.toMatchObject({
       code: "ENOENT",
     });
-    await page.getByRole("button", { name: "Workflows actions" }).click();
-    await page.getByRole("menuitem", { name: "New workflow", exact: true }).click();
-    const form = page.getByRole("region", { name: "New workflow", exact: true });
-    await form.getByLabel("Workflow name", { exact: true }).fill("Native preserved execution");
-    await form.getByRole("button", { name: "Choose repository", exact: true }).click();
-    const chooser = page.getByRole("dialog", { name: "Choose folder", exact: true });
-    await chooser.getByRole("option", { name: home, exact: true }).dblclick();
-    await chooser.getByRole("option", { name: "project", exact: true }).dblclick();
-    await chooser.getByRole("button", { name: "Choose folder", exact: true }).click();
-    await form.getByLabel("Task name", { exact: true }).fill("Write and verify isolated result");
-    await form
-      .getByLabel("Implementation instructions", { exact: true })
-      .fill(
-        "Create workflow-result.txt containing isolated native workflow and preserve source.txt.",
-      );
-    await form
-      .getByLabel("Verification criteria", { exact: true })
-      .fill("Read workflow-result.txt and verify it contains isolated native workflow.");
-    await form.getByRole("button", { name: "Review workflow", exact: true }).click();
-    await expect(
-      form.getByText(
-        "Use code60 workflows login in a terminal if Codex authentication is needed. Code60 provider connections are separate.",
-        {
-          exact: true,
-        },
-      ),
-    ).toBeVisible();
+    async function review(page: Page, name: string) {
+      await page.getByRole("button", { name: "Workflows actions" }).click();
+      await page.getByRole("menuitem", { name: "New workflow", exact: true }).click();
+      const form = page.getByRole("region", { name: "New workflow", exact: true });
+      await form.getByLabel("Workflow name", { exact: true }).fill(name);
+      await form.getByRole("button", { name: "Choose repository", exact: true }).click();
+      const chooser = page.getByRole("dialog", { name: "Choose folder", exact: true });
+      await chooser.getByRole("option", { name: home, exact: true }).dblclick();
+      await chooser.getByRole("option", { name: "project", exact: true }).dblclick();
+      await chooser.getByRole("button", { name: "Choose folder", exact: true }).click();
+      await form.getByLabel("Task name", { exact: true }).fill("Write and verify isolated result");
+      await form
+        .getByLabel("Implementation instructions", { exact: true })
+        .fill(
+          "Create workflow-result.txt containing isolated native workflow and preserve source.txt.",
+        );
+      await form
+        .getByLabel("Verification criteria", { exact: true })
+        .fill("Read workflow-result.txt and verify it contains isolated native workflow.");
+      await form.getByRole("button", { name: "Review workflow", exact: true }).click();
+      await expect(
+        form.getByText(
+          "Use code60 workflows login in a terminal if Codex authentication is needed. Code60 provider connections are separate.",
+          {
+            exact: true,
+          },
+        ),
+      ).toBeVisible();
+      return form;
+    }
+    const form = await review(page, "Native preserved execution");
     await expect(readFile(join(engineRoot, "endpoint.json"))).rejects.toMatchObject({
       code: "ENOENT",
     });
@@ -206,7 +235,7 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
     expect(guidance.events).toContainEqual(
       expect.objectContaining({
         kind: "message",
-        detail: { message: "Preserve the public API." },
+        detail: expect.objectContaining({ message: "Preserve the public API." }),
       }),
     );
     await context.close();
@@ -242,7 +271,11 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
     });
     await reopened.getByText("Accepted diff", { exact: true }).click();
     await reopened.getByRole("button", { name: "Load accepted diff", exact: true }).click();
-    await expect(reopened.locator("pre").filter({ hasText: "workflow-result.txt" })).toBeVisible();
+    await expect(
+      reopened
+        .locator("pre")
+        .filter({ hasText: "diff --git a/workflow-result.txt b/workflow-result.txt" }),
+    ).toBeVisible();
     const after = JSON.parse(await readFile(registryPath, "utf8"));
     expect(after.entries[0].key).toBe(before.entries[0].key);
     expect(after.entries[0].snapshot.runId).toBe(before.entries[0].snapshot.runId);
@@ -258,7 +291,18 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
       code: "ENOENT",
     });
     await expect(readFile(forbidden)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      readFile(join(env.XDG_CONFIG_HOME, "systemd/user/code60-transmission.service")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
     expect(provider.calls.filter((call) => call.tool).length).toBeGreaterThanOrEqual(2);
+    provider.setMode("hold");
+    const stopForm = await review(reopened, "Stop an installed workflow");
+    await stopForm.getByRole("button", { name: "Start workflow", exact: true }).click();
+    await expect.poll(() => provider.pending).toBeGreaterThan(0);
+    await reopened.getByRole("button", { name: "Stop workflow", exact: true }).click();
+    const stopDialog = reopened.getByRole("dialog", { name: "Stop workflow?" });
+    await stopDialog.getByRole("button", { name: "Stop workflow", exact: true }).click();
+    await expect(reopened.locator(".workflow-player > [role=status]")).toHaveText("Cancelled");
     await info.attach("native-identities-and-outcomes", {
       contentType: "application/json",
       body: JSON.stringify({

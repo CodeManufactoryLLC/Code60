@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { z } from "zod";
-import { TRANSMISSION_VERSION, type WorkflowRecord } from "../bridge/index.js";
+import { defaultWorkflowEngine, type WorkflowRecord } from "../bridge/index.js";
 import {
   installationFileCode,
   preserveTransmissionBundle,
@@ -12,6 +12,7 @@ import {
   readPrivateJson,
   resolveTransmissionRuntime,
   spawnOwnedProcess,
+  workflowHostSupported,
 } from "../platform/index.js";
 
 export interface TransmissionClient {
@@ -36,11 +37,18 @@ const operations = new Set([
   "resume_workflow",
 ]);
 export class LocalTransmission implements TransmissionClient {
-  readonly supported = process.platform === "darwin" && process.arch === "arm64";
+  get supported() {
+    return (
+      workflowHostSupported() &&
+      (process.platform === "linux") === (this.version === defaultWorkflowEngine("linux"))
+    );
+  }
   constructor(
     private readonly root: string,
     private readonly environment: Readonly<NodeJS.ProcessEnv>,
-    private readonly version: NonNullable<WorkflowRecord["engineVersion"]> = TRANSMISSION_VERSION,
+    private readonly version: NonNullable<WorkflowRecord["engineVersion"]> = defaultWorkflowEngine(
+      process.platform,
+    ),
   ) {}
   async call(
     operation: string,
@@ -93,7 +101,10 @@ export class LocalTransmission implements TransmissionClient {
     }
   }
   async connect(signal: AbortSignal): Promise<void> {
-    if (!this.supported) throw new Error("Transmission execution requires macOS");
+    if (!this.supported)
+      throw new Error(
+        `Transmission ${this.version} is unavailable on ${process.platform}-${process.arch}`,
+      );
     try {
       await this.call("health", {}, signal);
       return;

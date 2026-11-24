@@ -3,7 +3,18 @@ import { z } from "zod";
 z.config({ jitless: true });
 export const LEGACY_TRANSMISSION_VERSION = "0.1.0-staging.18";
 export const TRANSMISSION_VERSION = "0.1.0-staging.20";
-export const workflowEngineVersion = z.enum([LEGACY_TRANSMISSION_VERSION, TRANSMISSION_VERSION]);
+const LINUX_TRANSMISSION_VERSION = "0.1.1";
+export const workflowEngineVersion = z.enum([
+  LEGACY_TRANSMISSION_VERSION,
+  TRANSMISSION_VERSION,
+  LINUX_TRANSMISSION_VERSION,
+]);
+export function defaultWorkflowEngine(os: string) {
+  return os === "linux" ? LINUX_TRANSMISSION_VERSION : TRANSMISSION_VERSION;
+}
+export function supportsWorkflowPause(version?: string) {
+  return version === TRANSMISSION_VERSION || version === LINUX_TRANSMISSION_VERSION;
+}
 const text = z.string().trim().min(1).max(65_536);
 const id = z.uuid();
 const workflowTaskSchema = z.strictObject({

@@ -738,14 +738,14 @@ it("describes workflow drafting and execution prerequisites without starting the
       availability: expect.objectContaining({
         status: "available",
         reason: expect.stringContaining(
-          process.platform === "darwin" && process.arch === "arm64"
-            ? "staging.20"
+          ["darwin-arm64", "linux-x64"].includes(`${process.platform}-${process.arch}`)
+            ? "support pause and resume"
             : "history is readable",
         ),
       }),
     }),
   );
-  if (process.platform === "darwin" && process.arch === "arm64") {
+  if (["darwin-arm64", "linux-x64"].includes(`${process.platform}-${process.arch}`)) {
     expect(capabilities.entries).toContainEqual(
       expect.objectContaining({
         id: "workflows",

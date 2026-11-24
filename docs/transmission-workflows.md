@@ -2,7 +2,7 @@
 
 Open **Apps → Workflows** to create and monitor ordered coding tasks. The page
 and retained history work without a project database. Execution currently requires
-macOS Apple Silicon, the installation's recorded Node.js >=24.22.0 <25, and
+macOS Apple Silicon or Linux x64 with glibc, the installation's recorded Node.js >=24.22.0 <25, and
 separate Codex workflow authentication. macOS distribution candidates include
 exactly `code60-transmission-server@0.1.0-staging.20` for new workflows and
 staging.18 for retained records, with their locked dependencies and native runtime.
@@ -79,11 +79,10 @@ remove this storage, the original versioned state directories or legacy npm
 caches while retaining workflows. A damaged binding or moved Node is an explicit
 recovery condition; execution never falls back to a different Node on PATH.
 
-For source development on native macOS arm64, run `npm run prepare:engines` after
+For source development on a supported target, run `npm run prepare:engines` after
 `npm run build`. Preparation uses a fresh dependency tree and the committed
 `distribution/transmission/package-lock.json`; ordinary build/dev does not fetch
-engine assets. Another full build clears generated assets. Linux builds omit
-the unsupported engines and retain read-only workflow history.
+engine assets. Another full build clears generated assets. Linux builds bundle Transmission 0.1.1 for new workflows. History stays bound to the engine version recorded at approval.
 
 There is no automatic apply, merge, commit, push, message Undo integration
 or alternate execution provider. Retained worktrees can be reviewed

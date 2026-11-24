@@ -1,25 +1,80 @@
 import { createServer, type ServerResponse } from "node:http";
+import { basename, dirname } from "node:path";
+
+const readResult = "/bin/cat workflow-result.txt";
+const writeResult = "/usr/bin/printf '%s\\n' 'isolated native workflow' > workflow-result.txt";
 
 // Fake only the remote model. Transmission, ACP, native Codex and its tools are
 // unmodified published executables. This fixture never reads real credentials.
-export async function transmissionProvider() {
+export async function transmissionProvider(worktrees?: string) {
   let sequence = 0;
   let mode: "hold" | "complete" | "question" = "hold";
   const waiting = new Map<ServerResponse, string>();
   const calls: { method: string; path: string; tool: boolean }[] = [];
   function respond(res: ServerResponse, body: string) {
-    const parsed = JSON.parse(body) as { tools?: { name: string }[]; input?: { type: string }[] };
+    const parsed = JSON.parse(body) as {
+      tools?: { name: string }[];
+      input?: {
+        type: string;
+        output?: string;
+        arguments?: string;
+        content?: { text?: string }[];
+      }[];
+      text?: { format?: { schema?: { required?: string[] } } };
+    };
+    // Codex sends a separate, structured approval-review request when Docker
+    // disallows namespaces. Review only the two fixture actions in its worktree.
+    const reviewing = parsed.text?.format?.schema?.required?.includes("outcome");
+    let permitted = false;
+    if (reviewing && worktrees) {
+      const parts = parsed.input?.at(-1)?.content ?? [];
+      const marker = parts.findLastIndex((part) => part.text?.trim() === "Planned action JSON:");
+      const action = marker >= 0 && JSON.parse(parts[marker + 1]?.text ?? "null");
+      permitted = Boolean(
+        action &&
+          action.tool === "exec_command" &&
+          action.environment_id === "local" &&
+          dirname(action.cwd) === worktrees &&
+          /^transmission-[0-9a-f-]{36}$/.test(basename(action.cwd)) &&
+          Array.isArray(action.command) &&
+          action.command.length === 3 &&
+          action.command[0] === "/bin/bash" &&
+          action.command[1] === "-c" &&
+          [readResult, writeResult].includes(action.command[2]),
+      );
+    }
     const verifier = body.includes("Independently verify the candidate");
+    const lastOutput = parsed.input?.findLast(
+      (item) => item.type === "function_call_output",
+    )?.output;
+    // A container can deny unprivileged namespaces. Exercise the same bounded
+    // harness permission request a real model uses for this fixture command.
+    const retryWithApproval =
+      lastOutput?.includes("bwrap: No permissions to create a new namespace") &&
+      !parsed.input?.some(
+        (item) => item.type === "function_call" && item.arguments?.includes("require_escalated"),
+      );
     const tool =
+      !reviewing &&
       mode !== "question" &&
       parsed.tools?.some((item) => item.name === "exec_command") &&
-      !parsed.input?.some((item) => item.type === "function_call_output");
+      (!lastOutput || retryWithApproval);
     const text = JSON.stringify(
-      mode === "question" && !verifier
-        ? { kind: "question", question: "Should the fixture preserve the public API?" }
-        : verifier
-          ? { kind: "verdict", decision: "accept", reason: "Read the isolated workflow result" }
-          : { kind: "result", summary: "Created the isolated workflow result" },
+      reviewing
+        ? { outcome: permitted ? "allow" : "deny" }
+        : !tool && lastOutput && !lastOutput.includes("Process exited with code 0")
+          ? { kind: "question", question: "The fixture command failed. Inspect its output." }
+          : mode === "question" && !verifier
+            ? { kind: "question", question: "Should the fixture preserve the public API?" }
+            : verifier
+              ? {
+                  kind: "verdict",
+                  decision: lastOutput?.trimEnd().endsWith("\nisolated native workflow")
+                    ? "accept"
+                    : "reject",
+                  reason: "Compared the isolated file contents with the requested text",
+                }
+              : { kind: "result", summary: "Created the isolated workflow result" },
     );
     const id = ++sequence;
     const message = tool
@@ -29,9 +84,14 @@ export async function transmissionProvider() {
           call_id: `call_${id}`,
           name: "exec_command",
           arguments: JSON.stringify({
-            cmd: verifier
-              ? "/bin/cat workflow-result.txt"
-              : "/usr/bin/printf '%s\\n' 'isolated native workflow' > workflow-result.txt",
+            cmd: verifier ? readResult : writeResult,
+            ...(retryWithApproval
+              ? {
+                  sandbox_permissions: "require_escalated",
+                  justification:
+                    "Run the approved read or write of workflow-result.txt in the disposable workflow checkout.",
+                }
+              : {}),
             login: false,
             max_output_tokens: 1000,
           }),

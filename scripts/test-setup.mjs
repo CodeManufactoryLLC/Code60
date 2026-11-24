@@ -120,13 +120,13 @@ try {
     log: join(output, "independent-backend.log"),
   });
   secondEnv.CODE60_TEST_BACKEND_SOCKET = independent.socket;
+  const platform = await import(pathToFileURL(join(application, "dist/platform/index.js")).href);
+  const metadata = JSON.parse(await readFile(join(application, "payload.json"), "utf8"));
+  await platform.preserveTransmissionBundle(
+    join(application, "dist/engines", metadata.transmissionBundle),
+    secondEnv,
+  );
   if (process.platform === "darwin") {
-    const platform = await import(pathToFileURL(join(application, "dist/platform/index.js")).href);
-    const metadata = JSON.parse(await readFile(join(application, "payload.json"), "utf8"));
-    await platform.preserveTransmissionBundle(
-      join(application, "dist/engines", metadata.transmissionBundle),
-      secondEnv,
-    );
     // Model an interrupted source-development cache publication before managed
     // installation. Preserve the original healthy staging.18 binding.
     await rm(join(secondEnv.XDG_DATA_HOME, "code60/engines/0.1.0-staging.20.json"));
@@ -135,18 +135,16 @@ try {
     await bootstrapMain(["setup", "--yes", "--no-open"], { ...options, env: secondEnv }),
     0,
   );
-  if (process.platform === "darwin") {
-    const platform = await import(pathToFileURL(join(application, "dist/platform/index.js")).href);
-    await platform.resolveTransmissionRuntime(secondEnv, "0.1.0-staging.20");
-  }
+  for (const version of platform.installedEngineVersions())
+    await platform.resolveTransmissionRuntime(secondEnv, version);
   const secondPid = independent.pid();
   assert.ok(secondPid);
   await rm(cache, { recursive: true });
-  if (process.platform === "darwin") {
-    const { resolveTransmissionRuntime } = await import(
+  {
+    const { resolveTransmissionRuntime, installedEngineVersions } = await import(
       pathToFileURL(join(application, "dist/platform/index.js")).href
     );
-    for (const version of ["0.1.0-staging.18", "0.1.0-staging.20"]) {
+    for (const version of installedEngineVersions()) {
       const runtime = await resolveTransmissionRuntime(env, version);
       assert.ok(runtime.root.startsWith(`${env.XDG_DATA_HOME}/code60/engines/`));
       assert.ok(!runtime.entry.startsWith(`${application}/`));
@@ -163,7 +161,7 @@ try {
         (error) => error.code === 1 && error.stderr.includes(join(engineState, "endpoint.json")),
       );
       await assert.rejects(readdir(engineState), { code: "ENOENT" });
-      if (version.endsWith("20")) {
+      if (version !== "0.1.0-staging.18") {
         const loginHome = join(home, "codex-help");
         await mkdir(loginHome, { mode: 0o700 });
         const help = await execute(
@@ -183,8 +181,6 @@ try {
     console.log(
       "Preserved installed engines resolve after bootstrap removal; status remains inert",
     );
-  } else {
-    await assert.rejects(readdir(join(env.XDG_DATA_HOME, "code60/engines")), { code: "ENOENT" });
   }
   const before = await readFile(database);
   const pid = supervisor.pid();

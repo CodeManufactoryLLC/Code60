@@ -46,7 +46,7 @@ for (const directory of new Set(dependencies.trim().split("\n").slice(1))) {
 
 await mkdir("release/build", { recursive: true });
 await cp(output, "dist/licenses", { recursive: true });
-if (process.platform === "darwin") {
+{
   await cleanBuild(resolve("dist/engines"));
   await buildTransmission(process.cwd(), resolve("dist/engines"));
 }
