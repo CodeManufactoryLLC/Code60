@@ -292,6 +292,8 @@ npx or a compiler at execution time. A missing bundle may be cached from prepare
 local assets only on explicit start/reconnect; damaged bindings require recovery,
 never fallback. Keep Transmission provider authentication separate from Code60's
 verified provider membership. Backend shutdown does not cancel approved workflows.
+Pin CODEX_PATH to the verified cached native Codex for new engines; application
+provider overrides must not replace this runtime. Preserve healthy existing engines.
 
 ## Initial database preparation
 

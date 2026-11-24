@@ -16,7 +16,8 @@
   replacement. Wait for guidance acknowledgement and its persisted engine event
   before detaching. Source files/index/HEAD stay unchanged; native tools write only
   the dedicated worktree. Trap runtime npm/npx/compiler calls. Do not seed login
-  or infer Transmission credentials from application provider verification.
+  or infer Transmission credentials from application provider verification. An
+  unavailable application CODEX_PATH must not replace the bundled workflow runtime.
 - **Evidence:** `npm run test:transmission` after native packaging, with traces,
   screenshots, artifact/native identities, independent Git/filesystem assertions
   and every owned engine/provider/helper PID verified gone. Preserve failures;

@@ -11,7 +11,11 @@ function fixture() {
   const remove = vi.fn();
   const ports = {
     interactive: true,
-    runtime: vi.fn(async () => ({ root: "/private/cache/engine ' space", node: "/recorded/node" })),
+    runtime: vi.fn(async () => ({
+      root: "/private/cache/engine ' space",
+      node: "/recorded/node",
+      codex: "/private/cache/native/codex",
+    })),
     probe: vi.fn(async () => ({ version: "24.22.0", executable: "/recorded/node" })),
     run: vi.fn(
       async (
@@ -71,13 +75,19 @@ it("launches only the cached Codex login with arguments intact and sanitized Nod
     NODE_OPTIONS: "poison",
     NODE_PATH: "poison",
     npm_config_registry: "poison",
+    CODEX_PATH: "/unwanted/application/codex",
   };
   f.ports.run.mockResolvedValue(7);
   expect(await workflowLogin(["login"], env, f.ports)).toBe(7);
   expect(f.ports.run).toHaveBeenCalledWith(
     "/recorded/node",
     ["/private/cache/engine ' space/node_modules/@openai/codex/bin/codex.js", "login"],
-    { HOME: env.HOME, CODEX_HOME: env.CODEX_HOME, PATH: env.PATH },
+    {
+      HOME: env.HOME,
+      CODEX_HOME: env.CODEX_HOME,
+      PATH: env.PATH,
+      CODEX_PATH: "/private/cache/native/codex",
+    },
     expect.any(AbortSignal),
   );
   expect(env.NODE_OPTIONS).toBe("poison");

@@ -19,6 +19,8 @@ For a custom existing Codex home, use the same absolute `CODEX_HOME` when runnin
 setup/service repair and workflow login. Service registration preserves that path,
 without persisting credential variables or configuration payloads. Existing
 engines keep their startup environment; login does not reconfigure them.
+New engines and workflow login select the verified bundled Codex binary explicitly;
+an application-level `CODEX_PATH` override does not replace the workflow runtime.
 
 Choose **New workflow**, select the repository root and enter a workflow name and
 ordered tasks. Each task includes implementation instructions, independent

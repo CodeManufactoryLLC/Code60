@@ -28,6 +28,7 @@ beforeEach(() => {
     node: process.execPath,
     entry: "/bundle/engine.js",
     root: "/bundle",
+    codex: "/bundle/vendor/codex",
   });
   fake.probe.mockResolvedValue({
     stdout: JSON.stringify({ version: "24.22.0", executable: process.execPath }),
@@ -42,6 +43,7 @@ async function fixture() {
   const client = new LocalTransmission(join(root, "state"), {
     PATH: "/usr/bin",
     NODE_OPTIONS: "unwanted",
+    CODEX_PATH: "/unwanted/application/codex",
     npm_config_registry: "https://invalid.example",
   });
   Object.defineProperty(client, "supported", { value: true });
@@ -78,6 +80,7 @@ it("launches the preserved exact entrypoint without npm and releases only its MC
   expect(temporary).toBe("/bundle");
   expect(env.TRANSMISSION_STATE_DIR).toBe(join(f.root, "state"));
   expect(env.PATH).toBe("/usr/bin");
+  expect(env.CODEX_PATH).toBe("/bundle/vendor/codex");
   expect(env).not.toHaveProperty("NPM_CONFIG_REGISTRY");
   expect(env).not.toHaveProperty("NODE_OPTIONS");
   expect(env).not.toHaveProperty("npm_config_registry");

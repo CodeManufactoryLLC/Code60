@@ -45,6 +45,8 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
     XDG_STATE_HOME: join(home, "state"),
     XDG_DATA_HOME: join(home, "data"),
     CODEX_HOME: join(home, "codex"),
+    // Application provider overrides cannot select the pinned workflow runtime.
+    CODEX_PATH: join(home, "missing-application-codex"),
     CODEX_CONFIG: provider.config,
     CODE60_TEST_FORBIDDEN_LOG: forbidden,
     GIT_CONFIG_NOSYSTEM: "1",

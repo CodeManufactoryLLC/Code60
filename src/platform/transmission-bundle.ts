@@ -230,6 +230,7 @@ export async function resolveTransmissionRuntime(
     root,
     node: receipt.node,
     entry: join(root, bundle.manifest.engines[version].entry),
+    codex: join(root, bundle.manifest.native.path),
   };
 }
 

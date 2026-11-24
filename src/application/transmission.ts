@@ -134,6 +134,7 @@ export class LocalTransmission implements TransmissionClient {
     await privateDirectory(this.root);
     Object.assign(environment, {
       TRANSMISSION_STATE_DIR: this.root,
+      CODEX_PATH: binding.codex,
     });
     const child = await spawnOwnedProcess(
       [binding.node, binding.entry, "mcp"],

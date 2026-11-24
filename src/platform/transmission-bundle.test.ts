@@ -101,6 +101,7 @@ it("keeps version bindings and cached files independent of the source release", 
     const runtime = await resolveTransmissionRuntime(f.env, version);
     expect(runtime.entry).toContain(`transmission-${version.slice(-2)}/dist/src/main.js`);
     expect(runtime.root).toBe(join(storage, f.lock));
+    expect(runtime.codex).toBe(join(storage, f.lock, "native/codex"));
     expect((await lstat(join(storage, `${version}.json`))).mode & 0o777).toBe(0o600);
     expect(JSON.parse(await readFile(join(storage, `${version}.json`), "utf8")).nodeVersion).toBe(
       process.versions.node,

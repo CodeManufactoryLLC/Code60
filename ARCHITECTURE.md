@@ -532,7 +532,10 @@ workflow start/reconnect never runs npm, npx or a compiler.
 
 Managed installation preserves the bundle under XDG_DATA_HOME/code60/engines,
 outside application releases/activations. Private immutable version bindings pin
-its inventory and canonical Node. Source development explicitly prepares local
+its inventory and canonical Node. New engines and workflow login select the
+verified cached native Codex through an explicit CODEX_PATH, independently of
+application provider executable overrides. Healthy running engines retain their
+original environment. Source development explicitly prepares local
 assets; the first approved start may cache those verified local files. Existing
 bindings, state roots, run IDs, start keys and legacy npm caches are preserved.
 Application provider verification does not authorize Transmission: its bundled

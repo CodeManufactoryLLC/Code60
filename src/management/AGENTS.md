@@ -30,3 +30,5 @@ bound and await owned child cleanup, and preserve exit/signal results. Never
 install, start an engine, expose command/credential overrides, log authentication
 output or update application provider verification. Keep it out of the bootstrap
 closure; only the installed CLI owns this interaction.
+Use the verified cached native Codex even when CODEX_PATH configures a different
+application provider executable.

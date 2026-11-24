@@ -10,7 +10,10 @@ import {
 
 interface LoginPorts {
   interactive: boolean;
-  runtime(env: NodeJS.ProcessEnv, signal: AbortSignal): Promise<{ root: string; node: string }>;
+  runtime(
+    env: NodeJS.ProcessEnv,
+    signal: AbortSignal,
+  ): Promise<{ root: string; node: string; codex: string }>;
   probe(
     node: string,
     env: NodeJS.ProcessEnv,
@@ -87,6 +90,7 @@ export async function workflowLogin(
   const unlisten = ports.listen(interrupt, terminate, hangup);
   try {
     const runtime = await ports.runtime(environment, signal);
+    environment.CODEX_PATH = runtime.codex;
     const node = await ports.probe(runtime.node, environment, signal);
     if (
       !/^24\.(?:2[2-9]|[3-9]\d|\d{3,})\.[0-9]+$/.test(node.version) ||
