@@ -8,7 +8,7 @@ Schema version: 1
 
 - ID: `mcp-servers`
 - Status: shipped
-- Purpose: Manage MCP server definitions with guided forms or validated JSON; preview/restore backups and reset selected configurations; enable, approve, test, reconnect and disconnect managed connections; manage secure credentials and reviewed OAuth sign-in; review interrupted transactions, verify owned cleanup and copy a safe troubleshooting report.
+- Purpose: Use the Servers and JSON tabs to manage MCP definitions. Add server opens the guided form from the table toolbar; preview/restore backups and reset selected configurations; enable, approve, test, reconnect and disconnect managed connections; manage secure credentials and reviewed OAuth sign-in; review interrupted transactions, verify owned cleanup and copy a safe troubleshooting report.
 - Access: Apps → MCP Servers
 - Prerequisite: none
 - Agent access: human-only

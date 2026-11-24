@@ -22,6 +22,7 @@ describe("browser capability catalog", () => {
     expect(mcp).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });
     expect(PAGE_CAPABILITIES["mcp-servers"]).toBe("mcp-servers");
     expect(pages.find((page) => page.id === "mcp-servers")?.database).toBe(false);
+    expect(mcp?.purpose).toContain("table toolbar");
     expect(mcp?.limitations).toContain("open project and captured runtime/database identity");
     expect(mcp?.limitations).toContain("valid unpinned backup");
     expect(mcp?.limitations).toContain("Pending recovery blocks affected writes");

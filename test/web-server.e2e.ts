@@ -1,4 +1,3 @@
-import { expandNavigation } from "./fixtures/browser-actions.js";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
@@ -101,8 +100,7 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     const beforeMcp = await readdir(fixture.processLog);
     await page.getByRole("tab", { name: "Apps", exact: true }).click();
     await page.getByRole("button", { name: "Open MCP Servers", exact: true }).click();
-    await page.getByRole("button", { name: "MCP Servers actions", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Add server", exact: true }).click();
+    await page.getByRole("button", { name: "Add server", exact: true }).click();
     const form = page.getByRole("dialog", { name: /Add MCP server/ });
     await form.getByLabel("Server ID", { exact: true }).fill("lan-docs");
     await form.getByLabel("Label", { exact: true }).fill("LAN documentation");
@@ -118,9 +116,9 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
       args: ["public-argument"],
     });
     expect((await stat(mcpPath)).mode & 0o777).toBe(0o600);
-    await page.getByRole("button", { name: "JSON", exact: true }).click();
+    await page.getByRole("tab", { name: "JSON", exact: true }).click();
     await expect(page.locator(".monaco-editor")).toBeVisible();
-    await page.getByRole("button", { name: "Servers", exact: true }).click();
+    await page.getByRole("tab", { name: "Servers", exact: true }).click();
     await page.getByRole("button", { name: "Review troubleshooting report", exact: true }).click();
     const report = page.getByRole("dialog", {
       name: "Safe MCP troubleshooting report",

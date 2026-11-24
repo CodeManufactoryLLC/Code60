@@ -7,6 +7,7 @@ import type {
   McpTargetAddress,
 } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
+import { Button } from "./carbon/button.js";
 import { Modal } from "./modal.js";
 
 /** Reviewing recovery never replaces a working draft or grants connector authority. */
@@ -102,7 +103,7 @@ export function McpRecoveryPanel({
   };
   return (
     <>
-      <button
+      <Button
         type="button"
         disabled={busy || !active}
         onClick={() => {
@@ -111,7 +112,7 @@ export function McpRecoveryPanel({
         }}
       >
         Configuration recovery
-      </button>
+      </Button>
       {opened && (
         <Modal title="MCP configuration recovery" busy={busy} onClose={() => setOpened(false)}>
           <p>
@@ -134,7 +135,7 @@ export function McpRecoveryPanel({
                 {!entry.available &&
                   " — Reopen all affected projects to review. Evidence is retained."}
               </p>
-              <button
+              <Button
                 type="button"
                 disabled={busy || !entry.available}
                 onClick={() =>
@@ -142,7 +143,7 @@ export function McpRecoveryPanel({
                 }
               >
                 Review transaction
-              </button>
+              </Button>
             </div>
           ))}
           {review && (
@@ -186,20 +187,20 @@ export function McpRecoveryPanel({
                   Closed repositories are not scanned.
                 </p>
               )}
-              <button
+              <Button
                 type="button"
                 disabled={busy || !review.allowed}
                 onClick={() => setDecision("complete")}
               >
                 Complete transaction
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 disabled={busy || !review.allowed}
                 onClick={() => setDecision("rollback")}
               >
                 Roll back transaction
-              </button>
+              </Button>
               {decision && (
                 <fieldset aria-label="Confirm recovery">
                   <p>
@@ -209,10 +210,15 @@ export function McpRecoveryPanel({
                     Every reviewed revision and project identity is rechecked. Credentials and
                     approvals are not transferred; running work is not replayed.
                   </p>
-                  <button type="button" disabled={busy} onClick={() => setDecision(undefined)}>
+                  <Button
+                    variant="quiet"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setDecision(undefined)}
+                  >
                     Cancel recovery
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
                     disabled={busy}
                     onClick={() =>
@@ -230,26 +236,26 @@ export function McpRecoveryPanel({
                     }
                   >
                     Confirm {decision === "complete" ? "complete" : "roll back"}
-                  </button>
+                  </Button>
                 </fieldset>
               )}
             </>
           )}
           {retry && (
-            <button type="button" disabled={busy} onClick={() => void act(retry)}>
+            <Button type="button" disabled={busy} onClick={() => void act(retry)}>
               Check same recovery request
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             type="button"
             disabled={busy}
             onClick={() => void act({ action: "list", target })}
           >
             Refresh recovery evidence
-          </button>
-          <button type="button" disabled={busy} onClick={() => setOpened(false)}>
+          </Button>
+          <Button variant="quiet" type="button" disabled={busy} onClick={() => setOpened(false)}>
             Close recovery
-          </button>
+          </Button>
         </Modal>
       )}
     </>

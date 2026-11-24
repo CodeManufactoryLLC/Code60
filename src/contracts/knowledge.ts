@@ -232,7 +232,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
     "mcp-servers",
     "MCP Servers",
-    "Manage MCP server definitions with guided forms or validated JSON; preview/restore backups and reset selected configurations; enable, approve, test, reconnect and disconnect managed connections; manage secure credentials and reviewed OAuth sign-in; review interrupted transactions, verify owned cleanup and copy a safe troubleshooting report.",
+    "Use the Servers and JSON tabs to manage MCP definitions. Add server opens the guided form from the table toolbar; preview/restore backups and reset selected configurations; enable, approve, test, reconnect and disconnect managed connections; manage secure credentials and reviewed OAuth sign-in; review interrupted transactions, verify owned cleanup and copy a safe troubleshooting report.",
     "Apps → MCP Servers",
     "none",
     "human-only",

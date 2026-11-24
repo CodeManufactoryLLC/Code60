@@ -28,7 +28,7 @@ import type {
   PayloadDescriptor,
   resolveTransmissionRuntime as RuntimeFactory,
 } from "../src/platform/index.js";
-import { onboard } from "./fixtures/browser-actions.js";
+import { expandNavigation, onboard } from "./fixtures/browser-actions.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 import {
   nativeProcessAlive,
@@ -321,17 +321,16 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
       const page = await context.newPage();
       await page.goto((await connection()).origin);
       await onboard(page);
-      await page.getByRole("button", { name: "Start", exact: true }).click();
-      await page.locator("#tab-apps").press("ArrowRight");
+      await expandNavigation(page, "Automation");
       await page.locator("#tab-workflows").click();
       if (engineVersion.endsWith("18")) {
+        await page.getByRole("tab", { name: "Execution history", exact: true }).click();
         await page.getByRole("button", { name: /Work across application update/ }).click();
         await expect(
           page.getByRole("button", { name: "Recover same start request", exact: true }),
         ).toBeVisible();
       } else {
-        await page.getByRole("button", { name: "Workflows actions" }).click();
-        await page.getByRole("menuitem", { name: "New workflow", exact: true }).click();
+        await page.getByRole("button", { name: "New workflow", exact: true }).click();
         const form = page.getByRole("region", { name: "New workflow", exact: true });
         await form
           .getByLabel("Workflow name", { exact: true })
@@ -472,9 +471,9 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
       context = await browser.newContext();
       const reopened = await context.newPage();
       await reopened.goto((await connection()).origin);
-      await reopened.getByRole("button", { name: "Start", exact: true }).click();
-      await reopened.locator("#tab-apps").press("ArrowRight");
+      await expandNavigation(reopened, "Automation");
       await reopened.locator("#tab-workflows").click();
+      await reopened.getByRole("tab", { name: "Execution history", exact: true }).click();
       await reopened.getByRole("button", { name: /Work across application update/ }).click();
       if (engineVersion.endsWith("18"))
         await reopened

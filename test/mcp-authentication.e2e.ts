@@ -3,10 +3,12 @@ import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { connect } from "node:net";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { browserApp, onboard } from "./fixtures/browser-app.js";
 import { oauthServer } from "./fixtures/mcp-oauth-server.js";
 
 async function apps(page: Page) {
+  await expandNavigation(page, "Manage");
   await page.getByRole("tab", { name: "Apps", exact: true }).click();
   await page.getByRole("button", { name: "Open MCP Servers", exact: true }).click();
   await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
@@ -64,7 +66,7 @@ test("MCP credentials: explicit temporary entry, clearing, reload, no plaintext 
     await writeFile(file, original, { mode: 0o600 });
     const { page } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await apps(page);
     let dialog = await authentication(page);
     expect(
@@ -77,7 +79,8 @@ test("MCP credentials: explicit temporary entry, clearing, reload, no plaintext 
     );
     await page.screenshot({ path: test.info().outputPath("authentication-storage-choice.png") });
     await dialog.getByLabel("Credential secret", { exact: true }).fill(secret);
-    await dialog.getByLabel(/Temporary backend memory/).check();
+    await dialog.getByText(/^Temporary backend memory —/).click();
+    await expect(dialog.getByRole("radio", { name: /Temporary backend memory/ })).toBeChecked();
     await dialog.getByRole("button", { name: "Save credential", exact: true }).click();
     await expect(dialog.getByLabel("Credential secret", { exact: true })).toHaveValue("");
     await expect(dialog.getByRole("status").filter({ hasText: "Credential saved" })).toBeVisible();
@@ -143,7 +146,7 @@ test("MCP credentials: unavailable persistent storage never silently becomes tem
     await writeFile(file, original, { mode: 0o600 });
     const { page } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await apps(page);
     const dialog = await authentication(page);
     await dialog.getByLabel("Credential secret", { exact: true }).fill(secret);
@@ -152,7 +155,8 @@ test("MCP credentials: unavailable persistent storage never silently becomes tem
     await expect(dialog.getByLabel("Credential secret", { exact: true })).toHaveValue("");
     await expect(dialog.getByLabel(/Secure OS storage/)).toBeChecked();
     expect(remote.counts.initialize).toBe(0);
-    await dialog.getByLabel(/Temporary backend memory/).check();
+    await dialog.getByText(/^Temporary backend memory —/).click();
+    await expect(dialog.getByRole("radio", { name: /Temporary backend memory/ })).toBeChecked();
     await dialog.getByLabel("Credential secret", { exact: true }).fill(secret);
     await dialog.getByRole("button", { name: "Save credential", exact: true }).click();
     await expect(dialog.getByRole("status").filter({ hasText: "Credential saved" })).toBeVisible();
@@ -191,13 +195,14 @@ test("MCP OAuth: reviewed issuer/registration, browser consent, retained JSON dr
     await writeFile(file, original, { mode: 0o600 });
     const { page, context } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await apps(page);
     let dialog = await authentication(page);
     await dialog.getByRole("button", { name: "Review issuer and scopes", exact: true }).click();
     await expect(dialog).toContainText("tools.read");
     await expect(dialog).toContainText("per installation");
-    await dialog.getByLabel(/Temporary backend memory/).check();
+    await dialog.getByText(/^Temporary backend memory —/).click();
+    await expect(dialog.getByRole("radio", { name: /Temporary backend memory/ })).toBeChecked();
     await dialog.getByRole("button", { name: "Start sign-in", exact: true }).click();
     await expect(
       dialog.getByRole("link", { name: "Continue to authorization server", exact: true }),
@@ -215,7 +220,7 @@ test("MCP OAuth: reviewed issuer/registration, browser consent, retained JSON dr
     ).toBeVisible();
     await page.bringToFront();
     await dialog.getByRole("button", { name: "Continue in background", exact: true }).click();
-    await page.getByRole("button", { name: "JSON", exact: true }).click();
+    await page.getByRole("tab", { name: "JSON", exact: true }).click();
     await expect(page.locator(".mcp-json-editor .monaco-editor")).toBeVisible();
     const draft = JSON.stringify(
       {
@@ -235,11 +240,11 @@ test("MCP OAuth: reviewed issuer/registration, browser consent, retained JSON dr
     await expect.poll(() => remote.counts.token).toBe(1);
     await expect(page.locator(".mcp-json-editor")).toContainText("Retained OAuth draft");
     expect(await readFile(file, "utf8")).toBe(original);
-    await page.getByRole("button", { name: "Servers", exact: true }).click();
+    await page.getByRole("tab", { name: "Servers", exact: true }).click();
     const guard = page.getByRole("dialog", { name: "Unsaved MCP JSON changes", exact: true });
     await guard.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(page.locator(".mcp-json-editor")).toContainText("Retained OAuth draft");
-    await page.getByRole("button", { name: "Servers", exact: true }).click();
+    await page.getByRole("tab", { name: "Servers", exact: true }).click();
     await guard.getByRole("button", { name: "Discard", exact: true }).click();
     dialog = await authentication(page);
     await expect(dialog).toContainText("authenticated");
@@ -289,11 +294,12 @@ test("MCP OAuth: Cancel and browser detach revoke pending loopback callbacks", a
     );
     const { page } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await apps(page);
     const dialog = await authentication(page);
     await dialog.getByRole("button", { name: "Review issuer and scopes", exact: true }).click();
-    await dialog.getByLabel(/Temporary backend memory/).check();
+    await dialog.getByText(/^Temporary backend memory —/).click();
+    await expect(dialog.getByRole("radio", { name: /Temporary backend memory/ })).toBeChecked();
     await dialog.getByRole("button", { name: "Start sign-in", exact: true }).click();
     let link = await dialog
       .getByRole("link", { name: "Continue to authorization server", exact: true })

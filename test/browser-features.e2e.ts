@@ -72,7 +72,10 @@ test("browser: skips pairing by default and can require or skip it again without
 async function start(page: Page, directory: string) {
   await onboard(page);
   await createDatabase(page, directory);
-  await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
+  await expect
+    .poll(async () => (await page.evaluate(() => window.code60.snapshot())).database)
+    .toBe(join(directory, "projects.sqlite"));
+  await expect(page.getByRole("heading", { level: 1, name: "Relay", exact: true })).toBeVisible();
 }
 async function app(page: Page, name: string) {
   await expandNavigation(page, "Manage");

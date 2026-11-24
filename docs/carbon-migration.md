@@ -1,6 +1,6 @@
 # Code60 product interface
 
-The full-app worktree integrates the approved Scheduled Jobs design at `656b0ae` with upstream `341bd8e`. The reference worktree can still run independently. The renderer uses `@carbon/react` 1.121.0, standard blue, locally bundled Plex Sans and White/G100. The product header and navigation belong to the application. Scheduled Jobs owns its task tabs, forms and evidence.
+The full-app worktree integrates the approved Scheduled Jobs design at `656b0ae` with upstream `f0f7e5a`. The reference worktree can still run independently. The renderer uses `@carbon/react` 1.121.0, standard blue, locally bundled Plex Sans and White/G100. The product header and navigation belong to the application. Scheduled Jobs owns its task tabs, forms and evidence.
 
 ## Route inventory and interaction decisions
 
@@ -10,7 +10,8 @@ The full-app worktree integrates the approved Scheduled Jobs design at `656b0ae`
 | Automation | Scheduled Jobs, Workflows | Read next run and running state from Schedules. Expand for details or explicitly open scoped history. Workflows separates saved definitions from execution history. Edit a copy reuses a definition and requires a fresh reviewed submission. Playback, evidence and reconnect act on one run. |
 | Inspect | Data Viewer, Sessions, Configurations, Memories, Messages, Events, Logs, Worktrees, Polling | Open a record alongside the relevant table or in a bounded detail dialog. Search operates on its submitted query. The independent server cursors and retained log stream own older entries. Table density, sorting, column visibility and order remain available where supported. |
 | Manage | Providers, Provider, Apps, System Manager, Settings, Advanced, Experiments, Episodic Memory, RAG, Web Server Beta, Contributor Tools, Prompt Builder, Command Builder | Apps indexes tasks. Provider setup exposes install, login, verify, retry and cancellation. System Manager keeps recovery beside the affected service. Builders put editing and save actions with the working fields. |
-| Settings sections | About, Appearance, Memory, Polling, Table defaults, Text, Update Manager | Workspace and Appearance provide system, dark and light themes. Text controls interface sizing. The renderer preserves stored decorative preferences when displaying Carbon defaults. Destination glyphs come from Carbon. Extracted memory statements are text rows. |
+| MCP Servers | Apps → MCP Servers | Servers and JSON use line tabs for the same scoped configuration. The table toolbar owns Add server, selection owns authentication and connection actions, and configuration maintenance groups backup, reset, recovery and troubleshooting. The JSON editor retains draft ownership and the save/discard decision. |
+| Settings sections | About, Appearance, Memory, Polling, Table defaults, Text, Update Manager | Workspace and Appearance provide system, dark and light themes. Update Manager shows the installed release and the terminal commands to update, reconnect and recover. Text controls interface sizing. The renderer preserves stored decorative preferences when displaying Carbon defaults. Destination glyphs come from Carbon. Extracted memory statements are text rows. |
 | Startup and ownership | Pairing, takeover, backend reconnect, provider prerequisites, database selection, explicit workspace setup and verified return | Required actions appear in the affected state. Resume stores a validated route identity for each database and a separate browser-local identity for work without a database. A missing identity opens Relay. |
 
 The sidebar groups are entry points. Nested destinations keep their existing IDs, command palette targets, database gates and keyboard contracts. The shared header supplies global commands, history, connection state and Workspace. Navigating between destinations retains inactive components wherever drafts, scroll position or independent subscriptions require that lifetime.
@@ -19,11 +20,11 @@ The sidebar groups are entry points. Nested destinations keep their existing IDs
 
 | Owner | Surfaces |
 | --- | --- |
-| Application and gateway | Command palette, Workspace and theme, provider setup, Git setup, update notice, required pairing, takeover, connection loss, stop-backend confirmation, backend-owned approvals and confirmations. |
+| Application and gateway | Command palette, Workspace and theme, provider setup, Git setup, required pairing, takeover, connection loss, stop-backend confirmation, backend-owned approvals and confirmations. |
 | Projects and agents | Select database, create/open database file chooser, Open Project and choose folder, project confirmation, new and edit assistant, select or edit run configuration, new sessions and started-session results. |
 | Conversations | Rename, tactics, provider and model selection, permissions, plan approval, agent questions, attachment and repository choosers, file explorer settings, file/diff/evidence tabs. |
 | Automation | Dedicated create/edit schedule, repository approval, delete confirmation, execution transcript and changes. Workflow creation, prompt-assisted definition, review/review refusal, reconnect, steer, stop, task configuration, decision and accepted diff. |
-| Inspection and management | Search preview, record details, filters and saved filters, columns/table configuration, memory details, log record, polling controls, service and provider recovery confirmations. |
+| Inspection and management | Search preview, record details, filters and saved filters, columns/table configuration, memory details, log record, polling controls, service and provider recovery confirmations. MCP management covers guided editing, JSON save and discard, scoped connection and authentication, backup restore, reset and interrupted-write recovery. |
 
 ## Guidance and implementation
 

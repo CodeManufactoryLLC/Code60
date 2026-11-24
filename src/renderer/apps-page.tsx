@@ -3,6 +3,7 @@ import { NavigationHomePage } from "./navigation-home-page.js";
 import { staticChildren } from "./navigation-tree.js";
 
 const tasks: Record<string, string> = {
+  "mcp-servers": "Configure servers, credentials and connections",
   automations: "Schedule recurring jobs and investigate executions",
   workflows: "Define multi-step work and review runs",
   tables: "Inspect records and diagnostic logs",

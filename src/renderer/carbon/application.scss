@@ -403,3 +403,18 @@
     .search-page mark { background: var(--cds-highlight); color: var(--cds-text-primary); }
   }
 }
+
+@layer carbon-app {
+  .mcp-workspace .cds--tab-content { padding: space.$spacing-06 0 0; }
+  .mcp-servers-page .table-controls { padding-inline: 0; }
+  .mcp-maintenance {
+    margin-block-start: space.$spacing-07;
+    padding-block-start: space.$spacing-06;
+    border-block-start: 1px solid var(--cds-border-subtle-01);
+    h2 { @include type.type-style('heading-03'); margin: 0; }
+  }
+  #app-updates .settings-card p {
+    margin: 0 0 space.$spacing-05;
+    max-inline-size: 70ch;
+  }
+}

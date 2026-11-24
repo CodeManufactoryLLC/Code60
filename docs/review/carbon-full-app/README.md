@@ -1,6 +1,6 @@
 # Carbon workflow review
 
-The comparison uses the approved Scheduled Jobs build at `656b0ae` and the full-app conversion based on `341bd8e`. The [migration ledger](../../carbon-migration.md) maps every destination and dialog family to its interaction model and IBM guidance.
+The comparison uses the approved Scheduled Jobs build at `656b0ae` and the original full-app conversion based on `341bd8e`. The MCP Servers and Update Manager captures below come from the rebase onto `f0f7e5a`. The [migration ledger](../../carbon-migration.md) maps every destination and dialog family to its interaction model and IBM guidance.
 
 | Workflow | Reference | Full application |
 | --- | --- | --- |
@@ -16,6 +16,12 @@ The comparison uses the approved Scheduled Jobs build at `656b0ae` and the full-
 The [Carbon interaction audit](carbon-audit.md) records the subsequent review of startup, navigation, forms, search and workflows.
 
 The [dark mode gallery](dark-mode.md) covers 15 desktop views across the operator workflows.
+
+## MCP Servers and Update Manager
+
+The rebase onto `f0f7e5a` brings in scoped MCP configuration, authentication, diagnostics and explicit installation recovery. Add server opens the guided form from the table. The JSON tab keeps the editable document in Monaco. Backup and recovery tools sit below the active view. Update Manager shows the installed release and the terminal commands for updating, reconnecting and recovering.
+
+[Populated Servers table](mcp-servers.png) · [Add server](mcp-form.png) · [JSON editor in dark mode](mcp-json-dark.png) · [Update Manager](installed-update.png)
 
 ## Page spacing and alignment
 

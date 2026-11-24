@@ -11,6 +11,8 @@ import type {
 } from "../bridge/index.js";
 import { AnchoredMenu } from "./anchored-menu.js";
 import { randomId } from "./browser-platform.js";
+import { Button } from "./carbon/button.js";
+import { Select } from "./carbon/fields.js";
 import { DataTable, type TableOptions } from "./data-table.js";
 import { McpAuthenticationPanel } from "./mcp-authentication.js";
 import { McpForm, type McpFormDraft, mcpFormFields } from "./mcp-form.js";
@@ -316,7 +318,7 @@ export function McpServersPage({
             <p>
               Preserve configuration files, private backups and transaction evidence. Do not delete
               writer locks or replay uncertain actions. Follow the MCP configuration recovery
-              runbook; in-app Complete and Roll back controls are planned for a later phase.
+              runbook or review the affected transaction under Configuration maintenance.
             </p>
           </details>
         </div>
@@ -344,15 +346,6 @@ export function McpServersPage({
         addDisabled={blocked}
         pageActions={[
           {
-            id: "mcp-add",
-            label: "Add server",
-            run: () => {
-              setError("");
-              setEditor(captured());
-            },
-            disabled: blocked,
-          },
-          {
             id: "mcp-refresh",
             label: "Reload configurations",
             run: () => {
@@ -363,32 +356,30 @@ export function McpServersPage({
           },
         ]}
         scope={
-          <label>
-            Configuration
-            <select
-              aria-label="Configuration"
-              value={scope}
-              disabled={busy || Boolean(editor || remove || move)}
-              onChange={(e) => {
-                setScope(e.target.value);
-                setRead(undefined);
-                setSelected(undefined);
-                setError("");
-              }}
-            >
-              <option value="user">User</option>
-              {targets?.targets
-                .filter((t) => t.address.scope === "project")
-                .map((t) => (
-                  <option key={t.address.targetId} value={t.address.targetId}>
-                    {t.label}
-                  </option>
-                ))}
-              {scope !== "user" && !targets?.targets.some((t) => t.address.targetId === scope) && (
-                <option value={scope}>Closed project</option>
-              )}
-            </select>
-          </label>
+          <Select
+            labelText="Configuration"
+            aria-label="Configuration"
+            value={scope}
+            disabled={busy || Boolean(editor || remove || move)}
+            onChange={(e) => {
+              setScope(e.target.value);
+              setRead(undefined);
+              setSelected(undefined);
+              setError("");
+            }}
+          >
+            <option value="user">User</option>
+            {targets?.targets
+              .filter((t) => t.address.scope === "project")
+              .map((t) => (
+                <option key={t.address.targetId} value={t.address.targetId}>
+                  {t.label}
+                </option>
+              ))}
+            {scope !== "user" && !targets?.targets.some((t) => t.address.targetId === scope) && (
+              <option value={scope}>Closed project</option>
+            )}
+          </Select>
         }
         onActions={(id, bounds) => setMenu({ id, x: bounds.x, y: bounds.y + bounds.height })}
       />
@@ -400,25 +391,26 @@ export function McpServersPage({
               ? " Overrides the user definition, including while disabled or unapproved."
               : ""}
           </span>
-          <button type="button" disabled={blocked || !local} onClick={() => openEdit(selectedId)}>
+          <Button type="button" disabled={blocked || !local} onClick={() => openEdit(selectedId)}>
             Edit server
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="quiet"
             type="button"
             disabled={blocked || !local}
             onClick={() => setRemove(captured(selectedId))}
           >
             Remove server
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             disabled={blocked || !local || (targets?.targets.length ?? 0) < 2}
             onClick={() => openMove(selectedId)}
           >
             Move server
-          </button>
+          </Button>
           {!local && (
-            <button
+            <Button
               type="button"
               onClick={() => {
                 setScope("user");
@@ -426,7 +418,7 @@ export function McpServersPage({
               }}
             >
               Open user configuration
-            </button>
+            </Button>
           )}
         </section>
       )}
@@ -551,10 +543,16 @@ export function McpServersPage({
           ) : null}
           {error && <p role="alert">{error}</p>}
           <div className="dialog-actions">
-            <button type="button" disabled={busy} onClick={() => setRemove(undefined)}>
+            <Button
+              variant="quiet"
+              type="button"
+              disabled={busy}
+              onClick={() => setRemove(undefined)}
+            >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              className="destructive"
               type="button"
               disabled={busy || stale(remove)}
               onClick={() => {
@@ -566,7 +564,7 @@ export function McpServersPage({
               }}
             >
               Confirm removal
-            </button>
+            </Button>
           </div>
         </Modal>
       )}
@@ -583,29 +581,27 @@ export function McpServersPage({
             Move {move.source.document?.servers[move.serverId]?.label} from {move.target.label}. The
             server ID is preserved.
           </p>
-          <label>
-            Destination
-            <select
-              aria-label="Destination"
-              disabled={busy}
-              defaultValue=""
-              onChange={(e) => {
-                const t = targets?.targets.find((t) => t.address.targetId === e.target.value);
-                if (t) void chooseDestination(t.address);
-              }}
-            >
-              <option value="" disabled>
-                Choose configuration
-              </option>
-              {targets?.targets
-                .filter((t) => t.address.targetId !== move.target.address.targetId)
-                .map((t) => (
-                  <option key={t.address.targetId} value={t.address.targetId}>
-                    {t.label}
-                  </option>
-                ))}
-            </select>
-          </label>
+          <Select
+            labelText="Destination"
+            aria-label="Destination"
+            disabled={busy}
+            defaultValue=""
+            onChange={(e) => {
+              const t = targets?.targets.find((t) => t.address.targetId === e.target.value);
+              if (t) void chooseDestination(t.address);
+            }}
+          >
+            <option value="" disabled>
+              Choose configuration
+            </option>
+            {targets?.targets
+              .filter((t) => t.address.targetId !== move.target.address.targetId)
+              .map((t) => (
+                <option key={t.address.targetId} value={t.address.targetId}>
+                  {t.label}
+                </option>
+              ))}
+          </Select>
           {move.preview && (
             <div role="status">
               <p>
@@ -630,7 +626,8 @@ export function McpServersPage({
           )}
           {error && <p role="alert">{error}</p>}
           <div className="dialog-actions">
-            <button
+            <Button
+              variant="quiet"
               type="button"
               disabled={busy}
               onClick={() => {
@@ -639,8 +636,8 @@ export function McpServersPage({
               }}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               disabled={
                 busy ||
@@ -673,7 +670,7 @@ export function McpServersPage({
               }}
             >
               Confirm move
-            </button>
+            </Button>
           </div>
         </Modal>
       )}

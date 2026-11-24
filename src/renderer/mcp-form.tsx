@@ -7,6 +7,9 @@ import {
   parseMcpDefinitionText,
 } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
+import { Button } from "./carbon/button.js";
+import { Select, TextInput } from "./carbon/fields.js";
+import { Textarea } from "./carbon/textarea.js";
 
 type Binding = {
   key: string;
@@ -143,71 +146,64 @@ function BindingFields({
       <legend>{title}</legend>
       {rows.map((row, index) => (
         <div className="mcp-binding" key={row.key}>
-          <label>
-            Name
-            <input
-              aria-label={`${title} name ${index + 1}`}
-              value={row.name}
-              maxLength={128}
-              required
-              onChange={(e) =>
-                onChange(rows.map((r, i) => (i === index ? { ...r, name: e.target.value } : r)))
-              }
-            />
-          </label>
-          <label>
-            Binding
-            <select
-              aria-label={`${title} binding ${index + 1}`}
-              value={row.kind}
-              onChange={(e) =>
-                onChange(
-                  rows.map((r, i) =>
-                    i === index ? { ...r, kind: e.target.value as Binding["kind"], value: "" } : r,
-                  ),
-                )
-              }
-            >
-              <option value="literal">Non-secret literal</option>
-              <option value="credential">Credential reference</option>
-            </select>
-          </label>
-          <label>
-            {row.kind === "literal" ? "Non-secret value" : "Credential reference"}
-            <input
-              aria-label={`${title} value ${index + 1}`}
-              value={row.value}
-              maxLength={row.kind === "literal" ? 8192 : 128}
-              required={row.kind === "credential"}
-              onChange={(e) =>
-                onChange(rows.map((r, i) => (i === index ? { ...r, value: e.target.value } : r)))
-              }
-            />
-          </label>
+          <TextInput
+            labelText="Name"
+            aria-label={`${title} name ${index + 1}`}
+            value={row.name}
+            maxLength={128}
+            required
+            onChange={(e) =>
+              onChange(rows.map((r, i) => (i === index ? { ...r, name: e.target.value } : r)))
+            }
+          />
+          <Select
+            labelText="Binding"
+            aria-label={`${title} binding ${index + 1}`}
+            value={row.kind}
+            onChange={(e) =>
+              onChange(
+                rows.map((r, i) =>
+                  i === index ? { ...r, kind: e.target.value as Binding["kind"], value: "" } : r,
+                ),
+              )
+            }
+          >
+            <option value="literal">Non-secret literal</option>
+            <option value="credential">Credential reference</option>
+          </Select>
+          <TextInput
+            labelText={row.kind === "literal" ? "Non-secret value" : "Credential reference"}
+            aria-label={`${title} value ${index + 1}`}
+            value={row.value}
+            maxLength={row.kind === "literal" ? 8192 : 128}
+            required={row.kind === "credential"}
+            onChange={(e) =>
+              onChange(rows.map((r, i) => (i === index ? { ...r, value: e.target.value } : r)))
+            }
+          />
           {header && row.kind === "credential" && (
-            <label>
-              Prefix
-              <input
-                aria-label={`${title} prefix ${index + 1}`}
-                value={row.prefix}
-                placeholder="Bearer "
-                maxLength={8192}
-                onChange={(e) =>
-                  onChange(rows.map((r, i) => (i === index ? { ...r, prefix: e.target.value } : r)))
-                }
-              />
-            </label>
+            <TextInput
+              labelText="Prefix"
+              aria-label={`${title} prefix ${index + 1}`}
+              value={row.prefix}
+              placeholder="Bearer "
+              maxLength={8192}
+              onChange={(e) =>
+                onChange(rows.map((r, i) => (i === index ? { ...r, prefix: e.target.value } : r)))
+              }
+            />
           )}
-          <button
+          <Button
+            variant="quiet"
             type="button"
             aria-label={`Remove ${title.toLowerCase()} ${index + 1}`}
             onClick={() => onChange(rows.filter((_, i) => i !== index))}
           >
             Remove
-          </button>
+          </Button>
         </div>
       ))}
-      <button
+      <Button
         type="button"
         disabled={rows.length >= 64}
         onClick={() =>
@@ -215,7 +211,7 @@ function BindingFields({
         }
       >
         Add {header ? "header" : "environment binding"}
-      </button>
+      </Button>
     </fieldset>
   );
 }
@@ -285,40 +281,38 @@ export function McpForm({
       <fieldset disabled={busy}>
         {!originalId && (
           <>
-            <label>
-              Starting definition
-              <select
-                aria-label="Starting definition"
-                defaultValue="blank"
-                onChange={(e) => {
-                  const template = templates.find((t) => t.id === e.target.value);
-                  setFields(mcpFormFields(template?.id ?? "", template?.definition));
-                }}
-              >
-                <option value="blank">Blank</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.definition.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button type="button" onClick={() => setPasteOpen((v) => !v)}>
+            <Select
+              labelText="Starting definition"
+              aria-label="Starting definition"
+              defaultValue="blank"
+              onChange={(e) => {
+                const template = templates.find((t) => t.id === e.target.value);
+                setFields(mcpFormFields(template?.id ?? "", template?.definition));
+              }}
+            >
+              <option value="blank">Blank</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.definition.label}
+                </option>
+              ))}
+            </Select>
+            <Button type="button" onClick={() => setPasteOpen((v) => !v)}>
               Paste definition
-            </button>
+            </Button>
             {pasteOpen && (
               <>
-                <label>
-                  Server definition
-                  <textarea
-                    aria-label="Server definition"
-                    rows={5}
-                    maxLength={1_048_576}
-                    value={paste}
-                    onChange={(e) => setPaste(e.target.value)}
-                  />
-                </label>
-                <button
+                <Textarea
+                  labelText="Server definition"
+                  hideLabel={false}
+                  aria-label="Server definition"
+                  rows={5}
+                  maxLength={1_048_576}
+                  value={paste}
+                  onChange={(e) => setPaste(e.target.value)}
+                />
+                <Button
+                  variant="neutral"
                   type="button"
                   onClick={() => {
                     try {
@@ -334,78 +328,69 @@ export function McpForm({
                   }}
                 >
                   Review definition
-                </button>
+                </Button>
               </>
             )}
           </>
         )}
-        <label>
-          Server ID
-          <input
-            aria-label="Server ID"
-            value={fields.id}
-            disabled={Boolean(originalId)}
-            required
-            maxLength={64}
-            placeholder="documentation"
-            onChange={(e) => change("id", e.target.value)}
-          />
-        </label>
-        <label>
-          Label
-          <input
-            aria-label="Label"
-            value={fields.label}
-            required
-            maxLength={120}
-            onChange={(e) => change("label", e.target.value)}
-          />
-        </label>
-        <label>
-          Transport
-          <select
-            aria-label="Transport"
-            value={fields.type}
-            onChange={(e) => change("type", e.target.value as "stdio" | "http")}
-          >
-            <option value="stdio">Standard input/output</option>
-            <option value="http">Streamable HTTP</option>
-          </select>
-        </label>
+        <TextInput
+          labelText="Server ID"
+          aria-label="Server ID"
+          value={fields.id}
+          disabled={Boolean(originalId)}
+          required
+          maxLength={64}
+          placeholder="documentation"
+          onChange={(e) => change("id", e.target.value)}
+        />
+        <TextInput
+          labelText="Label"
+          aria-label="Label"
+          value={fields.label}
+          required
+          maxLength={120}
+          onChange={(e) => change("label", e.target.value)}
+        />
+        <Select
+          labelText="Transport"
+          aria-label="Transport"
+          value={fields.type}
+          onChange={(e) => change("type", e.target.value as "stdio" | "http")}
+        >
+          <option value="stdio">Standard input/output</option>
+          <option value="http">Streamable HTTP</option>
+        </Select>
         {fields.type === "stdio" ? (
           <>
-            <label>
-              Command
-              <input
-                aria-label="Command"
-                value={fields.command}
-                required
-                maxLength={4096}
-                placeholder="node"
-                onChange={(e) => change("command", e.target.value)}
-              />
-            </label>
+            <TextInput
+              labelText="Command"
+              aria-label="Command"
+              value={fields.command}
+              required
+              maxLength={4096}
+              placeholder="node"
+              onChange={(e) => change("command", e.target.value)}
+            />
             <fieldset className="settings-group">
               <legend>Arguments</legend>
               {fields.args
                 .map((arg, index) => ({ arg, i: index, key: fields.argIds[index] }))
                 .map(({ arg, i, key }) => (
                   <div className="mcp-binding" key={key}>
-                    <label>
-                      Argument {i + 1}
-                      <input
-                        aria-label={`Argument ${i + 1}`}
-                        value={arg}
-                        maxLength={4096}
-                        onChange={(e) =>
-                          change(
-                            "args",
-                            fields.args.map((v, n) => (n === i ? e.target.value : v)),
-                          )
-                        }
-                      />
-                    </label>
-                    <button
+                    <TextInput
+                      labelText={<>Argument {i + 1}</>}
+                      aria-label={`Argument ${i + 1}`}
+                      value={arg}
+                      maxLength={4096}
+                      onChange={(e) =>
+                        change(
+                          "args",
+                          fields.args.map((v, n) => (n === i ? e.target.value : v)),
+                        )
+                      }
+                    />
+                    <Button
+                      variant="quiet"
                       type="button"
                       aria-label={`Remove argument ${i + 1}`}
                       onClick={() =>
@@ -416,16 +401,16 @@ export function McpForm({
                       }
                     >
                       Remove
-                    </button>
+                    </Button>
                   </div>
                 ))}
-              <button
+              <Button
                 type="button"
                 disabled={fields.args.length >= 128}
                 onClick={() => change("args", [...fields.args, ""])}
               >
                 Add argument
-              </button>
+              </Button>
             </fieldset>
             <BindingFields
               title="Environment"
@@ -436,79 +421,68 @@ export function McpForm({
           </>
         ) : (
           <>
-            <label>
-              URL
-              <input
-                aria-label="URL"
-                value={fields.url}
-                required
-                maxLength={4096}
-                placeholder="https://example.com/mcp"
-                onChange={(e) => change("url", e.target.value)}
-              />
-            </label>
+            <TextInput
+              labelText="URL"
+              aria-label="URL"
+              value={fields.url}
+              required
+              maxLength={4096}
+              placeholder="https://example.com/mcp"
+              onChange={(e) => change("url", e.target.value)}
+            />
             <BindingFields
               title="Headers"
               rows={fields.headers}
               header
               onChange={(rows) => change("headers", rows)}
             />
-            <label>
-              Authentication
-              <select
-                aria-label="Authentication"
-                value={fields.oauth ? "oauth" : "none"}
-                onChange={(e) => change("oauth", e.target.value === "oauth")}
-              >
-                <option value="none">None / header bindings</option>
-                <option value="oauth">OAuth registration metadata</option>
-              </select>
-            </label>
+            <Select
+              labelText="Authentication"
+              aria-label="Authentication"
+              value={fields.oauth ? "oauth" : "none"}
+              onChange={(e) => change("oauth", e.target.value === "oauth")}
+            >
+              <option value="none">None / header bindings</option>
+              <option value="oauth">OAuth registration metadata</option>
+            </Select>
             {fields.oauth && (
               <>
-                <label>
-                  Requested scopes (one per line)
-                  <textarea
-                    aria-label="Requested scopes"
-                    value={fields.scopes}
-                    maxLength={16447}
-                    onChange={(e) => change("scopes", e.target.value)}
-                  />
-                </label>
-                <label>
-                  Client ID (optional)
-                  <input
-                    aria-label="Client ID"
-                    value={fields.clientId}
-                    maxLength={4096}
-                    onChange={(e) => change("clientId", e.target.value)}
-                  />
-                </label>
-                <label>
-                  Client ID type
-                  <select
-                    aria-label="Client ID type"
-                    value={fields.clientIdType}
-                    onChange={(event) =>
-                      change(
-                        "clientIdType",
-                        event.target.value === "metadata-url" ? "metadata-url" : "registered",
-                      )
-                    }
-                  >
-                    <option value="registered">Pre-registered client ID</option>
-                    <option value="metadata-url">User-hosted HTTPS client metadata URL</option>
-                  </select>
-                </label>
-                <label>
-                  Client secret reference (optional)
-                  <input
-                    aria-label="Client secret reference"
-                    value={fields.clientSecretRef}
-                    maxLength={128}
-                    onChange={(e) => change("clientSecretRef", e.target.value)}
-                  />
-                </label>
+                <Textarea
+                  labelText="Requested scopes (one per line)"
+                  hideLabel={false}
+                  aria-label="Requested scopes"
+                  value={fields.scopes}
+                  maxLength={16447}
+                  onChange={(e) => change("scopes", e.target.value)}
+                />
+                <TextInput
+                  labelText="Client ID (optional)"
+                  aria-label="Client ID"
+                  value={fields.clientId}
+                  maxLength={4096}
+                  onChange={(e) => change("clientId", e.target.value)}
+                />
+                <Select
+                  labelText="Client ID type"
+                  aria-label="Client ID type"
+                  value={fields.clientIdType}
+                  onChange={(event) =>
+                    change(
+                      "clientIdType",
+                      event.target.value === "metadata-url" ? "metadata-url" : "registered",
+                    )
+                  }
+                >
+                  <option value="registered">Pre-registered client ID</option>
+                  <option value="metadata-url">User-hosted HTTPS client metadata URL</option>
+                </Select>
+                <TextInput
+                  labelText="Client secret reference (optional)"
+                  aria-label="Client secret reference"
+                  value={fields.clientSecretRef}
+                  maxLength={128}
+                  onChange={(e) => change("clientSecretRef", e.target.value)}
+                />
               </>
             )}
           </>
@@ -538,15 +512,15 @@ export function McpForm({
           </p>
         )}
         <div className="dialog-actions">
-          <button type="button" onClick={onCancel}>
+          <Button variant="quiet" type="button" onClick={onCancel}>
             Cancel
-          </button>
-          <button type="button" onClick={onReload}>
+          </Button>
+          <Button variant="quiet" type="button" onClick={onReload}>
             Reload and discard draft
-          </button>
-          <button type="submit" disabled={!document || stale}>
+          </Button>
+          <Button variant="primary" type="submit" disabled={!document || stale}>
             Save server
-          </button>
+          </Button>
         </div>
       </fieldset>
     </form>

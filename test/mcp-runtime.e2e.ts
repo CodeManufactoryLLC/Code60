@@ -1,9 +1,11 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
 
 async function apps(page: Page) {
+  await expandNavigation(page, "Manage");
   await page.getByRole("tab", { name: "Apps", exact: true }).click();
   await page.getByRole("button", { name: "Open MCP Servers", exact: true }).click();
   await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
@@ -41,7 +43,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     const { page } = await fixture.open();
     await onboard(page);
     await createDatabase(page, fixture.directory);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await apps(page);
     await page.getByRole("button", { name: "Enable server", exact: true }).click();
     await expect(page.getByRole("button", { name: "Disable server", exact: true })).toBeVisible();
@@ -144,8 +146,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     if (!projectValue) throw new Error("Project target missing");
     await page.getByLabel("Configuration", { exact: true }).selectOption(projectValue);
     // Add a disabled project override; approval is explicit and source identity remains canonical.
-    await page.getByRole("button", { name: "MCP Servers actions", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Add server", exact: true }).click();
+    await page.getByRole("button", { name: "Add server", exact: true }).click();
     const form = page.getByRole("dialog", { name: /Add MCP server/ });
     await form.getByLabel("Server ID", { exact: true }).fill("fixture");
     await form.getByLabel("Label", { exact: true }).fill("Project override");
@@ -166,11 +167,12 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
       await readFile(join(fixture.directory, "state/code60/mcp-runtime/trust.json"), "utf8"),
     );
     expect(Object.keys(metadata.approvals)).toHaveLength(1);
-    await page.getByRole("button", { name: "JSON", exact: true }).click();
+    await page.getByRole("tab", { name: "JSON", exact: true }).click();
     await page.locator(".mcp-json-editor .inputarea").focus();
     await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.press("ArrowRight");
     await page.keyboard.insertText(" ");
+    await expandNavigation(page, "Manage");
     await page.getByRole("tab", { name: "Apps", exact: true }).click();
     await apps(page);
     await expect(page.locator(".mcp-json-editor")).toContainText("Project override");
@@ -210,7 +212,7 @@ test("MCP runtime: Cancel and browser detach stop page-owned discovery processes
     );
     const { page, context } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await apps(page);
     const events = async () =>
       (await readFile(evidence, "utf8").catch(() => ""))

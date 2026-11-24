@@ -4,16 +4,17 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import type { McpConfigurationStore as StoreType } from "../src/application/index.js";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
 
 async function app(page: Page) {
+  await expandNavigation(page, "Manage");
   await page.getByRole("tab", { name: "Apps", exact: true }).click();
   await page.getByRole("button", { name: "Open MCP Servers", exact: true }).click();
   await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
 }
 async function clickAdd(page: Page) {
-  await page.getByRole("button", { name: "MCP Servers actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Add server", exact: true }).click();
+  await page.getByRole("button", { name: "Add server", exact: true }).click();
 }
 async function add(page: Page, id: string, label: string) {
   await clickAdd(page);
@@ -33,7 +34,7 @@ test("MCP management: user scope, templates, pasted review, HTTP edits, cancella
     const legacy = await readFile(join(fixture.directory, "config/code60/config.json"));
     const { page } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
     const providerProcesses = await readdir(fixture.processLog);
     await expect(page.getByLabel("Configuration", { exact: true })).toHaveValue("user");
@@ -146,7 +147,7 @@ test("MCP management: project moves, collision preview, cancellation, inheritanc
     const { page } = await fixture.open();
     await onboard(page);
     await createDatabase(page, fixture.directory);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await openProject(page, fixture.directory, "alpha");
     await app(page);
     const destination = page.getByLabel("Configuration", { exact: true });
@@ -227,7 +228,7 @@ test("MCP management: malformed files and interrupted transactions block guided 
     });
     const { page } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
     await expect(page.locator("#panel-mcp-servers")).toContainText("Invalid configuration");
     await expect(page.getByRole("button", { name: "Add server", exact: true })).toBeDisabled();
@@ -267,7 +268,7 @@ test("MCP management: malformed files and interrupted transactions block guided 
     }
     await fixture.restart();
     const { page: recovered } = await fixture.open();
-    await recovered.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(recovered.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(recovered);
     await expect(recovered.locator("#panel-mcp-servers")).toContainText(
       "Pending configuration recovery blocks writes",
