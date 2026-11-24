@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { mcpTargetSchema } from "./mcp-management.js";
+import type { McpFailure, McpTroubleshootingReport } from "./mcp-troubleshooting.js";
 
 z.config({ jitless: true });
 const revision = z.string().regex(/^[a-f0-9]{64}$/);
@@ -16,6 +17,12 @@ const connection = {
 };
 export const mcpRuntimeRequestSchema = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("status"), target: mcpTargetSchema }),
+  z.strictObject({ action: z.literal("report"), target: mcpTargetSchema }),
+  z.strictObject({
+    action: z.literal("verify-cleanup"),
+    target: mcpTargetSchema,
+    requestId: z.uuid(),
+  }),
   z.strictObject({ action: z.literal("enable"), ...mutation, serverId, enabled: z.boolean() }),
   z.strictObject({ action: z.literal("review-approval"), ...captured }),
   z.strictObject({ action: z.literal("approve"), ...mutation }),
@@ -46,6 +53,10 @@ interface McpRuntimeSessionStatus {
   connectors: { id: string; targetId: string; revision: string; connection: string }[];
 }
 export interface McpRuntimeResponse {
+  failure?: McpFailure;
+  failures?: McpFailure[];
+  unresolvedCleanup?: number;
+  report?: McpTroubleshootingReport;
   previewId?: string;
   sessions?: McpRuntimeSessionStatus[];
   approved?: boolean;

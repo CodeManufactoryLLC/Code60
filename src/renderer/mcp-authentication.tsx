@@ -139,8 +139,8 @@ export function McpAuthenticationPanel({
       if (owner === epoch.current)
         setError(
           cause instanceof Error
-            ? cause.message
-            : "Authentication failed or is uncertain. Review before trying again; no temporary fallback was used.",
+            ? `MCP_AUTHENTICATION: ${cause.message} Other tools remain available.`
+            : "MCP_AUTHENTICATION: Authentication failed or is uncertain. Review before trying again; no temporary fallback was used. Other tools remain available.",
         );
     } finally {
       if (owner === epoch.current) setBusy(false);

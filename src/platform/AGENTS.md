@@ -63,3 +63,14 @@ storage requires explicit consent and survives only until backend restart/sign-o
 Credential writes/forget/sign-out are narrow human operations with safe metadata;
 there is no browser secret-read endpoint. Preserve existing JSON drafts/recovery.
 Dedicated integrations, Code60 registrations/hosted auth and recovery GUI stay out.
+
+
+Phase 7 preserves structured native startup codes in the backend error cause so
+agents can classify failures without parsing paths/messages. Never serialize that
+cause to browser status/reports. Application cleanup verification retries only
+retained revoked handles; native process-group ownership rules remain unchanged.
+
+Network policy failures carry only allowlisted native error codes for phase 7
+network/TLS/deadline guidance; discard raw causes and payloads. Protocol consumers
+must not infer authority or retry from these codes. Keep DNS/socket/redirect and
+HTTPS policy unchanged.

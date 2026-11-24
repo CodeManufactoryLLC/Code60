@@ -371,3 +371,22 @@ storage requires explicit consent and survives only until backend restart/sign-o
 Credential writes/forget/sign-out are narrow human operations with safe metadata;
 there is no browser secret-read endpoint. Preserve existing JSON drafts/recovery.
 Dedicated integrations, Code60 registrations/hosted auth and recovery GUI stay out.
+
+
+## MCP recovery and troubleshooting (phase 7)
+
+Phase 7 supersedes prior deferred-recovery wording. Human-only recovery lists and
+reviews registered targets, exact configuration revisions and a private journal
+identity/content revision. Confirm Complete/Roll back through application lifecycle
+serialization; every affected project must have its captured live runtime/epoch.
+Unknown/corrupt evidence, replaced roots and third states remain blocked. No force,
+lock deletion, automatic replay or path input exists. Keep drafts during recovery;
+compare or explicitly reload afterward. Credentials, approvals and session authority
+are not restored by configuration recovery.
+
+Only fixed allowlisted failure codes/stages and guidance reach status/report views;
+never echo server exceptions/output. Optional troubleshooting reports contain counts
+and states only, never names/IDs, definitions, paths, endpoints, references or secrets.
+Cleanup verification retries retained revoked handles for the captured scope only,
+coalesces concurrent attempts and retains ownership on failure. It never reconnects,
+launches a process, retries a business call or discovers/kills processes by name.

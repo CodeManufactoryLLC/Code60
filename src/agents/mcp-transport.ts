@@ -3,7 +3,12 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { type JSONRPCMessage, JSONRPCMessageSchema } from "@modelcontextprotocol/sdk/types.js";
-import type { McpConnectorDefinition } from "../contracts/index.js";
+import {
+  type McpConnectorDefinition,
+  type McpFailure,
+  mcpFailure,
+  mcpFailureGuidance,
+} from "../contracts/index.js";
 import { guardedFetch, type OwnedProcess, spawnOwnedProcess } from "../platform/index.js";
 
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -220,6 +225,7 @@ export async function connectMcpUpstream(input: {
     void close().catch(() => {});
   };
   signal.addEventListener("abort", onAbort, { once: true });
+  let stage: McpFailure["stage"] = "initialize";
   try {
     signal.throwIfAborted();
     await client.connect(transport, { signal, timeout: 30_000 });
@@ -236,6 +242,7 @@ export async function connectMcpUpstream(input: {
     transport.onerror = () => {
       void close().catch(() => {});
     };
+    stage = "discovery";
     const tools: Record<string, unknown>[] = [];
     let cursor: string | undefined;
     const cursors = new Set<string>();
@@ -243,7 +250,9 @@ export async function connectMcpUpstream(input: {
       const page = await client.listTools(cursor ? { cursor } : {}, { signal, timeout: 30_000 });
       tools.push(...page.tools);
       if (tools.length > 512 || Buffer.byteLength(JSON.stringify(tools)) > MAX_BYTES)
-        throw new Error("MCP discovery exceeded its limit");
+        throw Object.assign(new Error("MCP discovery exceeded its limit"), {
+          mcpFailure: { code: "limit", stage: "discovery" },
+        });
       cursor = page.nextCursor;
       if (cursor && cursors.has(cursor)) throw new Error("MCP discovery rejected");
       if (cursor) cursors.add(cursor);
@@ -257,31 +266,83 @@ export async function connectMcpUpstream(input: {
       async call(name, args, callSignal, timeout) {
         const deadline = Math.max(1, Math.min(timeout, 2_147_483_647));
         const authority = AbortSignal.any([callSignal, AbortSignal.timeout(deadline)]);
-        return calls.run(authority, () =>
-          client.callTool({ name, arguments: args }, undefined, {
-            signal: authority,
-            timeout: deadline,
-            resetTimeoutOnProgress: false,
-          }),
-        );
+        try {
+          return await calls.run(authority, () =>
+            client.callTool({ name, arguments: args }, undefined, {
+              signal: authority,
+              timeout: deadline,
+              resetTimeoutOnProgress: false,
+            }),
+          );
+        } catch (cause) {
+          const failure = classifyMcpFailure(cause, "call", authority);
+          throw Object.assign(new Error(mcpFailureGuidance(failure)), { mcpFailure: failure });
+        }
       },
       close: async () => {
         signal.removeEventListener("abort", onAbort);
         await close();
       },
     };
-  } catch {
+  } catch (cause) {
     signal.removeEventListener("abort", onAbort);
     try {
       await close();
     } catch {
       throw Object.assign(new Error("MCP cleanup remains unresolved"), {
+        mcpFailure: { code: "cleanup", stage: "cleanup" },
         code: "cleanup-unresolved",
         cleanup: close,
       });
     }
-    throw new Error(
-      "MCP connection failed; authentication or server configuration may require attention",
-    );
+    const failure = classifyMcpFailure(cause, stage, signal);
+    throw Object.assign(new Error(mcpFailureGuidance(failure)), { mcpFailure: failure });
   }
+}
+
+/** Classify structured platform/SDK codes, never search server-controlled messages. */
+function classifyMcpFailure(
+  cause: unknown,
+  stage: McpFailure["stage"],
+  signal: AbortSignal,
+): McpFailure {
+  if (signal.aborted)
+    return { code: signal.reason?.name === "TimeoutError" ? "timeout" : "cancelled", stage };
+  let value = cause;
+  for (let depth = 0; depth < 3 && value && typeof value === "object"; depth++) {
+    if ("code" in value) {
+      const code = value.code;
+      if (code === 401) return { code: "authentication", stage };
+      if (code === 403) return { code: "scope", stage };
+      if (code === "ENOENT" || code === "EACCES" || code === "ENOEXEC")
+        return { code: "launch", stage: "launch" };
+      if (code === "ERR_MCP_NETWORK_LIMIT") return { code: "limit", stage };
+      if (code === "EINVAL" || code === "E2BIG") return { code: "arguments", stage: "launch" };
+      if (
+        [
+          "ERR_MCP_NETWORK",
+          "ECONNREFUSED",
+          "ECONNRESET",
+          "ENOTFOUND",
+          "EAI_AGAIN",
+          "EHOSTUNREACH",
+          "ENETUNREACH",
+        ].includes(String(code))
+      )
+        return { code: "network", stage };
+      if (
+        [
+          "CERT_HAS_EXPIRED",
+          "DEPTH_ZERO_SELF_SIGNED_CERT",
+          "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+          "ERR_TLS_CERT_ALTNAME_INVALID",
+          "SELF_SIGNED_CERT_IN_CHAIN",
+        ].includes(String(code))
+      )
+        return { code: "tls", stage };
+      if (code === "ETIMEDOUT" || code === -32001) return { code: "timeout", stage };
+    }
+    value = "cause" in value ? value.cause : undefined;
+  }
+  return mcpFailure(cause, { code: "protocol", stage });
 }

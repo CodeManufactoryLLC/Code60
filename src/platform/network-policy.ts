@@ -4,7 +4,33 @@ import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import { Readable } from "node:stream";
 
-class NetworkFailure extends Error {}
+class NetworkFailure extends Error {
+  readonly code: string;
+  constructor(message = "Network destination rejected", error?: unknown) {
+    super(message);
+    const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+    // Carry only reviewed native codes. Drop raw exceptions, destinations and payloads.
+    this.code =
+      typeof code === "string" &&
+      [
+        "ECONNREFUSED",
+        "ECONNRESET",
+        "ENOTFOUND",
+        "EAI_AGAIN",
+        "EHOSTUNREACH",
+        "ENETUNREACH",
+        "ETIMEDOUT",
+        "CERT_HAS_EXPIRED",
+        "DEPTH_ZERO_SELF_SIGNED_CERT",
+        "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+        "ERR_TLS_CERT_ALTNAME_INVALID",
+        "SELF_SIGNED_CERT_IN_CHAIN",
+        "ERR_MCP_NETWORK_LIMIT",
+      ].includes(code)
+        ? code
+        : "ERR_MCP_NETWORK";
+  }
+}
 
 const privateListeners = new Map<number, number>();
 /** Register application-private TCP listeners for their actual lifetime. */
@@ -158,7 +184,7 @@ export function guardedFetch(options: GuardedNetworkOptions = {}): typeof fetch 
     )
       throw new NetworkFailure("Network request body rejected");
     if (body && Buffer.byteLength(body) > maximum)
-      throw new NetworkFailure("Network request limit reached");
+      throw new NetworkFailure("Network request limit reached", { code: "ERR_MCP_NETWORK_LIMIT" });
     const parent = init?.signal ?? original?.signal;
     const sensitive =
       options.credentials ||
@@ -209,7 +235,11 @@ export function guardedFetch(options: GuardedNetworkOptions = {}): typeof fetch 
               incoming.on("data", (chunk: Buffer) => {
                 bytes += chunk.length;
                 if (bytes > maximum)
-                  incoming.destroy(new NetworkFailure("Network response limit reached"));
+                  incoming.destroy(
+                    new NetworkFailure("Network response limit reached", {
+                      code: "ERR_MCP_NETWORK_LIMIT",
+                    }),
+                  );
               });
               const status = incoming.statusCode ?? 502;
               const stream =
@@ -237,16 +267,20 @@ export function guardedFetch(options: GuardedNetworkOptions = {}): typeof fetch 
               reject(new NetworkFailure("Network request failed or outcome is uncertain"));
             }
           });
-          request.once("error", () => {
+          request.once("error", (error) => {
             clearTimeout(timer);
-            reject(new NetworkFailure("Network request failed or outcome is uncertain"));
+            reject(new NetworkFailure("Network request failed or outcome is uncertain", error));
           });
           request.end(body);
         });
       } catch (error) {
         clearTimeout(timer);
+        if (deadline.signal.aborted && !parent?.aborted)
+          throw new NetworkFailure("Network request timed out or outcome is uncertain", {
+            code: "ETIMEDOUT",
+          });
         if (error instanceof NetworkFailure) throw error;
-        throw new NetworkFailure("Network request failed or outcome is uncertain");
+        throw new NetworkFailure("Network request failed or outcome is uncertain", error);
       }
       if (response.status < 300 || response.status > 399 || response.status === 304)
         return response;

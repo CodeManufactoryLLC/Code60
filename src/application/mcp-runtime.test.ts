@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CredentialFailure } from "./mcp-credentials.js";
 import { McpRuntime, type McpRuntimePorts, type McpRuntimeSnapshot } from "./mcp-runtime.js";
 
 const targetId = "a".repeat(64);
@@ -184,6 +185,60 @@ describe("MCP runtime ownership and policy", () => {
       "not authorized",
     );
   });
+  it.each(["credential", "unauthorized", "scope"] as const)(
+    "reports %s failures during an authorized turn without replaying work",
+    async (origin) => {
+      await runtime.close();
+      const beforeCall = vi.fn(async () => {
+        if (origin === "credential") throw new CredentialFailure("required");
+      });
+      const business = vi.fn(async () => {
+        throw Object.assign(new Error("private upstream output"), {
+          mcpFailure: { code: origin === "scope" ? "scope" : "authentication", stage: "call" },
+        });
+      });
+      ports.connect = async () => ({
+        tools: [{ name: "tool" }],
+        call: business,
+        close: async () => {},
+      });
+      runtime = new McpRuntime(
+        join(directory, "credential-runtime"),
+        ports,
+        () => {},
+        {},
+        { prepare: async () => ({ environment: {}, headers: {}, beforeCall }) },
+      );
+      const value = snapshot();
+      value.user.document.servers.fixture = {
+        ...definition,
+        env: { TOKEN: { credentialRef: "token" } },
+      };
+      const resources = await runtime.factory(
+        async () => value,
+        () => {},
+      )(context());
+      resources.beginTurn(Date.now() + 10_000);
+      await expect(exposures[0]!.call("tool", {}, new AbortController().signal)).rejects.toThrow(
+        origin === "scope" ? "MCP_SCOPE" : "Authentication required",
+      );
+      expect(business).toHaveBeenCalledTimes(origin === "credential" ? 0 : 1);
+      expect(runtime.authenticationObservation(targetId, "fixture", revision)).toBe(
+        origin === "scope" ? "failed" : "required",
+      );
+      expect(runtime.failureStatus(targetId)).toEqual([
+        {
+          code: origin === "scope" ? "scope" : "authentication",
+          stage: origin === "credential" ? "authentication" : "call",
+        },
+      ]);
+      await expect(exposures[0]!.call("tool", {}, new AbortController().signal)).rejects.toThrow(
+        "not authorized",
+      );
+      expect(business).toHaveBeenCalledTimes(origin === "credential" ? 0 : 1);
+      await resources.close();
+    },
+  );
   it("requires idle/supported restoration, previews every affected connector and replays a connection action only once", async () => {
     let idle = false;
     let supported = false;
@@ -361,6 +416,57 @@ describe("MCP runtime ownership and policy", () => {
     available = true;
     await runtime.close();
     expect(cleanup.mock.calls.length).toBeGreaterThanOrEqual(3);
+  });
+  it("explicitly verifies only retained cleanup, remains revoked, and never starts or replays work", async () => {
+    let available = false;
+    const cleanup = vi.fn(async () => {
+      if (!available) throw new Error("private cleanup text");
+    });
+    ports.connect = vi.fn(async () => {
+      throw Object.assign(new Error("private server output"), {
+        cleanup,
+        mcpFailure: { code: "network", stage: "initialize" },
+      });
+    });
+    const warn = vi.fn();
+    await runtime.factory(async () => snapshot(), warn)(context());
+    expect(runtime.cleanupCount(targetId)).toBe(1);
+    const calls = cleanup.mock.calls.length;
+    expect(await runtime.verifyCleanup(projectId)).toBe(0);
+    expect(cleanup).toHaveBeenCalledTimes(calls);
+    expect(await runtime.verifyCleanup(targetId)).toBe(1);
+    available = true;
+    expect(await runtime.verifyCleanup(targetId)).toBe(0);
+    expect(runtime.status(targetId)[0]?.connectors[0]?.connection).toBe("disconnected");
+    expect(ports.connect).toHaveBeenCalledTimes(1);
+    expect(exposures).toHaveLength(0);
+    expect(JSON.stringify(warn.mock.calls)).not.toMatch(/private server|private cleanup/);
+  });
+  it("retains discovery-test cleanup separately and coalesces simultaneous verification", async () => {
+    let available = false;
+    const cleanup = vi.fn(async () => {
+      if (!available) throw new Error("unavailable");
+    });
+    ports.connect = vi.fn(async () => ({ tools: [], call: async () => ({}), close: cleanup }));
+    const request = {
+      targetId,
+      serverId: "fixture",
+      revision,
+      definition,
+      cwd: directory,
+      page: "page",
+      requestId: randomUUID(),
+    };
+    await expect(runtime.test(request)).rejects.toThrow("cleanup");
+    expect(runtime.cleanupCount(targetId)).toBe(1);
+    available = true;
+    const before = cleanup.mock.calls.length;
+    expect(
+      await Promise.all([runtime.verifyCleanup(targetId), runtime.verifyCleanup(targetId)]),
+    ).toEqual([0, 0]);
+    expect(cleanup).toHaveBeenCalledTimes(before + 1);
+    expect(runtime.cleanupCount(targetId)).toBe(0);
+    expect(ports.connect).toHaveBeenCalledTimes(1);
   });
   it("uses prototype-free binding maps and rejects transport-owned HTTP headers", async () => {
     const value = snapshot();

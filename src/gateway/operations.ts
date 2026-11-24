@@ -9,6 +9,7 @@ import {
   mcpBackupSchema,
   mcpMovePreviewSchema,
   mcpMoveSchema,
+  mcpRecoveryRequestSchema,
   mcpResetPreviewSchema,
   mcpResetSchema,
   mcpRestoreSchema,
@@ -84,6 +85,9 @@ export function applicationOperations(
   const handle = (name: string, action: (value: unknown) => unknown) => {
     operations.set(name, action);
   };
+  handle("mcp-recovery", (value) =>
+    controller.mcpRecovery(parseMcpManagement(mcpRecoveryRequestSchema, value)),
+  );
   handle("mcp-runtime", (value) => controller.mcpRuntime(value, interactions.page()));
   handle("mcp-authentication", (value) => controller.mcpAuthentication(value, interactions.page()));
   handle("mcp-read-text", (value) =>

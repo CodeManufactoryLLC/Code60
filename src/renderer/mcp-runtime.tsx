@@ -6,6 +6,7 @@ import type {
   McpRuntimeResponse,
   McpTargetAddress,
 } from "../bridge/index.js";
+import { mcpFailureGuidance } from "../bridge/index.js";
 import { Modal } from "./modal.js";
 
 /** Controls capture the displayed configuration; selection never retargets a pending decision. */
@@ -80,7 +81,8 @@ export function McpRuntimePanel({
     try {
       const result = await api.mcpRuntime(request);
       if (epoch.current !== current) return;
-      if (result.connection)
+      if (result.failure) setOutcome(mcpFailureGuidance(result.failure));
+      else if (result.connection)
         setOutcome(
           `${result.connection === "authentication-required" ? "Authentication required" : result.connection}. ${result.tools ?? 0} tools discovered. No tools were called.`,
         );
@@ -92,8 +94,8 @@ export function McpRuntimePanel({
       if (epoch.current === current)
         setError(
           cause instanceof Error
-            ? cause.message
-            : "MCP operation failed. Reload before retrying uncertain work.",
+            ? `MCP_RUNTIME: ${cause.message} Review the captured scope and revision, then reload status. Other tools remain available; uncertain calls must not be replayed.`
+            : "MCP_RUNTIME: MCP operation failed. Reload before retrying uncertain work. Other tools remain available.",
         );
     } finally {
       if (epoch.current === current) {
@@ -123,7 +125,9 @@ export function McpRuntimePanel({
           ),
         });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Connection changed; reload status.");
+      setError(
+        `MCP_RUNTIME: ${cause instanceof Error ? cause.message : "Connection changed; reload status."} Review the captured session and reload status before another decision. Other tools remain available.`,
+      );
     }
   };
   return (
@@ -139,6 +143,12 @@ export function McpRuntimePanel({
         </button>
       )}
       {outcome && <p role="status">{outcome}</p>}
+      {[...new Set(status?.failures?.map(mcpFailureGuidance))].map((guidance) => (
+        <p key={guidance}>{guidance}</p>
+      ))}
+      {Boolean(status?.unresolvedCleanup) && (
+        <p>MCP_CLEANUP: Cleanup is unresolved. Use Verify cleanup without starting new work.</p>
+      )}
       {definition && serverId && (
         <>
           <button
@@ -214,6 +224,18 @@ export function McpRuntimePanel({
           <p>
             Session {session.runId.slice(-12)} — {session.idle ? "Idle" : "Active"}
           </p>
+          {!session.canReconnect && (
+            <p>
+              MCP_PROVIDER: This provider cannot load/resume the session. Start a new session to use
+              a changed configuration. Other available tools remain usable.
+            </p>
+          )}
+          {!session.idle && (
+            <p>
+              Reconnect waits for an idle turn. Finish or stop the current turn before reviewing
+              replacement.
+            </p>
+          )}
           {session.connectors.map((connector) => (
             <p key={`${connector.targetId}:${connector.id}`}>
               {connector.id}: {connector.connection}

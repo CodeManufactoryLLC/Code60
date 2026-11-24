@@ -387,6 +387,9 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface ApplicationClient {
+  mcpRecovery(
+    request: import("./index.js").McpRecoveryRequest,
+  ): Promise<import("./index.js").McpRecoveryResponse>;
   mcpRuntime(
     request: import("./index.js").McpRuntimeRequest,
   ): Promise<import("./index.js").McpRuntimeResponse>;
@@ -1086,6 +1089,7 @@ export {
   type McpBackupEntry,
   type McpBackupPreview,
   type McpBackupRequest,
+  type McpFailure,
   type McpManagementRead,
   type McpManagementResult,
   type McpManagementTarget,
@@ -1093,6 +1097,9 @@ export {
   type McpMovePreview,
   type McpMovePreviewRequest,
   type McpMoveRequest,
+  type McpRecoveryRequest,
+  type McpRecoveryResponse,
+  type McpRecoveryReview,
   type McpResetPreview,
   type McpResetRequest,
   type McpResetSelection,
@@ -1101,10 +1108,14 @@ export {
   type McpSaveText,
   type McpTargetAddress,
   type McpTextRead,
+  type McpTroubleshootingReport,
   mcpAuthenticationRequestSchema,
   mcpBackupSchema,
+  mcpFailure,
+  mcpFailureGuidance,
   mcpMovePreviewSchema,
   mcpMoveSchema,
+  mcpRecoveryRequestSchema,
   mcpResetPreviewSchema,
   mcpResetSchema,
   mcpRestoreSchema,
@@ -1112,6 +1123,7 @@ export {
   mcpSaveSchema,
   mcpSaveTextSchema,
   mcpTargetSchema,
+  mcpTroubleshootingReportSchema,
   parseMcpDefinitionText,
   parseMcpManagement,
 } from "../contracts/index.js";

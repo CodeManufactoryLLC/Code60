@@ -31,6 +31,10 @@ describe("browser capability catalog", () => {
     expect(mcp?.limitations).toContain("idle Reconnect");
     expect(mcp?.limitations).toContain("Tests initialize/discover only");
     expect(mcp?.confirmation).toContain("stdio tests");
+    expect(mcp?.purpose).toContain("safe troubleshooting report");
+    expect(mcp?.limitations).toContain("newer edits or corrupt evidence block recovery");
+    expect(mcp?.limitations).toContain("no force or lock deletion");
+    expect(mcp?.confirmation).toContain("Complete/Roll back");
   });
   it("describes scheduler upgrade recovery without granting service authority", () => {
     const updates = APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates");

@@ -75,7 +75,7 @@ async function posixProcess(
   await new Promise<void>((resolve, reject) => {
     child.once("spawn", resolve);
     child.once("error", (error) =>
-      reject(new Error(`could not start '${file}': ${error.message}`)),
+      reject(new Error(`could not start '${file}': ${error.message}`, { cause: error })),
     );
   });
   const pid = child.pid as number;

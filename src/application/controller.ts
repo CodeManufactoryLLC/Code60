@@ -73,6 +73,7 @@ import {
   type McpControlTool,
   type McpMovePreviewRequest,
   type McpMoveRequest,
+  type McpRecoveryRequest,
   type McpResetRequest,
   type McpResetSelection,
   type McpRestore,
@@ -81,10 +82,12 @@ import {
   type McpSaveRequest,
   type McpSaveText,
   type McpTargetAddress,
+  type McpTroubleshootingReport,
   mcpAuthenticationRequestSchema,
   mcpBackupSchema,
   mcpMovePreviewSchema,
   mcpMoveSchema,
+  mcpRecoveryRequestSchema,
   mcpResetPreviewSchema,
   mcpResetSchema,
   mcpRestoreSchema,
@@ -92,6 +95,7 @@ import {
   mcpSaveSchema,
   mcpSaveTextSchema,
   mcpTargetSchema,
+  mcpTroubleshootingReportSchema,
   type Plan,
   type PlanAction,
   type PlanRead,
@@ -355,6 +359,12 @@ export class ApplicationHost {
   readonly mcp: McpManagement;
   private readonly connectors: McpRuntime;
   private readonly authentication: McpAuthentication | undefined;
+  mcpRecovery(value: McpRecoveryRequest) {
+    const request = parseMcpManagement(mcpRecoveryRequestSchema, value);
+    return this.mcpOperation(() => this.mcp.recovery(request)).finally(() =>
+      this.authentication?.recheckOwners(),
+    );
+  }
   mcpReadText(value: McpTargetAddress) {
     const request = parseMcpManagement(mcpTargetSchema, value);
     return this.mcpOperation(() => this.mcp.readText(request));
@@ -624,6 +634,105 @@ export class ApplicationHost {
       this.authentication?.recheckOwners();
       return { completed: true };
     }
+    if (request.action === "verify-cleanup") {
+      await this.mcpOperation(() => this.mcp.authorizeRuntimeAddress(request.target));
+      const unresolvedCleanup = await this.connectors.verifyCleanup(request.target.targetId);
+      return { completed: unresolvedCleanup === 0, unresolvedCleanup };
+    }
+    if (request.action === "report") {
+      return {
+        report: await this.mcpOperation(async () => {
+          await this.mcp.authorizeRuntimeAddress(request.target);
+          const captured = this.connectors
+            .status(request.target.targetId)
+            .flatMap((session) =>
+              session.connectors.filter(
+                (connector) => connector.targetId === request.target.targetId,
+              ),
+            );
+          const value: McpTroubleshootingReport = {
+            version: 1,
+            scope: request.target.scope,
+            configuration: "unavailable",
+            issues: 0,
+            pendingTransactions: 0,
+            definitions: 0,
+            enabled: 0,
+            projectApproval: request.target.scope === "user" ? "not-required" : "not-checked",
+            authentication: {
+              notChecked: 0,
+              notRequired: 0,
+              required: 0,
+              authenticated: 0,
+              failed: 0,
+            },
+            connections: {
+              notTested: 0,
+              connecting: 0,
+              connected: 0,
+              failed: 0,
+              disconnected: 0,
+              cleanupUnresolved: 0,
+              authenticationRequired: 0,
+            },
+            failures: this.connectors.failureStatus(request.target.targetId),
+            unresolvedCleanup: this.connectors.cleanupCount(request.target.targetId),
+            capturedInstances: captured.length,
+            connectedInstances: captured.filter((connector) => connector.connection === "connected")
+              .length,
+          };
+          const read = await this.mcp.read(request.target).catch(() => undefined);
+          if (read) {
+            value.configuration = !read.exists ? "missing" : read.document ? "valid" : "invalid";
+            value.issues = read.issues.length;
+            value.pendingTransactions = read.pendingRecovery.length;
+            value.definitions = Object.keys(read.document?.servers ?? {}).length;
+            value.enabled = Object.values(read.document?.servers ?? {}).filter(
+              (s) => s.enabled,
+            ).length;
+            if (request.target.scope === "project")
+              value.projectApproval = (await this.connectors
+                .approval(request.target.targetId, read.revision)
+                .catch(() => false))
+                ? "approved"
+                : "required";
+            for (const row of read.rows) {
+              const source =
+                row.source.scope === "project"
+                  ? row.source.projectId
+                  : (await this.mcp.targets()).targets.find((t) => t.address.scope === "user")!
+                      .address.targetId;
+              const auth = this.connectors.authenticationObservation(
+                source,
+                row.id,
+                row.source.revision,
+              );
+              const authKey = {
+                "not-checked": "notChecked",
+                "not-required": "notRequired",
+                required: "required",
+                authenticated: "authenticated",
+                failed: "failed",
+              } as const;
+              value.authentication[authKey[auth]]++;
+              const connection = this.connectors.observation(source, row.id, row.source.revision);
+              const healthKey = {
+                "not-tested": "notTested",
+                connecting: "connecting",
+                connected: "connected",
+                failed: "failed",
+                disconnected: "disconnected",
+                "cleanup-unresolved": "cleanupUnresolved",
+                "authentication-required": "authenticationRequired",
+              } as const;
+              value.connections[healthKey[connection]]++;
+            }
+          }
+          await this.mcp.authorizeRuntimeAddress(request.target);
+          return mcpTroubleshootingReportSchema.parse(value);
+        }),
+      };
+    }
     if (request.action === "status") {
       await this.mcpOperation(() => this.mcp.authorizeRuntimeAddress(request.target));
       const current = await this.mcpOperation(() => this.mcp.runtimeTarget(request.target)).catch(
@@ -631,6 +740,8 @@ export class ApplicationHost {
       );
       return {
         sessions: this.connectors.status(request.target.targetId),
+        failures: this.connectors.failureStatus(request.target.targetId),
+        unresolvedCleanup: this.connectors.cleanupCount(request.target.targetId),
         approved:
           request.target.scope === "user" ||
           Boolean(

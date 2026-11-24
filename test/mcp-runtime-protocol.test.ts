@@ -297,6 +297,31 @@ describe("production MCP transports and per-session authority (supporting integr
       await new Promise<void>((resolve) => http.close(() => resolve()));
     }
   });
+  it("classifies missing executables without exposing native paths or upstream launch settings", async () => {
+    const value = snapshot();
+    value.user.document.servers.fixture = {
+      label: "private",
+      enabled: true,
+      type: "stdio",
+      command: "/no/such/private-executable",
+      args: ["private-argument"],
+      env: {},
+    };
+    const warnings: string[] = [];
+    const resources = await runtime.factory(
+      async () => value,
+      (warning) => warnings.push(warning),
+    )({
+      runId: randomUUID(),
+      provider: "fixture",
+      cwd: directory,
+      controls: { idle: () => true, canRestore: () => true, reconnect: async () => {} },
+    });
+    expect(resources.servers).toEqual([]);
+    expect(warnings.join(" ")).toContain("MCP_LAUNCH (launch)");
+    expect(warnings.join(" ")).not.toMatch(/private-executable|private-argument/);
+    expect(runtime.failureStatus(targetId)).toEqual([{ code: "launch", stage: "launch" }]);
+  });
   it("rejects a 513-tool catalog and verifies the owned stdio process group is gone", async () => {
     const value = snapshot();
     const definition = value.user.document.servers.fixture;
@@ -312,6 +337,7 @@ describe("production MCP transports and per-session authority (supporting integr
       controls: { idle: () => true, canRestore: () => true, reconnect: async () => {} },
     });
     expect(resources.servers).toEqual([]);
+    expect(runtime.failureStatus(targetId)).toContainEqual({ code: "limit", stage: "discovery" });
     const events = (await readFile(join(directory, "upstream.jsonl"), "utf8"))
       .trim()
       .split("\n")

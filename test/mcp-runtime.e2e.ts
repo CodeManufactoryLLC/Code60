@@ -111,6 +111,20 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
       "Reconnect requires an idle session",
     );
     expect((await events()).filter((event) => event.event === "spawn")).toHaveLength(before + 1);
+    const savedConfiguration = await readFile(userFile);
+    await writeFile(userFile, '{"version":1,"servers":', { mode: 0o600 });
+    await page.getByRole("button", { name: "Review troubleshooting report", exact: true }).click();
+    const troubleshooting = page.getByRole("dialog", {
+      name: "Safe MCP troubleshooting report",
+      exact: true,
+    });
+    const report = JSON.parse(await troubleshooting.locator("pre").innerText());
+    expect(report.configuration).toBe("invalid");
+    expect(report.capturedInstances).toBeGreaterThan(0);
+    expect(report.connectedInstances).toBeGreaterThan(0);
+    await troubleshooting.getByRole("button", { name: "Close report", exact: true }).click();
+    await writeFile(userFile, savedConfiguration);
+    await apps(page);
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     await chat.getByRole("button", { name: "Stop", exact: true }).click();
     await expect(composer).toBeEditable();

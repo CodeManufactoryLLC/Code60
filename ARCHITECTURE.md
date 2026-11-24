@@ -1133,7 +1133,7 @@ collisions, affected open-project context and unverifiable references; no closed
 repositories are scanned. Guided saves produce two-space JSON with a final newline.
 Forms retain drafts on recoverable failures and reject changed owner/revision;
 phase 4 adds validated exact-text repair, backup restoration and confirmed reset.
-In-app transaction recovery remains deferred. Phase 5 adds activation and private
+Phase 7 adds reviewed in-app transaction recovery; see the recovery and troubleshooting section below. Phase 5 adds activation and private
 exact-revision project approval; phase 6 adds secure credential entry and OAuth.
 
 #### Configuration storage service
@@ -1152,7 +1152,7 @@ directories and canonical source-project roots, returning opaque target IDs.
 Mutation requests accept only target IDs, expected revisions, request IDs and
 operation-specific content. Read/save/move/list-backups/restore/list-pending/
 recover/close remain backend library operations. Phase 4 adds seven strict human
-editing/backup/reset wrappers; explicit transaction recovery remains backend-only.
+editing/backup/reset wrappers; phase 7 adds strict human recovery wrappers.
 Missing files return empty defaults without creating config files or directories.
 Malformed files retain bounded text when UTF-8 permits it; oversized/unsafe files
 are refused rather than exposed as editable truncations.
@@ -3231,3 +3231,34 @@ Native/package checks use a disposable Linux Secret Service and unique synthetic
 macOS namespaces. Phase 7's transaction-recovery GUI and troubleshooting report,
 dedicated integrations, hosted authentication, shared Code60 client IDs/secrets,
 migrations and legacy SSE remain excluded.
+
+
+## MCP recovery and troubleshooting (phase 7)
+
+The application projects private transaction evidence into metadata-only reviews:
+operation/order, captured scope, before/after existence/validity/counts and current
+known state. Every commit carries all live runtime/database addresses, exact file
+revisions and a journal revision binding native identity, nanosecond stamps and
+contents. The store rechecks these before its guarded Complete/Roll back protocol.
+Same-byte replacement invalidates review. Closed owners require reopening and fresh
+review; replacement roots, third states or corrupt evidence block recovery. No
+browser path/force capability or lock deletion is added. Durable UUID receipts
+answer uncertain retries without repeating publication. Recovery retains renderer
+raw/form drafts and leaves comparison/reload explicit; no credentials, approvals,
+connections or execution authority are recovered from a configuration journal.
+
+Agents classify structured native/SDK failures into fixed codes and connection
+stages, discarding raw server output. Application keeps observed failure metadata
+separate from configuration validity, approval and authentication. In-app guidance
+names the failed stage, the next human action and continued availability of other
+tools. Testing stays discovery-only and bounded; no uncertain business replay.
+The optional troubleshooting report is a strict allowlist of counts, fixed codes
+and states. It excludes even labels, IDs, paths, endpoints and credential references,
+as well as definition text, tokens, user content and raw exceptions. Review/copy is
+local and human-initiated, never automatic upload or ordinary awareness payload.
+
+Explicit cleanup verification retries only retained revoked handles for the captured
+configuration; residual attempts share flights so capacity is released once. Failed
+verification retains ownership and visibility. It does not discover or terminate
+unrelated processes, start connectors, reconnect sessions or restore capability
+leases. Shutdown uses the same retained handles. No dependency edge changes.

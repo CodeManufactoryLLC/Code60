@@ -11,6 +11,8 @@ import {
   type McpMovePreview,
   type McpMovePreviewRequest,
   type McpMoveRequest,
+  type McpRecoveryRequest,
+  type McpRecoveryResponse,
   type McpResetPreview,
   type McpResetRequest,
   type McpResetSelection,
@@ -458,6 +460,51 @@ export class McpManagement {
     });
     this.changed();
     return result;
+  }
+  async recovery(request: McpRecoveryRequest): Promise<McpRecoveryResponse> {
+    const store = await this.storage();
+    if (request.action === "recover") {
+      if (
+        new Set(request.targets.map((entry) => entry.target.targetId)).size !==
+        request.targets.length
+      )
+        throw new McpStorageError("conflict");
+      for (const entry of request.targets) await this.target(entry.target);
+      const result = await store.recover({
+        transactionId: request.transactionId,
+        action: request.direction,
+        expectedJournalRevision: request.reviewRevision,
+        requestContext: JSON.stringify(request.targets.map((entry) => entry.target)),
+        expectedRevisions: Object.fromEntries(
+          request.targets.map((entry) => [entry.target.targetId, entry.expectedRevision]),
+        ),
+        requestId: request.requestId,
+      });
+      this.changed();
+      return { result };
+    }
+    await this.target(request.target);
+    const pending = (await store.listPendingRecovery()).filter((entry) =>
+      entry.targetIds.includes(request.target.targetId),
+    );
+    const targets = (await this.targets()).targets;
+    if (request.action === "list")
+      return {
+        pending: pending.map((entry) => ({
+          transactionId: entry.transactionId,
+          available: entry.targetIds.every((id) => targets.some((t) => t.address.targetId === id)),
+        })),
+      };
+    if (!pending.some((entry) => entry.transactionId === request.transactionId))
+      throw new McpStorageError("conflict");
+    const review = await store.previewRecovery(request.transactionId);
+    const captured = review.targets.map(({ targetId, ...entry }) => {
+      const target = targets.find((t) => t.address.targetId === targetId);
+      if (!target) throw new McpStorageError("conflict");
+      return { ...entry, target: target.address, label: target.label };
+    });
+    for (const entry of captured) await this.target(entry.target);
+    return { review: { ...review, targets: captured } };
   }
   async close() {
     this.closed = true;

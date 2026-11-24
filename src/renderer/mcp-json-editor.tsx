@@ -34,6 +34,7 @@ export interface McpEditorView {
 export default function McpJsonEditor({
   text,
   issues,
+  reveal,
   active,
   editable,
   canSave,
@@ -43,6 +44,7 @@ export default function McpJsonEditor({
 }: {
   text: string;
   issues: readonly McpTextIssue[];
+  reveal?: { issue: McpTextIssue; key: string } | undefined;
   active: boolean;
   editable: boolean;
   canSave: boolean;
@@ -83,6 +85,7 @@ export default function McpJsonEditor({
     instance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       if (current.current.canSave) current.current.onSave();
     });
+
     return () => {
       view.current = instance.saveViewState();
       changed.dispose();
@@ -116,5 +119,13 @@ export default function McpJsonEditor({
       })),
     );
   }, [text, issues, editable, active]);
+  useEffect(() => {
+    if (!active || !reveal || !editor.current) return;
+    const position = { lineNumber: reveal.issue.line, column: reveal.issue.column };
+    editor.current.setPosition(position);
+    editor.current.revealPositionInCenter(position);
+    editor.current.focus();
+  }, [active, reveal]);
+
   return <div ref={root} className="mcp-json-editor" />;
 }

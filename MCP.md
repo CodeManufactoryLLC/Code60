@@ -36,8 +36,9 @@ Unavailable servers warn while the agent and other available tools remain usable
 Configuration validity, enabled state, approval, authentication and connection
 health are separate. Untested means **Not tested**. Unresolved credential references
 and OAuth mean **Authentication required**. Use **Authentication** on a local
-definition for credential entry or reviewed OAuth sign-in. Transaction-recovery GUI and
-troubleshooting reports remain phase 7. Dedicated integrations, Code60-owned OAuth
+definition for credential entry or reviewed OAuth sign-in. Configuration recovery,
+owned cleanup verification and safe troubleshooting reports are available below.
+Dedicated integrations, Code60-owned OAuth
 registrations/client IDs/secrets, hosted authentication and legacy SSE are excluded.
 See the [implementation plan](ad-hoc-plans/mcp-connectors-plan.md),
 [architecture](ARCHITECTURE.md#mcp-connector-foundation-and-target-runtime) and
@@ -255,8 +256,7 @@ no credentials or approvals. Closed repositories are not scanned.
 Conflicts retain the draft; reload explicitly before saving against the new
 revision. Invalid files and pending recovery block guided changes. Preserve evidence
 and follow [configuration recovery](docs/runbooks/mcp-configuration.md). The direct
-JSON editor, backup restore and reset are described below; transaction recovery
-controls remain backend-only.
+JSON editor, backup restore, reset and reviewed transaction recovery are described below.
 
 
 ## JSON editing, backups and reset
@@ -287,9 +287,10 @@ malformed originals can be reset or repaired in JSON; their exact bytes are back
 Unsafe/oversized originals remain blocked. Missing/empty targets are not rewritten.
 
 Reset preserves other project files, unrelated settings, built-ins, credentials and
-running agents/connections. Interrupted changes require explicit backend Complete or
-Roll back; preserve evidence and follow the recovery runbook. Runtime activation is described above; sign-in and transaction recovery GUI remain
-later phases.
+running agents/connections. Interrupted changes require reviewed Complete or
+Roll back through **Configuration recovery**; preserve evidence and follow the
+[recovery runbook](docs/runbooks/mcp-configuration.md). Runtime activation and
+sign-in are described in this document.
 
 
 ## Credentials and sign-in
@@ -343,3 +344,39 @@ Linux requires a disposable private D-Bus and Secret Service (`dbus-run-session`
 `gnome-keyring-daemon`, `gdbus` for this QA harness); macOS uses only a unique
 synthetic service/account namespace. The production helper needs no QA commands.
 Never enumerate unrelated credentials or lock a shared service for a test.
+
+
+## Troubleshooting and interrupted configuration writes
+
+Use **Configuration recovery** in Apps → MCP Servers to inspect pending writes.
+Reopen all affected projects, review publication order and exact before/after
+states, then explicitly confirm **Complete transaction** or **Roll back transaction**.
+Moves complete destination first; combined resets publish User first; rollback
+reverses publication. A User change affects other inheriting projects. Unknown
+states, external edits, replaced project identities or corrupt evidence block
+recovery. No force/lock deletion or automatic startup replay exists. Rollback may
+restore a recorded malformed original; ordinary Restore backup still requires a
+valid unpinned backup. Configuration recovery restores neither credentials nor
+approval nor execution authority.
+
+Your unsaved draft stays in memory throughout recovery. After success, compare
+saved versus draft or explicitly reload. A failed/conflicting/uncertain result
+retains both draft and evidence. **Check same recovery request** reads its recorded
+outcome; a new reviewed decision uses a new request identity.
+
+Errors show fixed codes/stages and next actions. Missing commands/arguments require
+launch/prerequisite review; unsupported provider reconnect requires a new session;
+expired credentials/access require sign-in/scope review; network/TLS/timeout/protocol
+failures require server/network correction then explicit bounded **Test connection**.
+No business call is replayed. Other available tools and the agent session stay usable.
+**Verify cleanup** retries only retained revoked resources for the captured scope.
+It does not reconnect, search/kill unrelated processes or clear locks; uncertainty
+remains visible until verified.
+
+**Review troubleshooting report** shows optional local counts and safe fixed status
+metadata. **Copy safe report** copies only the reviewed allowlist; nothing is uploaded.
+Validity, approval, authentication and connection health remain independent facts.
+Definitions, labels/IDs, paths, endpoints, references, credentials, raw errors and
+server output are excluded. Never share private transaction journals or backups as
+diagnostic reports. See the [recovery runbook](docs/runbooks/mcp-configuration.md)
+for failure-specific actions and stop/escalation conditions.

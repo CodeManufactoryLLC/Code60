@@ -1,9 +1,9 @@
 # MCP configuration storage recovery
 
 The backend library is wrapped by Apps → MCP Servers guided/JSON editing,
-backup restoration and confirmed reset. Transaction Complete/Roll back remains
-backend-only; no recovery screen or CLI recovery command exists yet. The active configuration path remains the one described in [MCP configuration](../../MCP.md).
-Do not invent a product command or change live files to exercise this library.
+backup restoration and confirmed reset. Apps → MCP Servers → Configuration recovery
+provides reviewed Complete/Roll back. There is no CLI recovery command. Dedicated
+configuration files are described in [MCP configuration](../../MCP.md).
 
 ## Symptoms
 
@@ -29,8 +29,21 @@ file is not permission to replace it with defaults automatically.
 
 ## Supported recovery
 
-These are explicit backend operations for authorized callers, not currently
-available GUI instructions. Later human interfaces must preview their scope.
+Open the affected configuration in Apps → MCP Servers, then choose **Configuration
+recovery**. Reopen any closed affected project; replacement owners need a fresh
+review. Choose **Review transaction**. The review shows the recorded operation,
+publication order, every scope, current known state and before/after existence,
+validity and definition counts. It does not reveal private configuration bodies.
+
+Choose **Complete transaction** or **Roll back transaction**, inspect the effects
+and confirm, or Cancel without changing either file. A User change also affects
+other projects inheriting User definitions; closed repositories are not scanned.
+Every captured runtime/database owner, exact file revision and journal identity/
+contents is rechecked. A changed review must be reviewed again, never forced.
+Dirty JSON and guided drafts remain in memory: compare or explicitly reload after
+recovery. Browser reload/close can discard them. **Check same recovery request**
+inspects an uncertain accepted request using its original durable ID; it is not a
+new recovery decision. **Refresh recovery evidence** obtains a new review.
 
 - Re-read a conflicting file and retain the unsaved draft. A save must carry its
   observed revision; same-byte inode replacement still invalidates an older save.
@@ -74,10 +87,10 @@ approvals.
 Phases 3–4 expose guided saves/removals/moves, exact-text repair, reviewed backup
 restore and confirmed reset in Apps → MCP Servers.
 Invalid files and pending recovery display safe issues and block affected writes.
-There is no in-app transaction Complete/Roll back control. Backup preview/restore
+Configuration recovery exposes explicit reviewed Complete/Roll back. Backup preview/restore
 accepts only valid unpinned records and binds reviewed file identity/content. An
 absent-file backup explicitly removes the dedicated configuration file. Preserve all
-private evidence and use the backend recovery procedure above with verified
+private evidence and use the reviewed recovery procedure above with verified
 ownership. Never clear a writer lock as a repair. After an external edit, reload
 the configuration explicitly; failed drafts do not grant authority to a reopened
 project or replacement root. Connection health and authentication are independent observations. Runtime controls and secure authentication are human-only; unresolved references/OAuth require authentication.
@@ -110,6 +123,11 @@ all affected connectors. Otherwise start a new session. Never retry an uncertain
 tool call automatically, clear writer locks, or treat tool annotations as approval.
 Disconnect revokes selected instances without changing configured enablement.
 Unverified cleanup remains unresolved; preserve ownership and process evidence.
+Use **Verify cleanup**, then confirm to retry only retained revoked cleanup handles
+for the selected configuration. It does not start connectors, replay calls, search
+for process names or stop unrelated processes. If verification still fails, retain
+the backend/evidence and resolve the underlying OS/network condition. Remote HTTP
+cleanup may remain unverifiable independently of local transport closure.
 
 
 ## Credential and authorization failures
@@ -139,4 +157,34 @@ exchange or restore authority. A five-minute attempt expires on cancellation,
 page detach, owner replacement or shutdown. Start a new reviewed authorization;
 never replay an old callback/code, resume an uncertain refresh, expand scopes or
 retry a business tool request automatically. Reconnect creates fresh session
-capabilities only when idle and supported. Recovery GUI/reporting remain phase 7.
+capabilities only when idle and supported. Configuration recovery never restores credential or session authority.
+
+
+## Safe troubleshooting report and connection stages
+
+Choose **Review troubleshooting report** to inspect a local optional report, then
+**Copy safe report** only if you want to share it. Nothing is uploaded. It contains
+counts, configuration validity, approval, authentication and observed health as
+separate facts, plus fixed failure codes/stages and unresolved-cleanup counts.
+No labels, identifiers, paths, endpoints, definitions, credential references,
+secret values or raw server errors/output are included. Private journals/backups
+are not safe reports and must not be attached as diagnostics.
+
+- MCP_LAUNCH/MCP_ARGUMENTS: review command, prerequisites, argument rows and execution
+  permissions; explicitly Test connection again after correcting the cause.
+- MCP_PROVIDER: reconnect needs idle ACP load/resume support. Start a new session
+  or choose a supported provider. No prompt is manufactured to reconnect.
+- MCP_AUTHENTICATION/MCP_SCOPE: enter credentials or Sign in again after reviewing
+  requested access. Do not expand scopes or replay a failed business call silently.
+- MCP_NETWORK/MCP_TLS/MCP_TIMEOUT/MCP_PROTOCOL: inspect the reported initialization,
+  discovery or call stage. Correct endpoint/network/certificate/protocol support,
+  then use the bounded discovery-only Test connection. Never disable TLS validation.
+- MCP_LIMIT/MCP_CLEANUP: reduce configured work/disconnect unused instances or
+  explicitly verify retained cleanup. Limits do not evict healthy connections.
+- MCP_RECOVERY_BLOCKED/MCP_RECOVERY_CONFLICT: preserve drafts and evidence. Reopen
+  captured owners and review again; newer edits, replaced roots or corrupt records
+  require manual investigation without deleting locks, journals or pinned preimages.
+
+All failed connectors leave other available tools and the agent session usable.
+A successful configuration recovery/test does not prove authentication, permission
+to call tools, or that an earlier uncertain tool call did not execute.

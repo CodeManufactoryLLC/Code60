@@ -1055,11 +1055,88 @@ export class McpConfigurationStore {
       })),
     );
   }
+  private async recoveryRevision(journal: Journal) {
+    const path = this.path(`${journal.id}.journal`);
+    const before = await verifyPrivatePath(path, false);
+    const current = journalSchema.parse(await readPrivateJson(path, JOURNAL_LIMIT));
+    const after = await verifyPrivatePath(path, false);
+    const stamp = (info: typeof before) =>
+      [info.dev, info.ino, info.size, info.mtimeNs, info.ctimeNs, info.mode].map(String);
+    if (
+      JSON.stringify(stamp(before)) !== JSON.stringify(stamp(after)) ||
+      JSON.stringify(current) !== JSON.stringify(journal)
+    )
+      throw new McpStorageError("conflict");
+    return hash(JSON.stringify([stamp(after), current]));
+  }
+  /** Metadata only. Exact images and native identities remain private. */
+  previewRecovery(transactionId: string) {
+    return this.run(async () => {
+      const journal = (await this.records()).journals.find((entry) => entry.id === transactionId);
+      if (!journal) throw new McpStorageError("unavailable");
+      const summary = (value: Image) => {
+        const data = bytes(value);
+        const parsed =
+          data === null
+            ? null
+            : this.inspect({ data, identity: null, revision: "", mode: value.mode }).document;
+        return {
+          exists: data !== null,
+          valid: data === null || Boolean(parsed),
+          servers: data === null ? 0 : parsed ? Object.keys(parsed.servers).length : null,
+        };
+      };
+      const targets = [];
+      for (const change of journal.changes) {
+        const current = await this.raw(this.bound(change));
+        const before = this.matches(current, change.before, change.stages.before);
+        const after = this.matches(current, change.after, change.stages.after);
+        targets.push({
+          targetId: change.targetId,
+          expectedRevision: current.revision,
+          state:
+            before && after
+              ? ("unchanged" as const)
+              : before
+                ? ("before" as const)
+                : after
+                  ? ("after" as const)
+                  : ("conflict" as const),
+          writes: change.write,
+          changedServerIds: (() => {
+            const read = (value: Image) => {
+              const data = bytes(value);
+              return data === null
+                ? undefined
+                : this.inspect({ data, identity: null, revision: "", mode: value.mode }).document;
+            };
+            const before = read(change.before)?.servers ?? {};
+            const after = read(change.after)?.servers ?? {};
+            return [...new Set([...Object.keys(before), ...Object.keys(after)])]
+              .filter((id) => JSON.stringify(before[id]) !== JSON.stringify(after[id]))
+              .sort();
+          })(),
+          before: summary(change.before),
+          after: summary(change.after),
+        });
+      }
+      return {
+        transactionId: journal.id,
+        reviewRevision: await this.recoveryRevision(journal),
+        kind: journal.kind,
+        createdAt: journal.createdAt,
+        targets,
+        allowed: targets.every((target) => target.state !== "conflict"),
+      };
+    });
+  }
   recover(
     request: {
       transactionId: string;
       action: "complete" | "rollback";
       expectedRevisions: Record<string, string>;
+      expectedJournalRevision?: string;
+      requestContext?: string;
       requestId: string;
     },
     signal?: AbortSignal,
@@ -1070,6 +1147,8 @@ export class McpConfigurationStore {
           "recover",
           request.transactionId,
           request.action,
+          request.expectedJournalRevision ?? null,
+          request.requestContext ?? null,
           Object.entries(request.expectedRevisions).sort(([a], [b]) => a.localeCompare(b)),
         ]),
       );
@@ -1079,6 +1158,13 @@ export class McpConfigurationStore {
         (entry) => entry.id === request.transactionId,
       );
       if (!journal) throw new McpStorageError("unavailable");
+      if (
+        request.expectedJournalRevision &&
+        (await this.recoveryRevision(journal)) !== request.expectedJournalRevision
+      )
+        throw new McpStorageError("conflict");
+      if (Object.keys(request.expectedRevisions).length !== journal.changes.length)
+        throw new McpStorageError("conflict");
       if (signal?.aborted) throw new McpStorageError("cancelled");
       await this.checkRecovery(journal);
       for (const change of journal.changes)

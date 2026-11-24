@@ -215,3 +215,36 @@ it("uses actual callback ownership and never starts OAuth from an unapproved or 
   );
   expect(remote.counts.token).toBe(0);
 });
+
+it("projects explicit troubleshooting reads into counts only and preserves malformed files and unrelated runtime", async () => {
+  const report = (await host.mcpRuntime({ action: "report", target }, "page")).report;
+  expect(report).toMatchObject({
+    version: 1,
+    scope: "user",
+    configuration: "valid",
+    definitions: 1,
+    enabled: 0,
+    projectApproval: "not-required",
+    authentication: { notChecked: 1 },
+    connections: { notTested: 1 },
+  });
+  expect(JSON.stringify(report)).not.toMatch(
+    /credentialRef|TOKEN|token|docs|command|targetId|serverId|url|path/,
+  );
+  const file = join(root, "config/code60/mcp.json");
+  const malformed = '{"SECRET_KEY":"SYNTHETIC_SECRET",';
+  await fs.writeFile(file, malformed, { mode: 0o600 });
+  const invalid = (await host.mcpRuntime({ action: "report", target }, "page")).report;
+  expect(invalid).toMatchObject({ configuration: "invalid", definitions: 0, enabled: 0 });
+  expect(invalid?.issues).toBeGreaterThan(0);
+  expect(JSON.stringify(invalid)).not.toMatch(/SECRET_KEY|SYNTHETIC_SECRET/);
+  expect(await fs.readFile(file, "utf8")).toBe(malformed);
+  expect(await host.mcpRecovery({ action: "list", target })).toEqual({ pending: [] });
+  expect(() => host.mcpRecovery({ action: "list", target, path: "/private" } as never)).toThrow(
+    "Invalid MCP management request",
+  );
+  expect(
+    await host.mcpRuntime({ action: "verify-cleanup", target, requestId: randomUUID() }, "page"),
+  ).toEqual({ completed: true, unresolvedCleanup: 0 });
+  expect(native).not.toHaveBeenCalled();
+});

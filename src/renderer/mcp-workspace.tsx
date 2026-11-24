@@ -10,6 +10,7 @@ import {
   type McpManagementTargets,
   type McpResetPreview,
   type McpTargetAddress,
+  type McpTextIssue,
 } from "../bridge/index.js";
 import type { TableOptions } from "./data-table.js";
 import {
@@ -20,23 +21,42 @@ import {
   sameMcpOwner,
 } from "./mcp-draft.js";
 import type { McpEditorView } from "./mcp-json-editor.js";
+import { McpRecoveryPanel } from "./mcp-recovery.js";
 import { McpServersPage } from "./mcp-servers.js";
+import { McpTroubleshooting } from "./mcp-troubleshooting.js";
 import { Modal } from "./modal.js";
 import { PageTitle } from "./page-title.js";
 
 const JsonEditor = lazy(() => import("./mcp-json-editor.js"));
 const Diff = lazy(() => import("./monaco-diff.js"));
 const failure = (cause: unknown) => {
+  const explain = (code: string, detail: string) =>
+    `MCP_CONFIG_${code}: ${detail} Other application features and available tools remain usable.`;
   const text = cause instanceof Error ? cause.message : "";
   if (text.includes("conflict"))
-    return "Configuration, project or backup changed. Your draft is retained. Reload or compare before trying again.";
+    return explain(
+      "CONFLICT",
+      "Configuration, project or backup changed. Your draft is retained. Reload or compare before trying again.",
+    );
   if (text.includes("recovery-required"))
-    return "Configuration recovery is required. Your draft is retained; preserve the transaction evidence.";
+    return explain(
+      "RECOVERY_REQUIRED",
+      "Configuration recovery is required. Your draft is retained; preserve the transaction evidence.",
+    );
   if (text.includes("invalid"))
-    return "Configuration or backup is invalid. Review the format and choose a valid, unpinned backup.";
+    return explain(
+      "INVALID",
+      "Configuration or backup is invalid. Review the format and choose a valid, unpinned backup.",
+    );
   if (text.includes("storage-limit"))
-    return "Storage limit reached. Preserve pending evidence and review backups.";
-  return "MCP configuration storage is unavailable or unsafe. Your draft is retained.";
+    return explain(
+      "STORAGE_LIMIT",
+      "Storage limit reached. Preserve pending evidence and review backups.",
+    );
+  return explain(
+    "UNAVAILABLE",
+    "MCP configuration storage is unavailable or unsafe. Your draft is retained. Review storage ownership, permissions and free space, then explicitly reload or compare before saving.",
+  );
 };
 export function McpWorkspace({
   api,
@@ -59,6 +79,7 @@ export function McpWorkspace({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [compare, setCompare] = useState(false);
+  const [issueLocation, setIssueLocation] = useState<{ issue: McpTextIssue; key: string }>();
   const [guard, setGuard] = useState<{ title: string; proceed(): void }>();
   const [backups, setBackups] = useState<McpBackupEntry[]>();
   const [backup, setBackup] = useState<
@@ -319,6 +340,20 @@ export function McpWorkspace({
           </button>
         )}
       </div>
+      {target && (
+        <McpTroubleshooting api={api} target={target.address} active={active && visible} />
+      )}
+      {target && (
+        <McpRecoveryPanel
+          api={api}
+          target={target.address}
+          active={active && visible}
+          dirty={Boolean(state?.dirty || formDirty)}
+          onChanged={() => {
+            void load();
+          }}
+        />
+      )}
       {error && <p role="alert">{error}</p>}
       {draft?.ownerLost && (
         <button
@@ -409,7 +444,12 @@ export function McpWorkspace({
                 <ul aria-label="Configuration issues">
                   {state.validation.issues.map((issue) => (
                     <li key={`${issue.code}:${issue.line}:${issue.column}:${issue.path.join(".")}`}>
-                      {issue.message} Line {issue.line}, column {issue.column}.
+                      <button
+                        type="button"
+                        onClick={() => setIssueLocation({ issue, key: crypto.randomUUID() })}
+                      >
+                        {issue.message} Line {issue.line}, column {issue.column}.
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -418,6 +458,7 @@ export function McpWorkspace({
                 <JsonEditor
                   text={draft.text}
                   issues={state.validation.issues}
+                  reveal={issueLocation}
                   active={active && visible}
                   key={JSON.stringify(draft.saved.target)}
                   editable={state.editable && !busy}

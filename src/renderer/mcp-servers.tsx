@@ -18,18 +18,38 @@ import { Modal } from "./modal.js";
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const message = (cause: unknown) => {
+  const explain = (code: string, detail: string) =>
+    `MCP_CONFIG_${code}: ${detail} Other application features and available tools remain usable.`;
   const text = cause instanceof Error ? cause.message : "";
   if (text.includes("conflict"))
-    return "Configuration or project changed. Reload before saving. Your draft is retained.";
+    return explain(
+      "CONFLICT",
+      "Configuration or project changed. Reload before saving. Your draft is retained.",
+    );
   if (text.includes("recovery-required"))
-    return "Configuration recovery is required. Your draft is retained.";
+    return explain(
+      "RECOVERY_REQUIRED",
+      "Configuration recovery is required. Your draft is retained.",
+    );
   if (text.includes("storage-limit"))
-    return "Configuration storage limit reached. Inspect retained recovery evidence.";
+    return explain(
+      "STORAGE_LIMIT",
+      "Configuration storage limit reached. Inspect retained recovery evidence.",
+    );
   if (text.includes("invalid"))
-    return "Configuration is invalid or exceeds its limits. Review the fields and reload if the saved file changed.";
+    return explain(
+      "INVALID",
+      "Configuration is invalid or exceeds its limits. Review the fields and reload if the saved file changed.",
+    );
   if (text.includes("unsafe"))
-    return "Configuration storage identity or permissions are unsafe. Review the recovery guidance.";
-  return "MCP configuration is unavailable. Inspect storage, then reload or retry the same action.";
+    return explain(
+      "UNSAFE",
+      "Configuration storage identity or permissions are unsafe. Review the recovery guidance.",
+    );
+  return explain(
+    "UNAVAILABLE",
+    "MCP configuration is unavailable. Inspect storage, then reload or retry the same action.",
+  );
 };
 const columns = [
   { key: "label", title: "Label", width: 180, filter: "text" },

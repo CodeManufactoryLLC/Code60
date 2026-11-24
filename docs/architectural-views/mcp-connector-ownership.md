@@ -32,7 +32,7 @@ credentials. Keep existing ACP permissions and independently enforce live author
 
 Application owns resolution, trust and lifecycle; agents owns MCP protocol and
 adapters; gateway composes transports through injected ports and owns loopback
-listeners; platform owns native identity, processes and future secure storage.
+listeners; platform owns native identity, processes and secure storage.
 The only new module dependency is gateway to agents. Browser modules receive no
 generic host capabilities. Tools are the initial MCP surface; other features are
 explicitly unsupported.
@@ -43,8 +43,10 @@ with stable canonical targets and transient runtime/database fences. Phase 4 add
 exact-text editing and reviewed backup/reset operations using the same ownership
 and recoverable journals, including unchanged inheritance guards. Phase 5 composes
 production connections, fixed stdio adapters, exact-revision private approvals and
-turn-scoped authority with human activation controls. Secure storage and OAuth
-remain phase 6. The phase 1 proof alone does not certify production behavior.
+turn-scoped authority with human activation controls. Phase 6 adds secure storage
+and OAuth; phase 7 adds reviewed configuration recovery, retained cleanup verification
+and safe troubleshooting reports. The phase 1 proof alone does not certify
+production behavior. See [recovery ownership](mcp-connector-recovery.md).
 Detailed contracts and lifecycle rules live in
 [MCP connector architecture](../../ARCHITECTURE.md#mcp-connector-foundation-and-target-runtime).
 

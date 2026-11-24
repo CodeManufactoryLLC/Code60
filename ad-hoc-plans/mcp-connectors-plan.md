@@ -649,3 +649,95 @@ troubleshooting report remain deferred. Dedicated integrations, shared Code60
 registration/client IDs/secrets, hosted authentication, migrations and legacy SSE
 remain excluded; pre-bundled definitions remain optional templates and runtime
 support remains tools only.
+
+## Phase 7 implementation record (complete)
+
+Phase 7 adds human-only Configuration recovery, structured connection failure
+stages/guidance, retained-handle cleanup verification and an optional local safe
+troubleshooting report. Transaction reviews project private evidence into operation
+order, scoped before/after existence/validity/counts and current known states.
+Commits bind every live runtime/database address, exact file revision and a journal
+revision covering native identity, nanosecond stamps and content. Same-byte journal
+replacement, external edits, third states and replaced/closed owners require fresh
+review or block recovery; no force or lock deletion is provided. Durable recovery
+request IDs preserve recorded outcomes without repeating publication.
+
+Recovery retains renderer JSON/form drafts and leaves compare/reload explicit.
+It transfers no credentials or approvals and restores no execution authority.
+Cleanup verification acts only on retained revoked handles for the captured scope,
+coalesces residual flights and releases capacity once after verification. It never
+reconnects or discovers/kills unrelated processes. Failures retain ownership.
+
+Agents classify structured native/SDK codes without parsing or exposing raw server
+messages. Fixed stage/code guidance describes next human actions and continued
+availability of other tools. The strict optional report contains counts and states
+only, including validity, approval, authentication and observed health separately.
+It excludes names/IDs, paths, endpoints, definitions, references, secrets and raw
+exceptions. Review/copy is explicit and local; no automatic upload occurs.
+
+Architecture, module instructions, MCP/user/security/recovery documentation and
+human-only capability descriptions are updated. Validation evidence and failures
+are recorded under `test-results/qa/mcp-connectors-phase-7/`. Required protocol,
+full-check, real-browser, applicable package/native validation and owned cleanup
+are verified. Phase 7 completes the seven-phase implementation within the agreed
+scope; delivery remains on the existing draft PR #317, without merging main.
+
+
+### Phase 7 validation and delivery
+
+The final one-worker `npm run check` passed **318 files / 3,025 tests in
+572.54 seconds**, including instructions, typecheck, Biome, Knip and all unchanged
+coverage gates: statements 71.08%, branches 64.06%, functions 64.90%, lines 73.47%.
+The final full Linux browser run passed **all 39 journeys (6.2 minutes)**,
+including all prior MCP management/editing/runtime/authentication journeys and
+8 recovery/troubleshooting journeys. The separate first-use → acceptance →
+automatic edits → reload → Undo golden journey passed (16.9 seconds).
+
+Independent browser oracles verify destination-first Complete/Roll back,
+third-state refusal, exact malformed rollback after a combined reset, native file
+modes/private preimages, retained drafts, safe report/clipboard contents and
+permission failures without publication. A real HTTP fixture retained uncertain
+cleanup until explicit verification: one initialization, one discovery, zero
+business calls and three explicitly caused DELETE attempts, with no reconnect.
+A malformed saved file still reports the connected instance captured by an active
+session. Supporting integration separately covers journal/native identity review,
+reopened-owner fences, durable replay, guarded writes/quotas, safe native network
+codes and actual ACP new/load/resume/permissions/cancellation/revocation.
+
+The authentication audit also corrected stale observed authentication after
+mid-turn credential/401/403 failures. Three regression cases verify required/failed
+facts, useful guidance and no replay (zero business calls before a failed credential
+gate, exactly one for a server refusal). The actual OAuth-backed ACP/protocol
+supporting suite passed 49 tests. These are supporting integration results, not a
+substitute for the full browser journeys.
+
+The rebuilt npm tarball contains 1,139 files / 169,588,494 bytes; SHA256 is
+`b57c7326072c14f17978b9acda4bd34ec5087df85775f2a6454c798ac333ecbf`.
+Installed Linux CLI/backend/local JSON-worker/offline-model smoke passed. Packaged
+Linux x64 Secret Service checks passed available/locked/unavailable states,
+round-trip/deletion and private-daemon cleanup. Packaged macOS arm64 checks passed
+a unique synthetic Keychain round-trip/deletion and unavailable-default handling;
+independent security lookup returned 44 after owned deletion. Both native packaged
+adapters passed initialization/discovery/call, revocation, lease and process-group
+cleanup. No unrelated credentials were enumerated and no shared Keychain was locked.
+Browser journeys ran on Linux; macOS evidence covers the MCP native helper and
+adapter. No native login service was installed or validated; that remains a separate
+authorized release task rather than an MCP implementation claim.
+
+Final owned container `fabdd05a783f` / cache initializer and image `89b40c9ea96d`
+were removed. Task-label container/image inventories are empty; the other worktree's
+containers are preserved. Independent checks confirm native prefixes/PIDs/groups,
+private Linux daemon and macOS listener are gone. Dependency/build/npm/browser/model
+volumes, BuildKit, port reservations, QA evidence and the preserved previous package
+remain. Initial failures, the mixed-cache validation run and status-label regression
+are retained under `test-results/qa/mcp-connectors-phase-7/`; only final frozen-source
+results establish completion. No assertions, timeouts, coverage floors or Knip
+exclusions were relaxed. Capability descriptors/availability tests and the generated
+catalog describe the delivered human-only recovery and troubleshooting operations.
+
+Delivery is one DCO-signed phase 7 commit on `mcp-connectors`, pushed to existing
+**draft PR #317**. The PR remains draft; known conflicts with main are a separate
+integration task and no merge/release-readiness claim is made. Dedicated integrations,
+Code60-owned/shared registrations/client IDs/secrets, hosted authentication,
+migrations and legacy SSE remain excluded. Runtime support remains tools only;
+pre-bundled Playwright/Context7 definitions remain optional disabled templates.

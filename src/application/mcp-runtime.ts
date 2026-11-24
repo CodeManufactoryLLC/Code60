@@ -1,7 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { z } from "zod";
-import type { McpConnectorDefinition, McpConnectorDocument } from "../bridge/index.js";
+import {
+  type McpConnectorDefinition,
+  type McpConnectorDocument,
+  type McpFailure,
+  mcpFailure,
+  mcpFailureGuidance,
+} from "../bridge/index.js";
 import type {
   AgentMcpServer,
   SessionResourceControls,
@@ -144,7 +150,58 @@ export class McpRuntime {
   private initializing = 0;
   private readonly waiters: (() => void)[] = [];
   private closed = false;
-  private readonly unresolved = new Set<() => Promise<void>>();
+  private readonly unresolved = new Map<
+    () => Promise<void>,
+    { targetId: string; flight?: Promise<void> | undefined }
+  >();
+  private readonly failures = new Map<string, McpFailure>();
+  failureStatus(targetId: string) {
+    return [...this.failures]
+      .filter(([key]) => key.startsWith(`${targetId}:`))
+      .map(([, value]) => value)
+      .slice(0, 64);
+  }
+  cleanupCount(targetId: string) {
+    return (
+      [...this.unresolved.values()].filter((entry) => entry.targetId === targetId).length +
+      [...this.sessions.values()]
+        .flatMap((s) => s.instances)
+        .filter((i) => i.targetId === targetId && i.status === "cleanup-unresolved").length
+    );
+  }
+  private settleResidual(cleanup: () => Promise<void>) {
+    const entry = this.unresolved.get(cleanup);
+    if (!entry) return Promise.resolve();
+    entry.flight ??= (async () => {
+      await cleanup();
+      if (this.unresolved.get(cleanup) === entry) {
+        this.unresolved.delete(cleanup);
+        this.live--;
+      }
+    })();
+    void entry.flight.catch(() => {
+      entry.flight = undefined;
+    });
+    return entry.flight;
+  }
+  async verifyCleanup(targetId: string) {
+    // Retry only retained cleanup handles. Never discover processes by name or reconnect.
+    await Promise.allSettled([
+      ...[...this.unresolved]
+        .filter(([, entry]) => entry.targetId === targetId)
+        .map(([cleanup]) => this.settleResidual(cleanup)),
+      ...[...this.sessions.values()]
+        .flatMap((s) => s.instances)
+        .filter((i) => i.targetId === targetId && i.status === "cleanup-unresolved")
+        .map((i) => i.close()),
+    ]);
+    const remaining = this.cleanupCount(targetId);
+    if (remaining === 0)
+      for (const [key, failure] of this.failures)
+        if (key.startsWith(`${targetId}:`) && failure.code === "cleanup") this.failures.delete(key);
+    this.changed();
+    return remaining;
+  }
   private closing: Promise<void> | undefined;
   constructor(
     private readonly root: string,
@@ -287,7 +344,10 @@ export class McpRuntime {
     if (!this.ports || this.closed) throw new Error("MCP transport is unavailable");
     const release = await this.permit(signal);
     try {
-      if (this.live >= 256) throw new Error("MCP connection limit reached");
+      if (this.live >= 256)
+        throw Object.assign(new Error("MCP connection limit reached"), {
+          mcpFailure: { code: "limit", stage: "initialize" },
+        });
       let prepared: Awaited<ReturnType<McpAuthentication["prepare"]>> | undefined;
       const key = `${targetId}:${serverId}:${revision}`;
       const needsCredentials =
@@ -323,7 +383,10 @@ export class McpRuntime {
         throw error;
       }
       signal.throwIfAborted();
-      if (this.live >= 256) throw new Error("MCP connection limit reached");
+      if (this.live >= 256)
+        throw Object.assign(new Error("MCP connection limit reached"), {
+          mcpFailure: { code: "limit", stage: "initialize" },
+        });
       this.live++;
       try {
         const upstream = await this.ports.connect({ definition, cwd, signal, ...bindings });
@@ -346,7 +409,7 @@ export class McpRuntime {
         };
       } catch (error) {
         const cleanup = pendingCleanup(error);
-        if (cleanup) this.unresolved.add(cleanup);
+        if (cleanup) this.unresolved.set(cleanup, { targetId });
         else this.live--;
         throw error;
       }
@@ -512,7 +575,26 @@ export class McpRuntime {
                     )
                       throw new Error("MCP call authority was revoked");
                     return result;
-                  } catch {
+                  } catch (error) {
+                    const credentialFailure =
+                      error instanceof CredentialFailure || error === AUTH_REQUIRED;
+                    const failure = mcpFailure(error, {
+                      code: credentialFailure
+                        ? "authentication"
+                        : callSignal.aborted
+                          ? "cancelled"
+                          : "protocol",
+                      stage: credentialFailure ? "authentication" : "call",
+                    });
+                    if (failure.code === "authentication" || failure.code === "scope")
+                      this.authenticationFacts.set(
+                        `${instance.targetId}:${instance.id}:${instance.revision}`,
+                        failure.code === "scope" ? "failed" : "required",
+                      );
+                    this.failures.set(
+                      `${instance.targetId}:${instance.id}:${instance.revision}`,
+                      failure,
+                    );
                     if (!callSignal.aborted && instance.status === "connected") {
                       instance.status = "failed";
                       this.observations.set(
@@ -523,7 +605,7 @@ export class McpRuntime {
                       this.changed();
                     }
                     throw new Error(
-                      "MCP call failed or was cancelled; an uncertain result must not be replayed",
+                      `${mcpFailureGuidance(failure)} An uncertain result must not be replayed.`,
                     );
                   } finally {
                     session.calls.delete(call);
@@ -536,12 +618,16 @@ export class McpRuntime {
               }
               instance.exposure = exposure;
               instance.status = "connected";
+              this.failures.delete(`${instance.targetId}:${instance.id}:${instance.revision}`);
               void upstream.closed?.then(async () => {
                 if (instance.status !== "connected") return;
                 instance.status = "failed";
-                warning(
-                  "An MCP connection was lost. Its response may be uncertain; do not replay calls. Other tools remain available.",
+                const failure: McpFailure = { code: "network", stage: "call" };
+                this.failures.set(
+                  `${instance.targetId}:${instance.id}:${instance.revision}`,
+                  failure,
                 );
+                warning(mcpFailureGuidance(failure));
                 try {
                   await instance.close();
                   instance.status = "failed";
@@ -568,13 +654,25 @@ export class McpRuntime {
                 : error === AUTH_REQUIRED
                   ? "authentication-required"
                   : "failed";
-              warning(
-                error === AUTH_REQUIRED
-                  ? "An MCP server requires authentication. Other tools remain available."
-                  : instance.status === "cleanup-unresolved"
-                    ? "MCP cleanup could not be verified. Retain backend ownership and process evidence. Other tools remain available."
-                    : "An MCP server could not connect. Other tools remain available; reconnect when idle to try again.",
+              const failure = mcpFailure(error, {
+                code:
+                  error === AUTH_REQUIRED
+                    ? "authentication"
+                    : instance.status === "cleanup-unresolved"
+                      ? "cleanup"
+                      : "protocol",
+                stage:
+                  error === AUTH_REQUIRED
+                    ? "authentication"
+                    : instance.status === "cleanup-unresolved"
+                      ? "cleanup"
+                      : "initialize",
+              });
+              this.failures.set(
+                `${instance.targetId}:${instance.id}:${instance.revision}`,
+                failure,
               );
+              warning(mcpFailureGuidance(failure));
             }
             this.observations.set(
               `${instance.targetId}:${status.id}:${instance.revision}`,
@@ -692,6 +790,7 @@ export class McpRuntime {
     let result: {
       connection: "connected" | "authentication-required" | "cancelled" | "failed";
       tools: number;
+      failure?: McpFailure;
     };
     try {
       upstream = await this.initialize(
@@ -702,6 +801,7 @@ export class McpRuntime {
         input.serverId,
         input.revision,
       );
+      this.failures.delete(`${input.targetId}:${input.serverId}:${input.revision}`);
       result = { connection: "connected", tools: upstream.tools.length };
     } catch (error) {
       const cleanup = pendingCleanup(error);
@@ -723,7 +823,18 @@ export class McpRuntime {
               ? "cancelled"
               : "failed",
         tools: 0,
+        failure: mcpFailure(error, {
+          code:
+            error === AUTH_REQUIRED
+              ? "authentication"
+              : controller.signal.aborted
+                ? "cancelled"
+                : "protocol",
+          stage: error === AUTH_REQUIRED ? "authentication" : "initialize",
+        }),
       };
+      if (result.failure)
+        this.failures.set(`${input.targetId}:${input.serverId}:${input.revision}`, result.failure);
     }
     try {
       if (upstream) {
@@ -732,7 +843,7 @@ export class McpRuntime {
           this.live--;
         } catch {
           const retained = upstream;
-          this.unresolved.add(() => retained.close());
+          this.unresolved.set(() => retained.close(), { targetId: input.targetId });
           throw new Error(
             "MCP test cleanup could not be verified; retain backend ownership and process evidence",
           );
@@ -796,7 +907,7 @@ export class McpRuntime {
       throw new Error("MCP session changed; reload runtime status");
     if (action === "reconnect" && (!session.controls.idle() || !session.controls.canRestore()))
       throw new Error(
-        "Reconnect requires an idle session with load/resume support. Otherwise start a new session.",
+        "MCP_PROVIDER: Reconnect requires an idle session with load/resume support. Otherwise start a new session. Other available tools remain usable.",
       );
     return {
       session,
@@ -959,11 +1070,7 @@ export class McpRuntime {
       sessions.flatMap((session) => session.instances.map((instance) => instance.close())),
     );
     const residual = await Promise.allSettled(
-      [...this.unresolved].map(async (cleanup) => {
-        await cleanup();
-        this.unresolved.delete(cleanup);
-        this.live--;
-      }),
+      [...this.unresolved.keys()].map((cleanup) => this.settleResidual(cleanup)),
     );
     await this.queue;
     await this.opening?.catch(() => {});
