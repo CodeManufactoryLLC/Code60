@@ -20,6 +20,11 @@ browser bridge. Management status reports bounded database/engine availability
 without provider probes, pairing codes or repair. Preserve XDG_DATA_HOME in the
 registered runtime so setup and the backend use the same data location.
 
+Provider installation/authentication operations accept strict catalog/session/attempt
+identities and bounded code/confirmation inputs only. Derive the controlling-page owner
+server-side. Do not retain provider progress responses in request-receipt caches; never
+expose provider server APIs, install descriptors, commands, paths or environment overrides.
+
 Preserve an explicitly configured absolute CODEX_HOME path for workflow login and
 execution. Never persist CODEX_CONFIG payloads or provider credential environment
 variables in the service definition. Existing engines retain their startup

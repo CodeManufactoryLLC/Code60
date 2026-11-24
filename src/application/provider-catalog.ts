@@ -22,7 +22,8 @@ export const PROVIDERS: Provider[] = [
     name: "Antigravity",
     logo: "antigravity",
     command: ["agy", "acp"],
-    guidance: "Install the Antigravity CLI, open agy to sign in, then retry.",
+    guidance:
+      "Install Antigravity and sign in here. Complete Google sign-in, then paste its authorization code into this dialog. Custom commands require external setup.",
   },
   {
     id: "claude",
@@ -31,7 +32,7 @@ export const PROVIDERS: Provider[] = [
     command: ["npx", "-y", "@agentclientprotocol/claude-agent-acp"],
     prerequisites: ["claude", "claude-agent-acp"],
     guidance:
-      "Install Claude Code and sign in with claude. Retry when ready. Connecting may download the ACP adapter through npx.",
+      "Install Claude and its ACP adapter here, then choose Claude subscription or Anthropic Console browser sign-in. Paste the returned authorization code into this dialog. Custom commands require external setup.",
   },
   {
     id: "codex",
@@ -47,28 +48,32 @@ export const PROVIDERS: Provider[] = [
     name: "Copilot",
     logo: "copilot",
     command: ["copilot", "--acp", "--stdio"],
-    guidance: "Install GitHub Copilot CLI, open copilot and sign in with /login, then retry.",
+    guidance:
+      "Install Copilot and sign in here using the GitHub.com device code. Custom hosts and launch commands require external setup.",
   },
   {
     id: "droid",
     name: "Droid",
     logo: "droid",
     command: ["droid", "exec", "--output-format", "acp"],
-    guidance: "Install Factory Droid, open droid to sign in, then retry.",
+    guidance:
+      "Install Droid and sign in here using Factory’s browser device-pairing flow. Custom commands require external setup.",
   },
   {
     id: "kiro",
     name: "Kiro",
     logo: "kiro",
     command: ["kiro-cli", "acp"],
-    guidance: "Install Kiro CLI and sign in with kiro-cli login, then retry.",
+    guidance:
+      "Install Kiro and sign in here using its browser device flow. Organization policies may disable this flow. Custom enterprise settings require external setup.",
   },
   {
     id: "opencode",
     name: "OpenCode",
     logo: "opencode",
     command: ["opencode", "acp"],
-    guidance: "Install OpenCode and configure a provider with opencode auth login, then retry.",
+    guidance:
+      "Install OpenCode here and connect ChatGPT or GitHub Copilot through browser sign-in. Existing model-provider credentials are reused; API keys and custom integrations require external setup.",
   },
 ];
 export function desktopConfig(config: Config): Config {

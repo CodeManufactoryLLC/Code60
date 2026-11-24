@@ -159,3 +159,8 @@ work. This adds no preference, agent-write field, IPC endpoint or dependency.
 Workflow requests accept opaque picker/form/workflow/request IDs, revisions and bounded definitions only. No paths, endpoints, executable/environment fields or generic execution authority. Draft output can change only name/tasks; workflow approval is a separate human action.
 
 Pause, resume and reconnect carry only the local workflow identity. The main process resolves the owning engine and run.
+
+Provider setup uses strict catalog provider/method IDs and owner-derived setup/attempt/
+challenge identities. Login progress is an ephemeral typed device/browser/code/confirmation
+response, absent shared snapshots. No executable, endpoint, package, path, environment
+or generic terminal fields. Retain Codex operation wrappers and v1 saved membership.

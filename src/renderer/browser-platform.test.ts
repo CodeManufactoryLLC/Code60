@@ -17,6 +17,9 @@ it("acknowledges supported clipboard writes and propagates fallback denial", asy
   const remove = vi.fn();
   const focus = vi.fn();
   class Element {
+    closest() {
+      return null;
+    }
     focus = focus;
   }
   vi.stubGlobal("HTMLElement", Element);
@@ -24,7 +27,16 @@ it("acknowledges supported clipboard writes and propagates fallback denial", asy
   vi.stubGlobal("document", {
     activeElement: new Element(),
     getSelection: () => null,
-    createElement: () => ({ value: "", style: {}, setAttribute() {}, select() {}, remove }),
+    createElement: () => ({
+      value: "",
+      style: {},
+      setAttribute() {},
+      select() {},
+      focus() {
+        Object.defineProperty(document, "activeElement", { value: this, configurable: true });
+      },
+      remove,
+    }),
     body: { append() {} },
     execCommand: () => false,
   });

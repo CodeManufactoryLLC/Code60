@@ -180,7 +180,7 @@ import { BrowserAutomation } from "./browser-automation.js";
 import { ChatCheckpoints } from "./chat-checkpoints.js";
 import { savedChatReferences } from "./chat-reference.js";
 import { ChatStore } from "./chat-store.js";
-import { codexProviderAgents, createCodexProvider } from "./codex-provider.js";
+import { createCodexProvider } from "./codex-provider.js";
 import {
   type ChatSession,
   ConversationCoordinator,
@@ -223,6 +223,7 @@ import { ProjectSessionStore } from "./project-session.js";
 import { type OpenProjectDatabase, type ProjectDatabase, SCHEMA } from "./projects.js";
 import { effectivePrompts, promptStates } from "./prompt-templates.js";
 import { desktopConfig, detectProvider } from "./provider-catalog.js";
+import { createProviderRuntime, providerAgents } from "./provider-runtime.js";
 import { type RagExecutor, RagService } from "./rag-service.js";
 import { mergeRagEvents, ragProjectSources } from "./rag-sources.js";
 import { RAG_LIMITS } from "./rag-store.js";
@@ -248,6 +249,8 @@ export interface DesktopStorage {
   openDatabase: OpenProjectDatabase;
   preferences: DesktopPreferences;
   detectAgent?: typeof detectProvider;
+  providerFetch?: typeof fetch;
+  providerDownload?: typeof import("./provider-archive.js").downloadProviderArtifact;
   refreshPath?: (signal: AbortSignal) => Promise<void>;
 }
 
@@ -1897,7 +1900,7 @@ export class ApplicationHost {
     private readonly dialogs: DesktopDialogs,
     private readonly storage: DesktopStorage,
   ) {
-    const deps = { ...dependencies, agents: codexProviderAgents(dependencies.agents, this.env) };
+    const deps = { ...dependencies, agents: providerAgents(dependencies.agents, this.env) };
     this.deps = deps;
     this.modelDefaults = new ModelDefaults(storage.preferences, () => this.changed(null));
     this.memory = new MemoryService(
@@ -1940,8 +1943,13 @@ export class ApplicationHost {
       storage.ragExecutor,
     );
     const codexProvider = createCodexProvider(this.env);
+    const providers = createProviderRuntime(this.env, {
+      fetch: storage.providerFetch,
+      download: storage.providerDownload,
+    });
     this.agentSetup = new AgentSetup({
       codex: codexProvider,
+      providers: providers.policies,
       command: (id) => this.config?.agents[id]?.command,
       detect: async (id, command, signal) => {
         if (this.storage.refreshPath) await this.storage.refreshPath(signal);
@@ -1955,7 +1963,11 @@ export class ApplicationHost {
           const managed = await codexProvider.environment();
           if (managed.PATH) setEnvironmentPath(this.env as NodeJS.ProcessEnv, managed.PATH);
         }
-        await (this.storage.detectAgent ?? detectProvider)(id, command, this.env);
+        await (this.storage.detectAgent ?? detectProvider)(
+          id,
+          command,
+          id === "codex" ? this.env : await providers.environment(id),
+        );
         signal.throwIfAborted();
       },
       probe: (id, command, signal) =>
@@ -2287,6 +2299,25 @@ export class ApplicationHost {
       await this.setConfig(desktopConfig(await loadConfig(this.deps.fs, this.env)));
       return this.agentSetup.startCodex(request, owner, install);
     });
+  }
+  startProviderSetup(
+    request: import("../bridge/index.js").ProviderSetupStart,
+    owner: string,
+    install: boolean,
+  ) {
+    return this.agentSetup.startProvider(request, owner, install);
+  }
+  readProviderSetup(request: import("../bridge/index.js").ProviderSetupIdentity, owner: string) {
+    return this.agentSetup.readProvider(request, owner);
+  }
+  submitProviderSetup(
+    request: import("../bridge/index.js").ProviderSetupSubmission,
+    owner: string,
+  ) {
+    this.agentSetup.submitProvider(request, owner);
+  }
+  cancelProviderSetup(request: import("../bridge/index.js").ProviderSetupIdentity, owner: string) {
+    return this.agentSetup.cancelProvider(request, owner);
   }
   readCodexSetup(request: CodexSetupIdentity, owner: string) {
     return this.agentSetup.readCodex(request, owner);

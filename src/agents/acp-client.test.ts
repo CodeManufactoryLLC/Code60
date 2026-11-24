@@ -69,7 +69,11 @@ type Rpc = {
   result?: unknown;
 };
 
-function fakeAgent(capabilities: Record<string, unknown>, promptError?: string) {
+function fakeAgent(
+  capabilities: Record<string, unknown>,
+  promptError?: string,
+  authElicitation = false,
+) {
   const requests = new TransformStream<Rpc, Rpc>();
   const responses = new TransformStream<Rpc, Rpc>();
   const reader = requests.readable.getReader();
@@ -89,6 +93,21 @@ function fakeAgent(capabilities: Record<string, unknown>, promptError?: string) 
       const method = request.method as string;
       seen.push(method);
       received.push(request);
+      if (method === "session/new" && authElicitation) {
+        await writer.write({
+          jsonrpc: "2.0",
+          id: "login",
+          method: "elicitation/create",
+          params: {
+            mode: "url",
+            message: "PRIVATE-DEVICE-CODE",
+            url: "https://app.factory.ai/cli-auth?code=PRIVATE-DEVICE-CODE",
+            requestId: request.id,
+            elicitationId: "device-login",
+          },
+        });
+        continue;
+      }
       if (method === "session/load") {
         await writer.write({
           jsonrpc: "2.0",
@@ -495,4 +514,19 @@ describe("ACP session restoration", () => {
     expect(agent.seen).not.toContain("session/new");
     agent.close();
   });
+});
+
+it("reports Droid startup sign-in as authentication required without exposing its challenge", async () => {
+  const agent = fakeAgent({}, undefined, true);
+  try {
+    await expect(
+      openSession(agent.stream, { cwd: "/tmp", agentName: "droid" }),
+    ).rejects.toMatchObject({
+      authRequired: true,
+      message: expect.not.stringContaining("PRIVATE-DEVICE-CODE"),
+    });
+    expect(agent.seen).not.toContain("session/prompt");
+  } finally {
+    agent.close();
+  }
 });

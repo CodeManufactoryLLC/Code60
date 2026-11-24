@@ -459,6 +459,17 @@ export interface ApplicationClient {
   providerAction(request: import("./agent-setup.js").ProviderAction): Promise<void>;
   beginAgentSetup(request: SetupBegin): Promise<void>;
   attemptAgentSetup(request: SetupAttempt): Promise<void>;
+  installProviderForSetup?(
+    request: import("./agent-setup.js").ProviderSetupStart,
+  ): Promise<import("./agent-setup.js").CodexSetupStarted>;
+  loginProviderForSetup?(
+    request: import("./agent-setup.js").ProviderSetupStart,
+  ): Promise<import("./agent-setup.js").CodexSetupStarted>;
+  readProviderSetup?(
+    request: import("./agent-setup.js").ProviderSetupIdentity,
+  ): Promise<import("./agent-setup.js").ProviderSetupProgress>;
+  submitProviderSetup?(request: import("./agent-setup.js").ProviderSetupSubmission): Promise<void>;
+  cancelProviderSetup?(request: import("./agent-setup.js").ProviderSetupIdentity): Promise<void>;
   installCodexForSetup?(
     request: SetupIdentity,
   ): Promise<import("./agent-setup.js").CodexSetupStarted>;
