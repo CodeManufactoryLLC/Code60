@@ -171,8 +171,8 @@ test("browser: paired HTTP LAN browser installs and signs in without a secure-co
     await local.page.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await local.page.getByRole("button", { name: "Web Server Beta", exact: true }).click();
     const settings = local.page.getByRole("main", { name: "Web Server Beta", exact: true });
-    await settings.getByRole("switch").focus();
-    await local.page.keyboard.press("Space");
+    await expect(settings.getByRole("switch")).toBeEnabled();
+    await settings.getByRole("switch").press("Space");
     await expect(settings.locator("p[role=status]")).toHaveText("Listening");
     const url = await settings.getByRole("link").getAttribute("href");
     const pairing = await settings.getByLabel("LAN pairing code", { exact: true }).textContent();
@@ -213,8 +213,8 @@ test("browser: paired HTTP LAN browser installs and signs in without a secure-co
     await expandNavigation(local.page, "Manage");
     await local.page.locator("#advanced-toggle").click();
     await local.page.locator("#tab-web-server").click();
-    await settings.getByRole("switch").focus();
-    await local.page.keyboard.press("Space");
+    await expect(settings.getByRole("switch")).toBeEnabled();
+    await settings.getByRole("switch").press("Space");
     await expect(settings.locator("p[role=status]")).toHaveText("Off");
     expect(fixture.gateway.application.snapshot().agentSetup?.enabled).toEqual(["kiro"]);
     expect((await fetch(fixture.gateway.origin)).status).toBe(200);
