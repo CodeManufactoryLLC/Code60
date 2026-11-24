@@ -13,7 +13,8 @@
   Separately exercise cancellation, uncertain starts and both legacy versions.
 - **Invariants:** reads/review do not launch anything. Original state roots,
   start keys, run IDs, engine PID and executable/runtime bindings survive backend
-  replacement. Source files/index/HEAD stay unchanged; native tools write only
+  replacement. Wait for guidance acknowledgement and its persisted engine event
+  before detaching. Source files/index/HEAD stay unchanged; native tools write only
   the dedicated worktree. Trap runtime npm/npx/compiler calls. Do not seed login
   or infer Transmission credentials from application provider verification.
 - **Evidence:** `npm run test:transmission` after native packaging, with traces,

@@ -170,9 +170,19 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
       .getByLabel("Guidance for a subsequent turn", { exact: true })
       .fill("Preserve the public API.");
     await workflows.getByRole("button", { name: "Queue guidance", exact: true }).click();
-    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "Steer workflow", exact: true })).toBeHidden();
     const registryPath = join(env.XDG_STATE_HOME, "code60/workflows/registry.json");
     const before = JSON.parse(await readFile(registryPath, "utf8"));
+    const guidance = (await engine("get_workflow_events", {
+      runId: before.entries[0].snapshot.runId,
+      after: 0,
+    })) as { events: unknown[] };
+    expect(guidance.events).toContainEqual(
+      expect.objectContaining({
+        kind: "message",
+        detail: { message: "Preserve the public API." },
+      }),
+    );
     await context.close();
     context = undefined;
     await gateway.stop();
@@ -231,6 +241,7 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
         runId: after.entries[0].snapshot.runId,
         keyPreserved: true,
         completedWithoutBackend: true,
+        guidancePersisted: true,
         indexPreserved: true,
         headPreserved: true,
         runtimeToolsInvoked: false,
