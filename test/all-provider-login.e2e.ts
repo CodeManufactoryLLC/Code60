@@ -4,6 +4,26 @@ import { expect, test } from "@playwright/test";
 import { browserApp } from "./fixtures/browser-app.js";
 import { syntheticProviderDownload } from "./fixtures/provider-artifacts.js";
 
+async function stopped(log: string, relayWorkspace?: string) {
+  const records = await Promise.all(
+    (await readdir(log)).map(async (file) => JSON.parse(await readFile(join(log, file), "utf8"))),
+  );
+  expect(records.length).toBeGreaterThan(0);
+  await expect
+    .poll(() =>
+      records.filter(({ pid, cwd }) => {
+        if (relayWorkspace && cwd === relayWorkspace) return false;
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      }),
+    )
+    .toEqual([]);
+}
+
 for (const [id, name] of [
   ["antigravity", "Antigravity"],
   ["claude", "Claude"],
@@ -98,23 +118,7 @@ for (const [id, name] of [
           await file.close();
         }
       }
-      const records = await Promise.all(
-        (await readdir(fixture.processLog)).map(async (file) =>
-          JSON.parse(await readFile(join(fixture.processLog, file), "utf8")),
-        ),
-      );
-      await expect
-        .poll(() =>
-          records.filter(({ pid }) => {
-            try {
-              process.kill(pid, 0);
-              return true;
-            } catch {
-              return false;
-            }
-          }),
-        )
-        .toEqual([]);
+      await stopped(fixture.processLog, join(fixture.directory, "state/code60/relay/workspace"));
       await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
       await page.getByRole("button", { name: "Start", exact: true }).click();
       await expect(page.getByRole("button", { name: "Relay", exact: true })).toBeVisible();
@@ -122,6 +126,8 @@ for (const [id, name] of [
       const reopened = await fixture.open();
       await expect(reopened.page.locator(".agent-setup-dialog")).toHaveCount(0);
       expect(fixture.gateway.application.snapshot().agentSetup?.enabled).toEqual([id]);
+      await fixture.gateway.stop();
+      await stopped(fixture.processLog);
     } finally {
       await fixture.close();
     }

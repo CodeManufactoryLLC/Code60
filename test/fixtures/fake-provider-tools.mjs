@@ -16,7 +16,7 @@ const args = process.argv.slice(2);
 const provider = /\/providers\/([^/]+)\//.exec(process.argv[1])?.[1] ?? basename(process.argv[1]);
 writeFileSync(
   join(log, `${process.pid}-${randomUUID()}.json`),
-  JSON.stringify({ pid: process.pid, kind: provider }),
+  JSON.stringify({ pid: process.pid, kind: provider, cwd: process.cwd() }),
 );
 const versions = {
   claude: "2.1.331",
@@ -45,7 +45,7 @@ const send = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
 if (provider === "npm") {
   if (
     !args.includes("--ignore-scripts") ||
-    !args.includes("https://registry.npmjs.org") ||
+    args[args.indexOf("--registry") + 1] !== "https://registry.npmjs.org" ||
     !args.at(-1)?.endsWith("adapter.tgz")
   )
     process.exit(91);
