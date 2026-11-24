@@ -1,21 +1,29 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { once } from "node:events";
+import { statSync } from "node:fs";
 import { mkdir, mkdtemp, open, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import {
-  findMacRuntimeProcesses,
-  inspectMacRuntimeProcess,
-  macFileProcesses,
-  macRuntimeProcessFamily,
+  findRuntimeProcesses,
+  inspectRuntimeProcess,
   type OwnedProcess,
+  runtimeFileProcesses,
   runtimeProcessExists,
+  runtimeProcessFamily,
   spawnOwnedProcess,
   waitForRuntimeExit,
 } from "./index.js";
 
-const native = process.platform === "darwin" && process.arch === "arm64";
+const nativeTarget =
+  (process.platform === "darwin" && process.arch === "arm64") ||
+  (process.platform === "linux" && process.arch === "x64");
+const nativeMapping =
+  process.platform !== "linux" ||
+  (statSync("/proc/self/exe").ino === statSync(process.execPath).ino &&
+    statSync("/proc/self/exe").dev === statSync(process.execPath).dev);
+const native = nativeTarget && nativeMapping;
 const roots: string[] = [];
 const owned: OwnedProcess[] = [];
 const raw: { child: ChildProcess; exited: Promise<unknown> }[] = [];
@@ -55,7 +63,7 @@ it.runIf(native)(
   "inspects the exact owned Node argv, UID and start identity outside the checkout",
   async () => {
     const f = await fixture();
-    const identity = await inspectMacRuntimeProcess(f.child.pid, f.command);
+    const identity = await inspectRuntimeProcess(f.child.pid, f.command);
     expect(identity).toMatchObject({
       pid: f.child.pid,
       uid: process.getuid?.(),
@@ -63,10 +71,10 @@ it.runIf(native)(
     });
     expect(identity?.commandHash).toMatch(/^[a-f0-9]{64}$/);
     expect(identity?.started.length).toBeGreaterThan(0);
-    expect(await inspectMacRuntimeProcess(f.child.pid, f.command)).toEqual(identity);
+    expect(await inspectRuntimeProcess(f.child.pid, f.command)).toEqual(identity);
     expect(runtimeProcessExists(f.child.pid)).toBe(true);
     await f.child.stop();
-    expect(await inspectMacRuntimeProcess(f.child.pid, f.command)).toBe(null);
+    expect(await inspectRuntimeProcess(f.child.pid, f.command)).toBe(null);
     expect(runtimeProcessExists(f.child.pid)).toBe(false);
   },
 );
@@ -75,10 +83,10 @@ it.runIf(native)(
   async () => {
     const f = await fixture();
     await expect(
-      inspectMacRuntimeProcess(f.child.pid, [f.command[0], "private input fixture"]),
+      inspectRuntimeProcess(f.child.pid, [f.command[0], "private input fixture"]),
     ).rejects.toThrow("ownership is unavailable");
     try {
-      await inspectMacRuntimeProcess(f.child.pid, [f.command[0], "private input fixture"]);
+      await inspectRuntimeProcess(f.child.pid, [f.command[0], "private input fixture"]);
     } catch (error) {
       expect(String(error)).not.toContain("private input fixture");
     }
@@ -100,7 +108,7 @@ it.runIf(native)(
     await once(child, "spawn");
     raw.push({ child, exited });
     if (!child.pid) throw Error("Fixture PID unavailable");
-    await expect(inspectMacRuntimeProcess(child.pid, [node, "30"])).rejects.toThrow(
+    await expect(inspectRuntimeProcess(child.pid, [node, "30"])).rejects.toThrow(
       "ownership is unavailable",
     );
     expect(runtimeProcessExists(child.pid)).toBe(true);
@@ -115,9 +123,9 @@ it.runIf(native)(
       descendant = Number(await readFile(f.pidFile, "utf8"));
       expect(descendant).toBeGreaterThan(0);
     });
-    const identity = await inspectMacRuntimeProcess(f.child.pid, f.command);
+    const identity = await inspectRuntimeProcess(f.child.pid, f.command);
     if (!identity) throw Error("Owned fixture process disappeared");
-    const family = await macRuntimeProcessFamily(identity);
+    const family = await runtimeProcessFamily(identity);
     expect(family).toEqual(expect.arrayContaining([f.child.pid, descendant]));
     await expect(waitForRuntimeExit(family, undefined, 20)).rejects.toThrow("processes remain");
     expect(runtimeProcessExists(descendant)).toBe(true);
@@ -130,47 +138,57 @@ it.runIf(native)(
   "finds exact engine processes and positively inspects private file holders",
   async () => {
     const f = await fixture();
-    expect((await findMacRuntimeProcesses(f.command)).map((entry) => entry.pid)).toEqual([
+    expect((await findRuntimeProcesses(f.command)).map((entry) => entry.pid)).toEqual([
       f.child.pid,
     ]);
     const path = join(f.root, "owner.sqlite");
     await writeFile(path, "", { mode: 0o600 });
     const file = await open(path, "r");
     try {
-      expect(await macFileProcesses([path])).toContain(process.pid);
+      expect(await runtimeFileProcesses([path])).toContain(process.pid);
     } finally {
       await file.close();
     }
-    expect(await macFileProcesses([path])).toEqual([]);
+    expect(await runtimeFileProcesses([path])).toEqual([]);
     await f.child.stop();
-    expect(await findMacRuntimeProcesses(f.command)).toEqual([]);
+    expect(await findRuntimeProcesses(f.command)).toEqual([]);
   },
 );
 
 it("bounds cancellation and rejects unsafe identities without sending termination signals", async () => {
   const f = await fixture();
   const signal = AbortSignal.abort(Error("cancelled"));
-  await expect(inspectMacRuntimeProcess(f.child.pid, f.command, signal)).rejects.toThrow(
-    "cancelled",
-  );
+  await expect(inspectRuntimeProcess(f.child.pid, f.command, signal)).rejects.toThrow("cancelled");
   await expect(waitForRuntimeExit([f.child.pid], signal)).rejects.toThrow("cancelled");
   for (const pid of [0, -1, 1.5, Number.NaN, 2 ** 31])
-    await expect(inspectMacRuntimeProcess(pid, f.command)).rejects.toThrow(
-      "ownership is unavailable",
-    );
+    await expect(inspectRuntimeProcess(pid, f.command)).rejects.toThrow("ownership is unavailable");
   await expect(waitForRuntimeExit([f.child.pid], undefined, 90_001)).rejects.toThrow(
     "ownership is unavailable",
   );
   expect(f.child.hasExited()).toBe(false);
 });
 
-it.runIf(!native)(
+it.runIf(!nativeTarget)(
   "rejects native engine inspection on unsupported targets without touching the process",
   async () => {
     const f = await fixture();
-    await expect(inspectMacRuntimeProcess(f.child.pid, f.command)).rejects.toThrow(
+    await expect(inspectRuntimeProcess(f.child.pid, f.command)).rejects.toThrow(
       "requires macOS Apple Silicon",
     );
     expect(runtimeProcessExists(f.child.pid)).toBe(true);
+  },
+);
+it.runIf(nativeTarget && !nativeMapping)(
+  "refuses unverifiable emulator ownership instead of adopting by argv",
+  async () => {
+    const f = await fixture();
+    await expect(inspectRuntimeProcess(f.child.pid, f.command)).rejects.toThrow(
+      "ownership is unavailable",
+    );
+    await expect(findRuntimeProcesses(f.command)).rejects.toThrow("ownership is unavailable");
+    const path = join(f.root, "owner.sqlite");
+    await writeFile(path, "", { mode: 0o600 });
+    await expect(runtimeFileProcesses([path])).rejects.toThrow("ownership is unavailable");
+    expect(f.child.hasExited()).toBe(false);
   },
 );

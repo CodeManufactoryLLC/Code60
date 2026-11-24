@@ -10,6 +10,7 @@ import {
   readFile,
   realpath,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -21,13 +22,21 @@ import { runCommand } from "./distribution/command.mjs";
 import { descriptor, platform } from "./distribution/descriptor.mjs";
 
 await runCommand(async (cancel) => {
-  assert.equal(platform(), "darwin-arm64", "Native engine removal smoke requires macOS arm64");
+  const target = platform();
+  if (target === "linux-x64") {
+    const node = await stat(process.execPath),
+      mapped = await stat("/proc/self/exe");
+    assert.ok(
+      node.dev === mapped.dev && node.ino === mapped.ino,
+      "Native engine adoption is unavailable under this emulator; validate on native Linux x64",
+    );
+  }
   assert.ok(
     process.argv.length <= 3 && !process.argv[2]?.startsWith("-"),
     "Use node scripts/test-uninstall-engines.mjs [descriptor.json]",
   );
   const signal = AbortSignal.any([cancel, AbortSignal.timeout(7 * 60_000)]);
-  const input = resolve(process.argv[2] ?? "release/payloads/darwin-arm64.json");
+  const input = resolve(process.argv[2] ?? `release/payloads/${target}.json`);
   const identity = descriptor(JSON.parse(await readFile(input, "utf8")));
   const temporary = await realpath(await mkdtemp(join(tmpdir(), "code60 uninstall engines ' ")));
   const owned = await lstat(temporary, { bigint: true });
@@ -43,8 +52,9 @@ await runCommand(async (cancel) => {
   };
   const load = (path) => import(pathToFileURL(resolve("dist", path)).href);
   const {
+    installedEngineVersions,
     preserveTransmissionBundle,
-    inspectMacRuntimeProcess,
+    inspectRuntimeProcess,
     waitForRuntimeExit,
     privateDirectory,
     captureRemovalServiceProof,
@@ -101,7 +111,7 @@ await runCommand(async (cancel) => {
     await preserveTransmissionBundle(join(source.root, "dist/engines", bundles[0]), env, signal);
     // Engines must run from their independent cache after the app's source disappears.
     await rm(source.owned, { recursive: true });
-    for (const version of ["0.1.0-staging.18", "0.1.0-staging.20"]) {
+    for (const version of installedEngineVersions()) {
       const state = join(root, `transmission-${version}`);
       const entry = { version, state };
       started.push(entry);
@@ -110,7 +120,7 @@ await runCommand(async (cancel) => {
       const runtime = await ports.runtime(env, version, signal);
       const health = await client.call("health", {}, signal);
       entry.command = [runtime.node, runtime.entry, "engine"];
-      entry.owner = await inspectMacRuntimeProcess(health.pid, entry.command, signal);
+      entry.owner = await inspectRuntimeProcess(health.pid, entry.command, signal);
       assert.ok(entry.owner, "Started engine must have verified native process identity");
     }
     result.before = await history();
@@ -198,14 +208,14 @@ await runCommand(async (cancel) => {
       servicePorts,
     );
     const recovery = await prepareManagedRemoval(plan, service, { signal });
-    assert.equal(recovery.receipt.engines.length, 2);
+    assert.equal(recovery.receipt.engines.length, installedEngineVersions().length);
     const first = started[0];
     assert.ok(first);
     first.owner = undefined;
     const restarted = new LocalTransmission(first.state, env, first.version);
     await restarted.connect(signal);
     const health = await restarted.call("health", {}, signal);
-    first.owner = await inspectMacRuntimeProcess(health.pid, first.command, signal);
+    first.owner = await inspectRuntimeProcess(health.pid, first.command, signal);
     assert.ok(first.owner);
     const reserve = (proof, signal) => reserveRemovedBackend(proof, signal, servicePorts);
     await assert.rejects(
@@ -216,7 +226,7 @@ await runCommand(async (cancel) => {
       await readFile(join(installation.release, "NOTICE"), "utf8"),
       "component notice\n",
     );
-    assert.ok(await inspectMacRuntimeProcess(health.pid, first.command, signal));
+    assert.ok(await inspectRuntimeProcess(health.pid, first.command, signal));
     result.lateEngine = { pid: health.pid, refusedBeforeFileDeletion: true, remainedRunning: true };
     for (const proof of await prepareTransmissionRemoval(root, env, [], signal))
       await proof.stop(signal);

@@ -411,7 +411,7 @@ never wait behind a human operation whose answer an uninstall gate would block.
 Native uninstall preparation reads the pinned engine SQLite schema read-only and
 matches terminal runs to strict saved Code60 ownership before any stop. Never import
 the engine constructor for inspection: it reconciles and wakes stored work. Inspect
-both versions first, then use authenticated fixed health/stop with verified Node,
+all recorded supported versions first, then use authenticated fixed health/stop with verified Node,
 native process identity and private endpoint identity. Require positive process
 and open-file absence without an endpoint; preserve uncertain evidence. Only this
 explicit uninstall path may stop idle independent engines, never ordinary close.

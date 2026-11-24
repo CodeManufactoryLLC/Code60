@@ -25,6 +25,10 @@ describe("browser capability catalog", () => {
       access: expect.stringContaining("code60 uninstall [--yes]"),
     });
     expect(capability?.limitations).toContain("No data-purge option");
+    expect(capability?.limitations).toContain("readable native procfs ownership evidence");
+    expect(capability?.limitations).toContain(
+      "unverifiable emulated process mappings refuse removal",
+    );
     expect(capability?.limitations).toContain("engine cache/evidence");
     expect(capability?.limitations).toContain("absolute recovery launcher");
     expect(capability?.confirmation).toContain("--yes never approves profiles");

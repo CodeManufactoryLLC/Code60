@@ -90,10 +90,10 @@ export async function packagePayload(root, { signal } = {}) {
     );
     const runtime = { node: nodeRange, libc: process.platform === "linux" ? "glibc" : null };
     let transmissionBundle;
-    if (process.platform === "darwin") {
+    {
       const bundles = await readdir(join(application, "dist/engines"));
       if (bundles.length !== 1 || !/^[a-f0-9]{64}$/.test(bundles[0]))
-        throw Error("macOS payload requires its verified Transmission bundle");
+        throw Error("Platform payload requires its verified Transmission bundle");
       transmissionBundle = bundles[0];
     }
     const metadata = {

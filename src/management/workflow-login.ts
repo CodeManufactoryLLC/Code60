@@ -1,11 +1,12 @@
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { TRANSMISSION_VERSION } from "../contracts/index.js";
+import { defaultWorkflowEngine } from "../contracts/index.js";
 import {
   absoluteInstallationPath,
   resolveTransmissionRuntime,
   runInstallationCommand,
+  workflowHostSupported,
 } from "../platform/index.js";
 
 interface LoginPorts {
@@ -31,7 +32,8 @@ interface LoginPorts {
 const execute = promisify(execFile);
 const defaultPorts = (): LoginPorts => ({
   interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
-  runtime: (env, signal) => resolveTransmissionRuntime(env, TRANSMISSION_VERSION, signal),
+  runtime: (env, signal) =>
+    resolveTransmissionRuntime(env, defaultWorkflowEngine(process.platform), signal),
   probe: async (node, env, signal) => {
     const { stdout } = await execute(
       node,
@@ -61,8 +63,8 @@ export async function workflowLogin(
   ports = defaultPorts(),
 ) {
   if (args.length !== 1 || args[0] !== "login") throw Error("Use code60 workflows login.");
-  if (`${process.platform}-${process.arch}` !== "darwin-arm64")
-    throw Error("Workflow login requires macOS Apple Silicon.");
+  if (!workflowHostSupported())
+    throw Error("Workflow login requires macOS Apple Silicon or Linux x64 with glibc.");
   if (!ports.interactive)
     throw Error(
       "Workflow login requires an interactive terminal. Run code60 workflows login after setup.",

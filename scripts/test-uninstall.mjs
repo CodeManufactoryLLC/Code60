@@ -77,6 +77,7 @@ await runCommand(async (cancel) => {
     const install = () =>
       api.installManagedRelease({
         env,
+        signal,
         runtimeDirectory: resolve("build/distribution"),
         artifact: {
           identity,

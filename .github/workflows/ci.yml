@@ -20,20 +20,7 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: "24", cache: npm, package-manager-cache: false }
       - run: npm ci
-      - name: Prepare private Node runtime for installation checks
-        run: |
-          node --input-type=module <<'NODE'
-          import { copyFile, chmod, mkdir } from 'node:fs/promises';
-          import { join } from 'node:path';
-          import { appendFileSync } from 'node:fs';
-          // Hosted tool-cache executables can be group writable. Exercise the
-          // installation's strict runtime checks with a private disposable copy.
-          const bin = join(process.env.RUNNER_TEMP, 'code60-private-node', 'bin');
-          await mkdir(bin, { recursive: true, mode: 0o700 });
-          await copyFile(process.execPath, join(bin, 'node'));
-          await chmod(join(bin, 'node'), 0o700);
-          appendFileSync(process.env.GITHUB_PATH, `${bin}\n`);
-          NODE
+      - uses: ./.github/actions/private-node
       - run: npm run check
       - uses: actions/upload-artifact@v7.0.2
         if: always()
@@ -76,6 +63,7 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: "24", cache: npm, package-manager-cache: false }
       - run: npm ci
+      - uses: ./.github/actions/private-node
       - run: npm run prepare:models
       - run: npm run package:app
       - run: npm run test:packaged
@@ -137,10 +125,11 @@ jobs:
       - run: npm run devcontainer -- exec npm ci
       - run: npm run devcontainer -- exec npm run prepare:models
       - run: npm run devcontainer -- exec npm run package:payload
-      - run: npm run devcontainer -- exec npm run test:payload
-      - run: npm run devcontainer -- exec npm run test:setup
       - run: npm run devcontainer -- exec npx --no-install playwright install chromium
+      - run: npm run devcontainer -- exec npm run test:payload -- --workflows
+      - run: npm run devcontainer -- exec npm run test:setup
       - run: npm run devcontainer -- exec npm run test:update
+      - run: npm run devcontainer -- exec npm run test:uninstall:engines -- release/payloads/linux-x64.json
       - run: npm run devcontainer -- exec npm run test:installation -- --require-fish
       - run: npm run test:packaged:clean -- --payload release/payloads/linux-x64.json
       - run: npm run test:packaged:clean -- --managed release/payloads/linux-x64.json
@@ -168,6 +157,7 @@ jobs:
             test-results/setup/
             test-results/update/
             test-results/uninstall/
+            test-results/uninstall-engines/
           retention-days: 7
           if-no-files-found: warn
   passed:

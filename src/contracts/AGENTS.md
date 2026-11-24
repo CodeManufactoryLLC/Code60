@@ -51,7 +51,7 @@ main-owned blocking reasons; keep sidebar/gallery/details state and actions alig
 
 ## Transmission prototype
 
-Transmission workflow/drafting contracts are strict and browser-safe. Preserve staging.18 and staging.20 engine ownership, task indices and cursors, bounded evidence and separate draft versus execution authority.
+Transmission workflow/drafting contracts are strict and browser-safe. Preserve staging.18/staging.20 macOS and 0.1.1 Linux engine ownership, task indices and cursors, bounded evidence and separate draft versus execution authority.
 
 
 ## MCP connector guided management (phase 3)

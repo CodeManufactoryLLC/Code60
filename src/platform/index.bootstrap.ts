@@ -34,6 +34,11 @@ export {
   reserveRemovedBackend,
   validateRemovalServiceProof,
 } from "./installation-removal-service.js";
-export { findMacRuntimeProcesses, macFileProcesses } from "./process-identity.js";
-export { preserveTransmissionBundle, resolveTransmissionRuntime } from "./transmission-bundle.js";
+export { findRuntimeProcesses, runtimeFileProcesses } from "./runtime-process.js";
+export {
+  installedEngineVersions,
+  preserveTransmissionBundle,
+  resolveTransmissionRuntime,
+  type TransmissionVersion,
+} from "./transmission-bundle.js";
 export { newerStableRelease } from "./update-registry.js";

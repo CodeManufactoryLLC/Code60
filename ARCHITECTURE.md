@@ -196,11 +196,16 @@ The private, payload-free `prepare-uninstall` operation composes all three idle
 reservations before stopping engines and quiescing the backend. Pending application
 or workflow actions refuse preparation promptly, including human dialogs. Native
 engine inspection uses the pinned SQLite schema read-only, never the restart-capable
-engine constructor. Both versions must have terminal, matching saved ownership;
+engine constructor. The two macOS versions and Linux 0.1.1 must have terminal, matching saved ownership;
 fixed authenticated health/stop operations and native process/file inspection prove
 exit. Inspection never starts an engine. Ordinary shutdown and application updates
 continue to preserve independent engines. This private operation grants no file
 removal authority; installed management separately verifies consent and installation ownership.
+Linux proves process identity and open-file absence through bounded kernel procfs
+reads, binding exact NUL-separated argv to the canonical Node inode, UID and boot/start
+identity. macOS retains fixed ps/lsof inspection. Unavailable native evidence,
+including an unverifiable emulator text mapping, refuses removal rather than
+adopting by argv alone. See [Linux procfs](https://www.kernel.org/doc/html/latest/filesystems/proc.html).
 Guarded service removal additionally checks the original runtime and prepared PID
 under a compatible, non-reclaiming service-operation lock. Completed private
 preparation is distinct from ordinary shutdown. Restarted backends, uncertain exit
@@ -645,13 +650,12 @@ imports are permitted.
 
 ### Approved Transmission workflows
 
-Apps → Workflows is a database-independent, macOS-only execution prototype using
-exactly `code60-transmission-server@0.1.0-staging.20` for new approvals and recorded Node >=24.22 <25.
+Apps → Workflows is a database-independent execution interface using
+`code60-transmission-server@0.1.0-staging.20` for new macOS approvals or `0.1.1` for new Linux x64 approvals and recorded Node >=24.22 <25.
 macOS payloads bundle that artifact and staging.18 with a separate committed
 production lockfile, verified prebuilt Codex runtime and dependency notices. The
 supported artifacts contain no engine-native helper sources; helpers from the
-newer, incompatible Transmission checkout are not substituted. Linux payloads
-omit these components. Build-time npm acquisition is separate from execution;
+newer, incompatible Transmission checkout are not substituted. Linux payloads include their own engine, lockfile and native x64 Codex runtime. Build-time npm acquisition is separate from execution;
 workflow start/reconnect never runs npm, npx or a compiler.
 
 Managed installation preserves the bundle under XDG_DATA_HOME/code60/engines,

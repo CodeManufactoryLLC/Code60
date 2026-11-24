@@ -168,6 +168,7 @@ async function retained(f: Awaited<ReturnType<typeof fixture>>) {
 function uninstallPorts(f: Awaited<ReturnType<typeof fixture>>) {
   return {
     ...createUninstallPorts(f.env),
+    verifyNative: vi.fn(async () => {}),
     interactive: false as boolean,
     write: vi.fn((_message: string) => {}),
     confirm: vi.fn(async (_message: string, _signal: AbortSignal) => false),
@@ -595,6 +596,22 @@ it("public uninstall declines without service, application or profile changes", 
   expect(await readRemovalState(f.plan.record)).toBe(null);
   expect(await readFile(join(f.proof.root, "registration.json"))).toEqual(before);
   expect(await readFile(join(f.release, "NOTICE"), "utf8")).toBe("owned notice\n");
+  await retained(f);
+});
+
+it("refuses unavailable native inspection before service, profile or removal effects", async () => {
+  const f = await fixture();
+  const ports = uninstallPorts(f);
+  ports.verifyNative.mockRejectedValue(Error("Native kernel inspection unavailable"));
+  const before = await readFile(join(f.proof.root, "registration.json"));
+  await expect(runUninstall(["--yes"], f.env, ports)).rejects.toThrow(
+    "Native kernel inspection unavailable",
+  );
+  expect(ports.status).not.toHaveBeenCalled();
+  expect(ports.remove).not.toHaveBeenCalled();
+  expect(ports.prepare).not.toHaveBeenCalled();
+  expect(await readRemovalState(f.plan.record)).toBe(null);
+  expect(await readFile(join(f.proof.root, "registration.json"))).toEqual(before);
   await retained(f);
 });
 

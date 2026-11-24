@@ -9,6 +9,7 @@ import {
   lockInstallation,
   type RemovalServiceProof,
   type reserveRemovedBackend,
+  verifyRuntimeInspection,
 } from "../platform/index.js";
 import {
   installationPaths,
@@ -44,10 +45,12 @@ export interface UninstallPorts {
   reserve?: typeof reserveRemovedBackend;
   runtimeDirectory?: string;
   signal?: AbortSignal;
+  verifyNative?(signal: AbortSignal): Promise<void>;
   checkpoint?(state: RemovalState): Promise<void>;
 }
 export function createUninstallPorts(env: NodeJS.ProcessEnv): UninstallPorts {
   return {
+    verifyNative: verifyRuntimeInspection,
     runtimeDirectory: fileURLToPath(new URL("../bootstrap/", import.meta.url)),
     interactive: !!process.stdin.isTTY && !!process.stdout.isTTY,
     confirm: async (message, signal) => {
@@ -158,6 +161,7 @@ export async function runUninstall(
           join(plan.current.receipt.release.path, "dist/management/cli.js")
       )
         throw Error("Run the current installed code60 command before uninstalling this activation");
+      await ports.verifyNative?.(signal);
       const status = resume ? null : await ports.status();
       if (!resume && !status)
         throw Error("Backend status is unavailable; preserve the installation");

@@ -35,7 +35,9 @@ it.each(["hasInstallScript", "resolved", "integrity", "version"])(
 );
 it("rejects unsupported and cross-target builds before creating files", async () => {
   await expect(
-    buildTransmission("/missing", "/must-not-write", { host: { platform: "linux", arch: "x64" } }),
+    buildTransmission("/missing", "/must-not-write", {
+      host: { platform: "freebsd", arch: "x64" },
+    }),
   ).rejects.toThrow("natively");
 });
 it("omits npm-rewritten metadata before recording the shared runtime inventory", async () => {
@@ -51,4 +53,17 @@ it("omits npm-rewritten metadata before recording the shared runtime inventory",
   } finally {
     await rm(root, { recursive: true });
   }
+});
+
+it("pins the Linux engine tarball and rejects changes to its integrity", async () => {
+  const { createHash } = await import("node:crypto");
+  const { linuxEngines } = await import("../src/platform/transmission-target.mjs");
+  const root = new URL("../distribution/transmission-linux/", import.meta.url);
+  const lock = JSON.parse(await readFile(new URL("package-lock.json", root), "utf8"));
+  verifyTransmissionLock(lock, linuxEngines);
+  const artifact = lock.packages["node_modules/code60-transmission-server"];
+  const bytes = await readFile(new URL(artifact.resolved.slice(5), root));
+  expect("sha512-" + createHash("sha512").update(bytes).digest("base64")).toBe(artifact.integrity);
+  artifact.integrity = "sha512-changed";
+  expect(() => verifyTransmissionLock(lock, linuxEngines)).toThrow("verified supported artifacts");
 });

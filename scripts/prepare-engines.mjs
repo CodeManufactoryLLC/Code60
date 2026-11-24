@@ -5,8 +5,8 @@ import { runCommand } from "./distribution/command.mjs";
 import { buildTransmission } from "./distribution/transmission.mjs";
 
 await runCommand(async (signal) => {
-  if (process.argv.length !== 2 || `${process.platform}-${process.arch}` !== "darwin-arm64")
-    throw Error("Use npm run prepare:engines on native macOS arm64 after building Code60");
+  if (process.argv.length !== 2)
+    throw Error("Use npm run prepare:engines on a supported native target after building Code60");
   const root = fileURLToPath(new URL("..", import.meta.url));
   const output = join(root, "dist/engines");
   await cleanBuild(output);

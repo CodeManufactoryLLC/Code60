@@ -13,6 +13,7 @@ const env = {
 };
 await assert.rejects(stat("/work/bootstrap-cache"), { code: "ENOENT" });
 const original = JSON.parse(await readFile("/work/control/public.json", "utf8"));
+const signal = AbortSignal.timeout(9 * 60_000);
 const { result, ...connection } = await uninstallJourney({
   root: "/installation/code60",
   application,
@@ -25,7 +26,7 @@ const { result, ...connection } = await uninstallJourney({
   promptLog: "/work/prompts",
   connection: publicConnection,
   output: "/evidence",
-  signal: AbortSignal.timeout(9 * 60_000),
+  signal,
   async install() {
     await cp("/harness/bootstrap", "/work/reinstall-cache", { recursive: true });
     try {
@@ -34,6 +35,7 @@ const { result, ...connection } = await uninstallJourney({
       );
       return await installPayload({
         env,
+        signal,
         acquisition: { transport: () => createReadStream("/input/package.tgz") },
       });
     } finally {

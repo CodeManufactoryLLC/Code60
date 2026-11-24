@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import {
+  chmod,
   link,
   lstat,
   mkdir,
@@ -179,6 +180,35 @@ it("refuses a replaced parent even when the same owned file was moved into it", 
   ).rejects.toThrow("ownership");
   expect(await readFile(join(f.root, "nested/binary"))).toEqual(Buffer.from([0, 255, 195, 40]));
 });
+it.each(["replacement", "symlink", "permissions"])(
+  "preserves a deep owned leaf after an ancestor %s at the deletion checkpoint",
+  async (change) => {
+    const f = await fixture();
+    const leaf = "nested/deep/more/leaf";
+    await mkdir(join(f.root, "nested/deep/more"), { recursive: true, mode: 0o700 });
+    await writeFile(join(f.root, leaf), "preserve owned leaf", { mode: 0o600 });
+    const inventory = await inventoryInstallationRemoval(f.root);
+    await expect(
+      removeInstallationInventory(f.root, inventory, {
+        checkpoint: async (path) => {
+          if (path !== leaf) return;
+          if (change === "permissions") await chmod(join(f.root, "nested"), 0o777);
+          else {
+            await rename(join(f.root, "nested"), join(f.home, "original-ancestor"));
+            if (change === "symlink")
+              await symlink(join(f.home, "original-ancestor"), join(f.root, "nested"));
+            else {
+              await mkdir(join(f.root, "nested"), { mode: 0o700 });
+              await rename(join(f.home, "original-ancestor/deep"), join(f.root, "nested/deep"));
+            }
+          }
+        },
+      }),
+    ).rejects.toThrow();
+    expect(await readFile(join(f.root, leaf), "utf8")).toBe("preserve owned leaf");
+    expect(await readFile(join(f.home, "database.sqlite"), "utf8")).toBe("customer bytes");
+  },
+);
 
 it.each([
   "same-target replacement",

@@ -14,9 +14,12 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
   descriptors without that field; never infer ownership of additional empty dirs.
 
 - Never use blanket `shell: true` or unverified PID kills.
-- Native Transmission process adoption is macOS Apple Silicon only, matching
-  engine availability. Verify the canonical Node text mapping, exact argv, UID and
-  stable start identity with fixed system inspection commands. Return hashes,
+- Native Transmission process adoption follows supported engine targets: macOS
+  Apple Silicon and Linux x64. Verify the canonical Node text mapping, exact argv, UID and
+  stable start identity. macOS uses fixed system inspection commands; Linux uses
+  bounded kernel procfs reads, exact NUL-separated argv, executable device/inode
+  and boot/start ticks. Permission or identity uncertainty refuses removal;
+  do not fall back to argv alone under emulation. Return hashes,
   never raw argv. Portable PID-existence/exit checks do not establish ownership;
   callers must first prove it through their service, gateway or owned-child boundary.
 - Reject unsupported hosts before process launch; macOS and Linux are the only supported operating systems.

@@ -402,7 +402,7 @@ it("refuses an outside registry replacement before worktree preparation or dispa
 it("keeps unversioned history, control, reconnect and uncertain recovery on staging.18", async () => {
   const f = await fixture();
   const record = await f.start();
-  expect(record.engineVersion).toBe("0.1.0-staging.20");
+  expect(record.engineVersion).toBe(process.platform === "linux" ? "0.1.1" : "0.1.0-staging.20");
   await f.service.close();
   services.splice(services.indexOf(f.service), 1);
   const path = join(f.service.root, "registry.json");
@@ -428,6 +428,12 @@ it("keeps unversioned history, control, reconnect and uncertain recovery on stag
   for (const action of ["pause", "resume"])
     await expect(reopened.request({ action, id: old.id })).rejects.toThrow("staging.20");
   await reopened.request({ action: "cancel", id: old.id });
+  legacy.supported = false;
+  expect(await reopened.request({ action: "read", id: old.id })).toMatchObject({
+    connected: false,
+    error: "Transmission 0.1.0-staging.18 is unavailable on this platform",
+    record: { id: old.id, key: old.key },
+  });
   expect(legacy.call.mock.calls.map(([op]) => op)).toEqual([
     "start_workflow",
     "get_workflow",

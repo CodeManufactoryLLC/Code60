@@ -123,6 +123,11 @@ Keep read-only golden mounts; inspect the separate maintenance customer's shared
 PID/loopback namespace and exact owned writable volumes. Real shell removal uses
 `npm run test:installation`; report missing native/fish coverage explicitly.
 Bounded supervisor fixtures are not native login/reboot certification.
+For supported Linux workflow engines also run `npm run test:uninstall:engines`
+against the Linux descriptor in the pinned container or native Linux runner. Keep
+actual idle-engine, late-restart, retained-history and process-exit evidence.
+An emulated kernel that cannot prove the recorded Node executable is BLOCKED
+for native adoption; do not weaken identity checks or count it as native evidence.
 Linux delivery also requires `npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json`:
 two complete journeys, with independent owner-labelled inventories and a real
 survivor readiness/assets probe after the first cleanup. Retain both run reports

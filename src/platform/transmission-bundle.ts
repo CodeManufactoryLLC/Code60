@@ -18,13 +18,18 @@ import {
 } from "./installation-files.js";
 
 export const transmissionVersions = ["0.1.0-staging.18", "0.1.0-staging.20"] as const;
-export type TransmissionVersion = (typeof transmissionVersions)[number];
-const integrities = {
-  "0.1.0-staging.18":
-    "sha512-U1SLG4FZv7yYW9eMzKEVSNx6tZ85YRbGyagEfcBzedfEQkn8Qaj1SS+duXST+8WH4jFaF8XZAbp+tTTiGbhDVg==",
-  "0.1.0-staging.20":
-    "sha512-23Y6om57UMB1pCAe+XcbH84JzFk0xo6CHJHiCfd06G5E1m1OAxY/JDI9UR43dfACAJfpWQHN+Wm67U4Lc+Xy9Q==",
-};
+export type TransmissionVersion = (typeof transmissionVersions)[number] | "0.1.1";
+
+import { workflowTarget } from "./transmission-target.mjs";
+export function workflowHostSupported() {
+  if (process.platform === "darwin") return process.arch === "arm64";
+  if (process.platform !== "linux" || process.arch !== "x64") return false;
+  const report = process.report.getReport() as { header: { glibcVersionRuntime?: string } };
+  return Boolean(report.header.glibcVersionRuntime);
+}
+export function installedEngineVersions(): TransmissionVersion[] {
+  return Object.keys(workflowTarget()) as TransmissionVersion[];
+}
 interface BundleFile {
   path: string;
   type: "0";
@@ -33,8 +38,8 @@ interface BundleFile {
 }
 interface TransmissionBundle {
   schema: 1;
-  os: "darwin";
-  arch: "arm64";
+  os: "darwin" | "linux";
+  arch: "arm64" | "x64";
   node: ">=24.22.0 <25";
   builtWithNode: string;
   lockfileSha256: string;
@@ -114,8 +119,10 @@ export async function inspectTransmissionBundle(root: string, signal?: AbortSign
   const value = JSON.parse(snapshot.text) as TransmissionBundle;
   if (
     value.schema !== 1 ||
-    value.os !== "darwin" ||
-    value.arch !== "arm64" ||
+    !(
+      (value.os === "darwin" && value.arch === "arm64") ||
+      (value.os === "linux" && value.arch === "x64")
+    ) ||
     value.node !== ">=24.22.0 <25" ||
     !digest(value.lockfileSha256) ||
     !Array.isArray(value.files) ||
@@ -144,11 +151,14 @@ export async function inspectTransmissionBundle(root: string, signal?: AbortSign
     total += file.size;
     if (total > 2 * 1024 ** 3) throw Error("Transmission bundle exceeds size limit");
   }
-  for (const version of transmissionVersions) {
-    const engine = value.engines?.[version];
+  const artifacts = workflowTarget(value.os, value.arch);
+  if (!value.engines || Object.keys(value.engines).length !== Object.keys(artifacts).length)
+    throw Error("Unexpected Transmission engine set");
+  for (const [version, artifact] of Object.entries(artifacts)) {
+    const engine = value.engines?.[version as TransmissionVersion];
     if (
-      engine?.integrity !== integrities[version] ||
-      engine.entry !== `node_modules/transmission-${version.slice(-2)}/dist/src/main.js` ||
+      engine?.integrity !== artifact.integrity ||
+      engine.entry !== `node_modules/${artifact.name}/dist/src/main.js` ||
       !files.has(engine.entry)
     )
       throw Error("Transmission engine differs from the supported pinned artifact");
@@ -188,7 +198,9 @@ export async function resolveTransmissionRuntime(
   const storage = await ownedStorage(env);
   const absent = () =>
     Object.assign(
-      Error("Bundled Transmission is unavailable; prepare the Code60 engine assets or run setup"),
+      Error(
+        `Bundled Transmission ${version} is unavailable; prepare the Code60 engine assets or run setup`,
+      ),
       { code: "CODE60_ENGINE_UNAVAILABLE" },
     );
   if (
@@ -222,6 +234,12 @@ export async function resolveTransmissionRuntime(
     throw Error("Invalid Transmission runtime binding; preserved existing state");
   const root = join(storage, receipt.bundle);
   const bundle = await inspectTransmissionBundle(root, signal);
+  if (
+    bundle.manifest.os !== process.platform ||
+    bundle.manifest.arch !== process.arch ||
+    !bundle.manifest.engines[version]
+  )
+    throw Error(`Transmission ${version} is unavailable on this platform`);
   if (bundle.hash !== receipt.manifestHash || bundle.manifest.lockfileSha256 !== receipt.bundle)
     throw Error("Transmission runtime binding changed; preserved existing state");
   if ((await verifyInstallationNode(receipt.node)) !== receipt.node)
@@ -243,14 +261,13 @@ export async function preserveTransmissionBundle(
   signal?: AbortSignal,
   options: { checkpoint?: (phase: "cached" | "bound") => Promise<void> } = {},
 ) {
-  if (`${process.platform}-${process.arch}` !== "darwin-arm64")
-    throw Error("Bundled Transmission execution requires macOS arm64");
-  if (process.getuid?.() === 0)
-    throw Error("Transmission installation must run as a non-root user");
+  const versions = installedEngineVersions();
   const [major, minor] = process.versions.node.split(".").map(Number);
   if (major !== 24 || (minor ?? 0) < 22)
     throw Error("Bundled Transmission requires Node >=24.22.0 <25");
   const checked = await inspectTransmissionBundle(source, signal);
+  if (checked.manifest.os !== process.platform || checked.manifest.arch !== process.arch)
+    throw Error("Transmission bundle target differs from this host");
   const storage = await ownedStorage(env);
   await createInstallationParents(storage, true);
   const release = await lockInstallation(storage);
@@ -262,7 +279,7 @@ export async function preserveTransmissionBundle(
     const node = await verifyInstallationNode();
     const destination = join(storage, checked.manifest.lockfileSha256);
     const bindings = [];
-    for (const version of transmissionVersions) {
+    for (const version of versions) {
       const path = join(storage, `${version}.json`);
       const receipt = await installationSnapshot(path, 4096, true);
       if (receipt) {
@@ -320,7 +337,7 @@ export async function preserveTransmissionBundle(
         // A receipt write can fail after its atomic rename. Inspect publication
         // before removing a new tree; any binding or uncertainty preserves it.
         const bindings = await Promise.all(
-          transmissionVersions.map((version) =>
+          versions.map((version) =>
             installationSnapshot(join(storage, `${version}.json`), 4096, true),
           ),
         );

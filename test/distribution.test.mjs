@@ -268,14 +268,14 @@ it("verifies and extracts a self-contained payload into owned staging in a path 
   expect(await readdir(result.owned)).toEqual(["application"]);
 });
 
-it("rejects unsupported engine components in a Linux payload", async () => {
+it("rejects undeclared engine components in a Linux payload", async () => {
   const f = await fixture();
   await mkdir(join(f.root, "dist/engines/unsupported"), { recursive: true });
   await writeFile(join(f.root, "dist/engines/unsupported/engine.js"), "unsupported engine");
   await f.pack();
   await expect(
     acquirePayload(f.expected, { parent: f.parent, host, transport: f.transport }),
-  ).rejects.toThrow("Linux payload must omit");
+  ).rejects.toThrow("undeclared Transmission bundle");
 });
 
 it("rejects a macOS payload missing its engine bundle declaration", async () => {

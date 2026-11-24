@@ -18,8 +18,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  defaultWorkflowEngine,
   LEGACY_TRANSMISSION_VERSION,
-  TRANSMISSION_VERSION,
   type WorkflowRecord,
 } from "../bridge/index.js";
 import {
@@ -27,6 +27,7 @@ import {
   prepareTransmissionRemoval,
 } from "./transmission-removal.js";
 
+const TRANSMISSION_VERSION = defaultWorkflowEngine("darwin");
 const roots: string[] = [];
 const servers: Server[] = [];
 afterEach(async () => {
@@ -158,7 +159,7 @@ async function fixture(
       entry: join(home, `engine-${version}.js`),
     })),
     processes: vi.fn(async (command: readonly string[]) => {
-      // Both pinned main.js entrypoints use the literal engine subcommand.
+      // Every pinned main.js entrypoint uses the literal engine subcommand.
       expect(command[2]).toBe("engine");
       const engine = [...engines.entries()].find(
         ([version]) => command[1] === join(home, `engine-${version}.js`),
@@ -235,6 +236,38 @@ it("does not stop the first engine if the second has active or foreign history",
   expect([...f.engines.values()].every((item) => item.alive && !item.calls.includes("/stop"))).toBe(
     true,
   );
+});
+it("inspects Linux 0.1.1 terminal ownership and preserves its evidence through authenticated stop", async () => {
+  const version = defaultWorkflowEngine("linux");
+  const f = await fixture([version]);
+  const engine = f.engines.get(version);
+  if (!engine) throw Error("Linux fixture engine missing");
+  const before = await readFile(join(engine.root, "workflows.sqlite"));
+  const prepared = await prepareTransmissionRemoval(
+    f.root,
+    { HOME: f.home },
+    f.records,
+    f.signal,
+    f.ports,
+  );
+  expect(prepared.map((item) => item.version)).toEqual(["0.1.1"]);
+  expect(engine.calls).not.toContain("/stop");
+  await prepared[0]?.stop(f.signal);
+  expect(engine.alive).toBe(false);
+  expect(await readFile(join(engine.root, "workflows.sqlite"))).toEqual(before);
+});
+it("refuses active Linux history before stopping any owner", async () => {
+  const f = await fixture([defaultWorkflowEngine("linux")]);
+  const engine = f.first;
+  if (!engine) throw Error("Linux fixture engine missing");
+  const db = new DatabaseSync(join(engine.root, "workflows.sqlite"));
+  db.prepare("UPDATE runs SET body=json_set(body,'$.status','running')").run();
+  db.close();
+  await expect(
+    prepareTransmissionRemoval(f.root, { HOME: f.home }, f.records, f.signal, f.ports),
+  ).rejects.toThrow("ownership or history is uncertain");
+  expect(engine.alive).toBe(true);
+  expect(engine.calls).not.toContain("/stop");
 });
 it.each(["unrelated", "empty", "corrupt", "newer", "symlink", "hardlink"])(
   "refuses unsafe native history without initializing or replacing it: %s",

@@ -55,6 +55,11 @@ separately inspected maintenance customer owns the writable removal operation.
 the isolated supervisor fixture. `npm run test:installation` additionally exercises
 real shell startup before and after separately consented profile removal.
 These tests do not establish native login/reboot lifecycle behavior.
+The installed engine-removal smoke also runs on native Linux x64 in the required
+payload job. It checks the bundled 0.1.1 engine, a late restart refusal, retained
+bindings/history and original process exit. Linux uses kernel procfs for executable,
+argv, UID, start identity and file-holder checks. Restricted permissions or an
+unverifiable emulator mapping remain an explicit refusal, never an argv-only fallback.
 Installed CLI commands share the caller's finite journey deadline: twenty minutes
 for native acceptance and nine minutes for Linux maintenance. Full receipt scans
 retain every ownership check; there is no shorter nested command deadline.

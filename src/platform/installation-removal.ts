@@ -305,6 +305,25 @@ export async function verifyInstallationRemovalRemainder(
   }
 }
 
+/** Parent identities need directory metadata only, never a file read through a changed parent. */
+async function removalParent(
+  root: string,
+  path: string,
+  signal?: AbortSignal,
+): Promise<InstallationRemovalEntry> {
+  signal?.throwIfAborted();
+  const info = await lstat(join(root, path), { bigint: true });
+  if (!info.isDirectory() || info.uid !== BigInt(process.getuid?.() ?? -1) || info.mode & 0o7022n)
+    throw fail();
+  return {
+    path,
+    type: "directory",
+    dev: String(info.dev),
+    ino: String(info.ino),
+    mode: Number(info.mode & 0o777n),
+  };
+}
+
 /** Resume only the recorded removal; missing entries are previous progress, never permission to claim new files. */
 export async function removeInstallationInventory(
   root: string,
@@ -328,11 +347,17 @@ export async function removeInstallationInventory(
   for (const entry of [...actual.entries].reverse()) {
     options.signal?.throwIfAborted();
     await options.checkpoint?.(entry.path);
+    // Validate the physical chain before metadata reads, then check every owned
+    // ancestor deepest-first. inspect() repeats the complete physical-chain walk
+    // immediately before the same-handle leaf check. Recursively walking the
+    // whole chain again for each ancestor made deletion quadratic in path depth.
+    if (entry.path) await installationDirectory(dirname(join(root, entry.path)));
     let parent = entry.path ? dirname(entry.path) : "";
     while (entry.path) {
       const relative = parent === "." ? "" : parent;
       const recorded = expected.get(relative);
-      if (!recorded || !same(recorded, await inspect(root, relative, options.signal))) throw fail();
+      if (!recorded || !same(recorded, await removalParent(root, relative, options.signal)))
+        throw fail();
       if (!relative) break;
       parent = dirname(relative);
     }

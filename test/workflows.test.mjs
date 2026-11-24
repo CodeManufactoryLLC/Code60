@@ -77,6 +77,20 @@ describe("browser and package validation", () => {
     ).toBe(true);
     for (const command of ["npm run test:uninstall", "npm run test:uninstall:engines"])
       expect(nativeTests.jobs.uninstall.steps.some((step) => step.run === command)).toBe(true);
+    for (const workflow of [ci, release]) {
+      expect(
+        workflow.jobs.payload.steps.some(
+          (step) =>
+            step.run ===
+            "npm run devcontainer -- exec npm run test:uninstall:engines -- release/payloads/linux-x64.json",
+        ),
+      ).toBe(true);
+      expect(
+        workflow.jobs.payload.steps.some((step) =>
+          step.with?.path?.includes("test-results/uninstall-engines/"),
+        ),
+      ).toBe(true);
+    }
     expect(nativeTests.jobs.uninstall.needs).toBe("test");
     expect(nativeTests.jobs.test["timeout-minutes"]).toBe(45);
     expect(nativeTests.jobs.uninstall["timeout-minutes"]).toBe(35);

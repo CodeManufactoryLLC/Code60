@@ -78,14 +78,18 @@ export {
 } from "./private-state.js";
 export { type OwnedProcess, spawnOwnedProcess } from "./process.js";
 export {
-  findMacRuntimeProcesses,
-  inspectMacRuntimeProcess,
-  macFileProcesses,
-  macRuntimeProcessFamily,
   type RuntimeProcessIdentity,
   runtimeProcessExists,
   waitForRuntimeExit,
 } from "./process-identity.js";
+export {
+  findRuntimeProcesses,
+  inspectRuntimeProcess,
+  runtimeFileProcesses,
+  runtimeInspectionSupported,
+  runtimeProcessFamily,
+  verifyRuntimeInspection,
+} from "./runtime-process.js";
 export {
   appendPrivateFile,
   atomicReplace,
@@ -99,8 +103,11 @@ export {
 } from "./storage.js";
 export { assertSupportedPlatform } from "./support.js";
 export {
+  installedEngineVersions,
   preserveTransmissionBundle,
   resolveTransmissionRuntime,
+  type TransmissionVersion,
+  workflowHostSupported,
 } from "./transmission-bundle.js";
 export {
   newerStableRelease,

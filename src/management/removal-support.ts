@@ -6,19 +6,20 @@ import { fileURLToPath } from "node:url";
 import {
   createInstallationParents,
   executableInstallationFile,
-  findMacRuntimeProcesses,
+  findRuntimeProcesses,
   installationDirectory,
   installationFileCode,
   installationSnapshot,
   installationTreeIdentity,
+  installedEngineVersions,
   inventoryInstallationRemoval,
   lockInstallation,
-  macFileProcesses,
   type RemovalServiceProof,
   removeInstallationInventory,
   removeRecordedInstallationLink,
   reserveRemovedBackend,
   resolveTransmissionRuntime,
+  runtimeFileProcesses,
   snapshotRemovalLink,
   syncInstallationDirectory,
   verifyInstallationNode,
@@ -56,8 +57,7 @@ async function captureEngines(
   signal?: AbortSignal,
 ) {
   const engines: RemovalReceipt["engines"] = [];
-  if (process.platform !== "darwin") return engines;
-  for (const version of ["0.1.0-staging.18", "0.1.0-staging.20"] as const) {
+  for (const version of installedEngineVersions()) {
     try {
       const { node, entry, root } = await resolveTransmissionRuntime(
         engineEnvironment(record),
@@ -97,7 +97,7 @@ async function verifyEngines(receipt: RemovalReceipt, signal?: AbortSignal) {
       runtime.root !== engine.root ||
       runtime.node !== engine.node ||
       runtime.entry !== engine.entry ||
-      (await findMacRuntimeProcesses([engine.node, engine.entry, "engine"], signal)).length
+      (await findRuntimeProcesses([engine.node, engine.entry, "engine"], signal)).length
     )
       throw Error("Engine ownership or absence changed; preserve installation files");
     const root = join(workflowRoot, `transmission-${engine.version}`);
@@ -117,7 +117,7 @@ async function verifyEngines(receipt: RemovalReceipt, signal?: AbortSignal) {
         else if (name === "owner.sqlite" || name === "workflows.sqlite")
           throw Error("Engine evidence disappeared; preserve installation files");
       }
-      if ((await macFileProcesses(files, signal)).length)
+      if ((await runtimeFileProcesses(files, signal)).length)
         throw Error("Engine evidence is still open; preserve installation files");
     }
   }

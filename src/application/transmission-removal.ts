@@ -2,19 +2,20 @@ import { lstat, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
+  defaultWorkflowEngine,
   LEGACY_TRANSMISSION_VERSION,
-  TRANSMISSION_VERSION,
   type WorkflowRecord,
 } from "../bridge/index.js";
 import {
   fileCode,
-  findMacRuntimeProcesses,
+  findRuntimeProcesses,
   installationDirectory,
   installationSnapshot,
-  macFileProcesses,
-  macRuntimeProcessFamily,
   type RuntimeProcessIdentity,
   resolveTransmissionRuntime,
+  runtimeFileProcesses,
+  runtimeInspectionSupported,
+  runtimeProcessFamily,
   verifyPrivatePath,
   waitForRuntimeExit,
 } from "../platform/index.js";
@@ -84,11 +85,11 @@ async function nativeRequest(endpoint: Endpoint, action: "health" | "stop", sign
   }
 }
 export const createTransmissionRemovalPorts = (): TransmissionRemovalPorts => ({
-  supported: process.platform === "darwin" && process.arch === "arm64",
+  supported: runtimeInspectionSupported(),
   runtime: resolveTransmissionRuntime,
-  processes: findMacRuntimeProcesses,
-  family: macRuntimeProcessFamily,
-  holders: macFileProcesses,
+  processes: findRuntimeProcesses,
+  family: runtimeProcessFamily,
+  holders: runtimeFileProcesses,
   exited: waitForRuntimeExit,
   request: nativeRequest,
 });
@@ -232,12 +233,17 @@ export async function prepareTransmissionRemoval(
     await installationDirectory(root, false, true);
     const known = new Set([
       `transmission-${LEGACY_TRANSMISSION_VERSION}`,
-      `transmission-${TRANSMISSION_VERSION}`,
+      `transmission-${defaultWorkflowEngine("darwin")}`,
+      `transmission-${defaultWorkflowEngine("linux")}`,
     ]);
     if ((await readdir(root)).some((name) => name.startsWith("transmission-") && !known.has(name)))
       throw refused();
   }
-  for (const version of [LEGACY_TRANSMISSION_VERSION, TRANSMISSION_VERSION] as const) {
+  for (const version of [
+    LEGACY_TRANSMISSION_VERSION,
+    defaultWorkflowEngine("darwin"),
+    defaultWorkflowEngine("linux"),
+  ] as const) {
     const state = join(root, `transmission-${version}`);
     const relevant = records.filter(
       (record) => (record.engineVersion ?? LEGACY_TRANSMISSION_VERSION) === version,
@@ -252,7 +258,7 @@ export async function prepareTransmissionRemoval(
     }
     if (!ports.supported)
       throw Error(
-        "Native engine state cannot be verified on this platform; preserve it and use its supported macOS environment before uninstalling",
+        "Native engine state cannot be verified on this platform; preserve it and use its supported platform before uninstalling",
       );
     try {
       await installationDirectory(state, false, true);

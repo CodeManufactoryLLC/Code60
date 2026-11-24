@@ -26,32 +26,37 @@ export async function stripTransmissionPackageIgnores(directory) {
     else if (entry.isFile() && [".npmignore", ".gitignore"].includes(entry.name)) await rm(path);
   }
 }
-export const transmissionArtifacts = {
-  "0.1.0-staging.18": {
-    name: "transmission-18",
-    integrity:
-      "sha512-U1SLG4FZv7yYW9eMzKEVSNx6tZ85YRbGyagEfcBzedfEQkn8Qaj1SS+duXST+8WH4jFaF8XZAbp+tTTiGbhDVg==",
-  },
-  "0.1.0-staging.20": {
-    name: "transmission-20",
-    integrity:
-      "sha512-23Y6om57UMB1pCAe+XcbH84JzFk0xo6CHJHiCfd06G5E1m1OAxY/JDI9UR43dfACAJfpWQHN+Wm67U4Lc+Xy9Q==",
-  },
-};
-export function verifyTransmissionLock(lock) {
-  for (const [version, artifact] of Object.entries(transmissionArtifacts)) {
+export { macEngines as transmissionArtifacts } from "../../src/platform/transmission-target.mjs";
+
+import { platform } from "../../src/platform/payload-descriptor.mjs";
+import {
+  linuxEngines,
+  macEngines,
+  workflowTarget,
+} from "../../src/platform/transmission-target.mjs";
+
+export function verifyTransmissionLock(lock, artifacts = macEngines) {
+  for (const [version, artifact] of Object.entries(artifacts)) {
     const value = lock.packages?.[`node_modules/${artifact.name}`];
     if (
       value?.version !== version ||
-      value.name !== "code60-transmission-server" ||
+      (value.name ?? artifact.name) !== "code60-transmission-server" ||
       value.integrity !== artifact.integrity ||
       value.resolved !==
-        `https://registry.npmjs.org/code60-transmission-server/-/code60-transmission-server-${version}.tgz`
+        (artifacts === linuxEngines
+          ? `file:code60-transmission-server-${version}.tgz`
+          : `https://registry.npmjs.org/code60-transmission-server/-/code60-transmission-server-${version}.tgz`)
     )
       throw Error("Transmission lock differs from the verified supported artifacts");
   }
   for (const [path, value] of Object.entries(lock.packages)) {
     if (!path) continue;
+    if (
+      artifacts === linuxEngines &&
+      path === "node_modules/code60-transmission-server" &&
+      !value.hasInstallScript
+    )
+      continue;
     if (
       value.hasInstallScript ||
       !value.integrity?.startsWith("sha512-") ||
@@ -65,13 +70,17 @@ export function verifyTransmissionLock(lock) {
 
 // Build-time only. Never called by setup, the gateway, or workflow execution.
 export async function buildTransmission(root, destination, { signal, host = process } = {}) {
-  if (`${host.platform}-${host.arch}` !== "darwin-arm64")
-    throw Error("Transmission bundles must be built natively on macOS arm64");
-  const [major, minor] = host.versions.node.split(".").map(Number);
-  if (major !== 24 || minor < 22) throw Error("Transmission bundles require Node >=24.22.0 <25");
-  const source = join(root, "distribution/transmission");
+  if (host.platform !== process.platform || host.arch !== process.arch)
+    throw Error("Transmission bundles must be built natively for the target");
+  platform(host);
+  const artifacts = workflowTarget(host.platform, host.arch);
+  const linux = host.platform === "linux";
+  const source = join(
+    root,
+    linux ? "distribution/transmission-linux" : "distribution/transmission",
+  );
   const lock = JSON.parse(await readFile(join(source, "package-lock.json"), "utf8"));
-  verifyTransmissionLock(lock);
+  verifyTransmissionLock(lock, artifacts);
   const temporary = await mkdtemp(join(tmpdir(), "code60-engine-build-"));
   const bundle = join(temporary, "bundle");
   try {
@@ -90,6 +99,10 @@ export async function buildTransmission(root, destination, { signal, host = proc
     };
     for (const name of ["package.json", "package-lock.json"])
       await cp(join(source, name), join(bundle, name));
+    if (linux) {
+      const archive = "code60-transmission-server-0.1.1.tgz";
+      await cp(join(source, archive), join(bundle, archive));
+    }
     await execute("npm", ["ci", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"], {
       cwd: bundle,
       env,
@@ -97,6 +110,7 @@ export async function buildTransmission(root, destination, { signal, host = proc
       timeout: 180_000,
       maxBuffer: 8 * 1024 ** 2,
     });
+    if (linux) await rm(join(bundle, "code60-transmission-server-0.1.1.tgz"));
     // .bin aliases are unnecessary: every process is launched by an exact entrypoint.
     await rm(join(bundle, "node_modules/.bin"), { recursive: true, force: true });
     await stripTransmissionPackageIgnores(join(bundle, "node_modules"));
@@ -109,14 +123,15 @@ export async function buildTransmission(root, destination, { signal, host = proc
       maxBuffer: 8 * 1024 ** 2,
     });
     await writeFile(join(bundle, "dependencies.json"), stdout);
-    const native = "node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex";
+    const native = linux
+      ? "node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex"
+      : "node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex";
     const binary = await readFile(join(bundle, native));
-    if (
-      binary.readUInt32LE(0) !== 0xfeedfacf ||
-      binary.readUInt32LE(4) !== 0x0100000c ||
-      !((await stat(join(bundle, native))).mode & 0o111)
-    )
-      throw Error("Transmission native Codex runtime is not executable macOS arm64");
+    const correctArchitecture = linux
+      ? binary.subarray(0, 6).toString("hex") === "7f454c460201" && binary.readUInt16LE(18) === 62
+      : binary.readUInt32LE(0) === 0xfeedfacf && binary.readUInt32LE(4) === 0x0100000c;
+    if (!correctArchitecture || !((await stat(join(bundle, native))).mode & 0o111))
+      throw Error("Incorrect native Codex executable for Transmission build target");
     const probe = await execute(
       process.execPath,
       [join(bundle, "node_modules/@openai/codex/bin/codex.js"), "--version"],
@@ -133,13 +148,13 @@ export async function buildTransmission(root, destination, { signal, host = proc
       throw Error("Transmission bundle exceeds supported regular-file limits");
     const metadata = {
       schema: 1,
-      os: "darwin",
-      arch: "arm64",
+      os: host.platform,
+      arch: host.arch,
       node: ">=24.22.0 <25",
       builtWithNode: process.version,
       lockfileSha256: await sha256(join(bundle, "package-lock.json")),
       engines: Object.fromEntries(
-        Object.entries(transmissionArtifacts).map(([version, artifact]) => [
+        Object.entries(artifacts).map(([version, artifact]) => [
           version,
           {
             integrity: artifact.integrity,

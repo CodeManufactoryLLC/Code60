@@ -99,20 +99,18 @@ try {
     XDG_CONFIG_HOME: join(isolated, "config"),
     XDG_DATA_HOME: join(isolated, "data"),
   };
-  if (process.platform === "darwin" && process.arch === "arm64") {
+  {
     const bundles = await readdir(join(root, "dist/engines"));
     assert.equal(bundles.length, 1);
     assert.match(bundles[0], /^[a-f0-9]{64}$/);
     const engine = await import(pathToFileURL(join(root, "dist/platform/index.js")).href);
     await engine.preserveTransmissionBundle(join(root, "dist/engines", bundles[0]), env);
-    for (const version of ["0.1.0-staging.18", "0.1.0-staging.20"]) {
+    for (const version of engine.installedEngineVersions()) {
       const cached = await engine.resolveTransmissionRuntime(env, version);
       assert.ok(cached.root.startsWith(`${env.XDG_DATA_HOME}/code60/engines/`));
       assert.ok((await stat(cached.entry)).isFile());
     }
     assert.equal(await stat(join(isolated, "state/code60/workflows")).catch(() => null), null);
-  } else {
-    assert.equal(await stat(join(root, "dist/engines")).catch(() => null), null);
   }
   const policy = (...args) =>
     JSON.parse(

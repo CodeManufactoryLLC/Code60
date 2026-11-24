@@ -15,6 +15,7 @@ import {
   parseKnowledge,
   parseValue,
 } from "../bridge/index.js";
+import { workflowHostSupported } from "../platform/index.js";
 
 export type KnowledgeCaller =
   | { kind: "relay"; conversationId: string; generation: number }
@@ -316,10 +317,9 @@ export class DesktopKnowledge {
       action = "Set up Git from Chat, then continue explicitly.";
     } else if (cap.id === "workflows") {
       status = "available";
-      reason =
-        process.platform === "darwin" && process.arch === "arm64"
-          ? "New staging.20 workflows support pause and resume; staging.18 history stays on its original engine. Workflow engine launch uses bundled pinned engines with recorded Node >=24.22 <25 and separate Codex login/configuration (code60 workflows login), without runtime npm downloads or compilation; prompt drafting requires a verified primary provider."
-          : "Workflow history is readable; Transmission execution requires macOS Apple Silicon. Prompt drafting requires a verified primary provider.";
+      reason = workflowHostSupported()
+        ? "New workflows support pause and resume; staging.18 history stays on its original engine. Workflow engine launch uses bundled pinned engines with recorded Node >=24.22 <25 and separate Codex login/configuration (code60 workflows login), without runtime npm downloads or compilation; prompt drafting requires a verified primary provider."
+        : "Workflow history is readable; Transmission execution requires macOS Apple Silicon or Linux x64 with glibc. Prompt drafting requires a verified primary provider.";
       action = "Open Apps → Workflows.";
     } else if (cap.id === "system-manager") {
       reason =
@@ -332,7 +332,7 @@ export class DesktopKnowledge {
     } else if (cap.id === "uninstall") {
       status = "unknown";
       reason =
-        "Awareness cannot verify managed installation, service or workflow ownership. The local terminal command checks idle ownership, asks for removal consent and preserves user data; it separately asks before profile edits.";
+        "Awareness cannot verify managed installation, service or workflow ownership. The local terminal command checks idle ownership and native process/file evidence (Linux procfs or macOS inspection), asks for removal consent and preserves user data; it separately asks before profile edits.";
       action =
         "Run code60 uninstall in the local terminal; use its printed absolute recovery command after interruption.";
     } else if (cap.prerequisite === "runtime") {

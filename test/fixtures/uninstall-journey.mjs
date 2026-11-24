@@ -140,7 +140,7 @@ export async function uninstallJourney({
     ),
     prompts: (await readdir(promptLog)).sort(),
     engines: await Promise.all(
-      ["0.1.0-staging.18", "0.1.0-staging.20"].map(async (version) => ({
+      ["0.1.0-staging.18", "0.1.0-staging.20", "0.1.1"].map(async (version) => ({
         version,
         hash: await readFile(join(root, "engines", `${version}.json`))
           .then(digest)

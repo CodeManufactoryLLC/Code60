@@ -9,7 +9,9 @@ import {
   installationLink,
   installationSnapshot,
   installationTreeIdentity,
+  installedEngineVersions,
   type RemovalServiceProof,
+  type TransmissionVersion,
   validateInstallationRemovalInventory,
   validateRemovalServiceProof,
   writeInstallationFile,
@@ -25,7 +27,7 @@ export interface RemovalReceipt {
   node: string;
   service: RemovalServiceProof;
   engines: {
-    version: "0.1.0-staging.18" | "0.1.0-staging.20";
+    version: TransmissionVersion;
     node: string;
     entry: string;
     root: string;
@@ -144,7 +146,7 @@ export function validateRemovalReceipt(record: InstallationRecord, value: Remova
   for (const engine of value.engines) {
     if (
       !engine ||
-      !["0.1.0-staging.18", "0.1.0-staging.20"].includes(engine.version) ||
+      !installedEngineVersions().includes(engine.version) ||
       typeof engine.node !== "string" ||
       absoluteInstallationPath(engine.node) !== engine.node ||
       typeof engine.root !== "string" ||
@@ -154,13 +156,16 @@ export function validateRemovalReceipt(record: InstallationRecord, value: Remova
         join(
           engine.root,
           "node_modules",
-          engine.version.endsWith(".18") ? "transmission-18" : "transmission-20",
+          engine.version === "0.1.1"
+            ? "code60-transmission-server"
+            : engine.version.endsWith(".18")
+              ? "transmission-18"
+              : "transmission-20",
           "dist/src/main.js",
         )
     )
       throw refused();
   }
-  if (process.platform !== "darwin" && value.engines.length) throw refused();
 }
 
 export async function readRemovalState(record: InstallationRecord): Promise<RemovalState | null> {
