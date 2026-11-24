@@ -64,12 +64,6 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
         .map((line) => JSON.parse(line));
     expect((await events()).map((event) => event.event)).toEqual(["spawn", "list"]);
     await expect.poll(async () => alive((await events())[0].pid)).toBe(false);
-    const configuration = await open(userFile, "r");
-    try {
-      expect((await configuration.stat()).mode & 0o777).toBe(0o600);
-    } finally {
-      await configuration.close();
-    }
     await mkdir(join(fixture.directory, "project"));
     await openProject(page, fixture.directory, "project");
     await apps(page);
@@ -140,7 +134,13 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     decision = page.getByRole("dialog", { name: "Disconnect server", exact: true });
     await decision.getByRole("button", { name: "Confirm disconnect server", exact: true }).click();
     await expect(decision).toHaveCount(0);
-    expect(JSON.parse(await readFile(userFile, "utf8")).servers.fixture.enabled).toBe(true);
+    const configuration = await open(userFile, "r");
+    try {
+      expect(JSON.parse(await configuration.readFile("utf8")).servers.fixture.enabled).toBe(true);
+      expect((await configuration.stat()).mode & 0o777).toBe(0o600);
+    } finally {
+      await configuration.close();
+    }
     await page.getByRole("button", { name: "Disable server", exact: true }).click();
     await expect(page.getByRole("button", { name: "Enable server", exact: true })).toBeVisible();
     const projectValue = await page
