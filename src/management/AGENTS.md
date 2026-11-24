@@ -38,3 +38,5 @@ prior activation and record durable progress at activation boundaries. Setup
 remains limited to the matching release. Never execute acquired bootstrap code,
 implicitly replace healthy engine bindings, downgrade a database or resume
 uncertain execution during recovery. Browser update views have read authority only.
+Reject an old current pointer that contradicts recorded publication before
+consent or service effects; preserve both the pointer and journal for inspection.

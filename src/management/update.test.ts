@@ -1,4 +1,13 @@
-import { mkdir, mkdtemp, readFile, readlink, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readlink,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
@@ -268,6 +277,38 @@ it("recovers the published current generation explicitly without acquisition or 
   expect(f.ports.bootstrap).not.toHaveBeenCalled();
   expect(f.output.join("")).toContain("1.1.0 recovered");
 });
+it.each(["activated", "repairing"])(
+  "refuses an externally restored old pointer after recorded publication (%s)",
+  async (phase) => {
+    const f = await fixture();
+    const repair = f.ports.repair;
+    if (phase === "activated")
+      f.ports.checkpoint = async (record) => {
+        if (record.phase === "activated") throw Error("interrupted after publication");
+      };
+    else
+      f.ports.repair = async () => {
+        throw Error("registration failed");
+      };
+    await expect(runUpdate(["--yes"], f.env, f.ports)).rejects.toThrow();
+    expect((await f.journal()).phase).toBe(phase);
+    expect(await readlink(join(f.root, "current"))).not.toBe(f.previous);
+    const progress = await readFile(join(f.root, "update.json"), "utf8");
+    // Simulate an outside pointer change after the newer release may have
+    // opened user data. Recovery must preserve the contradiction for inspection.
+    await rm(join(f.root, "current"));
+    await symlink(f.previous, join(f.root, "current"));
+    delete f.ports.checkpoint;
+    f.ports.repair = repair;
+    f.calls.length = 0;
+    await expect(runUpdate(["recover", "--yes"], f.env, f.ports)).rejects.toThrow(
+      "contradicts recorded publication",
+    );
+    expect(f.calls).toEqual([]);
+    expect(await readFile(join(f.root, "update.json"), "utf8")).toBe(progress);
+    expect(await readlink(join(f.root, "current"))).toBe(f.previous);
+  },
+);
 it("recovers the original generation after failed shutdown without activating the removed candidate", async () => {
   const f = await fixture();
   const service = f.ports.service;

@@ -50,6 +50,9 @@ release and never changes the current generation to an older version. Before
 publication, recovery keeps the original generation; after publication, it keeps
 the new one. Prior releases and their immutable receipts remain available for
 inspection. Automatic rollback is unsafe once a newer backend has opened data.
+If an outside change restores the old pointer after recorded publication,
+recovery refuses service changes and preserves the conflicting evidence for
+inspection; it cannot repair the old release as though publication never happened.
 
 Unfinished progress prevents a second update. Installation and setup locks are
 exclusive and never reclaimed automatically. Preserve an uncertain lock, receipt,

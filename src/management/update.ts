@@ -275,6 +275,10 @@ export async function runUpdate(
         throw Error(
           "Current activation does not belong to this update; preserve state for manual inspection",
         );
+      if (isPrevious && ["activated", "repairing", "ready"].includes(saved.phase))
+        throw Error(
+          "Current activation contradicts recorded publication; preserve the pointer and update record for manual inspection",
+        );
       if (
         !(await consent(
           ports,
