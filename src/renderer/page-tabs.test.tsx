@@ -111,7 +111,8 @@ describe("database connection navigation", () => {
     expect(search).not.toContain("icon-button");
     expect(search).not.toContain("disabled");
     expect(html.match(/id="tab-search"/g)).toHaveLength(1);
-    expect(html.indexOf('id="tab-search"')).toBeGreaterThan(html.indexOf('class="page-tabs"'));
+    expect(html).toContain('id="nav-group-Work"');
+    expect(html.indexOf('id="tab-search"')).toBeGreaterThan(html.indexOf('id="nav-group-Work"'));
     expect(html.indexOf('id="tab-home"')).toBeLessThan(html.indexOf('id="tab-search"'));
     expect(html.indexOf('id="tab-search"')).toBeLessThan(html.indexOf('id="tab-chat"'));
     expect(html).not.toContain("sidebar-toolbar");

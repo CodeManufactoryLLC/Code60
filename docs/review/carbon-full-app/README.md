@@ -13,6 +13,12 @@ The comparison uses the approved Scheduled Jobs build at `656b0ae` and the full-
 | Configure and recover | [Prompt Builder](before-prompts.png) · [Command Builder](before-commands.png) · [Service health](before-system.png) | [Prompt Builder](after-prompts.png) · [Command Builder](after-commands.png) · [Service health](after-system.png) |
 | Readability | [Appearance](before-appearance.png) | [Appearance](after-appearance.png) · [Forced colors](jobs-forced-colors.png) · [200% CSS zoom](jobs-zoom.png) |
 
+## Sidebar review
+
+The Carbon homepage uses UI Shell submenu buttons for its section navigation. The four Code60 sections use that same React component. The current route opens its section, and each section can be toggled without leaving the page. At the default text size, the section uses 16px semibold Plex and destinations use 14px regular Plex. A collapsed section containing the current page retains Carbon’s active indicator. [Carbon homepage](https://carbondesignsystem.com/) · [UI Shell left panel](https://carbondesignsystem.com/building-blocks/core/components/ui-shell-left-panel/accessibility/)
+
+[Previous sidebar](navigation-before.png) · [Updated sidebar](navigation.png) · [Dark theme](navigation-dark.png) · [Mobile drawer](navigation-narrow.png)
+
 ## Visual findings
 
 The project title, selected conversation, plan and composer share one frame. At narrow widths the operator can open the plan or file detail at full width. On larger screens the resizing handle stays on the panel boundary. The schedule list exposes next run, enablement and running state simultaneously, and the selected execution owns its evidence actions.

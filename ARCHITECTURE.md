@@ -196,7 +196,7 @@ migration as the finished application.
 ## Product shell and resume
 
 The product header owns browser history, connection status, commands and workspace
-controls. A responsive navigation panel groups Work, Automation, Inspect and Manage.
+controls. The responsive panel uses Carbon UI Shell submenus for Work, Automation, Inspect and Manage. Opening a destination reveals its group. Toggling a group preserves the current view and its nested disclosures.
 The application grid retains inactive destinations and their drafts. Startup pairs
 the controlling browser and verifies a provider before restoring a destination.
 Each browser stores a route identity per active database and a separate identity for

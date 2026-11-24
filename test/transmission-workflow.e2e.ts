@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 import { type Browser, expect, type Page, test } from "@playwright/test";
 import type { LocalTransmission as TransmissionFactory } from "../src/application/index.js";
 import type { startGateway as GatewayFactory } from "../src/gateway/index.js";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
 const root = resolve(import.meta.dirname, "..");
@@ -147,7 +148,7 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
     application = await launchWorkflowBrowser(browser, directory);
     let page = await application.firstWindow();
     const openWorkflows = async () => {
-      await page.locator("#tab-apps").press("ArrowRight");
+      await expandNavigation(page, "Automation");
       await page.locator("#tab-workflows").click();
     };
     const menu = async (label: string) =>
@@ -645,7 +646,7 @@ test("workflow: Transmission staging.18 retained history and controls use its or
     await expect(wizard.getByRole("status")).toHaveText("Claude connected");
     await wizard.getByRole("button", { name: "Close provider setup" }).click();
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
-    await page.locator("#tab-apps").press("ArrowRight");
+    await expandNavigation(page, "Automation");
     await page.locator("#tab-workflows").click();
     const view = page.locator(".workflows-page");
     await view.getByRole("tab", { name: "Execution history", exact: true }).click();

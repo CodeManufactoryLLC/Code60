@@ -2,9 +2,11 @@ import { expandNavigation } from "./fixtures/browser-actions.js";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard } from "./fixtures/browser-app.js";
 
 async function serverPage(page: Page) {
+  await expandNavigation(page, "Manage");
   await page.locator("#advanced-toggle").click();
   await page.locator("#tab-web-server").click();
   await expect(page.getByRole("heading", { name: "Web Server Beta", exact: true })).toBeVisible();

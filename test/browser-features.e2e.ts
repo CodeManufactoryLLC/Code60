@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { expect, type Page, test } from "@playwright/test";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
@@ -74,6 +75,7 @@ async function start(page: Page, directory: string) {
   await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
 }
 async function app(page: Page, name: string) {
+  await expandNavigation(page, "Manage");
   await page.getByRole("tab", { name: "Apps", exact: true }).click();
   await page.getByRole("button", { name: `Open ${name}`, exact: true }).click();
 }
@@ -173,6 +175,7 @@ test("browser: Carbon application navigation, appearance controls and retained d
     const { page } = await fixture.open();
     page.setDefaultTimeout(10_000);
     await start(page, fixture.directory);
+    await expandNavigation(page, "Manage");
     await page.getByRole("tab", { name: "Apps", exact: true }).click();
     await expect(page.locator(".page-panel:not([hidden])")).toHaveCount(1);
     await expect(page.locator("#panel-apps .navigation-list-row").first()).toBeVisible();
@@ -182,13 +185,32 @@ test("browser: Carbon application navigation, appearance controls and retained d
       path: test.info().outputPath("carbon-apps-light.png"),
       animations: "disabled",
     });
-    for (const group of ["Work", "Automation", "Inspect", "Manage"]) {
-      await expect(
-        page
-          .getByRole("navigation", { name: "Product navigation" })
-          .getByRole("heading", { name: group, exact: true }),
-      ).toBeVisible();
-    }
+    const nav = page.getByRole("navigation", { name: "Product navigation" });
+    const group = (name: string) => nav.getByRole("button", { name, exact: true });
+    const manage = group("Manage");
+    const apps = nav.getByRole("tab", { name: "Apps", exact: true });
+    for (const name of ["Automation", "Inspect"])
+      await expect(group(name)).toHaveAttribute("aria-expanded", "false");
+    const fontSize = (el: Element) => parseFloat(getComputedStyle(el).fontSize);
+    expect(
+      await manage.locator(".cds--side-nav__submenu-title").evaluate(fontSize),
+    ).toBeGreaterThan(await apps.locator(".page-tab-label").evaluate(fontSize));
+    await apps.press("Escape");
+    await expect(manage).toBeFocused();
+    await expect(manage).toHaveAttribute("aria-expanded", "false");
+    await expect(apps).toBeHidden();
+    await expect(page.locator("#panel-apps")).toBeVisible();
+    await manage.press("Space");
+    await expect(apps).toBeVisible();
+    await group("Automation").press("Enter");
+    await expect(nav.getByRole("tab", { name: "Scheduled Jobs" })).toBeVisible();
+    await group("Automation").click();
+    await page.getByRole("button", { name: "Open Scheduled Jobs", exact: true }).click();
+    await expect(group("Automation")).toHaveAttribute("aria-expanded", "true");
+    await expect(nav.getByRole("tab", { name: "Scheduled Jobs" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await app(page, "Appearance");
     const appearance = page.locator("#panel-settings-appearance");
     await expect(appearance.getByRole("switch", { name: "Monochrome" })).toHaveCount(0);
@@ -263,6 +285,7 @@ test("browser: Carbon scheduled jobs edit, run, evidence, cancellation and brows
     const first = await fixture.open();
     first.page.setDefaultTimeout(10_000);
     await start(first.page, fixture.directory);
+    await expandNavigation(first.page, "Manage");
     const appsTab = first.page.getByRole("tab", { name: "Apps", exact: true });
     const tabStyles = () =>
       appsTab.evaluate((element) => {
@@ -522,6 +545,7 @@ test("browser: Carbon scheduled jobs edit, run, evidence, cancellation and brows
     await expect(content.getByText("No scheduled jobs.", { exact: true })).toBeVisible();
     await tab(second.page, "Execution history").click();
     await expect(table.getByRole("radio")).toHaveCount(2);
+    await expandNavigation(second.page, "Manage");
     await second.page
       .getByRole("navigation", { name: "Product navigation" })
       .getByRole("tab", { name: "Apps", exact: true })
@@ -843,6 +867,22 @@ test("browser: concurrent project conversations retain their own streaming respo
     );
     await select("release-server");
     await expect(composer).toHaveValue("Server follow-up draft");
+    const rename = page
+      .getByRole("region", {
+        name: `Project ${join(fixture.directory, "release-server")}`,
+        exact: true,
+      })
+      .getByRole("button", { name: /^Rename chat:/ })
+      .first();
+    await rename.click();
+    const dialog = page.getByRole("dialog", { name: "Rename chat" });
+    await dialog.getByLabel("Chat name").press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("button", { name: "Work", exact: true })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(rename).toBeFocused();
     for (const name of names)
       expect(
         execFileSync("git", ["status", "--porcelain"], {

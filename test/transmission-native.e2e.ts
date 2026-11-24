@@ -7,6 +7,7 @@ import { expect, test } from "@playwright/test";
 import type { LocalTransmission as ClientFactory } from "../src/application/index.js";
 import type { startGateway as GatewayFactory } from "../src/gateway/index.js";
 import type { preserveTransmissionBundle as PreserveFactory } from "../src/platform/index.js";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 import {
   nativeProcessAlive as alive,
@@ -108,7 +109,7 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
     await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     const open = async () => {
-      await page.locator("#tab-apps").press("ArrowRight");
+      await expandNavigation(page, "Automation");
       await page.locator("#tab-workflows").click();
     };
     await open();
@@ -235,7 +236,7 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
     const reopened = await context.newPage();
     await reopened.goto(gateway.origin);
     await expect(reopened.getByRole("banner", { name: "Code60" })).toBeVisible();
-    await reopened.locator("#tab-apps").press("ArrowRight");
+    await expandNavigation(reopened, "Automation");
     await reopened.locator("#tab-workflows").click();
     await reopened.getByRole("button", { name: /Native preserved execution/ }).click();
     expect(((await engine("health")) as { pid: number }).pid).toBe(enginePid);

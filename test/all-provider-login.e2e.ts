@@ -1,6 +1,7 @@
 import { open, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { browserApp } from "./fixtures/browser-app.js";
 import { syntheticProviderDownload } from "./fixtures/provider-artifacts.js";
 
@@ -222,6 +223,7 @@ test("browser: paired HTTP LAN browser installs and signs in without a secure-co
     await expect(wizard.locator("p[role=status]")).toHaveText("Kiro connected");
     await page.screenshot({ path: test.info().outputPath("lan-provider-connected.png") });
     await local.page.getByRole("button", { name: "Take control", exact: true }).click();
+    await expandNavigation(local.page, "Manage");
     await local.page.locator("#advanced-toggle").click();
     await local.page.locator("#tab-web-server").click();
     await settings.getByRole("switch").focus();

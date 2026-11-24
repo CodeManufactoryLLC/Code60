@@ -246,7 +246,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Left navigation sidebar or Home / Apps / Settings lists; workspace header → Back / Forward",
     "none",
     "human-only",
-    "Work, Automation, Inspect and Manage group product navigation. Projects and conversations keep their own actions. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.",
+    "Work, Automation, Inspect and Manage are expandable navigation groups. Opening a destination reveals its group. Projects and conversations keep their own actions. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.",
     "No confirmation; navigation only.",
   ),
   feature(
@@ -503,7 +503,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Manage → Settings → Text or Table defaults, Apps → Appearance or Polling, Workspace → Color theme",
     "none",
     "human-only",
-    "Top-level navigation sections remain open. Project and conversation disclosures retain their own state. System follows the operating system. Legacy decorative preferences remain stored.",
+    "Navigation groups expand or collapse independently. Project and conversation disclosures retain their own state. System follows the operating system. Legacy decorative preferences remain stored.",
   ),
   feature(
     "updates",

@@ -22,7 +22,7 @@ No comparison destination, preference or feature flag is introduced.
   storage scoped to the active database or the database-independent workspace.
   Preserve navigation handlers, availability checks and view ownership. Resume
   must never dispatch a prompt, start a job or accept pending work.
-- Keep Work, Automation, Inspect and Manage as navigation groups. Keep enabled
+- Keep Work, Automation, Inspect and Manage in Carbon SideNavMenu disclosures. Use compact heading typography above indented destination rows. Reveal the active route on navigation and preserve manual toggles during background updates. Keep enabled
   projects and conversations directly reachable. Use Home and Apps as task indexes.
   Use one descriptive heading per destination. Keep install, login, verification,
   retry and cancel controls at the relevant provider step. Preserve saved decorative

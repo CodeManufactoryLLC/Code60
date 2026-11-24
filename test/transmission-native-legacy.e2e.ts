@@ -23,6 +23,7 @@ import type {
   preserveTransmissionBundle as PreserveFactory,
   spawnOwnedProcess as SpawnFactory,
 } from "../src/platform/index.js";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 import {
   nativeProcessAlive as alive,
@@ -231,7 +232,7 @@ for (const saved of [undefined, "0.1.0-staging.18", "0.1.0-staging.20"] as const
       await expect(wizard.getByRole("status")).toHaveText("Claude connected");
       await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
       await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
-      await page.locator("#tab-apps").press("ArrowRight");
+      await expandNavigation(page, "Automation");
       await page.locator("#tab-workflows").click();
       const view = page.locator(".workflows-page");
       await view.getByRole("button", { name: /Retained native workflow/ }).click();

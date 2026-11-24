@@ -212,7 +212,7 @@ describe("browser capability catalog", () => {
   it("keeps navigation disclosures human-only and independent from execution", () => {
     const settings = APPLICATION_CAPABILITIES.find((capability) => capability.id === "settings");
     expect(settings).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });
-    expect(settings?.limitations).toContain("Top-level navigation sections remain open");
+    expect(settings?.limitations).toContain("Navigation groups expand or collapse independently");
     expect(settings?.limitations).toContain(
       "Project and conversation disclosures retain their own state",
     );
