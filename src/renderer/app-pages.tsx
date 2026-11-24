@@ -14,6 +14,7 @@ import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
 import { HomePage } from "./home-page.js";
 import { LogsPage } from "./logs.js";
+import { McpWorkspace } from "./mcp-workspace.js";
 import { MemoriesPage } from "./memories.js";
 import { MemoryPage } from "./memory.js";
 import { MessagesPage } from "./messages.js";
@@ -195,6 +196,20 @@ export function AppPages(props: AppPagesProps) {
     openChat,
   ]);
   const views = {
+    "mcp-servers": (
+      <McpWorkspace
+        api={api}
+        active={!splash && tabs.active === "mcp-servers"}
+        contextKey={JSON.stringify([
+          snapshot?.databaseEpoch,
+          snapshot?.openProjects?.map((p) => p.id),
+        ])}
+        lines={lines}
+        density={density}
+        fit={fit}
+        textStyles={textStyles}
+      />
+    ),
     assistants: (
       <HomePage
         page="assistants"

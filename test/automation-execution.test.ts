@@ -35,8 +35,15 @@ async function setup() {
     JSON.stringify({
       permissions: { default: "allow" },
       agents: { fixture: { command: ["fake-provider"] } },
-      mcpServers: { untrusted: { type: "stdio", command: "bad" } },
     }),
+  );
+  await fs.writeFile(
+    join(env.XDG_CONFIG_HOME, "code60", "mcp.json"),
+    JSON.stringify({
+      version: 1,
+      servers: { untrusted: { label: "Untrusted", enabled: true, type: "stdio", command: "bad" } },
+    }),
+    { mode: 0o600 },
   );
   const agents = new FakeAgents((_text, session) => {
     void session
@@ -147,7 +154,7 @@ describe("isolated automation execution", () => {
       s.automation,
     );
     expect(config.permissions).toEqual({ default: "deny", read: "allow" });
-    expect(config.mcpServers).toEqual({});
+    expect(config).not.toHaveProperty("mcpServers");
   });
   it.each(["finished", "failed", "cancelled"] as const)(
     "publishes saved chunks before %s and preserves reopened evidence",

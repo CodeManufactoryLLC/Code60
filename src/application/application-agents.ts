@@ -6,8 +6,10 @@ import {
   type DetailScope,
   parseCustomAgentRequest,
 } from "../bridge/index.js";
+import type { SessionResourceFactory } from "../core/index.js";
 import { stateHome } from "../core/index.js";
 import { CustomAgentStore } from "./custom-agent-store.js";
+import type { McpConnectorRole } from "./mcp-configuration.js";
 import type { ModelDefaults } from "./model-defaults.js";
 import { RelayService } from "./relay-service.js";
 
@@ -42,6 +44,11 @@ export class ApplicationAgents {
     private readonly modelDefaults?: ModelDefaults,
     private readonly orchestrationAutoApproval: () => boolean = () => true,
     private readonly onPlanTimingError: () => void = () => {},
+    private readonly connectorResources?: (
+      role: McpConnectorRole,
+      root: string | undefined,
+      warning: (message: string) => void,
+    ) => SessionResourceFactory,
   ) {
     this.relay = new RelayService(
       deps,
@@ -53,6 +60,7 @@ export class ApplicationAgents {
       modelDefaults,
       orchestrationAutoApproval,
       onPlanTimingError,
+      connectorResources,
     );
     this.selected = this.relay;
   }
@@ -201,6 +209,7 @@ export class ApplicationAgents {
             this.modelDefaults,
             this.orchestrationAutoApproval,
             this.onPlanTimingError,
+            this.connectorResources,
           );
           if (this.knowledge) runtime.attachKnowledge(this.knowledge);
           this.agents.set(request.id, runtime);

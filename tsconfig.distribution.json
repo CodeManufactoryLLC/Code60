@@ -4,7 +4,8 @@
     "rootDir": "src",
     "outDir": "build/distribution",
     "sourceMap": false,
-    "allowJs": true
+    "allowJs": true,
+    "moduleSuffixes": [".bootstrap", ""]
   },
   "include": [
     "src/management/index.ts",

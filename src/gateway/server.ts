@@ -3,6 +3,7 @@ import { readdir, readFile, rm } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { connectMcpUpstream } from "../agents/index.js";
 import {
   ApplicationHost,
   DesktopAutomations,
@@ -33,13 +34,17 @@ import {
   fileCode,
   isPrivateIPv4,
   lockPrivateState,
+  nativeCredentialStore,
   privateDirectory,
   readPrivateJson,
+  registerPrivateListener,
   userHome,
   writePrivateJson,
 } from "../platform/index.js";
 import { Interactions } from "./interactions.js";
 import { createLanPublisher } from "./lan-publisher.js";
+import { createMcpBroker } from "./mcp-broker.js";
+import { openOAuthCallback } from "./oauth-callback.js";
 import { applicationOperations } from "./operations.js";
 import { Sessions, sameSecret } from "./sessions.js";
 import { readGatewaySettings, writeGatewaySettings } from "./settings.js";
@@ -80,7 +85,11 @@ async function body(request: IncomingMessage): Promise<unknown> {
     if (size > GATEWAY_LIMITS.requestBytes) throw new Error("Request is too large.");
     chunks.push(chunk);
   }
-  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)));
+  try {
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)));
+  } catch {
+    throw new Error("Invalid JSON request.");
+  }
 }
 const mime: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -189,11 +198,28 @@ export async function startGateway(options: GatewayOptions = {}) {
     (owner, value) => send(owner.split(":")[0] ?? "", "interaction", value),
     (owner, id) => send(owner.split(":")[0] ?? "", "interaction-ended", id),
   );
+  let connectorBroker: ReturnType<typeof createMcpBroker> | undefined;
+  const closeConnectors = async () => {
+    await connectorBroker?.then(
+      (broker) => broker.close(),
+      () => {},
+    );
+  };
   const application = new ApplicationHost(
     options.deps ?? defaultDeps(logs.sink),
     env,
     interactions,
     {
+      mcpAuthentication: { credentials: nativeCredentialStore(env), callback: openOAuthCallback },
+      mcpRuntime: {
+        connect: connectMcpUpstream,
+        expose: async (input) => {
+          if (closing) throw new Error("MCP broker is stopping");
+          connectorBroker ??= createMcpBroker();
+          return (await connectorBroker).expose(input);
+        },
+      },
+
       ...(options.providerDownload ? { providerDownload: options.providerDownload } : {}),
       ...(options.providerFetch ? { providerFetch: options.providerFetch } : {}),
       ...(options.refreshPath ? { refreshPath: options.refreshPath } : {}),
@@ -287,13 +313,17 @@ export async function startGateway(options: GatewayOptions = {}) {
       );
       emit("update", snapshot);
     }, true),
+    application.mcp.subscribe(() => emit("mcp-changed")),
     application.memory.subscribe(() => emit("memory-changed")),
     application.rag.subscribe((status) => emit("rag-status", status)),
     logs.subscribe(() => emit("logs-changed")),
   ];
   const detach = async (session: string) => {
     const owner = owners.get(session);
-    if (owner) interactions.detach(owner);
+    if (owner) {
+      interactions.detach(owner);
+      application.mcpDetach(owner);
+    }
     owners.delete(session);
     clients.delete(session);
     if (sessions.controlling !== session) return;
@@ -744,7 +774,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     await webServer?.close();
     interactions.close();
     const results = await Promise.allSettled([
-      application.shutdown(),
+      application.shutdown().finally(closeConnectors),
       scheduler?.stop(),
       workflows.close(),
     ]);
@@ -782,6 +812,8 @@ export async function startGateway(options: GatewayOptions = {}) {
     });
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("Could not bind the backend.");
+    const unregister = registerPrivateListener(address.port);
+    server.once("close", unregister);
     origin = `http://127.0.0.1:${address.port}`;
     // The exclusive writer lock is held. Replace only verified dead-owner metadata,
     // using the private storage CAS so an outside change cannot be overwritten.
@@ -833,7 +865,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     for (const dispose of disposers) dispose();
     await Promise.allSettled([
       webServer?.close(),
-      application.shutdown(),
+      application.shutdown().finally(closeConnectors),
       scheduler?.stop(),
       workflows.close(),
       logs.close(),

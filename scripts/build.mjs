@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { cp } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { cleanBuild } from "./clean-build.mjs";
 
@@ -9,3 +10,14 @@ for (const args of [
 ]) {
   execFileSync(process.execPath, args, { stdio: "inherit", timeout: 120_000 });
 }
+
+// Installed updates must copy the same verified Node-only support used by bootstrap setup.
+execFileSync(process.execPath, ["scripts/build-distribution.mjs"], {
+  stdio: "inherit",
+  timeout: 120_000,
+});
+await cp(
+  fileURLToPath(new URL("../build/distribution/", import.meta.url)),
+  fileURLToPath(new URL("../dist/bootstrap/", import.meta.url)),
+  { recursive: true },
+);

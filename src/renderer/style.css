@@ -4,6 +4,7 @@
 @import "@glideapps/glide-data-grid/dist/index.css" layer(vendor);
 @import "./styles/tokens.css" layer(tokens);
 @import "./styles/base.css" layer(base);
+@import "./styles/mcp-connectors.css" layer(components);
 @import "./neobrutalism/theme.css";
 @import "./neobrutalism/controls.css" layer(neobrutalism);
 @import "./styles/layout.css" layer(layout);

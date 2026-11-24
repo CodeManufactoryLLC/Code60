@@ -7,7 +7,7 @@ import { agent, methods, PROTOCOL_VERSION, RequestError } from "@agentclientprot
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** @param {{ authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, relayWorkflow?: boolean, memoryExtraction?: boolean, browserWorkflow?: boolean, onSessionNew?: (params: unknown) => Promise<void>, onPrompt?: () => void }} [options] */
+/** @param {{ restoreSupported?: boolean, authRequired?: boolean, sessionInfo?: boolean, reviewWorkflow?: boolean, planWorkflow?: boolean, relayWorkflow?: boolean, memoryExtraction?: boolean, browserWorkflow?: boolean, onSessionNew?: (params: unknown) => Promise<void>, onPrompt?: () => void }} [options] */
 export function createFakeAgent(options = {}) {
   let cwd = process.cwd();
   let gateway = {};
@@ -89,7 +89,7 @@ export function createFakeAgent(options = {}) {
   return agent({ name: "fake-agent" })
     .onRequest(methods.agent.initialize, () => ({
       protocolVersion: PROTOCOL_VERSION,
-      agentCapabilities: {},
+      agentCapabilities: options.restoreSupported ? { loadSession: true } : {},
     }))
     .onRequest(methods.agent.session.new, async ({ params, client }) => {
       if (options.authRequired) throw RequestError.authRequired();
@@ -107,6 +107,14 @@ export function createFakeAgent(options = {}) {
         sessionId: "fake-session",
         ...(options.sessionInfo ? { configOptions: configOptions() } : {}),
       };
+    })
+    .onRequest(methods.agent.session.load, async ({ params }) => {
+      if (!options.restoreSupported) throw RequestError.invalidParams();
+      cwd = params.cwd;
+      gateway = Object.fromEntries(
+        (params.mcpServers?.[0]?.env ?? []).map((entry) => [entry.name, entry.value]),
+      );
+      return { ...(options.sessionInfo ? { configOptions: configOptions() } : {}) };
     })
     .onRequest(methods.agent.session.setConfigOption, ({ params }) => {
       if (!options.sessionInfo) throw RequestError.invalidParams();

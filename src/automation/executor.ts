@@ -83,7 +83,6 @@ export function executionConfig(config: Config, automation: Automation): Config 
       default: "deny",
       ...Object.fromEntries(automation.allow.map((kind) => [kind, "allow"])),
     },
-    mcpServers: {},
     prompts: { ...DEFAULT_CONFIG.prompts },
     worktreeDir: null,
   };

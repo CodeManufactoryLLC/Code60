@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { RowDensity, TableLines } from "./table-preferences.js";
 
 export type TableId =
+  | "mcp-servers"
   | "automations"
   | "automation-history"
   | "memories"

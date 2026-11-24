@@ -30,6 +30,7 @@ describe("Apps home", () => {
       "Appearance",
       "Command Builder",
       "Data Viewer",
+      "MCP Servers",
       "Memory",
       "Polling",
       "Prompt Builder",

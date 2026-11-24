@@ -88,6 +88,7 @@ export interface AgentSpec {
 }
 
 export interface AgentSession {
+  readonly restoreSupported?: boolean;
   /** ACP session identifier. Persist this to allow an explicit later restore attempt. */
   readonly sessionId: string;
   readonly sessionState?: SessionState;

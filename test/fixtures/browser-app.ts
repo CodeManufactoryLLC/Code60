@@ -15,6 +15,7 @@ export async function browserApp(
   requirePairing = true,
   codex = false,
   providerDownload?: typeof import("../../src/application/index.js").ProviderDownload,
+  extraEnvironment: NodeJS.ProcessEnv = {},
 ) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-browser-")));
   const config = join(directory, "config/code60");
@@ -43,6 +44,7 @@ export async function browserApp(
   );
   const env = {
     PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
+    ...extraEnvironment,
     HOME: directory,
     CODE60_DEV_CONTAINER: "0",
     SHELL: shell,

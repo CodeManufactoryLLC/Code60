@@ -1,4 +1,4 @@
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { browserApp, createDatabase, onboard } from "./fixtures/browser-app.js";
@@ -90,6 +90,43 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     await page.getByRole("button", { name: "Connect to Code60", exact: true }).click();
     await page.getByRole("button", { name: "Take control", exact: true }).click();
     await page.getByRole("button", { name: "Start", exact: true }).click();
+    // MCP management also runs on paired HTTP, without secure-context UUID/clipboard APIs.
+    const beforeMcp = await readdir(fixture.processLog);
+    await page.getByRole("tab", { name: "Apps", exact: true }).click();
+    await page.getByRole("button", { name: "Open MCP Servers", exact: true }).click();
+    await page.getByRole("button", { name: "MCP Servers actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Add server", exact: true }).click();
+    const form = page.getByRole("dialog", { name: /Add MCP server/ });
+    await form.getByLabel("Server ID", { exact: true }).fill("lan-docs");
+    await form.getByLabel("Label", { exact: true }).fill("LAN documentation");
+    await form.getByLabel("Command", { exact: true }).fill("must-never-launch");
+    await form.getByRole("button", { name: "Add argument", exact: true }).click();
+    await form.getByLabel("Argument 1", { exact: true }).fill("public-argument");
+    await form.getByRole("button", { name: "Save server", exact: true }).click();
+    await expect(form).toHaveCount(0);
+    const mcpPath = join(fixture.directory, "config/code60/mcp.json");
+    expect(JSON.parse(await readFile(mcpPath, "utf8")).servers["lan-docs"]).toMatchObject({
+      enabled: false,
+      command: "must-never-launch",
+      args: ["public-argument"],
+    });
+    expect((await stat(mcpPath)).mode & 0o777).toBe(0o600);
+    await page.getByRole("button", { name: "JSON", exact: true }).click();
+    await expect(page.locator(".monaco-editor")).toBeVisible();
+    await page.getByRole("button", { name: "Servers", exact: true }).click();
+    await page.getByRole("button", { name: "Review troubleshooting report", exact: true }).click();
+    const report = page.getByRole("dialog", {
+      name: "Safe MCP troubleshooting report",
+      exact: true,
+    });
+    const safeReport = await report.locator("pre").textContent();
+    expect(safeReport).not.toContain("LAN documentation");
+    await report.getByRole("button", { name: "Copy safe report", exact: true }).click();
+    await expect
+      .poll(() => local.page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(safeReport);
+    await report.getByRole("button", { name: "Close report", exact: true }).click();
+    expect(await readdir(fixture.processLog)).toEqual(beforeMcp);
     const remoteSettings = await serverPage(page);
     await expect(remoteSettings.getByRole("switch")).toBeDisabled();
     await expect(remoteSettings.getByLabel("LAN pairing code")).toHaveCount(0);

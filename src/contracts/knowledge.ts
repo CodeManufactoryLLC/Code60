@@ -230,6 +230,16 @@ const feature = (
 });
 export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
+    "mcp-servers",
+    "MCP Servers",
+    "Manage MCP server definitions with guided forms or validated JSON; preview/restore backups and reset selected configurations; enable, approve, test, reconnect and disconnect managed connections; manage secure credentials and reviewed OAuth sign-in; review interrupted transactions, verify owned cleanup and copy a safe troubleshooting report.",
+    "Apps → MCP Servers",
+    "none",
+    "human-only",
+    "User configuration is database-independent. Project configuration requires an open project and captured runtime/database identity. Project definitions shadow user IDs, including disabled/unapproved entries. New definitions are disabled. Authentication and observed connection health are separate from configured enablement and project approval. Untested servers say Not tested. Credential references are resolved only in the backend after explicit entry. No credentials or approvals move. Playwright/Context7 templates are opt-in. Invalid files block guided saves; bounded safe malformed files can be repaired in JSON or reset with private preimages. Pending recovery blocks affected writes. JSON drafts stay in renderer memory across navigation; reload/close can lose them. Save preserves exact valid text; formatting is explicit. Restore requires a reviewed valid unpinned backup and fresh revisions; absent-file backups remove the dedicated file. Reset clears this configuration, or User and this project, preserving other project files, credentials, built-ins and running work. Clearing a project may reveal User definitions; clearing User affects other projects. Enablement and approval changes affect future connections. Existing connections retain their captured revisions until explicit Disconnect or idle Reconnect. Reconnect replaces all connectors in the owning ACP session and requires provider load/resume support; otherwise start a new session. Tests initialize/discover only, require project approval, and confirm stdio command launch. Unavailable connectors warn while other tools remain usable. Credentials use macOS Keychain or Linux Secret Service through a bounded helper. Locked/unavailable storage never falls back silently. Explicit temporary storage lasts until backend restart or sign-out. Security-relevant definition changes require new credential review; label/enablement changes do not. OAuth requires issuer/scope/registration review, S256 and a page/revision-bound single-use callback. Supply client information or use advertised per-installation registration; no shared Code60 client or hosted authentication is provided. Sign-out revokes affected connections immediately; uncertain removal remains visible. Tool calls are never replayed after authentication failure; uncertain refresh requires reauthorization. Configuration recovery reviews every affected live scope and exact recorded state before Complete/Roll back. Closed/replaced projects, newer edits or corrupt evidence block recovery; no force or lock deletion. Drafts are retained. Verify cleanup retries only retained revoked resources, without reconnecting. Troubleshooting reports are opt-in counts/fixed codes only, with no definitions, identifiers, paths, endpoints, references or secrets. Definitions and references are excluded from awareness and agent tools.",
+    "Review forms before immediate saves; Save, Discard or Cancel dirty JSON before guided edits or scope changes. Confirm removal, moves, draft discard, backup restoration and reset after scope/inheritance review. Review exact project configuration before approval; confirm stdio tests and reviewed Disconnect/Reconnect effects. Explicitly choose persistent or temporary storage; review issuer, scopes, resource and registration before sign-in; confirm forgetting credentials or sign-out. Review captured revisions and effects before confirming Complete/Roll back; confirm owned cleanup verification. Review the safe report before copying.",
+  ),
+  feature(
     "page-navigation",
     "Page navigation",
     "Open pages through the sidebar, navigation cards or Back and Forward.",
@@ -588,6 +598,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   ),
 ];
 export const PAGE_CAPABILITIES = {
+  "mcp-servers": "mcp-servers",
   "custom-agents": "custom-agents",
   home: "knowledge",
   assistants: "assistants",
