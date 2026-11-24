@@ -20,7 +20,7 @@ jobs:
         with: { node-version: "24", cache: npm, package-manager-cache: false }
       - name: Verify Apple Silicon runner
         run: test "$(uname -m)" = arm64
-      - run: npm ci
+      - run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
       - run: npx --no-install playwright install chromium
       - run: npm run check
       - run: npm run prepare:models

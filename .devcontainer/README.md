@@ -13,7 +13,7 @@ Native host development remains available without any container runtime.
 
 ## Start Code60 in your browser
 
-With Docker running and host dependencies installed (`npm ci` once, using Node 24), run:
+With Docker running and host dependencies installed (see [Prepare on the host](#prepare-on-the-host)), run:
 
 ```sh
 npm run devcontainer -- start
@@ -125,7 +125,7 @@ already removed with the old container.
 From the checkout root, using Node 24:
 
 ```sh
-npm ci
+ONNXRUNTIME_NODE_INSTALL=skip npm ci
 npm run devcontainer -- prepare
 ```
 
@@ -190,7 +190,7 @@ Use the explicit cleanup command below when finished.
 
 ## Terminal workflow
 
-The pinned official Dev Container CLI is installed by the host's `npm ci`:
+The host dependency installation supplies the pinned official Dev Container CLI:
 
 ```sh
 npm run devcontainer -- up

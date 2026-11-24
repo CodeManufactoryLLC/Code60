@@ -48,7 +48,7 @@ environments.
 
 ## Development
 
-- Use npm. Install with `npm ci`, and commit `package-lock.json` changes.
+- Use npm. Install with `ONNXRUNTIME_NODE_INSTALL=skip npm ci`, and commit `package-lock.json` changes.
 - Prepare pinned offline embedding assets explicitly with `npm run prepare:models`
   before RAG development or packaging. Keep generated `models/` out of Git.
   Model/runtime changes require the offline smoke and packaged target checks.
