@@ -19,6 +19,8 @@ This review started at `4080c62` with first use, a populated project conversatio
 
 ## Screens and sources
 
+The [dark mode gallery](dark-mode.md) shows the audited interactions alongside a populated conversation, schedules and execution history.
+
 - Provider setup — [earlier](audit-provider-before.png), [updated](audit-provider.png), [mobile dark theme at 390px](audit-provider-mobile.png). [Modal guidance](https://carbondesignsystem.com/building-blocks/core/components/modal/guidelines/) · [Tile guidance](https://carbondesignsystem.com/building-blocks/core/components/tile/guidelines/)
 - Settings and builders — [earlier Appearance](after-appearance.png), [updated Appearance](audit-appearance.png), [earlier Command Builder](after-commands.png), [pristine form](audit-commands.png), [after submitting an empty form](audit-command-errors.png). [Forms](https://carbondesignsystem.com/building-blocks/core/patterns/forms/) · [Button hierarchy](https://carbondesignsystem.com/building-blocks/core/components/button/guidelines/)
 - Navigation, search and automation — [selected search result](audit-search.png), [empty Definitions view](audit-workflows.png). [Header accessibility](https://carbondesignsystem.com/building-blocks/core/components/ui-shell-header/accessibility/) · [Search](https://carbondesignsystem.com/building-blocks/core/components/search/guidelines/) · [Empty states](https://carbondesignsystem.com/building-blocks/core/patterns/empty-states/)
