@@ -158,6 +158,9 @@ contents, directory identities and contained links; interrupted cleanup may remo
 only the recorded remainder. Shell removal has its own exact preview and explicit
 interactive approval, preserving unrelated profile bytes and changed blocks.
 These internal primitives do not yet expose an application uninstall command.
+Private uninstall inspection adds bounded interactive/scheduled availability and
+strict saved workflow counts. It rejects a payload and browser Origin, never
+starts an engine or creates workflow storage, and cannot alone prove process exit.
 
 ## Current exclusions
 

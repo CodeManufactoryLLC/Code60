@@ -9,6 +9,7 @@ import {
   DesktopLogStore,
   DesktopWorkflows,
   filePreferences,
+  inspectWorkflowRecordsForUninstall,
   openProjectDatabase,
   prepareCodexEnvironment,
   providerAgents,
@@ -449,6 +450,19 @@ export async function startGateway(options: GatewayOptions = {}) {
               scheduledActive: scheduled ? scheduled.activeExecutionId !== null : null,
               schedulerAvailable: !!scheduled && !schedulerError,
             });
+          } else if (path === "/management/uninstall-summary") {
+            for await (const chunk of request)
+              if (chunk.length) throw new Error("Uninstall inspection accepts no payload");
+            const workflows = await inspectWorkflowRecordsForUninstall(env);
+            const scheduled = scheduler?.scheduler.status();
+            respond(response, {
+              pid: process.pid,
+              interactiveActive: application.hasActiveWork,
+              scheduledActive: scheduled ? scheduled.activeExecutionId !== null : null,
+              schedulerAvailable: !!scheduled && !schedulerError,
+              scheduledUncertain: scheduled ? scheduled.block !== null : null,
+              workflows,
+            });
           } else if (path === "/management/prepare-database") {
             for await (const chunk of request)
               if (chunk.length) throw new Error("Database preparation accepts no payload");
@@ -861,7 +875,14 @@ async function readGatewayConnection(env: Readonly<NodeJS.ProcessEnv>): Promise<
 }
 export async function managementRequest(
   env: Readonly<NodeJS.ProcessEnv>,
-  action: "pair" | "status" | "shutdown" | "pairing" | "prepare-database" | "update-summary",
+  action:
+    | "pair"
+    | "status"
+    | "shutdown"
+    | "pairing"
+    | "prepare-database"
+    | "update-summary"
+    | "uninstall-summary",
   value?: { requirePairing: boolean },
 ) {
   const connection = await readGatewayConnection(env);

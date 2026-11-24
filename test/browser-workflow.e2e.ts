@@ -1,13 +1,33 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { managementRequest } from "../src/gateway/index.js";
 import { browserApp, onboard } from "./fixtures/browser-app.js";
 import { goldenJourney } from "./fixtures/golden-journey.js";
 
 test("browser: first use through accepted plan, automatic edits, diff, attachment and Undo", async ({
   browser,
 }) => {
-  await goldenJourney(await browserApp(browser));
+  const fixture = await browserApp(browser);
+  await goldenJourney({
+    directory: fixture.directory,
+    open: fixture.open,
+    close: async () => {
+      try {
+        const before = await readdir(join(fixture.directory, "state/code60"));
+        expect(await managementRequest(fixture.env, "uninstall-summary")).toMatchObject({
+          interactiveActive: false,
+          scheduledActive: false,
+          schedulerAvailable: true,
+          scheduledUncertain: false,
+          workflows: { completed: 0, active: 0, uncertain: 0 },
+        });
+        expect(await readdir(join(fixture.directory, "state/code60"))).toEqual(before);
+      } finally {
+        await fixture.close();
+      }
+    },
+  });
 });
 
 test("browser: setup-prepared database through provider verification and accepted work", async ({

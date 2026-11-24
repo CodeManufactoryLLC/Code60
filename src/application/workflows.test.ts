@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   realpath,
   rename,
@@ -26,7 +27,7 @@ import type {
 import { defaultDeps } from "../core/index.js";
 import type { TransmissionClient } from "./transmission.js";
 import { workflowContext } from "./workflow-context.js";
-import { DesktopWorkflows } from "./workflows.js";
+import { DesktopWorkflows, inspectWorkflowRecordsForUninstall } from "./workflows.js";
 
 const roots: string[] = [];
 const services: DesktopWorkflows[] = [];
@@ -450,4 +451,83 @@ it("retains a pending stop after a lost acknowledgement until cleanup is confirm
   });
   await expect(f.service.request({ action: "resume", id })).rejects.toThrow("acknowledgement");
   expect(await f.service.request({ action: "cancel", id })).not.toHaveProperty("stopPending");
+});
+
+it("inspects active and terminal saved workflows without connecting engines or changing history", async () => {
+  const f = await fixture();
+  const { id } = await f.start();
+  const env = { XDG_STATE_HOME: join(f.root, "state") };
+  const path = join(f.service.root, "registry.json");
+  const before = await readFile(path);
+  const calls = f.call.mock.calls.length;
+  const connections = vi.mocked(f.client.connect).mock.calls.length;
+  expect(await inspectWorkflowRecordsForUninstall(env)).toEqual({
+    completed: 0,
+    active: 1,
+    uncertain: 0,
+  });
+  expect(await readFile(path)).toEqual(before);
+  expect(f.call).toHaveBeenCalledTimes(calls);
+  expect(f.client.connect).toHaveBeenCalledTimes(connections);
+  await f.service.request({ action: "cancel", id });
+  expect(await inspectWorkflowRecordsForUninstall(env)).toEqual({
+    completed: 1,
+    active: 0,
+    uncertain: 0,
+  });
+});
+
+it("never mistakes uncertain or pending-stop terminal snapshots for uninstall readiness", async () => {
+  const f = await fixture();
+  const { id } = await f.start();
+  await f.service.request({ action: "cancel", id });
+  await f.service.close();
+  const path = join(f.service.root, "registry.json");
+  const saved = JSON.parse(await readFile(path, "utf8"));
+  const env = { XDG_STATE_HOME: join(f.root, "state") };
+  for (const patch of [
+    { state: "uncertain" },
+    { stopPending: true },
+    { state: "preparation_failed" },
+  ]) {
+    const changed = structuredClone(saved);
+    Object.assign(changed.entries[0], patch);
+    const text = JSON.stringify(changed);
+    await writeFile(path, text);
+    const calls = f.call.mock.calls.length;
+    expect(await inspectWorkflowRecordsForUninstall(env)).toEqual({
+      completed: 0,
+      active: 0,
+      uncertain: 1,
+    });
+    expect(await readFile(path, "utf8")).toBe(text);
+    expect(f.call).toHaveBeenCalledTimes(calls);
+  }
+});
+
+it("refuses damaged or duplicate workflow evidence and creates no state on a fresh inspection", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "code60 inspect workflows ")));
+  roots.push(root);
+  const env = { XDG_STATE_HOME: join(root, "empty-state") };
+  expect(await inspectWorkflowRecordsForUninstall(env)).toEqual({
+    completed: 0,
+    active: 0,
+    uncertain: 0,
+  });
+  expect(await readdir(root)).toEqual([]);
+  const f = await fixture();
+  await f.start();
+  await f.service.close();
+  const path = join(f.service.root, "registry.json");
+  const saved = JSON.parse(await readFile(path, "utf8"));
+  saved.entries.push(saved.entries[0]);
+  await writeFile(path, JSON.stringify(saved));
+  await expect(
+    inspectWorkflowRecordsForUninstall({ XDG_STATE_HOME: join(f.root, "state") }),
+  ).rejects.toThrow("duplicate ownership");
+  await writeFile(path, "{damaged");
+  await expect(
+    inspectWorkflowRecordsForUninstall({ XDG_STATE_HOME: join(f.root, "state") }),
+  ).rejects.toThrow();
+  expect(await readFile(path, "utf8")).toBe("{damaged");
 });

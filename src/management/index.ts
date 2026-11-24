@@ -9,3 +9,4 @@ export {
   planShellIntegration,
 } from "./shell-integration.js";
 export { applyShellRemoval, planShellRemoval } from "./shell-removal.js";
+export { planManagedRemoval } from "./uninstall-plan.js";

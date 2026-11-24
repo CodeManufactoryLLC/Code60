@@ -24,6 +24,9 @@ Update interruption inspection is a payload-free authenticated management read.
 Report only bounded interactive/scheduled availability; do not mint pairing codes,
 stop work, launch engines or grant a browser replacement authority. Terminal
 updates must verify quiescence and native/backend process exit before activation.
+The private uninstall summary likewise accepts no body or browser Origin. Saved
+workflow counts are read-only evidence, not proof that engine processes are gone;
+removal must separately verify process ownership and refuse uncertain work.
 
 The service-definition serializer is part of registration ownership version 1.
 Changing its byte format requires an explicit versioned ownership/migration path

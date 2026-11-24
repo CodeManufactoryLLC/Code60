@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, realpath } from "node:fs/promises";
+import { lstat, mkdir, realpath } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import {
@@ -20,6 +20,7 @@ import {
 import { type CoreDeps, stateHome } from "../core/index.js";
 import {
   fileCode,
+  installationDirectory,
   lockPrivateState,
   readPrivateJson,
   writePrivateJson,
@@ -57,6 +58,74 @@ const ended = (record: WorkflowRecord) =>
   (!record.stopPending &&
     record.snapshot &&
     ["completed", "failed", "cancelled"].includes(record.snapshot.status));
+
+/** Saved-work inspection only: process ownership must be verified separately before removal. */
+export async function inspectWorkflowRecordsForUninstall(env: Readonly<NodeJS.ProcessEnv>) {
+  const root = join(stateHome(env), "code60", "workflows");
+  const counts = { completed: 0, active: 0, uncertain: 0 };
+  const exists = await lstat(root).catch((error: unknown) => {
+    if (fileCode(error) !== "ENOENT") throw error;
+    return null;
+  });
+  if (!exists) return counts;
+  await installationDirectory(root, false, true);
+  const raw = await readPrivateJson(join(root, "registry.json"), maximum).catch(
+    (error: unknown) => {
+      if (fileCode(error) !== "ENOENT") throw error;
+      return undefined;
+    },
+  );
+  if (raw === undefined) return counts;
+  const parsed = registrySchema.safeParse(raw);
+  if (!parsed.success)
+    throw Error("Workflow history is invalid; preserve state and recover it before uninstalling");
+  const records = parsed.data.entries;
+  if (
+    new Set(records.map((record) => record.id)).size !== records.length ||
+    new Set(records.map((record) => record.key)).size !== records.length
+  )
+    throw Error("Workflow history has duplicate ownership; preserve state before uninstalling");
+  for (const record of records) {
+    const snapshot = record.snapshot;
+    if (
+      record.stopPending ||
+      ["preparing", "starting", "uncertain"].includes(record.state) ||
+      (record.state === "preparation_failed" && snapshot) ||
+      (record.state === "submitted" && !snapshot)
+    ) {
+      counts.uncertain++;
+      continue;
+    }
+    if (record.state === "preparation_failed") {
+      counts.completed++;
+      continue;
+    }
+    if (!snapshot) {
+      counts.uncertain++;
+      continue;
+    }
+    const terminal = ["completed", "failed", "cancelled"].includes(snapshot.status);
+    if (
+      terminal !== (snapshot.activeTaskIndex === null) ||
+      snapshot.tasks.length !== record.definition.tasks.length ||
+      snapshot.tasks.some(
+        (task, index) => task.index !== index || task.name !== record.definition.tasks[index]?.name,
+      ) ||
+      (snapshot.activeTaskIndex !== null && snapshot.activeTaskIndex >= snapshot.tasks.length) ||
+      snapshot.accepted.length > snapshot.tasks.length ||
+      (snapshot.status === "completed" && snapshot.accepted.length !== snapshot.tasks.length) ||
+      snapshot.accepted.some(
+        (task, index) =>
+          task.name !== record.definition.tasks[index]?.name ||
+          snapshot.tasks[index]?.state !== "accepted",
+      )
+    )
+      counts.uncertain++;
+    else if (terminal) counts.completed++;
+    else counts.active++;
+  }
+  return counts;
+}
 type Choice = {
   path: string;
   identity: string;
