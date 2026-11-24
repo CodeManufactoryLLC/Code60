@@ -1,11 +1,18 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { z } from "zod";
 import { TRANSMISSION_VERSION, type WorkflowRecord } from "../bridge/index.js";
-import { privateDirectory, readPrivateJson, spawnOwnedProcess } from "../platform/index.js";
+import {
+  installationFileCode,
+  preserveTransmissionBundle,
+  privateDirectory,
+  readPrivateJson,
+  resolveTransmissionRuntime,
+  spawnOwnedProcess,
+} from "../platform/index.js";
 
 export interface TransmissionClient {
   readonly supported: boolean;
@@ -29,7 +36,7 @@ const operations = new Set([
   "resume_workflow",
 ]);
 export class LocalTransmission implements TransmissionClient {
-  readonly supported = process.platform === "darwin";
+  readonly supported = process.platform === "darwin" && process.arch === "arm64";
   constructor(
     private readonly root: string,
     private readonly environment: Readonly<NodeJS.ProcessEnv>,
@@ -97,72 +104,67 @@ export class LocalTransmission implements TransmissionClient {
     for (const key of Object.keys(environment))
       if (/^npm_config_/i.test(key) || key === "NODE_OPTIONS" || key === "NODE_PATH")
         delete environment[key];
+    let binding: Awaited<ReturnType<typeof resolveTransmissionRuntime>>;
+    try {
+      binding = await resolveTransmissionRuntime(environment, this.version, signal);
+    } catch (error) {
+      if (installationFileCode(error) !== "CODE60_ENGINE_UNAVAILABLE") throw error;
+      const assets = fileURLToPath(new URL("../engines/", import.meta.url));
+      const names = await readdir(assets).catch(() => []);
+      if (names.length !== 1 || !/^[a-f0-9]{64}$/.test(names[0] ?? ""))
+        throw new Error(
+          "Bundled Transmission is unavailable. Run setup, or npm run prepare:engines for source development.",
+        );
+      await preserveTransmissionBundle(join(assets, names[0] as string), environment, signal);
+      binding = await resolveTransmissionRuntime(environment, this.version, signal);
+    }
     const { stdout } = await promisify(execFile)(
-      "node",
+      binding.node,
       ["-p", "JSON.stringify({version:process.versions.node,executable:process.execPath})"],
       { env: environment, timeout: 5_000, maxBuffer: 4096, signal },
     );
     const runtime = z
       .strictObject({ version: z.string(), executable: z.string() })
       .parse(JSON.parse(stdout));
-    if (!/^24\.(?:2[2-9]|[3-9]\d|\d{3,})\./.test(runtime.version))
-      throw new Error("Install Node.js >=24.22.0 <25 with npm to run Transmission");
+    if (
+      !/^24\.(?:2[2-9]|[3-9]\d|\d{3,})\./.test(runtime.version) ||
+      runtime.executable !== binding.node
+    )
+      throw new Error("Install Node.js >=24.22.0 <25 at the recorded Transmission runtime binding");
     await privateDirectory(this.root);
-    const cache = join(dirname(this.root), "npm-cache");
-    await privateDirectory(cache);
-    const temporary = await mkdtemp(join(tmpdir(), "code60-transmission-launch-"));
-    const config = join(temporary, ".npmrc");
-    const globalConfig = join(temporary, "global.npmrc");
+    Object.assign(environment, {
+      TRANSMISSION_STATE_DIR: this.root,
+      CODEX_PATH: binding.codex,
+    });
+    const child = await spawnOwnedProcess(
+      [binding.node, binding.entry, "mcp"],
+      binding.root,
+      environment,
+    );
+    child.stdout.resume();
+    child.stderr.resume();
     try {
-      await writeFile(config, "", { mode: 0o600 });
-      await writeFile(globalConfig, "", { mode: 0o600 });
-      await writeFile(
-        join(temporary, "package.json"),
-        '{"name":"code60-transmission-launch","private":true}',
-        { mode: 0o600 },
-      );
-      Object.assign(environment, {
-        PATH: `${dirname(runtime.executable)}:${environment.PATH ?? ""}`,
-        TRANSMISSION_STATE_DIR: this.root,
-        NPM_CONFIG_USERCONFIG: config,
-        NPM_CONFIG_GLOBALCONFIG: globalConfig,
-        NPM_CONFIG_CACHE: cache,
-        NPM_CONFIG_PREFIX: temporary,
-        NPM_CONFIG_GLOBAL: "false",
-        NPM_CONFIG_REGISTRY: "https://registry.npmjs.org",
-        NPM_CONFIG_IGNORE_SCRIPTS: "true",
-        NPM_CONFIG_SCRIPT_SHELL: "/bin/sh",
-      });
-      const child = await spawnOwnedProcess(
-        ["npx", "-y", `code60-transmission-server@${this.version}`, "mcp"],
-        temporary,
-        environment,
-      );
-      child.stdout.resume();
-      child.stderr.resume();
-      try {
-        const deadline = Date.now() + 120_000;
-        while (Date.now() < deadline) {
+      const deadline = Date.now() + 120_000;
+      while (Date.now() < deadline) {
+        signal.throwIfAborted();
+        try {
+          await this.call("health", {}, signal);
+          return;
+        } catch {
           signal.throwIfAborted();
-          try {
-            await this.call("health", {}, signal);
-            return;
-          } catch {
-            signal.throwIfAborted();
-          }
-          if (child.hasExited())
-            throw new Error("Transmission launcher failed. Check Node/npm and Codex setup.");
-          await new Promise<void>((resolve) => setTimeout(resolve, 100));
         }
-        throw new Error(
-          "Transmission startup timed out; engine state is unconfirmed. Reconnect before retrying.",
-        );
-      } finally {
-        child.stdin.end();
-        await child.stop(1_000);
+        if (child.hasExited())
+          throw new Error(
+            "Transmission launcher failed. Check the installed runtime and separate Codex workflow authentication.",
+          );
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
       }
+      throw new Error(
+        "Transmission startup timed out; engine state is unconfirmed. Reconnect before retrying.",
+      );
     } finally {
-      await rm(temporary, { recursive: true, force: true });
+      child.stdin.end();
+      await child.stop(1_000);
     }
   }
 }

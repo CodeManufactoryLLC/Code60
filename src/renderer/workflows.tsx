@@ -214,8 +214,8 @@ export function WorkflowsPage({
       <div className="workflow-content">
         {list?.supported === false && (
           <p role="status">
-            Transmission execution requires macOS and Node 24.22 or later in the 24.x series. Saved
-            history remains available.
+            Transmission execution requires macOS Apple Silicon and Node 24.22 or later in the 24.x
+            series. Saved history remains available.
           </p>
         )}
         {error && <p role="alert">Refresh failed. The last verified state is retained. {error}</p>}

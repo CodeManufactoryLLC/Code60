@@ -24,3 +24,8 @@ Provider installation/authentication operations accept strict catalog/session/at
 identities and bounded code/confirmation inputs only. Derive the controlling-page owner
 server-side. Do not retain provider progress responses in request-receipt caches; never
 expose provider server APIs, install descriptors, commands, paths or environment overrides.
+
+Preserve an explicitly configured absolute CODEX_HOME path for workflow login and
+execution. Never persist CODEX_CONFIG payloads or provider credential environment
+variables in the service definition. Existing engines retain their startup
+environment; backend repair must not silently replace or cancel them.

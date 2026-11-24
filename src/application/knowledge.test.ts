@@ -738,11 +738,25 @@ it("describes workflow drafting and execution prerequisites without starting the
       availability: expect.objectContaining({
         status: "available",
         reason: expect.stringContaining(
-          process.platform === "darwin" ? "staging.20" : "history is readable",
+          process.platform === "darwin" && process.arch === "arm64"
+            ? "staging.20"
+            : "history is readable",
         ),
       }),
     }),
   );
+  if (process.platform === "darwin" && process.arch === "arm64") {
+    expect(capabilities.entries).toContainEqual(
+      expect.objectContaining({
+        id: "workflows",
+        availability: expect.objectContaining({
+          reason: expect.stringMatching(
+            /bundled pinned engines.*separate Codex login\/configuration.*without runtime npm downloads/,
+          ),
+        }),
+      }),
+    );
+  }
   expect(reads).toEqual([]);
 });
 it("keeps LAN beta discoverable without probing or granting server authority", async () => {

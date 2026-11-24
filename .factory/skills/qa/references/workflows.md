@@ -1,5 +1,28 @@
 # User workflow cards
 
+## Bundled Transmission
+
+- **Start:** native macOS arm64, freshly prepared locked bundle, isolated HOME,
+  config/data/state and synthetic Git repository with staged and unstaged edits.
+  Use the real pinned Transmission, ACP adapter and native Codex; fake only the
+  external model endpoint and the separate application provider.
+- **Actions:** verify the application provider visibly, manually review/start a
+  workflow, pause/resume and queue guidance. Close the browser and stop/restart
+  the backend while the engine is active; reopen through visible Start/history.
+  Complete verification and inspect the retained worktree and accepted diff.
+  Separately exercise cancellation, uncertain starts and both legacy versions.
+- **Invariants:** reads/review do not launch anything. Original state roots,
+  start keys, run IDs, engine PID and executable/runtime bindings survive backend
+  replacement. Wait for guidance acknowledgement and its persisted engine event
+  before detaching. Source files/index/HEAD stay unchanged; native tools write only
+  the dedicated worktree. Trap runtime npm/npx/compiler calls. Do not seed login
+  or infer Transmission credentials from application provider verification. An
+  unavailable application CODEX_PATH must not replace the bundled workflow runtime.
+- **Evidence:** `npm run test:transmission` after native packaging, with traces,
+  screenshots, artifact/native identities, independent Git/filesystem assertions
+  and every owned engine/provider/helper PID verified gone. Preserve failures;
+  scripted HTTP engine tests remain independent protocol/UI regression coverage.
+
 Use synthetic projects and isolated private state. Each card is a user journey,
 not a claim that all of its steps are already automated. Check current selectors
 and supported controls before extending tests. Retain evidence under ignored

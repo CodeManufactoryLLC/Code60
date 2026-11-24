@@ -286,7 +286,8 @@ Existing installations remain usable after failed candidates.
 
 ## Phase 5 — One-command setup, database and browser onboarding
 
-**Status:** implemented on `codex/one-command-setup-and-onboarding`; final acceptance and PR validation in progress.
+**Status:** implemented and merged in PR #320 after required Linux and exact-commit
+native validation.
 The confirmed default uses user data storage; declined/non-TTY service setup exits
 0 with explicit incomplete status and a continuation command. Delivery requires
 packaged setup golden coverage, required Linux CI and exact-commit native fixture
@@ -331,6 +332,14 @@ restart, change pairing policy and exercise all database failure cases.
 
 ## Phase 6 — Bundled Transmission and version-bound execution
 
+**Status:** implemented and locally validated. Four native real-engine browser
+journeys cover new, retained and original-cache execution; both platforms pass
+package/payload/model/setup smoke and 23 browser regressions. All four Linux
+offline installation modes pass, including concurrent payload/managed runs, with
+independent process/container/image/volume cleanup. The bootstrap assembles from
+both verified platform artifacts. Required Linux CI and exact-commit native
+validation remain delivery gates; packages stay private and unpublished.
+
 **PR outcome:** macOS users receive workflow execution components as part of
 Code60 installation without a separate runtime npm download.
 
@@ -353,6 +362,8 @@ Code60 installation without a separate runtime npm download.
 - Preserve provider authentication boundaries. Workflow-specific configuration is
   requested when enabling workflows, without assuming application provider login
   supplies Transmission credentials.
+  A fixed interactive `code60 workflows login` delegates authentication to the
+  bundled Codex CLI; it grants no application verification or engine execution.
 - Linux payloads omit unsupported engine binaries and retain an accurate macOS-only
   workflow availability explanation.
 

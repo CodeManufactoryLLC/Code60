@@ -26,15 +26,15 @@ validate both Linux x64 and native macOS arm64 outputs at the exact selected
 commit. The manual release workflow collects both targets, rejects dirty or
 mismatched provenance, verifies archive hashes and assembles the bootstrap.
 It retains workflow artifacts only; it does not publish npm packages or release
-assets. The bootstrap's public setup and persistent installation are not yet
-implemented. Version bumps remain explicit release-preparation work.
+assets. The private candidate supports persistent installation and setup as
+described below. Version bumps remain explicit release-preparation work.
 
 Phase 4 additionally requires the managed installed-package journey and real shell
 acceptance described in [installation internals](docs/distribution/installation.md).
 The bootstrap build now compiles a narrow Node-only installer/launcher closure;
 its build job installs development dependencies, while the artifact itself retains
-zero runtime dependencies. Public setup remains unavailable and publication stays
-an explicit later release action.
+zero runtime dependencies. Installation library APIs remain internal; publication
+stays an explicit later release action.
 
 ## Setup candidate acceptance
 
@@ -45,3 +45,19 @@ artifact-only, managed and legacy npm checks. Pair only real descriptors from th
 same commit and verify bootstrap size/integrity. Keep release visibility private;
 this phase neither uploads release assets nor publishes npm packages. Real native
 login lifecycle validation remains a later, separately isolated release gate.
+
+## Bundled workflow validation
+
+macOS packaging must use the committed Transmission dependency lock and its exact
+staging.18/staging.20 artifacts. Review recorded engine integrities, native Codex
+hash/version, Node and dependency inventory alongside the payload descriptor.
+Keep native helpers from incompatible Transmission checkouts out of this build.
+Linux payload validation must reject unsupported engine components.
+
+After native packaging, run `npm run test:transmission`. The manual Apple Silicon
+workflow retains its traces, screenshots, original-key/run recovery and process
+cleanup evidence with the ordinary browser, setup and package checks. It uses
+real pinned engines/ACP/Codex and a fake external model endpoint, with runtime
+npm/npx/compiler traps. Retain published engine bindings and old executable caches
+across app replacement; never delete workflow state to force a new runtime.
+This validation installs no real login service and uses no live provider.

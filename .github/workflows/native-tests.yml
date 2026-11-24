@@ -35,6 +35,7 @@ jobs:
       - run: npm run package:payload
       - run: npm run test:payload
       - run: npm run test:setup
+      - run: npm run test:transmission
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: code60-darwin-payload
@@ -49,6 +50,7 @@ jobs:
             test-results/installation/
             test-results/setup/
             test-results/payload/
+            test-results/transmission-native/
           retention-days: 7
           if-no-files-found: warn
       - uses: actions/upload-artifact@v7.0.2

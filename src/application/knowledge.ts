@@ -314,9 +314,9 @@ export class DesktopKnowledge {
     } else if (cap.id === "workflows") {
       status = "available";
       reason =
-        process.platform === "darwin"
-          ? "New staging.20 workflows support pause and resume; staging.18 history stays on its original engine. Workflow execution requires external Node >=24.22 <25 and Codex login; prompt drafting requires a verified primary provider."
-          : "Workflow history is readable; Transmission execution requires macOS. Prompt drafting requires a verified primary provider.";
+        process.platform === "darwin" && process.arch === "arm64"
+          ? "New staging.20 workflows support pause and resume; staging.18 history stays on its original engine. Workflow engine launch uses bundled pinned engines with recorded Node >=24.22 <25 and separate Codex login/configuration (code60 workflows login), without runtime npm downloads or compilation; prompt drafting requires a verified primary provider."
+          : "Workflow history is readable; Transmission execution requires macOS Apple Silicon. Prompt drafting requires a verified primary provider.";
       action = "Open Apps → Workflows.";
     } else if (cap.id === "system-manager") {
       reason =
