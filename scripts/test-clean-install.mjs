@@ -55,6 +55,33 @@ export async function acceptanceInput(directory, args) {
   return archive;
 }
 
+export function updateAcceptanceLayout(value) {
+  if (
+    value?.home !== "/work/home" ||
+    value.launcher !== "/work/home/.local/bin/code60" ||
+    value.setupDatabase !== "/work/home/custom database.sqlite" ||
+    !/^[a-f0-9]{64}$/.test(value.archiveSha256) ||
+    value.application !== `/installation/code60/releases/${value.archiveSha256}` ||
+    !/^\d+\.\d+\.\d+$/.test(value.version) ||
+    typeof value.fakeAgent !== "string" ||
+    value.fakeAgent.length > 4096 ||
+    !value.fakeAgent.startsWith("/work/") ||
+    !value.fakeAgent.endsWith("/provider/fake-agent.mjs") ||
+    /[\0\r\n]/.test(value.fakeAgent) ||
+    resolve(value.fakeAgent) !== value.fakeAgent
+  )
+    throw Error("Invalid updated customer handoff; preserve run evidence");
+  return {
+    application: value.application,
+    launcher: value.launcher,
+    home: value.home,
+    setupDatabase: value.setupDatabase,
+    fakeAgent: value.fakeAgent,
+    version: value.version,
+    archiveSha256: value.archiveSha256,
+  };
+}
+
 export async function cleanupAcceptance(run, id) {
   const list = async (kind) =>
     (
@@ -107,7 +134,17 @@ export async function cleanupAcceptance(run, id) {
   return inventory;
 }
 
-async function stage(context, input, harness, archive, version, payload, managed, setup = false) {
+async function stage(
+  context,
+  input,
+  harness,
+  archive,
+  version,
+  payload,
+  managed,
+  setup = false,
+  update = false,
+) {
   await mkdir(join(context, "driver/test/fixtures"), { recursive: true });
   await mkdir(join(context, "driver/test/clean-install"), { recursive: true });
   await mkdir(input);
@@ -123,6 +160,7 @@ async function stage(context, input, harness, archive, version, payload, managed
     JSON.stringify({
       application,
       setup,
+      update,
       fakeAgent: managed
         ? "/installation/fixtures/fake-agent.mjs"
         : `${application}/fixtures/fake-agent.mjs`,
@@ -176,6 +214,28 @@ async function stage(context, input, harness, archive, version, payload, managed
         join(harness, "test/clean-install", name),
       );
   }
+  if (update) {
+    await mkdir(join(harness, "test/fixtures"), { recursive: true });
+    await cp(join(repository, "scripts/test-update.mjs"), join(harness, "scripts/test-update.mjs"));
+    for (const name of ["update-fixture.mjs", "policy.mjs", "command.mjs", "probe-native.mjs"])
+      await cp(
+        join(repository, "scripts/distribution", name),
+        join(harness, "scripts/distribution", name),
+      );
+    for (const name of [
+      "backend-supervisor.mjs",
+      "backend-supervisor-command.mjs",
+      "update-command.mjs",
+      "fake-agent.mjs",
+      "fake-agent-app.mjs",
+    ])
+      await cp(join(repository, "test/fixtures", name), join(harness, "test/fixtures", name));
+    await mkdir(join(harness, "build"));
+    await cp(join(repository, "build/distribution"), join(harness, "build/distribution"), {
+      recursive: true,
+    });
+    await writeFile(join(harness, "build/distribution/package.json"), '{"type":"module"}\n');
+  }
   for (const name of ["Customer.Dockerfile", "Driver.Dockerfile"])
     await cp(join(repository, "test/clean-install", name), join(context, name));
   for (const name of ["support.mjs", "install.mjs", "runtime.mjs", "probe.mjs", "supervisor.mjs"])
@@ -223,12 +283,13 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
   const root = await realpath(directory);
   let payload;
   let archive;
-  const setup = args[0] === "--setup";
+  const update = args[0] === "--update";
+  const setup = args[0] === "--setup" || update;
   const managed = args[0] === "--managed" || setup;
   if (args[0] === "--payload" || managed) {
     if (args.length !== 2)
       throw new Error(
-        "Use npm run test:packaged:clean -- --payload|--managed|--setup <descriptor.json>",
+        "Use npm run test:packaged:clean -- --payload|--managed|--setup|--update <descriptor.json>",
       );
     const path = resolve(root, args[1]);
     payload = descriptor(JSON.parse(await readFile(path, "utf8")));
@@ -334,6 +395,7 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
       payload,
       managed,
       setup,
+      update,
     );
     summary.playwright = version;
     const uid = process.platform === "linux" ? process.getuid() || 1000 : 1000;
@@ -410,9 +472,11 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
       ...mount("volume", state, "/work"),
     ]);
     await checked(
-      payload
-        ? "verified payload extraction without npm"
-        : "online installation from read-only local artifact",
+      update
+        ? "offline managed update preparation"
+        : payload
+          ? "verified payload extraction without npm"
+          : "online installation from read-only local artifact",
       async () => {
         await docker(
           [
@@ -421,23 +485,60 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
             ...common,
             "--network",
             payload ? "none" : "bridge",
+            ...(update
+              ? [
+                  "--workdir",
+                  "/harness",
+                  "-e",
+                  "TMPDIR=/work",
+                  "-e",
+                  "CODE60_ACCEPTANCE_UPDATE_HANDOFF=1",
+                ]
+              : []),
             ...fixtures,
             ...mount("volume", installation, "/installation"),
             ...mount("volume", state, "/work"),
             image,
             "node",
-            setup
-              ? "/harness/install-setup.mjs"
-              : managed
-                ? "/harness/install-managed.mjs"
-                : payload
-                  ? "/harness/test/clean-install/install-payload.mjs"
-                  : "/harness/install.mjs",
+            update
+              ? "/harness/scripts/test-update.mjs"
+              : setup
+                ? "/harness/install-setup.mjs"
+                : managed
+                  ? "/harness/install-managed.mjs"
+                  : payload
+                    ? "/harness/test/clean-install/install-payload.mjs"
+                    : "/harness/install.mjs",
+            ...(update ? ["/input/descriptor.json"] : []),
           ],
-          4 * 60_000,
+          (update ? 10 : 4) * 60_000,
         );
       },
     );
+    if (update) {
+      await checked("verified update handoff and bootstrap cache removal", async () => {
+        const text = await docker([
+          "run",
+          "--rm",
+          ...common,
+          "--network",
+          "none",
+          ...mount("volume", state, "/work"),
+          image,
+          "node",
+          "-e",
+          "process.stdout.write(require('node:fs').readFileSync('/work/control/update-layout.json','utf8'))",
+        ]);
+        const installed = updateAcceptanceLayout(JSON.parse(text));
+        await writeFile(
+          join(harness, "layout.json"),
+          JSON.stringify({ ...installed, setup: true, update: true }),
+        );
+        await rm(join(harness, "build"), { recursive: true });
+        await rm(join(harness, "bootstrap"), { recursive: true });
+        summary.updatedInstallation = installed;
+      });
+    }
     const runtime = `${name}-runtime`;
     const start = async (container, work, extra = [], override = [], scenario = "baseline") => {
       return docker([
@@ -594,7 +695,7 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
           mount(
             "volume",
             mask,
-            `${setup ? `/installation/code60/releases/${payload.archive.sha256}` : managed ? `/installation/customer-home/.local/share/code60/releases/${payload.archive.sha256}` : "/installation/product/node_modules/code60"}${target}`,
+            `${summary.updatedInstallation?.application ?? (setup ? `/installation/code60/releases/${payload.archive.sha256}` : managed ? `/installation/customer-home/.local/share/code60/releases/${payload.archive.sha256}` : "/installation/product/node_modules/code60")}${target}`,
             true,
           ),
           kind === "model" ? ["sleep", "infinity"] : [],
@@ -623,7 +724,12 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
     try {
       summary.cleanup = dockerReady
         ? await cleanupAcceptance(
-            (file, argv) => command(file, argv, { signal: cleanupAbort.signal, timeout: 35_000 }),
+            (file, argv) =>
+              command(file, argv, {
+                signal: cleanupAbort.signal,
+                timeout: 35_000,
+                log: join(output, `${String(++logIndex).padStart(2, "0")}-cleanup-${argv[0]}.log`),
+              }),
             id,
           )
         : { resourcesCreated: false };

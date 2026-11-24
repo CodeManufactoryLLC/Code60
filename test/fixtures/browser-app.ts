@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Browser } from "@playwright/test";
 import type { startGateway as GatewayFactory } from "../../src/gateway/index.js";
@@ -42,7 +42,7 @@ export async function browserApp(
     }),
   );
   const env = {
-    ...process.env,
+    PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
     HOME: directory,
     CODE60_DEV_CONTAINER: "0",
     SHELL: shell,
@@ -85,6 +85,7 @@ export async function browserApp(
     roots: [directory],
     assets: resolve("dist/renderer"),
     ...(providerDownload ? { providerDownload } : {}),
+    refreshPath: async (signal) => signal.throwIfAborted(),
   });
   const contexts = new Set<Awaited<ReturnType<Browser["newContext"]>>>();
   async function open(options: { hasTouch?: boolean } = {}) {
@@ -116,6 +117,7 @@ export async function browserApp(
         roots: [directory],
         assets: resolve("dist/renderer"),
         ...(providerDownload ? { providerDownload } : {}),
+        refreshPath: async (signal) => signal.throwIfAborted(),
       });
     },
     async close() {

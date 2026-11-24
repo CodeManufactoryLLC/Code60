@@ -67,6 +67,8 @@ export interface GatewayOptions {
   lanIntervalMs?: number;
   providerFetch?: typeof fetch;
   providerDownload?: typeof import("../application/index.js").ProviderDownload;
+  /** Trusted host composition only; browser/CLI requests cannot select a PATH. */
+  refreshPath?: (signal: AbortSignal) => Promise<void>;
   workflowClients?: { current: TransmissionClient; legacy: TransmissionClient };
 }
 const json = (value: unknown) => JSON.stringify(value ?? null);
@@ -194,6 +196,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     {
       ...(options.providerDownload ? { providerDownload: options.providerDownload } : {}),
       ...(options.providerFetch ? { providerFetch: options.providerFetch } : {}),
+      ...(options.refreshPath ? { refreshPath: options.refreshPath } : {}),
       relay: true,
       memory: true,
       openDatabase: openProjectDatabase,

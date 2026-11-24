@@ -380,7 +380,10 @@ this phase; they are not grounds to change engine APIs silently.
 
 ## Phase 7 — Explicit updates and installation recovery
 
-**Status:** in progress on `codex/explicit-updates-and-recovery`.
+**Status:** implemented on `codex/explicit-updates-and-recovery`; local Linux
+installation/update acceptance, native macOS workflow continuity and browser
+regressions pass. Required CI, clean exact-commit native artifacts and paired
+bootstrap verification remain delivery gates before merge.
 
 **PR outcome:** `code60 update` replaces the manual stop/install/repair/start sequence.
 

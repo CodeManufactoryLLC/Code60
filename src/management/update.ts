@@ -139,6 +139,7 @@ function requireService(status: ServiceStatus, currentRuntime = true) {
     );
 }
 async function consent(ports: UpdatePorts, yes: boolean, message: string, signal: AbortSignal) {
+  signal.throwIfAborted();
   ports.write(`${message}\n`);
   if (yes) return true;
   if (!ports.interactive) {
@@ -147,7 +148,9 @@ async function consent(ports: UpdatePorts, yes: boolean, message: string, signal
     );
     return false;
   }
-  return ports.confirm("Proceed with this backend interruption?", signal);
+  const approved = await ports.confirm("Proceed with this backend interruption?", signal);
+  signal.throwIfAborted();
+  return approved;
 }
 async function quiescent(ports: UpdatePorts, pid: number | null, signal: AbortSignal) {
   const deadline = Date.now() + ports.deadlineMs;
@@ -242,12 +245,14 @@ export async function runUpdate(
     return progress.value;
   };
   const phase = async (next: UpdateRecord["phase"]) => {
+    signal.throwIfAborted();
     if (!progress) throw Error("Update progress is missing");
     await save({
       ...progress.value,
       phase: next,
       outcome: next === "ready" || next === "aborted" ? "complete" : "running",
     });
+    signal.throwIfAborted();
   };
   try {
     release = await lockInstallation(record.root, "setup");
@@ -355,6 +360,7 @@ export async function runUpdate(
           expectedGeneration: receipt.generation,
           beforePublish: async ({ candidate }) => {
             await save({ ...currentRecord(), candidate: identityOf(candidate), phase: "prepared" });
+            signal.throwIfAborted();
             const before = await ports.service("status");
             requireService(before);
             const pid = validPid(before.service?.pid) ? before.service.pid : null;
@@ -380,6 +386,7 @@ export async function runUpdate(
             )
               throw new DeclinedUpdate();
             await phase("stopping");
+            signal.throwIfAborted();
             changedBackend = true;
             await ports.service("stop", true);
             await quiescent(ports, pid, signal);

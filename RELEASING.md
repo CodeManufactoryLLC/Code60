@@ -61,6 +61,11 @@ After native packaging, run `npm run test:transmission`. The manual Apple Silico
 workflow retains its traces, screenshots, original-key/run recovery and process
 cleanup evidence with the ordinary browser, setup and package checks. It uses
 real pinned engines/ACP/Codex and a fake external model endpoint, with runtime
-npm/npx/compiler traps. Retain published engine bindings and old executable caches
+npm/npx/compiler traps. The isolated model fixture disables unrelated remote
+plugin discovery; product runtime defaults are unchanged. Retain published engine
+bindings and old executable caches
 across app replacement; never delete workflow state to force a new runtime.
+The native update journey requires the freshly built macOS payload and retains
+the approved engine/worker processes through an actual managed update before
+completing the original workflow and comparing its source Git state.
 This validation installs no real login service and uses no live provider.

@@ -1,6 +1,6 @@
 # Management
 
-Own the narrow local setup/status/open/service/pairing CLI. Depend on gateway, platform, core and contracts through indexes. Never expose agent execution commands. Non-TTY service/pairing changes require explicit --yes; files-only setup remains non-interactive; do not prompt indefinitely. Never place pairing codes or secrets in subprocess arguments or diagnostics.
+Own the narrow local setup/status/update/open/service/pairing CLI. Depend on gateway, platform, core and contracts through indexes. Never expose agent execution commands. Non-TTY service/pairing changes require explicit --yes; files-only setup remains non-interactive; do not prompt indefinitely. Never place pairing codes or secrets in subprocess arguments or diagnostics.
 
 Internal distribution orchestration stays separate from CLI parsing. Bootstrap
 installer exports and launcher support must depend only on Node-built-in platform

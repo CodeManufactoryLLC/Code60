@@ -316,3 +316,32 @@ it("requires explicit recovery consent and never reclaims an uncertain installat
   }
   expect(await readFile(join(f.root, "update.json"), "utf8")).toBe(before);
 });
+it.each(
+  ["prepared", "stopped", "activated"].flatMap((phase) =>
+    (["SIGINT", "SIGTERM"] as const).map((signal) => ({ phase, signal })),
+  ),
+)(
+  "preserves interruption ownership and $signal exit status at $phase",
+  async ({ phase, signal }) => {
+    const f = await fixture();
+    let interrupted = false;
+    f.ports.checkpoint = async (record) => {
+      if (record.phase === phase && !interrupted) {
+        interrupted = true;
+        process.emit(signal);
+      }
+    };
+    await expect(runUpdate(["--yes"], f.env, f.ports)).rejects.toThrow();
+    expect(process.exitCode).toBe(signal === "SIGINT" ? 130 : 143);
+    if (phase === "prepared") {
+      expect(f.calls).not.toContain("stop");
+      expect((await f.journal()).phase).toBe("aborted");
+    } else expect((await f.journal()).outcome).toBe("interrupted");
+    expect((await readlink(join(f.root, "current"))) !== f.previous).toBe(phase === "activated");
+    expect(f.calls).not.toContain("repair");
+    // A subsequent explicit recovery may own these locks; cancellation releases
+    // only this attempt's lock rather than leaving a stale lock to be reclaimed.
+    const release = await lockInstallation(f.root, "setup");
+    await release();
+  },
+);

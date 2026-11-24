@@ -7,6 +7,7 @@ import {
   cleanupAcceptance,
   commandEnvironment,
   runCleanInstall,
+  updateAcceptanceLayout,
 } from "../scripts/test-clean-install.mjs";
 
 const directories = [];
@@ -41,6 +42,16 @@ function docker({
   const leaks = new Set();
   const starts = new Map();
   const run = vi.fn(async (_file, args, options) => {
+    if (args.some((value) => value.includes("readFileSync('/work/control/update-layout.json'")))
+      return JSON.stringify({
+        home: "/work/home",
+        launcher: "/work/home/.local/bin/code60",
+        setupDatabase: "/work/home/custom database.sqlite",
+        fakeAgent: "/work/update-fixture/provider/fake-agent.mjs",
+        application: `/installation/code60/releases/${"2".repeat(64)}`,
+        archiveSha256: "2".repeat(64),
+        version: "0.4.2",
+      });
     if (args[0] === "info") {
       if (unavailable) throw new Error("Docker stopped");
       return "linux\n";
@@ -237,6 +248,11 @@ it("reports image cleanup failure without a global prune or forced removal", asy
   );
   expect(report.cleanup.failed).toBe(true);
   expect(report.cleanup.remaining.images).toHaveLength(2);
+  const imageRemoval = ports.run.mock.calls.filter(
+    ([, args]) => args[0] === "image" && args[1] === "rm",
+  );
+  expect(imageRemoval).toHaveLength(2);
+  for (const [, , options] of imageRemoval) expect(options.log).toMatch(/\d+-cleanup-image\.log$/);
   expect(
     ports.run.mock.calls.some(([, args]) => args.includes("--force") || args.includes("prune")),
   ).toBe(false);
@@ -332,11 +348,62 @@ it("uses the same isolation and cleanup for explicit payload mode without npm in
     .find((args) => args.includes("/harness/test/clean-install/install-payload.mjs"));
   expect(installer[installer.indexOf("--network") + 1]).toBe("none");
   expect(result.cleanup).toEqual({ containers: [], images: [], volumes: [] });
+  const updatedPorts = docker();
+  const updated = await runCleanInstall(
+    root,
+    ["--update", "release/payloads/linux-x64.json"],
+    updatedPorts,
+  );
+  expect(updated.status).toBe("passed");
+  expect(updated.phases).toContain("offline managed update preparation");
+  expect(updated.updatedInstallation.version).toBe("0.4.2");
+  expect(updated.phases).toContain("verified update handoff and bootstrap cache removal");
+  const updateCalls = updatedPorts.run.mock.calls.map(([, args]) => args);
+  const prepare = updateCalls.find((args) => args.includes("/harness/scripts/test-update.mjs"));
+  expect(prepare[prepare.indexOf("--network") + 1]).toBe("none");
+  expect(prepare).toContain("CODE60_ACCEPTANCE_UPDATE_HANDOFF=1");
+  for (const target of ["dist/renderer", "models"])
+    expect(
+      updateCalls.some((args) =>
+        args.some((value) =>
+          value.includes(`/installation/code60/releases/${"2".repeat(64)}/${target}`),
+        ),
+      ),
+    ).toBe(true);
+  expect(updated.cleanup).toEqual({ containers: [], images: [], volumes: [] });
   await expect(runCleanInstall(root, ["--payload"], ports)).rejects.toThrow("<descriptor.json>");
   await rm(join(folder, name));
   await expect(
     runCleanInstall(root, ["--payload", "release/payloads/linux-x64.json"], ports),
   ).rejects.toThrow("Build the platform payload");
+});
+
+it("validates and allowlists the offline update handoff without forwarding arbitrary fields", () => {
+  const value = {
+    home: "/work/home",
+    launcher: "/work/home/.local/bin/code60",
+    setupDatabase: "/work/home/custom database.sqlite",
+    fakeAgent: "/work/owned/provider/fake-agent.mjs",
+    application: `/installation/code60/releases/${"2".repeat(64)}`,
+    archiveSha256: "2".repeat(64),
+    version: "0.4.2",
+    unwanted: "must not propagate",
+  };
+  expect(updateAcceptanceLayout(value)).not.toHaveProperty("unwanted");
+  for (const patch of [
+    { home: "/elsewhere" },
+    { launcher: "/usr/bin/code60" },
+    { setupDatabase: "/other/db" },
+    { archiveSha256: "3".repeat(64) },
+    { fakeAgent: "/work/../private/provider/fake-agent.mjs" },
+    { fakeAgent: "/host/provider/fake-agent.mjs" },
+    { version: "latest" },
+    { application: "/unowned/release" },
+  ])
+    expect(() => updateAcceptanceLayout({ ...value, ...patch })).toThrow(
+      "Invalid updated customer handoff",
+    );
+  expect(() => updateAcceptanceLayout(null)).toThrow();
 });
 
 it("setup mode keeps installed subtrees read-only and retains separate writable customer state", async () => {

@@ -86,6 +86,20 @@ describe("browser and package validation", () => {
         (step) => step.run === "npm run devcontainer -- exec npm run test:update",
       ),
     ).toBe(true);
+    const payloadCommands = ci.jobs.payload.steps.map((step) => step.run);
+    const chromiumInstall = payloadCommands.indexOf(
+      "npm run devcontainer -- exec npx --no-install playwright install chromium",
+    );
+    expect(chromiumInstall).toBeGreaterThanOrEqual(0);
+    expect(chromiumInstall).toBeLessThan(
+      payloadCommands.indexOf("npm run devcontainer -- exec npm run test:update"),
+    );
+    expect(
+      ci.jobs.payload.steps.some(
+        (step) =>
+          step.run === "npm run test:packaged:clean -- --update release/payloads/linux-x64.json",
+      ),
+    ).toBe(true);
     expect(nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:update")).toBe(
       true,
     );

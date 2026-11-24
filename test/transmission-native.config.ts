@@ -2,7 +2,11 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: ".",
-  testMatch: ["transmission-native.e2e.ts", "transmission-native-legacy.e2e.ts"],
+  testMatch: [
+    "transmission-native.e2e.ts",
+    "transmission-native-legacy.e2e.ts",
+    "update-native-workflow.e2e.ts",
+  ],
   outputDir: "../test-results/transmission-native",
   workers: 1,
   timeout: 180_000,

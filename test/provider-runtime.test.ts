@@ -158,14 +158,21 @@ it("retains uncertain resources after failed cleanup and retries only its own st
     hasExited: () => false,
     stop,
   };
+  const abort = new AbortController();
+  const spawn = vi.fn(async () => {
+    // Cancel only after the owned child exists: filesystem/archive work can
+    // legitimately outlast a short wall-clock deadline under coverage.
+    abort.abort();
+    return child;
+  });
   const runtime = createProviderRuntime(f.env, {
     download: syntheticProviderDownload,
-    spawn: async () => child,
-    installMs: 100,
+    spawn,
   });
-  await expect(
-    runtime.policies.claude?.install(new AbortController().signal),
-  ).rejects.toMatchObject({ reason: "cleanup" });
+  await expect(runtime.policies.claude?.install(abort.signal)).rejects.toMatchObject({
+    reason: "cleanup",
+  });
+  expect(spawn).toHaveBeenCalledOnce();
   const parent = join(managedProviderDirectory(f.env, "claude"), "..");
   expect((await readdir(parent)).some((name) => name.startsWith(".install-"))).toBe(true);
   await runtime.policies.claude?.cleanup();

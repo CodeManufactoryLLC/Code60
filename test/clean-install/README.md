@@ -99,3 +99,21 @@ the setup-created database. Release/activation volume subpaths are read-only;
 management metadata and database storage remain writable. No checkout or host
 credentials enter the customer. Original tarball, payload and managed modes retain
 their independent manual-database journeys and fault/leak/cleanup probes.
+
+## Update mode
+
+Run `npm run test:packaged:clean -- --update release/payloads/linux-x64.json` after
+building the current Linux payload. The Node-only customer prepares a managed
+installation and a controlled newer version fixture entirely with `--network none`.
+Only the test artifact transport and native supervisor are injected. It exercises
+integrity failure, declined consent, SIGINT before publication, explicit recovery,
+concurrent update rejection, successful activation and read-only/no-op behavior.
+
+The preparer stops its real backend before handoff. The host validates the new
+layout and removes the temporary installer/bootstrap support before starting a
+fresh customer. Releases and activations are mounted read-only; preserved custom
+database, preferences and management metadata remain writable. A separate driver
+shares the customer's loopback namespace and completes the shared golden journey.
+The customer contains no Playwright/Chromium or development dependencies. Existing
+asset/model faults, leaked-child detection and independent labelled cleanup still
+apply. Version fixtures are not release artifacts or native login-service evidence.

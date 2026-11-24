@@ -75,6 +75,15 @@ a controlled newer version; its descriptors are test fixtures, not release or
 unexecuted-platform evidence. The original payload stays unchanged. Evidence under
 `test-results/update` records custom-database preservation, retained activations,
 engine binding bytes, native offline models, no-op PID continuity and owned cleanup.
+Prepare matching Chromium explicitly with
+`npx --no-install playwright install chromium` in a fresh development container;
+the browser cache stays outside the customer installation.
+
+On the Docker host also run
+`npm run test:packaged:clean -- --update release/payloads/linux-x64.json`. This
+adds the separate minimal customer/browser-driver boundary, forced offline
+networking and read-only release/activation mounts after the update handoff.
+The installed application never imports the host checkout or driver dependencies.
 
 Focused checks cover registry and payload attacks, ownership, immutable
 generations, consent, quiescence, interruption and explicit recovery. Packaged
@@ -82,5 +91,13 @@ acceptance must additionally exercise the full golden journey against the update
 release and independently compare database/preferences, Git/index/HEAD/worktrees,
 engine bindings and process outcomes. Keep npm tarball, artifact-only, managed,
 setup, shell, offline-model and native workflow regressions independent.
+After native payload packaging, `npm run test:transmission` also starts approved
+staging.20 work through visible controls and independently resumes a retained
+staging.18 start whose acknowledgement was lost. Each managed installation selects
+a valid custom database, replaces the application through the installed update
+transaction, then completes its original workflow. It compares engine/worker PIDs,
+original runtime bindings, run/start identity, selected database and source Git
+state. Only the remote model and service supervisor are fixtures; this is separate
+from a backend restart without application replacement.
 Fake supervisor boundaries do not certify actual launchd/systemd login or reboot
 behavior; that remains Phase 9 validation in an authorized disposable environment.

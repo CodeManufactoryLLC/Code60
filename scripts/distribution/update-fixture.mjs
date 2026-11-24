@@ -18,6 +18,13 @@ export async function updateFixture(identity, parent, transport, signal) {
     manifest.version = version;
     await writeFile(join(staged.root, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
     const metadata = JSON.parse(await readFile(join(staged.root, "payload.json"), "utf8"));
+    const distinctEngineManifest = typeof metadata.transmissionBundle === "string";
+    if (distinctEngineManifest) {
+      const path = join(staged.root, "dist/engines", metadata.transmissionBundle, "bundle.json");
+      const bundle = JSON.parse(await readFile(path, "utf8"));
+      bundle.acceptanceCandidate = "distinct manifest; original engine bindings must survive";
+      await writeFile(path, `${JSON.stringify(bundle, null, 2)}\n`);
+    }
     await rm(join(staged.root, "payload.json"));
     metadata.version = version;
     metadata.dirty = false;
@@ -90,7 +97,15 @@ export async function updateFixture(identity, parent, transport, signal) {
         integrity: `sha512-${createHash("sha512").update(bytes).digest("base64")}`,
       },
     };
-    return { descriptor, archive, bootstrap, registry, synthetic: true, original: identity };
+    return {
+      descriptor,
+      archive,
+      bootstrap,
+      registry,
+      synthetic: true,
+      distinctEngineManifest,
+      original: identity,
+    };
   } finally {
     await rm(staged.owned, { recursive: true });
   }
