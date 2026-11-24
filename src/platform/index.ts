@@ -73,8 +73,10 @@ export {
 } from "./storage.js";
 export { assertSupportedPlatform } from "./support.js";
 export {
+  installedEngineVersions,
   preserveTransmissionBundle,
   resolveTransmissionRuntime,
+  workflowHostSupported,
 } from "./transmission-bundle.js";
 export {
   newerStableRelease,

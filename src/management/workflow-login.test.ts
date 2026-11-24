@@ -136,7 +136,7 @@ it("bounds authentication and reports timeout after the child settles", async ()
   expect(f.remove).toHaveBeenCalledOnce();
 });
 it("rejects Linux before touching bindings", async () => {
-  vi.stubGlobal("process", { ...process, platform: "linux", arch: "x64" });
+  vi.stubGlobal("process", { ...process, platform: "linux", arch: "arm64" });
   const f = fixture();
   await expect(workflowLogin(["login"], {}, f.ports)).rejects.toThrow("macOS Apple Silicon");
   expect(f.ports.runtime).not.toHaveBeenCalled();

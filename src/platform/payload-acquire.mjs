@@ -82,9 +82,8 @@ async function verifyPayload(root, expected, entries, signal) {
     throw new Error("Unexpected payload content");
   const inventory = new Map(metadata.files.map((entry) => [entry.path, entry]));
   const engineFiles = metadata.files.filter((entry) => entry.path.startsWith("dist/engines/"));
-  if (expected.os === "linux") {
-    if (metadata.transmissionBundle !== undefined || engineFiles.length)
-      throw Error("Linux payload must omit unsupported Transmission components");
+  if (expected.os === "linux" && metadata.transmissionBundle === undefined) {
+    if (engineFiles.length) throw Error("Linux payload contains an undeclared Transmission bundle");
   } else if (
     !/^[a-f0-9]{64}$/.test(metadata.transmissionBundle) ||
     !inventory.has(`dist/engines/${metadata.transmissionBundle}/bundle.json`) ||
@@ -92,7 +91,9 @@ async function verifyPayload(root, expected, entries, signal) {
       (entry) => !entry.path.startsWith(`dist/engines/${metadata.transmissionBundle}/`),
     )
   )
-    throw Error("macOS payload requires its pinned Transmission bundle");
+    throw Error(
+      `${expected.os === "darwin" ? "macOS" : "Linux"} payload requires its pinned Transmission bundle`,
+    );
   const actual = entries.filter((entry) => entry.type !== "5" && entry.path !== "payload.json");
   if (inventory.size !== metadata.files.length || inventory.size !== actual.length)
     throw new Error("Payload inventory mismatch");

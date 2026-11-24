@@ -4,8 +4,9 @@ export default defineConfig({
   testDir: ".",
   testMatch: [
     "transmission-native.e2e.ts",
-    "transmission-native-legacy.e2e.ts",
-    "update-native-workflow.e2e.ts",
+    ...(process.platform === "darwin"
+      ? ["transmission-native-legacy.e2e.ts", "update-native-workflow.e2e.ts"]
+      : []),
   ],
   outputDir: "../test-results/transmission-native",
   workers: 1,

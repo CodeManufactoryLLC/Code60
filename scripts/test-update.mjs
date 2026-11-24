@@ -184,9 +184,10 @@ await runCommand(async (cancel) => {
     assert.ok(beforePid);
     const databaseHash = await sha256(custom, signal);
     const engineBindings = {};
-    if (process.platform === "darwin")
-      for (const version of ["0.1.0-staging.18", "0.1.0-staging.20"])
-        engineBindings[version] = await readFile(join(root, "engines", `${version}.json`), "utf8");
+    for (const version of process.platform === "linux"
+      ? ["0.1.1"]
+      : ["0.1.0-staging.18", "0.1.0-staging.20"])
+      engineBindings[version] = await readFile(join(root, "engines", `${version}.json`), "utf8");
     const requests = [];
     let announceMetadata;
     const metadataRequested = new Promise((resolveMetadata) => {

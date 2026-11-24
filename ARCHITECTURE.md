@@ -595,13 +595,12 @@ imports are permitted.
 
 ### Approved Transmission workflows
 
-Apps → Workflows is a database-independent, macOS-only execution prototype using
-exactly `code60-transmission-server@0.1.0-staging.20` for new approvals and recorded Node >=24.22 <25.
+Apps → Workflows is a database-independent execution interface using
+`code60-transmission-server@0.1.0-staging.20` for new macOS approvals or `0.1.1` for new Linux x64 approvals and recorded Node >=24.22 <25.
 macOS payloads bundle that artifact and staging.18 with a separate committed
 production lockfile, verified prebuilt Codex runtime and dependency notices. The
 supported artifacts contain no engine-native helper sources; helpers from the
-newer, incompatible Transmission checkout are not substituted. Linux payloads
-omit these components. Build-time npm acquisition is separate from execution;
+newer, incompatible Transmission checkout are not substituted. Linux payloads include their own engine, lockfile and native x64 Codex runtime. Build-time npm acquisition is separate from execution;
 workflow start/reconnect never runs npm, npx or a compiler.
 
 Managed installation preserves the bundle under XDG_DATA_HOME/code60/engines,

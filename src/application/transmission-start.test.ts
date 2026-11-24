@@ -46,7 +46,7 @@ async function fixture() {
     CODEX_PATH: "/unwanted/application/codex",
     npm_config_registry: "https://invalid.example",
   });
-  Object.defineProperty(client, "supported", { value: true });
+  Object.defineProperty(client, "supported", { configurable: true, value: true });
   const child = {
     pid: 1234,
     stdin: new PassThrough(),
@@ -74,7 +74,7 @@ it("launches the preserved exact entrypoint without npm and releases only its MC
   expect(command).toEqual([process.execPath, "/bundle/engine.js", "mcp"]);
   expect(fake.resolve).toHaveBeenCalledWith(
     expect.any(Object),
-    "0.1.0-staging.20",
+    process.platform === "linux" ? "0.1.1" : "0.1.0-staging.20",
     expect.any(AbortSignal),
   );
   expect(temporary).toBe("/bundle");
@@ -124,7 +124,7 @@ it("honors cancellation before downloading", async () => {
 it("refuses the unsupported production execution boundary", async () => {
   const f = await fixture();
   Object.defineProperty(f.client, "supported", { value: false });
-  await expect(f.client.connect(new AbortController().signal)).rejects.toThrow("macOS");
+  await expect(f.client.connect(new AbortController().signal)).rejects.toThrow("is unavailable");
 });
 
 it("preserves damaged bindings rather than falling back to a replacement", async () => {

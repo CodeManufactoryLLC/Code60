@@ -117,8 +117,7 @@ disabled. It verifies the prebuilt Apple Silicon Codex runtime before archiving,
 records exact package integrities, dependency inventory, native hashes, Node and
 lockfile identity, and includes dependency notices. These pinned releases have no
 native helper sources requiring compilation. Do not substitute helpers or APIs
-from the newer Transmission repository. Linux payload verification rejects engine
-components rather than shipping binaries that cannot run there.
+from the newer Transmission repository. Linux x64 payloads stage the pinned Transmission 0.1.1 tarball from `distribution/transmission-linux` with the Linux Codex executable. The lock records the candidate integrity. The bundle records the dependency inventory and native binary digest.
 
 Exclude dependency `.npmignore` and `.gitignore` metadata before recording the
 engine inventory, since npm strips or renames it when repacking. The installed

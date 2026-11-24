@@ -2,7 +2,7 @@ import { DirectionStraightRight, Pause, Play, Stop } from "@carbon/icons-react";
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   type ApplicationClient,
-  TRANSMISSION_VERSION,
+  supportsWorkflowPause,
   type WorkflowEvent,
   type WorkflowRecord,
   type WorkflowRequest,
@@ -381,7 +381,7 @@ export function WorkflowPlayer({
   const terminal = status === "completed" || status === "failed" || status === "cancelled";
   const controllable = connected && !terminal && !!snapshot && !busy && !record.stopPending;
   const canStop = connected && !!snapshot && !busy && (!terminal || !!record.stopPending);
-  const modern = record.engineVersion === TRANSMISSION_VERSION;
+  const modern = supportsWorkflowPause(record.engineVersion);
   const legacyReason = modern ? undefined : "Pause and resume require Transmission staging.20";
   const command = (action: "pause" | "resume" | "cancel" | "recover") =>
     act({ action, id: record.id });
