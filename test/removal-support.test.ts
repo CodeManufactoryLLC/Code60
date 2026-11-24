@@ -20,12 +20,15 @@ import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  applyShellIntegration,
   finishManagedRemoval,
   installManagedRelease,
   planManagedRemoval,
+  planShellIntegration,
   prepareManagedRemoval,
   readRemovalState,
 } from "../src/management/index.js";
+import { runUninstall, type UninstallPorts } from "../src/management/uninstall.js";
 import {
   captureRemovalServiceProof,
   privateDirectory,
@@ -156,6 +159,34 @@ async function retained(f: Awaited<ReturnType<typeof fixture>>) {
   expect((await lstat(join(f.root, "installation.json"))).mode & 0o777).toBe(0o600);
   expect(await readdir(f.root)).not.toContain(".install-lock");
   expect(await readdir(f.root)).not.toContain(".setup-lock");
+}
+
+function uninstallPorts(f: Awaited<ReturnType<typeof fixture>>) {
+  return {
+    interactive: false as boolean,
+    write: vi.fn((_message: string) => {}),
+    confirm: vi.fn(async (_message: string, _signal: AbortSignal) => false),
+    status: vi.fn(async () => ({
+      installed: false,
+      nativeState: "stopped",
+      runtimeCurrent: true,
+      service: null as Record<string, unknown> | null,
+    })),
+    summary: vi.fn(async () => ({
+      pid: 42,
+      interactiveActive: false,
+      scheduledActive: false,
+      schedulerAvailable: true,
+      scheduledUncertain: false,
+      workflows: { completed: 0, active: 0, uncertain: 0 },
+    })),
+    prepare: vi.fn(async () => ({ quiescent: true, pid: 42, enginePids: [43] })),
+    remove: vi.fn(async (_guard: Parameters<UninstallPorts["remove"]>[0]) =>
+      structuredClone(f.proof),
+    ),
+    reserve: f.reserve,
+    runtimeDirectory: resolve("build/distribution"),
+  } satisfies UninstallPorts;
 }
 
 async function inspectionTools(home: string, gated = false) {
@@ -531,6 +562,159 @@ it("refuses an incomplete support build and removes only its newly created direc
     "receipt is invalid",
   );
   expect(await readdir(join(f.root, "removals"))).toEqual([]);
+  expect(await readRemovalState(f.plan.record)).toBe(null);
+  await retained(f);
+});
+
+it("public uninstall declines without service, application or profile changes", async () => {
+  const f = await fixture();
+  const ports = uninstallPorts(f);
+  ports.interactive = true;
+  const before = await readFile(join(f.proof.root, "registration.json"));
+  await runUninstall([], f.env, ports);
+  expect(ports.confirm).toHaveBeenCalledOnce();
+  expect(ports.remove).not.toHaveBeenCalled();
+  expect(await readRemovalState(f.plan.record)).toBe(null);
+  expect(await readFile(join(f.proof.root, "registration.json"))).toEqual(before);
+  expect(await readFile(join(f.release, "NOTICE"), "utf8")).toBe("owned notice\n");
+  await retained(f);
+});
+
+it("public non-TTY uninstall requires trailing consent and --yes never edits profiles", async () => {
+  const f = await fixture();
+  const ports = uninstallPorts(f);
+  const preview = await planShellIntegration(f.env);
+  await applyShellIntegration(preview, { approved: true, interactive: true });
+  const profiles = await Promise.all(preview.edits.map((edit) => readFile(edit.path, "utf8")));
+  await expect(runUninstall([], f.env, ports)).rejects.toThrow("explicit consent");
+  expect(ports.remove).not.toHaveBeenCalled();
+  await runUninstall(["--yes"], f.env, ports);
+  expect(ports.confirm).not.toHaveBeenCalled();
+  expect(ports.remove).toHaveBeenCalledOnce();
+  expect(ports.prepare).not.toHaveBeenCalled();
+  expect(await Promise.all(preview.edits.map((edit) => readFile(edit.path, "utf8")))).toEqual(
+    profiles,
+  );
+  expect(
+    ports.write.mock.calls.some(
+      ([message]) => message.includes("Recovery command") && message.includes(" uninstall --yes"),
+    ),
+  ).toBe(true);
+  expect((await readRemovalState(f.plan.record))?.value.phase).toBe("complete");
+  await retained(f);
+});
+
+it.each([true, false])(
+  "public --yes still requests separate interactive profile approval: %s",
+  async (approved) => {
+    const f = await fixture();
+    const ports = uninstallPorts(f);
+    ports.interactive = true;
+    await writeFile(join(f.home, ".bashrc"), "unrelated profile content\n", { mode: 0o600 });
+    const preview = await planShellIntegration(f.env);
+    await applyShellIntegration(preview, { approved: true, interactive: true });
+    const before = await readFile(join(f.home, ".bashrc"), "utf8");
+    ports.confirm.mockResolvedValue(approved);
+    await runUninstall(["--yes"], f.env, ports);
+    expect(ports.confirm).toHaveBeenCalledOnce();
+    expect(ports.confirm.mock.calls[0]?.[0]).toContain("shell profile");
+    expect(await readFile(join(f.home, ".bashrc"), "utf8")).toBe(
+      approved ? "unrelated profile content\n" : before,
+    );
+    await retained(f);
+  },
+);
+
+it.each(["interactive", "scheduled", "workflow", "unenrolled-running"] as const)(
+  "public uninstall refuses uncertain/active %s before asking for consent or stopping anything",
+  async (fault) => {
+    const f = await fixture();
+    const ports = uninstallPorts(f);
+    ports.interactive = true;
+    ports.status.mockResolvedValue({
+      installed: fault !== "unenrolled-running",
+      nativeState: "running",
+      runtimeCurrent: true,
+      service: { pid: 42 },
+    });
+    const summary = await ports.summary();
+    if (fault === "interactive") summary.interactiveActive = true;
+    if (fault === "scheduled") summary.scheduledUncertain = true;
+    if (fault === "workflow") summary.workflows.uncertain = 1;
+    ports.summary.mockResolvedValue(summary);
+    await expect(runUninstall([], f.env, ports)).rejects.toThrow(/uncertain|active/);
+    expect(ports.confirm).not.toHaveBeenCalled();
+    expect(ports.prepare).not.toHaveBeenCalled();
+    expect(ports.remove).not.toHaveBeenCalled();
+    expect(await readFile(join(f.release, "NOTICE"), "utf8")).toBe("owned notice\n");
+    await retained(f);
+  },
+);
+
+it("public uninstall forwards exact prepared generation to guarded removal and merges process evidence", async () => {
+  const f = await fixture();
+  const ports = uninstallPorts(f);
+  ports.status.mockResolvedValue({
+    installed: true,
+    nativeState: "running",
+    runtimeCurrent: true,
+    service: { pid: 42 },
+  });
+  await runUninstall(["--yes"], f.env, ports);
+  expect(ports.remove).toHaveBeenCalledWith({
+    pid: 42,
+    executable: f.plan.current.receipt.node.path,
+    entrypoint: join(f.release, "dist/gateway/main.js"),
+    appVersion: "1.0.0",
+  });
+  expect(ports.prepare.mock.invocationCallOrder[0]).toBeLessThan(
+    ports.remove.mock.invocationCallOrder[0] ?? 0,
+  );
+  expect((await readRemovalState(f.plan.record))?.receipt.service.pids.sort()).toEqual([42, 43]);
+  await retained(f);
+});
+
+it("public uninstall refuses conflicting stopped runtime metadata before consent or profile changes", async () => {
+  const f = await fixture();
+  const ports = uninstallPorts(f);
+  ports.interactive = true;
+  ports.status.mockResolvedValue({
+    installed: false,
+    nativeState: "stopped",
+    runtimeCurrent: false,
+    service: null,
+  });
+  await expect(runUninstall([], f.env, ports)).rejects.toThrow("runtime ownership is uncertain");
+  expect(ports.confirm).not.toHaveBeenCalled();
+  expect(ports.remove).not.toHaveBeenCalled();
+  expect(await readRemovalState(f.plan.record)).toBe(null);
+  await retained(f);
+});
+
+it("public uninstall resumes recorded preparation without reinstalling, probing or removing the service again", async () => {
+  const f = await fixture();
+  const ports = uninstallPorts(f);
+  await expect(
+    runUninstall(["--yes"], f.env, {
+      ...ports,
+      checkpoint: async () => {
+        throw Error("intentional interruption");
+      },
+    }),
+  ).rejects.toThrow("Resume:");
+  expect((await readRemovalState(f.plan.record))?.value.phase).toBe("prepared");
+  ports.status.mockRejectedValue(Error("Unexpected status probe"));
+  ports.remove.mockRejectedValue(Error("Unexpected service mutation"));
+  await runUninstall(["--yes"], f.env, ports);
+  expect(ports.status).toHaveBeenCalledTimes(1);
+  expect(ports.remove).toHaveBeenCalledTimes(1);
+  expect((await readRemovalState(f.plan.record))?.value.phase).toBe("complete");
+  await retained(f);
+});
+
+it("default public uninstall refuses an old/source CLI before native service effects", async () => {
+  const f = await fixture();
+  await expect(runUninstall(["--yes"], f.env)).rejects.toThrow("current installed code60 command");
   expect(await readRemovalState(f.plan.record)).toBe(null);
   await retained(f);
 });

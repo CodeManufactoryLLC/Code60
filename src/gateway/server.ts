@@ -921,11 +921,17 @@ export async function startGateway(options: GatewayOptions = {}) {
 }
 
 async function readGatewayConnection(env: Readonly<NodeJS.ProcessEnv>): Promise<GatewayConnection> {
-  const value = (await readPrivateJson(
-    join(gatewayRoot(env), "connection.json"),
-    4096,
+  const value = (await readPrivateJson(join(gatewayRoot(env), "connection.json"), 4096).catch(
+    (error: unknown) => {
+      if (fileCode(error) === "ENOENT") throw error;
+      throw Error(
+        "Backend connection metadata is unavailable or invalid. Existing state was preserved.",
+      );
+    },
   )) as GatewayConnection;
   if (
+    !value ||
+    typeof value !== "object" ||
     value.version !== GATEWAY_VERSION ||
     !/^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(value.origin) ||
     !/^[a-f0-9]{64}$/.test(value.token) ||

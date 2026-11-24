@@ -28,6 +28,12 @@ repair its service registration, start the backend and pair the browser again.
 Preserve the old package for inspection. Never downgrade application data or
 erase locks/history to make an older package start.
 
+Managed `code60 uninstall` removes owned application resources while retaining
+data, configuration and engine evidence; see [uninstall recovery](docs/distribution/uninstall.md).
+Release acceptance must cover the installed golden journey, actual guarded process
+exit, interrupted cleanup through the standalone launcher and retained-data
+reinstallation. Component/native-engine smoke results cannot satisfy those gates.
+
 ## Platform payload and bootstrap candidates
 
 The [artifact workflow](docs/distribution/artifacts.md) adds private platform

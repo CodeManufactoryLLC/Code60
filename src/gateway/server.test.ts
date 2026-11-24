@@ -514,6 +514,18 @@ it("keeps damaged private workflow contents out of uninstall inspection errors",
   expect((await managementRequest(env, "status")).pid).toBe(process.pid);
 });
 
+it("keeps damaged private connection contents out of uninstall client errors without quiescing the backend", async () => {
+  const f = await fixture();
+  const path = join(f.directory, "state/code60/gateway/connection.json");
+  const contents = "private123";
+  await writeFile(path, contents, { mode: 0o600 });
+  await expect(managementRequest(f.env, "prepare-uninstall")).rejects.toThrow(
+    "Backend connection metadata is unavailable or invalid",
+  );
+  expect(await readFile(path, "utf8")).toBe(contents);
+  expect((await fetch(`${f.gateway.origin}/api/connection`)).status).toBe(200);
+});
+
 it("prepares uninstall only with private authentication and no payload, then keeps all owners quiescent", async () => {
   const { env, directory, gateway } = await fixture();
   const metadata = (await readPrivateJson(

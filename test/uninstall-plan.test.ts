@@ -23,6 +23,7 @@ afterEach(async () => {
 });
 async function fixture(
   transform?: (files: { path: string; type: string; sha256: string; size: number }[]) => unknown[],
+  directories?: string[],
 ) {
   const home = await realpath(await mkdtemp(join(tmpdir(), "code60 uninstall plan ' ")));
   roots.push(home);
@@ -41,6 +42,8 @@ async function fixture(
         const owned = await mkdtemp(join(parent, ".code60-payload-"));
         const root = join(owned, "application");
         await mkdir(join(root, "dist/management"), { recursive: true, mode: 0o700 });
+        for (const path of directories ?? [])
+          await mkdir(join(root, path), { recursive: true, mode: 0o700 });
         const contents = {
           "dist/management/cli.js": "export async function runManagement(){}",
           NOTICE: "Notice fixture\n",
@@ -61,6 +64,7 @@ async function fixture(
             os: process.platform,
             arch: process.arch,
             files: transform?.(files) ?? files,
+            ...(directories ? { directories: ["dist", "dist/management", ...directories] } : {}),
           }),
         );
         return { root, owned };
@@ -95,6 +99,23 @@ it("plans only receipted release/activation inventory and leaves retained data a
   expect(await readFile(join(f.root, "databases/default.sqlite"), "utf8")).toBe(
     "retained customer data",
   );
+});
+
+it("owns explicitly receipted empty platform directories and still refuses a later outside directory", async () => {
+  const f = await fixture(undefined, [
+    "node_modules",
+    "node_modules/native",
+    "node_modules/native/empty-platform",
+  ]);
+  const plan = await planManagedRemoval(f.env);
+  expect(plan?.releases[0]?.entries).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ path: "node_modules/native/empty-platform", type: "directory" }),
+    ]),
+  );
+  await mkdir(join(f.release, "node_modules/native/outside"), { mode: 0o700 });
+  await expect(planManagedRemoval(f.env)).rejects.toThrow("unowned contents");
+  expect((await lstat(join(f.release, "node_modules/native/outside"))).isDirectory()).toBe(true);
 });
 it.each(["modified-payload", "extra-file", "empty-directory", "extra-support"])(
   "rejects uncertain active ownership: %s",

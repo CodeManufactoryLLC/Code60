@@ -65,7 +65,10 @@ function validRuntime(value: RegisteredRuntime) {
 async function registration(env: Readonly<NodeJS.ProcessEnv>) {
   const value = (await readPrivateJson(join(gatewayRoot(env), "registration.json"), 16_384).catch(
     (error) => {
-      if (fileCode(error) !== "ENOENT") throw error;
+      if (fileCode(error) !== "ENOENT")
+        throw Error(
+          "Backend registration is unavailable or invalid. Existing state was preserved.",
+        );
       return null;
     },
   )) as Registration | null;

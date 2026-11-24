@@ -33,6 +33,11 @@ The builder installs a fresh locked production tree with scripts disabled, witho
 copying host dependencies. Build-time npm access is permitted; extraction and
 runtime acceptance perform no npm resolution, lifecycle scripts or compilation.
 Payloads include compiled assets, models, production notices and provenance.
+New payload manifests also record every directory, including empty platform
+placeholders. Acquisition compares that list with the verified archive entries;
+uninstall can then distinguish owned empty directories from outside additions.
+Older private descriptors remain verifiable without that optional manifest field;
+unproven directory ownership is preserved rather than inferred during removal.
 Foreign ONNX platform binaries and cache directories are explicitly excluded.
 
 Each target produces `release/payloads/<os>-<arch>.json` and a versioned tar.gz.

@@ -1,6 +1,6 @@
 # Management
 
-Own the narrow local setup/status/update/open/service/pairing CLI. Depend on gateway, platform, core and contracts through indexes. Never expose agent execution commands. Non-TTY service/pairing changes require explicit --yes; files-only setup remains non-interactive; do not prompt indefinitely. Never place pairing codes or secrets in subprocess arguments or diagnostics.
+Own the narrow local setup/status/update/uninstall/open/service/pairing CLI. Depend on gateway, platform, core and contracts through indexes. Never expose agent execution commands. Non-TTY service/pairing changes require explicit --yes; files-only setup remains non-interactive; do not prompt indefinitely. Never place pairing codes or secrets in subprocess arguments or diagnostics.
 
 Internal distribution orchestration stays separate from CLI parsing. Bootstrap
 installer exports and launcher support must depend only on Node-built-in platform
@@ -54,3 +54,12 @@ Preserve changed support, foreign files/launchers and all data/engine/worktree s
 Release failures remain failures after completed deletion; do not roll it back.
 Reinstall refuses unfinished removal and recognizes a later healthy activation;
 an old recovery attempt can never delete that new installation.
+Use explicit verified payload directory metadata for shipped empty directories;
+undeclared additions never become owned through their name or location alone.
+Installed uninstall parsing/orchestration stays outside the Node-only bootstrap
+index. Parse before effects and read removal progress before requiring an intact
+activation. The default CLI must match the current release before a new attempt;
+old launchers cannot uninstall a later activation. Refuse active/uncertain work,
+then require service/application consent and separate profile approval. Publish
+and print durable recovery before deletion. Release the outer setup lock before
+calling cleanup, which owns its own setup/install/runtime/service locks.

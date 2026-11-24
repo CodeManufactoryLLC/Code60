@@ -96,6 +96,19 @@ it("keeps uninstalled status read-only and requires explicit consent before inst
   await expect(readFile(join(root, "registration.json"))).rejects.toMatchObject({ code: "ENOENT" });
   expect(fake.control).not.toHaveBeenCalled();
 });
+
+it("keeps damaged private registration contents out of management errors", async () => {
+  const f = await fixture();
+  await privateDirectory(f.root);
+  const contents = "private123";
+  const path = join(f.root, "registration.json");
+  await writeFile(path, contents, { mode: 0o600 });
+  await expect(backendControl(f.env, "status")).rejects.toThrow(
+    "Backend registration is unavailable or invalid",
+  );
+  expect(await readFile(path, "utf8")).toBe(contents);
+  expect(fake.control).not.toHaveBeenCalled();
+});
 it("pins plain Node and the backend entrypoint, ignoring Electron/AppImage environment", async () => {
   const { env, root } = await fixture();
   await backendControl(env, "install", true);

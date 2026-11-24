@@ -18,7 +18,7 @@ import { sha256 } from "./distribution/acquire.mjs";
 import { writeArchive } from "./distribution/archive.mjs";
 import { runCommand } from "./distribution/command.mjs";
 import { descriptor, limits, nodeRange, platform } from "./distribution/descriptor.mjs";
-import { inventory, notices, pruneNative } from "./distribution/policy.mjs";
+import { inventory, inventoryDirectories, notices, pruneNative } from "./distribution/policy.mjs";
 
 const execute = promisify(execFile);
 export async function packagePayload(root, { signal } = {}) {
@@ -108,6 +108,7 @@ export async function packagePayload(root, { signal } = {}) {
       lockfileSha256: await sha256(join(application, "package-lock.json")),
       ...(transmissionBundle ? { transmissionBundle } : {}),
       files: await inventory(application),
+      directories: await inventoryDirectories(application),
     };
     await writeFile(join(application, "payload.json"), `${JSON.stringify(metadata, null, 2)}\n`);
     const name = `code60-${manifest.version}-${target}.tar.gz`;

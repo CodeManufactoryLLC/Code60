@@ -96,6 +96,20 @@ async function verifyPayload(root, expected, entries, signal) {
   const actual = entries.filter((entry) => entry.type !== "5" && entry.path !== "payload.json");
   if (inventory.size !== metadata.files.length || inventory.size !== actual.length)
     throw new Error("Payload inventory mismatch");
+  // Older private payloads did not describe empty directories. New payloads
+  // pin every directory so later removal need not claim an unrecorded object.
+  if (metadata.directories !== undefined) {
+    const directories = new Set(
+      entries.filter((entry) => entry.type === "5").map((entry) => entry.path),
+    );
+    if (
+      !Array.isArray(metadata.directories) ||
+      metadata.directories.length !== directories.size ||
+      new Set(metadata.directories).size !== directories.size ||
+      metadata.directories.some((path) => typeof path !== "string" || !directories.has(path))
+    )
+      throw Error("Payload directory inventory mismatch");
+  }
   for (const entry of actual) {
     const item = inventory.get(entry.path);
     if (

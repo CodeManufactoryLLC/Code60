@@ -125,8 +125,9 @@ manual continuation instructions and identify any blocks already applied.
 
 ## Uninstall recovery internals
 
-Phase 8 is in progress; the public uninstall flow is not yet available. Its internal
-cleanup publishes private support under `removals/<attempt>` before deleting any
+Phase 8's installed uninstall command is implemented and undergoing acceptance;
+see [uninstall and recovery](uninstall.md). Its internal cleanup publishes private
+support under `removals/<attempt>` before deleting any
 application files. The printed absolute recovery launcher uses recorded Node and
 remains usable after the application entrypoint or temporary bootstrap cache is gone.
 The original `current` pointer is retained until its owned files have been removed.
@@ -141,5 +142,5 @@ application deletion has completed.
 Databases, configuration, run records, engine evidence/cache and worktrees are
 retained. Reinstall refuses unfinished cleanup, then validates completed removal
 and retained installation ownership. A completed old recovery command refuses a
-later activation. These internal APIs add no product capability yet; full packaged
-uninstall, recovery and real database reinstallation acceptance are still required.
+later activation. Full packaged uninstall, recovery and real database reinstallation
+acceptance are still required before Phase 8 delivery.

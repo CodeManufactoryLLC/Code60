@@ -28,9 +28,13 @@ interface PayloadFile {
   sha256?: string;
   link?: string;
 }
-function verifyInventory(inventory: InstallationRemovalInventory, files: Map<string, PayloadFile>) {
-  const directories = new Set([""]);
-  for (const path of files.keys()) {
+function verifyInventory(
+  inventory: InstallationRemovalInventory,
+  files: Map<string, PayloadFile>,
+  ownedDirectories: readonly string[] = [],
+) {
+  const directories = new Set(["", ...ownedDirectories]);
+  for (const path of [...files.keys(), ...ownedDirectories]) {
     if (
       !path ||
       isAbsolute(path) ||
@@ -78,6 +82,7 @@ async function releaseInventory(receipt: ActivationRecord, signal?: AbortSignal)
     os: string;
     arch: string;
     files: PayloadFile[];
+    directories?: string[];
   };
   if (
     metadata.schemaVersion !== 1 ||
@@ -88,6 +93,14 @@ async function releaseInventory(receipt: ActivationRecord, signal?: AbortSignal)
     metadata.files.length > 200_000
   )
     throw Error("Payload removal identity is invalid; preserve installation");
+  if (
+    metadata.directories !== undefined &&
+    (!Array.isArray(metadata.directories) ||
+      metadata.directories.length > 200_000 ||
+      metadata.directories.some((path) => typeof path !== "string") ||
+      new Set(metadata.directories).size !== metadata.directories.length)
+  )
+    throw Error("Payload directory removal identity is invalid; preserve installation");
   const files = new Map<string, PayloadFile>();
   for (const file of metadata.files) {
     if (
@@ -104,7 +117,7 @@ async function releaseInventory(receipt: ActivationRecord, signal?: AbortSignal)
     type: "0",
     sha256: receipt.release.manifestHash,
   });
-  verifyInventory(inventory, files);
+  verifyInventory(inventory, files, metadata.directories);
   return inventory;
 }
 async function activationInventory(root: string, receipt: ActivationRecord, signal?: AbortSignal) {

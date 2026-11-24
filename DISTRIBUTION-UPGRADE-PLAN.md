@@ -415,8 +415,8 @@ Verify the prior release remains available and recovery never replays work.
 **Status:** in progress on `codex/state-preserving-uninstall`. Internal inventory,
 separate shell previews, guarded quiescence and standalone recovery are implemented
 and under validation. Supporting tests cover partial cleanup and retained-data
-file reinstallation. The public uninstall command, full customer-database journeys
-and required Linux/native acceptance remain unfinished.
+file reinstallation. The public uninstall command is implemented and under test;
+full customer-database journeys and required Linux/native acceptance remain unfinished.
 
 **PR outcome:** `code60 uninstall` removes owned installation resources predictably.
 

@@ -66,7 +66,7 @@ Code60-managed user storage; it cannot select packages, commands or destinations
   bridge, automation and platform and has no browser or Electron dependency.
 - gateway composes application and automation once, validates HTTP/session boundaries,
   serves assets, owns client interactions and private local service management.
-- management parses the narrow code60 setup/status/update/open/service/pairing CLI and calls gateway/platform APIs.
+- management parses the narrow code60 setup/status/update/uninstall/open/service/pairing CLI and calls gateway/platform APIs.
   Its fixed workflows login command delegates provider authentication to the
   preserved Codex CLI in an interactive terminal, without starting an engine.
   It offers no run, prompt or agent-command execution interface.
@@ -157,7 +157,7 @@ receipt-owned shell removal planning in management. Removal inventories pin file
 contents, directory identities and contained links; interrupted cleanup may remove
 only the recorded remainder. Shell removal has its own exact preview and explicit
 interactive approval, preserving unrelated profile bytes and changed blocks.
-These internal primitives do not yet expose an application uninstall command.
+Installed management composes these primitives into the human-only uninstall command.
 Private uninstall inspection adds bounded interactive/scheduled availability and
 strict saved workflow counts. It rejects a payload and browser Origin, never
 starts an engine or creates workflow storage, and cannot alone prove process exit.
@@ -192,8 +192,11 @@ engine absence, and deletes only the recorded remainder. Unknown/changed files,
 registrations and links fail closed or remain explicit residuals. Data, configuration,
 engine caches/evidence and worktrees remain outside these inventories. Reinstall
 refuses unfinished removal and validates retained ownership; old recovery cannot
-remove a later activation. Public uninstall orchestration and acceptance remain
-in progress, so these internals do not yet add a supported product command.
+remove a later activation. The installed `code60 uninstall [--yes]` command uses
+default-no service/application consent and separate interactive profile approval;
+non-TTY calls need trailing Code60 --yes and never edit profiles. The bootstrap
+does not acquire gateway dependencies or expose uninstall. Packaged/native delivery
+acceptance remains in progress; these candidates are not published.
 
 ## Current exclusions
 

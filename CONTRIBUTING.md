@@ -455,3 +455,15 @@ offline customer/driver journey. Preserve custom databases, prior releases,
 workflow bindings and independent filesystem/Git/process evidence. No check
 installs a real host service or edits host profiles. Host tooling and both builds
 share the Node-only platform verifier without importing development dist.
+
+## Uninstall development
+
+Follow [uninstall and recovery](docs/distribution/uninstall.md) and the QA workflow's
+state-preserving uninstall journey. Component tests cover owned file inventories,
+profile consent, guarded shutdown and the standalone recovery launcher. After a
+build, `npm run test:uninstall:engines` additionally checks actual empty bundled
+native engines and retained cache/history with a synthetic inert app; it is not
+full packaged application or native login-service validation. Supply an exact
+macOS descriptor as its optional argument. Never point tests at a real user
+service or profiles. Full installed golden/reinstall and isolated Linux/native
+delivery evidence remain required before Phase 8 is complete.

@@ -9,6 +9,9 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
   Keep them Node-only, include them in both builds and validate them with the same
   archive attack tests. Registry bootstrap metadata is data, never executable
   update logic. Production registry/release origins have no public override.
+  When payload metadata declares directories, verify the complete unique list
+  against actual extracted directory entries. Preserve acceptance of older
+  descriptors without that field; never infer ownership of additional empty dirs.
 
 - Never use blanket `shell: true` or unverified PID kills.
 - Native Transmission process adoption is macOS Apple Silicon only, matching
