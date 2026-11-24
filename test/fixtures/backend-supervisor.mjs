@@ -6,7 +6,13 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export async function backendSupervisor({ directory, application, env, log }) {
+export async function backendSupervisor({
+  directory,
+  application,
+  candidateApplication,
+  env,
+  log,
+}) {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const socketDirectory =
     Buffer.byteLength(join(directory, "backend-supervisor.sock")) > 90
@@ -26,12 +32,20 @@ export async function backendSupervisor({ directory, application, env, log }) {
     if (alive()) return;
     const saved = JSON.parse(await readFile(join(stateRoot, "registration.json"), "utf8"));
     assert.equal(await realpath(saved.runtime.executable), await realpath(process.execPath));
-    assert.deepEqual(saved.runtime.args, [join(application, "dist/gateway/main.js")]);
+    assert.equal(saved.runtime.args.length, 1);
+    const selectedApplication = [
+      application,
+      ...(candidateApplication ? [candidateApplication] : []),
+    ].find((value) => saved.runtime.args[0] === join(value, "dist/gateway/main.js"));
+    assert.ok(
+      selectedApplication,
+      "Fixture refuses an application outside its two exact update identities",
+    );
     for (const key of ["HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME"])
       assert.equal(saved.runtime.env[key], env[key]);
     if (env.CODEX_HOME) assert.equal(saved.runtime.env.CODEX_HOME, env.CODEX_HOME);
     const { userServiceDefinition, installationSnapshot } = await import(
-      pathToFileURL(join(application, "dist/platform/index.js")).href
+      pathToFileURL(join(selectedApplication, "dist/platform/index.js")).href
     );
     const expected = userServiceDefinition(
       process.platform,

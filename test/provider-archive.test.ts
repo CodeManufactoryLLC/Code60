@@ -96,3 +96,12 @@ it("extracts contained symlinks last, rejects duplicates and truncated/corrupt h
     extractProviderArchive(file, join(home, "corrupt"), new AbortController().signal),
   ).rejects.toThrow();
 });
+it("rejects an unavailable destination before opening missing input and preserves the file", async () => {
+  const home = await fixture();
+  const destination = join(home, "existing-file");
+  await writeFile(destination, "preserve");
+  await expect(
+    extractProviderArchive(join(home, "missing.tgz"), destination, new AbortController().signal),
+  ).rejects.toMatchObject({ code: "EEXIST" });
+  expect(await readFile(destination, "utf8")).toBe("preserve");
+});

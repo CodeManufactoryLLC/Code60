@@ -20,7 +20,7 @@ describe("browser capability catalog", () => {
   it("describes scheduler upgrade recovery without granting service authority", () => {
     const updates = APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates");
     expect(updates).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });
-    expect(updates?.limitations).toContain("Stop the backend");
+    expect(updates?.limitations).toContain("before shutdown");
     expect(updates?.limitations).toContain("No automatic downloads");
   });
   it("describes human-only sidebar/card navigation without a current-page menu", () => {
@@ -220,8 +220,10 @@ describe("browser capability catalog", () => {
   });
   it("describes the scheduler update ownership and executable prerequisites without agent authority", () => {
     const updates = APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates");
-    expect(updates?.limitations).toContain("Node 24 and npm");
-    expect(updates?.limitations).toContain("repair the service registration");
+    expect(updates?.limitations).toContain("Node >=24.22.0 <25");
+    expect(updates?.limitations).toContain("repairs service registration");
+    expect(updates?.limitations).toContain("code60 update recover");
+    expect(updates?.limitations).toContain("Setup never updates");
     expect(updates?.agentAccess).toBe("human-only");
   });
   it("classifies Providers navigation and human management without retaining an Agents settings route", () => {

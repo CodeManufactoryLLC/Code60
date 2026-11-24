@@ -4,7 +4,8 @@ Phase 4 introduces the first supported installation layout. There is no legacy
 recognition, migration or compatibility layer. The filesystem APIs remain internal. Phase 5 now composes them through the private
 candidate setup command; see [setup behavior](setup.md). Installation primitives
 do not initialize databases, verify providers, register services or update/remove
-releases themselves.
+releases themselves. Phase 7 composes an explicit guarded version transition;
+see [updates and recovery](updates.md).
 
 ## Layout and activation
 
@@ -26,7 +27,9 @@ npx from conflicting with itself; unrelated commands still block activation.
 
 An existing healthy matching release is reused without download. Explicit repair
 may replace an owned launcher/runtime binding. A different version or digest is
-rejected rather than implicitly updated. Unknown receipts, unowned files, unsafe
+rejected rather than implicitly updated by setup. Only the explicit update flow
+may prepare a newer stable generation and pass its consent/quiescence gate.
+Unknown receipts, unowned files, unsafe
 links, privileged destinations and effective command conflicts are errors.
 
 Installation locks fail promptly when busy or uncertain. They are never reclaimed
@@ -100,6 +103,10 @@ other agents' resources. The manual Apple Silicon workflow validates native laun
 and shells without installing a user service.
 
 ## Failure recovery
+
+Use `code60 update status` to inspect a recorded update and `code60 update recover`
+to repair its current generation with explicit consent. Recovery retains both
+release generations and never automatically downgrades databases or replays work.
 
 Preserve failed-run evidence and uncertain locks. Inspect the exact installation
 receipt, activation pointer and owner token. Do not erase a lock, delete history,

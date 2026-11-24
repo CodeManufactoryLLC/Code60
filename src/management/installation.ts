@@ -11,6 +11,7 @@ import {
   installationLink,
   installationTreeIdentity,
   lockInstallation,
+  newerStableRelease,
   preserveTransmissionBundle,
   publishInstallationLink,
   removeInstallationTree,
@@ -30,6 +31,7 @@ import {
   readInstallation,
   shellQuote,
   supportedInstallationRuntime,
+  verifyBoundNode,
 } from "./install-state.js";
 
 interface InstallationArtifact {
@@ -47,6 +49,14 @@ export interface InstallationOptions {
   runtimeDirectory?: string;
   bootstrapEntry?: string;
   checkpoint?: (phase: "prepared" | "published") => Promise<void>;
+  update?: {
+    expectedGeneration: string;
+    beforePublish(prepared: {
+      record: InstallationRecord;
+      previous: ActivationRecord;
+      candidate: ActivationRecord;
+    }): Promise<void>;
+  };
 }
 async function verifyCommandPath(
   record: InstallationRecord,
@@ -80,7 +90,7 @@ async function copyRuntime(source: string, target: string) {
   for (const module of ["management", "platform"]) {
     await mkdir(join(target, module));
     for (const name of (await readdir(join(source, module))).sort()) {
-      if (!name.endsWith(".js")) continue;
+      if (!/\.(?:js|mjs)$/.test(name)) continue;
       if (module === "management" && !["installed-launcher.js", "install-state.js"].includes(name))
         continue;
       const path = join(source, module, name);
@@ -94,13 +104,25 @@ async function copyRuntime(source: string, target: string) {
   return files;
 }
 
-async function preserveEngines(application: string, env: NodeJS.ProcessEnv, signal?: AbortSignal) {
+async function preserveEngines(
+  application: string,
+  env: NodeJS.ProcessEnv,
+  signal?: AbortSignal,
+  retainBindings = false,
+) {
   const metadata = JSON.parse(await readFile(join(application, "payload.json"), "utf8"));
   // Legacy tarballs and synthetic installation fixtures have no payload engine
   // declaration. Current macOS payloads must declare it in artifact validation.
   if (metadata.transmissionBundle === undefined) return;
   if (process.platform !== "darwin" || !/^[a-f0-9]{64}$/.test(metadata.transmissionBundle))
     throw Error("Unsupported installation engine bundle");
+  if (retainBindings) {
+    // Application updates cannot rebind a running or unfinished engine to a
+    // different build's Node, manifest or dependencies, even for the same lock.
+    for (const version of ["0.1.0-staging.18", "0.1.0-staging.20"] as const)
+      await resolveTransmissionRuntime(env, version, signal);
+    return;
+  }
   await preserveTransmissionBundle(
     join(application, "dist/engines", metadata.transmissionBundle),
     env,
@@ -110,6 +132,8 @@ async function preserveEngines(application: string, env: NodeJS.ProcessEnv, sign
 
 export async function installManagedRelease(options: InstallationOptions) {
   supportedInstallationRuntime();
+  if (options.update && options.repair)
+    throw Error("Update and installation repair are separate operations");
   const env = options.env ?? process.env;
   const paths = await installationPaths(env);
   const identity = options.artifact.identity;
@@ -167,13 +191,23 @@ export async function installManagedRelease(options: InstallationOptions) {
         null,
       );
     const current = await currentInstallation(record, !options.repair);
+    if (options.update) {
+      if (!current || current.receipt.generation !== options.update.expectedGeneration)
+        throw Error("Update activation changed; inspect the current installation before retrying");
+      await verifyBoundNode(current.receipt);
+      if (!newerStableRelease(identity.version, current.receipt.release.version))
+        throw Error(
+          "Explicit update requires a newer stable release; installed files were preserved",
+        );
+    }
     if (current) {
       if (
-        current.receipt.release.version !== identity.version ||
-        current.receipt.release.archive.sha256 !== identity.archive.sha256
+        !options.update &&
+        (current.receipt.release.version !== identity.version ||
+          current.receipt.release.archive.sha256 !== identity.archive.sha256)
       )
         throw new Error("A different release is installed; implicit updates are unavailable");
-      if (!options.repair && (await installationLink(record.launcher))) {
+      if (!options.update && !options.repair && (await installationLink(record.launcher))) {
         if ((await verifyInstallationNode()) !== current.receipt.node.path)
           throw new Error("Installed Node binding differs; explicit repair is required");
         await preserveEngines(current.receipt.release.path, env, options.signal);
@@ -188,7 +222,7 @@ export async function installManagedRelease(options: InstallationOptions) {
     if (!result) {
       for (const name of ["releases", "activations", ".staging"])
         await createInstallationParents(join(paths.root, name), true);
-      let application = current?.receipt.release.path;
+      let application = options.update ? undefined : current?.receipt.release.path;
       if (!application) {
         const candidate = await options.artifact.acquire({
           parent: join(paths.root, ".staging"),
@@ -213,7 +247,7 @@ export async function installManagedRelease(options: InstallationOptions) {
         created.push({ path: application, identity: await installationTreeIdentity(application) });
       }
       const generation = randomUUID();
-      await preserveEngines(application, env, options.signal);
+      await preserveEngines(application, env, options.signal, !!options.update);
       const directory = join(paths.root, "activations", generation);
       await mkdir(directory, { mode: 0o700 });
       created.push({ path: directory, identity: await installationTreeIdentity(directory) });
@@ -248,6 +282,15 @@ export async function installManagedRelease(options: InstallationOptions) {
       await syncInstallationDirectory(directory);
       await options.checkpoint?.("prepared");
       options.signal?.throwIfAborted();
+      if (options.update && current) {
+        await options.update.beforePublish({
+          record,
+          previous: current.receipt,
+          candidate: receipt,
+        });
+        options.signal?.throwIfAborted();
+        await readActivation(record, `activations/${generation}`);
+      }
       if ((await installationLink(record.launcher)) === null) {
         await exclusiveInstallationLink(record.launcher, join(paths.root, "current/code60"));
         launcherCreated = true;

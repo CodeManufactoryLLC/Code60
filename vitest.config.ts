@@ -7,8 +7,8 @@ export default defineConfig({
     exclude: ["node_modules/**", "dist/**", "test/**/*.e2e.ts", "release/**", "release-assets/**"],
     coverage: {
       provider: "v8",
-      include: ["src/**/*.{ts,tsx,cts}"],
-      exclude: ["src/**/*.{test,spec}.{ts,tsx,cts}", "src/**/*.d.ts"],
+      include: ["src/**/*.{ts,tsx,cts,mjs}"],
+      exclude: ["src/**/*.{test,spec}.{ts,tsx,cts,mjs}", "src/**/*.d.{ts,mts}"],
       reporter: ["text-summary", "json", "json-summary", "html"],
       reportsDirectory: "coverage",
     },

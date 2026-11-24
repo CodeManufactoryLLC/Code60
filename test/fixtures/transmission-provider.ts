@@ -146,8 +146,11 @@ export async function transmissionProvider() {
         },
       },
       web_search: "disabled",
-      features: { shell_snapshot: false },
+      // Exercise the pinned engine's tools, without unrelated remote plugin
+      // catalog startup/Git acquisition in this isolated model fixture.
+      features: { shell_snapshot: false, plugins: false, remote_plugin: false },
     }),
+    toml: `model = "code60-fixture"\nmodel_provider = "code60_fixture"\nweb_search = "disabled"\n[features]\nshell_snapshot = false\nplugins = false\nremote_plugin = false\n[model_providers.code60_fixture]\nname = "Code60 isolated fixture"\nbase_url = "http://127.0.0.1:${address.port}/v1"\nwire_api = "responses"\nrequires_openai_auth = false\n`,
     setMode(next: typeof mode) {
       mode = next;
       if (mode === "hold") return;

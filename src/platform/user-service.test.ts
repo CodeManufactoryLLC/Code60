@@ -1,8 +1,13 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { controlUserService, inspectUserService, userServiceDefinition } from "./user-service.js";
+import {
+  controlUserService,
+  inspectUserService,
+  userServiceDefinition,
+  userServiceSnapshot,
+} from "./user-service.js";
 
 describe("per-user service supervisors", () => {
   const runtime = {
@@ -10,6 +15,43 @@ describe("per-user service supervisors", () => {
     args: ["/app/agent's entry.js"],
     env: { PATH: "/usr/bin:/path with spaces" },
   };
+  it("creates an exclusively owned backend definition and rejects changed contents during repair", async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), "c60-owned-definition-")));
+    try {
+      const definition = userServiceDefinition("linux", root, root, runtime, "backend");
+      expect(await userServiceSnapshot(definition.path)).toBeNull();
+      const command = vi.fn(async (_argv: readonly string[]) => true);
+      await controlUserService(definition, "install", command, undefined, { expected: null });
+      const snapshot = await userServiceSnapshot(definition.path);
+      expect(snapshot?.identity.mode).toBe(0o600);
+      command.mockImplementation(async (argv) => {
+        if (argv.includes("stop"))
+          await writeFile(definition.path, "outside edit", { mode: 0o600 });
+        return true;
+      });
+      command.mockClear();
+      await expect(
+        controlUserService(
+          { ...definition, contents: "new runtime" },
+          "repair",
+          command,
+          undefined,
+          { expected: snapshot?.identity ?? null },
+        ),
+      ).rejects.toThrow("changed since preview");
+      expect(await readFile(definition.path, "utf8")).toBe("outside edit");
+      expect(command.mock.calls.map(([argv]) => argv)).toEqual(definition.stop);
+      command.mockClear();
+      await expect(
+        controlUserService(definition, "start", command, undefined, {
+          expected: snapshot?.identity ?? null,
+        }),
+      ).rejects.toThrow("definition changed");
+      expect(command).not.toHaveBeenCalled();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
   it("keeps launchd arguments separate, safely encodes XML and throttles restarts", () => {
     const definition = userServiceDefinition("darwin", "/Users/test", "/state", runtime);
     expect(definition.contents).toContain("<string>/Applications/Code60 App/Code60</string>");

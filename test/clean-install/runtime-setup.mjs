@@ -14,6 +14,8 @@ import {
   fakeAgent,
   launcher,
   publicConnection,
+  setupDatabase,
+  updated,
 } from "./support.mjs";
 
 process.umask(0o077);
@@ -22,9 +24,13 @@ await mkdir("/work/control", { recursive: true });
 await mkdir("/work/processes");
 await mkdir("/work/driver-home", { mode: 0o700 });
 const selection = `${env.XDG_STATE_HOME}/code60/desktop.json`,
-  database = "/installation/code60/databases/default.sqlite";
-await assert.rejects(readdir(`${env.XDG_STATE_HOME}/code60`), { code: "ENOENT" });
-await assert.rejects(readdir("/installation/code60/databases"), { code: "ENOENT" });
+  database = setupDatabase ?? "/installation/code60/databases/default.sqlite";
+if (!updated) {
+  await assert.rejects(readdir(`${env.XDG_STATE_HOME}/code60`), { code: "ENOENT" });
+  await assert.rejects(readdir("/installation/code60/databases"), { code: "ENOENT" });
+} else {
+  assert.equal(JSON.parse(await readFile(selection, "utf8")).database, database);
+}
 await mkdir(`${env.XDG_CONFIG_HOME}/code60`, { recursive: true });
 await writeFile(
   `${env.XDG_CONFIG_HOME}/code60/config.json`,
@@ -64,21 +70,25 @@ async function stop() {
 }
 let polling;
 try {
-  const { bootstrapMain } = await import(
-    pathToFileURL("/work/bootstrap-cache/bin/code60.mjs").href
-  );
-  assert.equal(
-    await bootstrapMain(["setup", "--yes", "--no-open"], {
-      env,
-      acquisition: {
-        transport: () => {
-          throw Error("Healthy setup unexpectedly downloaded");
+  if (updated) {
+    await execute(launcher, ["setup", "--yes", "--no-open"], { env, cwd: "/", timeout: 45000 });
+  } else {
+    const { bootstrapMain } = await import(
+      pathToFileURL("/work/bootstrap-cache/bin/code60.mjs").href
+    );
+    assert.equal(
+      await bootstrapMain(["setup", "--yes", "--no-open"], {
+        env,
+        acquisition: {
+          transport: () => {
+            throw Error("Healthy setup unexpectedly downloaded");
+          },
         },
-      },
-    }),
-    0,
-  );
-  await rm("/work/bootstrap-cache", { recursive: true });
+      }),
+      0,
+    );
+    await rm("/work/bootstrap-cache", { recursive: true });
+  }
   await assert.rejects(stat("/work/bootstrap-cache"), { code: "ENOENT" });
   const prefs = JSON.parse(await readFile(selection, "utf8"));
   assert.equal(prefs.database, database);
@@ -106,6 +116,7 @@ try {
     noProviderVerification: true,
     database,
     readOnlyInstalledTrees: true,
+    updated,
     nativeService: "bounded fixture only",
   });
   await evidence("runtime", {
@@ -116,7 +127,8 @@ try {
     origin: connection.origin,
     backendPid: connection.pid,
     supervisorPid: process.pid,
-    emptyStateBeforeSetup: true,
+    emptyStateBeforeSetup: !updated,
+    preservedUpdateState: updated,
     externalNetworking: "disabled",
   });
   polling = setInterval(() => {

@@ -1,6 +1,9 @@
 # Releasing Code60
 
-Code60 is distributed as a Node 24 npm tarball. Node and npm are prerequisites; no native installer, bundled runtime or automatic updater is shipped. Publishing remains an explicit release action.
+Code60 retains its Node 24 npm tarball and builds private platform payloads plus
+a small bootstrap. Managed candidates support explicit terminal update/recovery;
+no native installer, bundled Node or background updater is shipped. Publishing
+remains an explicit release action. See [update behavior](docs/distribution/updates.md).
 
 ## Prepare a release
 
@@ -16,7 +19,14 @@ Tag the merged release commit on main with its exact package version. Push the t
 
 ## Updating an installation
 
-Stop the backend, install the replacement tarball, repair its service registration, start the backend and pair the browser again. Preserve the old package for rollback. Never downgrade application data or erase locks/history to make an older package start.
+Managed installations use `code60 update`, with `code60 update status` and
+`code60 update recover` for inspection and explicit recovery. Follow the
+[update behavior](docs/distribution/updates.md).
+
+For a legacy npm tarball, stop the backend, install the replacement tarball,
+repair its service registration, start the backend and pair the browser again.
+Preserve the old package for inspection. Never downgrade application data or
+erase locks/history to make an older package start.
 
 ## Platform payload and bootstrap candidates
 
@@ -58,6 +68,15 @@ After native packaging, run `npm run test:transmission`. The manual Apple Silico
 workflow retains its traces, screenshots, original-key/run recovery and process
 cleanup evidence with the ordinary browser, setup and package checks. It uses
 real pinned engines/ACP/Codex and a fake external model endpoint, with runtime
-npm/npx/compiler traps. Retain published engine bindings and old executable caches
+npm/npx/compiler traps. The isolated model fixture disables unrelated remote
+plugin discovery; product runtime defaults are unchanged. Retain published engine
+bindings and old executable caches
 across app replacement; never delete workflow state to force a new runtime.
+The native update journey requires the freshly built macOS payload and retains
+the approved engine/worker processes through an actual managed update before
+completing the original workflow and comparing its source Git state.
+The [native workflow](.github/workflows/native-tests.yml) runs existing regressions
+and each complete update journey in separate, sequential single-worker batches.
+This preserves their original per-journey and suite deadlines on the slower hosted
+runner; all batches are required and retain separate trace directories.
 This validation installs no real login service and uses no live provider.

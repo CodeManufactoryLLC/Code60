@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
@@ -28,7 +29,32 @@ export async function goldenJourney(fixture: GoldenApplication, setupDatabase?: 
   const index = await readFile(join(repo, ".git/index"));
   const head = git("rev-parse", "HEAD");
   const worktrees = git("worktree", "list", "--porcelain");
+  const audit = {
+    expected: {
+      head: head.trim(),
+      workingNotes: "unstaged\n",
+      stagedNotes: "staged\n",
+      indexSha256: createHash("sha256").update(index).digest("hex"),
+      worktrees: worktrees.toString(),
+    },
+    observations: [] as {
+      head: string;
+      indexSha256: string;
+      workingNotes: string;
+      stagedNotes: string;
+      result: string;
+    }[],
+  };
   const unchanged = async () => {
+    audit.observations.push({
+      head: git("rev-parse", "HEAD").toString().trim(),
+      indexSha256: createHash("sha256")
+        .update(await readFile(join(repo, ".git/index")))
+        .digest("hex"),
+      workingNotes: await readFile(join(repo, "notes.txt"), "utf8"),
+      stagedNotes: git("show", ":notes.txt").toString(),
+      result: await readFile(join(repo, "result.txt"), "utf8"),
+    });
     expect(await readFile(join(repo, "notes.txt"), "utf8")).toBe("unstaged\n");
     expect(git("show", ":notes.txt")).toBe("staged\n");
     expect(git("rev-parse", "HEAD")).toBe(head);
@@ -114,6 +140,13 @@ export async function goldenJourney(fixture: GoldenApplication, setupDatabase?: 
     expect(errors).toEqual([]);
     await page.screenshot({ path: test.info().outputPath("browser-golden-path.png") });
   } finally {
-    await fixture.close();
+    try {
+      await writeFile(
+        test.info().outputPath("golden-filesystem.json"),
+        JSON.stringify(audit, null, 2),
+      );
+    } finally {
+      await fixture.close();
+    }
   }
 }

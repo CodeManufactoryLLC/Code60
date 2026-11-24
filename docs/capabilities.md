@@ -400,12 +400,12 @@ Schema version: 1
 
 - ID: `updates`
 - Status: shipped
-- Purpose: Review the manual package update procedure.
+- Purpose: Inspect the installed version and terminal update/recovery commands.
 - Access: Apps → Update Manager
 - Prerequisite: none
 - Agent access: human-only
-- Confirmation: Local terminal consent is required for service changes. Histories, worktrees and settings are preserved.
-- Limits: Requires Node 24 and npm. Stop the backend, install the replacement npm tarball, repair the service registration and start the backend. No automatic downloads, native installers or bundled runtime.
+- Confirmation: Local terminal consent is required before interrupting interactive/scheduled work; non-TTY changes require Code60's --yes. Prior releases, histories, custom databases, worktrees, settings and pinned engine/runtime bindings are preserved. The browser shows installed version and terminal instructions only.
+- Limits: Managed installations require Node >=24.22.0 <25 on macOS arm64 or Linux x64. code60 update resolves the stable npm bootstrap, verifies registry integrity and exact platform payloads before shutdown, then activates atomically and repairs service registration. code60 update status is read-only; code60 update recover explicitly repairs the current activation after interruption without database downgrade or replay. Setup never updates. No automatic downloads or checks from browser awareness, native installers or bundled Node.
 - Pages: none
 - Settings sections: `updates`
 - Tools: none

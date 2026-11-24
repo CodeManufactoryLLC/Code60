@@ -1,18 +1,11 @@
 import { execFile } from "node:child_process";
-import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { backendControl, managementRequest } from "../gateway/index.js";
-import { installationFileCode, lockInstallation } from "../platform/index.js";
-import {
-  currentInstallation,
-  installationPaths,
-  readInstallation,
-  shellQuote,
-  verifyBoundNode,
-} from "./install-state.js";
+import { lockInstallation } from "../platform/index.js";
+import { managedInstallation, shellQuote } from "./install-state.js";
 import { checkSetup, setupFlags } from "./setup-input.js";
 import { applyShellIntegration, planShellIntegration } from "./shell-integration.js";
 
@@ -62,22 +55,6 @@ function portsFor(env: NodeJS.ProcessEnv): SetupPorts {
       }),
     readinessMs: 30000,
   };
-}
-async function managedInstallation(env: NodeJS.ProcessEnv) {
-  const paths = await installationPaths(env);
-  if (
-    !(await lstat(paths.root).catch((error: unknown) => {
-      if (installationFileCode(error) !== "ENOENT") throw error;
-      return null;
-    }))
-  )
-    return null;
-  const record = await readInstallation(paths);
-  if (!record) throw Error("Installation receipt is missing; preserve existing files");
-  const current = await currentInstallation(record);
-  if (!current) throw Error("Installation activation is missing; preserve existing files");
-  await verifyBoundNode(current.receipt);
-  return { record, receipt: current.receipt };
 }
 export async function combinedStatus(env: NodeJS.ProcessEnv) {
   const installation = await managedInstallation(env)

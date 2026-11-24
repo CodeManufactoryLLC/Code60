@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { sha256 } from "./distribution/acquire.mjs";
 import { bootstrapAdapter } from "./distribution/bootstrap-adapter.mjs";
 import { runCommand } from "./distribution/command.mjs";
+import { writeBootstrapVerifier } from "./distribution/copy-verifier.mjs";
 import { descriptorPair, nodeRange, targets } from "./distribution/descriptor.mjs";
 
 const execute = promisify(execFile);
@@ -54,8 +55,7 @@ export async function packageBootstrap(root, input, { signal } = {}) {
     );
     await writeFile(join(temporary, "platforms.json"), `${JSON.stringify(platforms, null, 2)}\n`);
     await cp(join(root, "scripts/distribution/bootstrap.mjs"), join(temporary, "bin/code60.mjs"));
-    for (const name of ["acquire.mjs", "archive.mjs", "descriptor.mjs"])
-      await cp(join(root, "scripts/distribution", name), join(temporary, "lib", name));
+    await writeBootstrapVerifier(join(temporary, "lib"));
     await cp(join(root, "build/distribution"), join(temporary, "lib/runtime"), { recursive: true });
     await writeFile(join(temporary, "lib/index.mjs"), bootstrapAdapter);
     for (const name of ["LICENSE", "NOTICE", "TRADEMARKS.md"])

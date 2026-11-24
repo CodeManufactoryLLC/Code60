@@ -65,6 +65,11 @@ Use the existing harness, not a new QA plugin or a live agent.
   activate Git hooks or call a live provider without separate authorization.
   Inject native service controls for registration and handoff tests. Unit tests
   of service definitions do not establish native login/reboot behavior.
+- Missing-provider journeys must use a clean environment and controlled PATH.
+  Production path recovery adds common host tool directories even with a temporary
+  HOME; use the trusted Node composition port to retain fixture paths while keeping
+  real detection, installation and ACP verification. Never inherit host credentials
+  or let a routine fixture probe an installed provider.
 - Build with `npm run package:app`, then run `npm run test:packaged` to verify an
   installed npm tarball, bundled browser assets and offline embedding assets.
   This smoke test does not install a login service.
@@ -77,7 +82,8 @@ Use the existing harness, not a new QA plugin or a live agent.
   payload mode of the clean-install harness. Preserve the existing tarball journey.
   Verify extraction needs no npm/compiler/scripts and record both targets' exact
   descriptors, model results and owned staging/process cleanup. Bootstrap help and
-  unavailable setup are acceptance checks, not evidence of a working installer.
+  version checks alone do not prove acquisition, installation or setup; exercise
+  the affected managed/setup journeys as well.
 - Managed installation changes follow the [installation internals](../../../docs/distribution/installation.md).
   Exercise the managed clean-install mode after cache removal and real login/
   interactive shells. Keep artifact-only and legacy journeys independent. Assert
@@ -95,6 +101,15 @@ Use the existing harness, not a new QA plugin or a live agent.
   cache removal, repeated/restarted backend identity, read-only status and the full
   golden journey from a setup-created database. Use the dedicated bounded backend
   supervisor fixture, never legacy scheduler fixtures or a real host service.
+
+- Update changes additionally require `npm run test:update` and clean-install
+  `--update` mode. Assert verification and consent before interruption, original
+  PID preservation on decline/preparation cancellation, quiescence before
+  publication, authenticated new-version readiness and explicit recovery. Retain
+  custom database/preferences, prior activation and original engine bindings.
+  Exercise the shared golden journey after source caches are removed and while
+  release/activation trees are read-only. On native macOS additionally verify
+  approved workflows survive the actual update on their original engine/runtime.
 
 ## Report what actually happened
 

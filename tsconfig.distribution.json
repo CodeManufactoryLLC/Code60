@@ -1,6 +1,15 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "rootDir": "src", "outDir": "build/distribution", "sourceMap": false },
-  "include": ["src/management/index.ts", "src/management/installed-launcher.ts"],
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "build/distribution",
+    "sourceMap": false,
+    "allowJs": true
+  },
+  "include": [
+    "src/management/index.ts",
+    "src/management/installed-launcher.ts",
+    "src/platform/*.mjs"
+  ],
   "exclude": ["src/**/*.test.ts", "src/renderer/**"]
 }

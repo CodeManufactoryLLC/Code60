@@ -20,6 +20,16 @@ browser bridge. Management status reports bounded database/engine availability
 without provider probes, pairing codes or repair. Preserve XDG_DATA_HOME in the
 registered runtime so setup and the backend use the same data location.
 
+Update interruption inspection is a payload-free authenticated management read.
+Report only bounded interactive/scheduled availability; do not mint pairing codes,
+stop work, launch engines or grant a browser replacement authority. Terminal
+updates must verify quiescence and native/backend process exit before activation.
+
+The service-definition serializer is part of registration ownership version 1.
+Changing its byte format requires an explicit versioned ownership/migration path
+and old/new-definition tests. Preserve outside edits; do not bypass ownership
+checks to accommodate a new formatter.
+
 Provider installation/authentication operations accept strict catalog/session/attempt
 identities and bounded code/confirmation inputs only. Derive the controlling-page owner
 server-side. Do not retain provider progress responses in request-receipt caches; never
@@ -29,3 +39,9 @@ Preserve an explicitly configured absolute CODEX_HOME path for workflow login an
 execution. Never persist CODEX_CONFIG payloads or provider credential environment
 variables in the service definition. Existing engines retain their startup
 environment; backend repair must not silently replace or cancel them.
+
+Host path refresh and provider transport callbacks are trusted Node composition
+ports, never browser/CLI/environment overrides. Isolated provider tests must own
+their PATH and environment; production path recovery can discover installed host
+tools even when HOME is temporary. Keep real detection and ACP verification in
+those journeys while restricting their external tools to the fixture.

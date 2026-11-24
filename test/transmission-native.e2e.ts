@@ -147,7 +147,38 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
     });
     await form.getByRole("button", { name: "Start workflow", exact: true }).click();
     const workflows = page.locator(".workflows-page");
-    await expect.poll(() => provider.pending).toBeGreaterThan(0);
+    // Source first use must materialize its uncached bundle before the engine
+    // can accept work. Observe readiness without launching it from the test;
+    // keep the separate model-request deadline after this startup checkpoint.
+    await expect
+      .poll(
+        () =>
+          engine("health").then(
+            () => true,
+            () => false,
+          ),
+        { timeout: 30000 },
+      )
+      .toBe(true);
+    const requestedAt = Date.now();
+    try {
+      await expect.poll(() => provider.pending).toBeGreaterThan(0);
+    } catch (error) {
+      // Keep the original assertion failure while distinguishing late cold
+      // startup from a worker that never reaches the isolated model endpoint.
+      const later = await expect
+        .poll(() => provider.pending, { timeout: 30000 })
+        .toBeGreaterThan(0)
+        .then(
+          () => true,
+          () => false,
+        );
+      await info.attach("initial-model-request-diagnostic", {
+        contentType: "application/json",
+        body: JSON.stringify({ later, elapsedMs: Date.now() - requestedAt, calls: provider.calls }),
+      });
+      throw error;
+    }
     const health = (await engine("health")) as { pid: number };
     enginePid = health.pid;
     for (const pid of family(enginePid)) owned.add(pid);

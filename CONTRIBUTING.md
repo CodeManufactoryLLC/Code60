@@ -444,3 +444,14 @@ fixture. On the Docker host, also run
 setup-created-database browser journey. Keep the manual database journey and all
 existing package/model regressions. No real user service or host profiles are
 changed by acceptance; retain evidence and verify owned resource cleanup.
+
+## Update development
+
+See [explicit updates and recovery](docs/distribution/updates.md). After packaging,
+run `npm run test:update` for installed runtime/browser acceptance with isolated
+state and the bounded supervisor. On the Docker host also run
+`npm run test:packaged:clean -- --update release/payloads/linux-x64.json` for the
+offline customer/driver journey. Preserve custom databases, prior releases,
+workflow bindings and independent filesystem/Git/process evidence. No check
+installs a real host service or edits host profiles. Host tooling and both builds
+share the Node-only platform verifier without importing development dist.

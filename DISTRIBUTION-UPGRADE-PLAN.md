@@ -332,7 +332,8 @@ restart, change pairing policy and exercise all database failure cases.
 
 ## Phase 6 — Bundled Transmission and version-bound execution
 
-**Status:** implemented and locally validated. Four native real-engine browser
+**Status:** implemented and merged in PR #321 after required Linux CI and
+exact-commit native validation passed. Four native real-engine browser
 journeys cover new, retained and original-cache execution; both platforms pass
 package/payload/model/setup smoke and 23 browser regressions. All four Linux
 offline installation modes pass, including concurrent payload/managed runs, with
@@ -378,6 +379,11 @@ continuity and original routing. No runtime npm download or compiler invocation 
 this phase; they are not grounds to change engine APIs silently.
 
 ## Phase 7 — Explicit updates and installation recovery
+
+**Status:** implemented on `codex/explicit-updates-and-recovery`; local Linux
+installation/update acceptance, native macOS workflow continuity and browser
+regressions pass. Required CI, clean exact-commit native artifacts and paired
+bootstrap verification remain delivery gates before merge.
 
 **PR outcome:** `code60 update` replaces the manual stop/install/repair/start sequence.
 

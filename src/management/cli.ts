@@ -8,6 +8,7 @@ import {
 } from "../gateway/index.js";
 
 import { combinedStatus, runSetup } from "./setup.js";
+import { runUpdate } from "./update.js";
 import { workflowLogin } from "./workflow-login.js";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -37,13 +38,17 @@ export async function runManagement(args: readonly string[], env: NodeJS.Process
     process.stdout.write(`${JSON.stringify(await combinedStatus(env))}\n`);
     return;
   }
+  if (command === "update") {
+    await runUpdate(args.slice(1), env);
+    return;
+  }
   if (command === "workflows") {
     process.exitCode = await workflowLogin(args.slice(1), env);
     return;
   }
   if (command === "--help" || command === "help") {
     process.stdout.write(
-      "code60 setup [--yes] [--no-open]\ncode60 status\ncode60 open\ncode60 workflows login\ncode60 service install|status|start|stop|repair|uninstall [--yes]\ncode60 pairing on|off|status [--yes]\n",
+      "code60 setup [--yes] [--no-open]\ncode60 status\ncode60 update [--yes]\ncode60 update status\ncode60 update recover [--yes]\ncode60 open\ncode60 workflows login\ncode60 service install|status|start|stop|repair|uninstall [--yes]\ncode60 pairing on|off|status [--yes]\n",
     );
     return;
   }

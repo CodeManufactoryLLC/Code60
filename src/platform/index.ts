@@ -23,6 +23,14 @@ export {
 export { installationPrerequisite, runInstallationCommand } from "./installation-process.js";
 export { isPrivateIPv4, primaryPrivateIPv4 } from "./lan-address.js";
 export { containedPath, samePath } from "./paths.js";
+export { acquirePayload, type PayloadTransport } from "./payload-acquire.mjs";
+export { extractArchive as extractPayloadArchive } from "./payload-archive.mjs";
+export {
+  descriptor as parsePayloadDescriptor,
+  descriptorPair as parsePayloadDescriptors,
+  type PayloadDescriptor,
+  platform as payloadPlatform,
+} from "./payload-descriptor.mjs";
 export {
   fileCode,
   lockPrivateState,
@@ -48,8 +56,15 @@ export {
   resolveTransmissionRuntime,
 } from "./transmission-bundle.js";
 export {
+  newerStableRelease,
+  readStableBootstrap,
+  registryTransport,
+  type StableBootstrap,
+} from "./update-registry.js";
+export {
   controlUserService,
   inspectUserService,
   type ServiceRuntime,
   userServiceDefinition,
+  userServiceSnapshot,
 } from "./user-service.js";

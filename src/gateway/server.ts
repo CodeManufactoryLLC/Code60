@@ -27,7 +27,7 @@ import {
   pairingRequestSchema,
   webServerEnabledSchema,
 } from "../bridge/index.js";
-import { type CoreDeps, defaultDeps, stateHome } from "../core/index.js";
+import { CODE60_VERSION, type CoreDeps, defaultDeps, stateHome } from "../core/index.js";
 import {
   diagnosticMessage,
   fileCode,
@@ -67,6 +67,8 @@ export interface GatewayOptions {
   lanIntervalMs?: number;
   providerFetch?: typeof fetch;
   providerDownload?: typeof import("../application/index.js").ProviderDownload;
+  /** Trusted host composition only; browser/CLI requests cannot select a PATH. */
+  refreshPath?: (signal: AbortSignal) => Promise<void>;
   workflowClients?: { current: TransmissionClient; legacy: TransmissionClient };
 }
 const json = (value: unknown) => JSON.stringify(value ?? null);
@@ -194,6 +196,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     {
       ...(options.providerDownload ? { providerDownload: options.providerDownload } : {}),
       ...(options.providerFetch ? { providerFetch: options.providerFetch } : {}),
+      ...(options.refreshPath ? { refreshPath: options.refreshPath } : {}),
       relay: true,
       memory: true,
       openDatabase: openProjectDatabase,
@@ -436,6 +439,16 @@ export async function startGateway(options: GatewayOptions = {}) {
               }
             }
             respond(response, { requirePairing });
+          } else if (path === "/management/update-summary") {
+            for await (const chunk of request)
+              if (chunk.length) throw new Error("Update inspection accepts no payload");
+            const scheduled = scheduler?.scheduler.status();
+            respond(response, {
+              pid: process.pid,
+              interactiveActive: application.hasActiveWork,
+              scheduledActive: scheduled ? scheduled.activeExecutionId !== null : null,
+              schedulerAvailable: !!scheduled && !schedulerError,
+            });
           } else if (path === "/management/prepare-database") {
             for await (const chunk of request)
               if (chunk.length) throw new Error("Database preparation accepts no payload");
@@ -443,6 +456,7 @@ export async function startGateway(options: GatewayOptions = {}) {
           } else if (path === "/management/status")
             respond(response, {
               pid: process.pid,
+              appVersion: CODE60_VERSION,
               version: GATEWAY_VERSION,
               requirePairing,
               scheduler: scheduler?.scheduler.status() ?? null,
@@ -847,7 +861,7 @@ async function readGatewayConnection(env: Readonly<NodeJS.ProcessEnv>): Promise<
 }
 export async function managementRequest(
   env: Readonly<NodeJS.ProcessEnv>,
-  action: "pair" | "status" | "shutdown" | "pairing" | "prepare-database",
+  action: "pair" | "status" | "shutdown" | "pairing" | "prepare-database" | "update-summary",
   value?: { requirePairing: boolean },
 ) {
   const connection = await readGatewayConnection(env);

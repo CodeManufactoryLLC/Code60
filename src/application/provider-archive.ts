@@ -75,6 +75,9 @@ export async function extractProviderArchive(
   destination: string,
   signal: AbortSignal,
 ): Promise<void> {
+  // Complete asynchronous preparation before starting a stream whose errors
+  // are consumed by the iterator below. A failed mkdir must open no input.
+  await mkdir(destination, { recursive: true, mode: 0o700 });
   const source = createReadStream(file);
   const gzip = source.pipe(createGunzip());
   source.on("error", (error) => gzip.destroy(error));
@@ -103,7 +106,6 @@ export async function extractProviderArchive(
   const links: { path: string; target: string }[] = [];
   let overrides: Record<string, string> = {};
   let entries = 0;
-  await mkdir(destination, { recursive: true, mode: 0o700 });
   try {
     for (;;) {
       const header = await read(512);

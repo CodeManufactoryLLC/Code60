@@ -9,6 +9,9 @@ clear them on owner/URL/visibility changes and use the shared cryptographic ID a
 clipboard helpers on HTTP origins. Never expose Vite or authentication in links.
 
 Use the browser ApplicationClient; no Node, Electron, preload or native window API.
+Update Manager shows the running installed version from existing version metadata
+and the terminal update/recovery commands. It never checks npm, downloads code,
+replaces files or controls native services; there is no browser update authority.
 Pairing, host choosers and confirmations use real accessible UI, with page-bound server
 interactions. Closing the browser never stops approved work. Native window transparency,
 backdrop, caption controls, application menus and automatic update actions have been removed;

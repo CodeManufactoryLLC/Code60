@@ -82,8 +82,37 @@ describe("browser and package validation", () => {
       true,
     );
     expect(
-      nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:transmission"),
+      ci.jobs.payload.steps.some(
+        (step) => step.run === "npm run devcontainer -- exec npm run test:update",
+      ),
     ).toBe(true);
+    const payloadCommands = ci.jobs.payload.steps.map((step) => step.run);
+    const chromiumInstall = payloadCommands.indexOf(
+      "npm run devcontainer -- exec npx --no-install playwright install chromium",
+    );
+    expect(chromiumInstall).toBeGreaterThanOrEqual(0);
+    expect(chromiumInstall).toBeLessThan(
+      payloadCommands.indexOf("npm run devcontainer -- exec npm run test:update"),
+    );
+    expect(
+      ci.jobs.payload.steps.some(
+        (step) =>
+          step.run === "npm run test:packaged:clean -- --update release/payloads/linux-x64.json",
+      ),
+    ).toBe(true);
+    expect(nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:update")).toBe(
+      true,
+    );
+  });
+  it("requires every native journey in bounded single-worker batches with separate evidence", () => {
+    const commands = nativeTests.jobs.test.steps
+      .map((step) => step.run)
+      .filter((command) => command?.startsWith("npm run test:transmission"));
+    expect(commands).toEqual([
+      "npm run test:transmission -- --grep-invert 'native update:' --output test-results/transmission-native/regressions",
+      "npm run test:transmission -- --grep 'native update:' --fully-parallel --shard=1/2 --output test-results/transmission-native/update-1",
+      "npm run test:transmission -- --grep 'native update:' --fully-parallel --shard=2/2 --output test-results/transmission-native/update-2",
+    ]);
   });
   it("uses Node 24 and validates the real browser and installed package", () => {
     for (const name of ["check", "browser", "package"])

@@ -4,6 +4,12 @@ Node-only leaf module for native process ownership, executable resolution, path
 identity and private storage. Import no application modules or Electron. Export
 through `index.ts`. Bridge, renderer and contracts must never import this module.
 
+- Payload archive, descriptor and acquisition implementations are shared source
+  ES modules, consumed by both the installed runtime and independent host tools.
+  Keep them Node-only, include them in both builds and validate them with the same
+  archive attack tests. Registry bootstrap metadata is data, never executable
+  update logic. Production registry/release origins have no public override.
+
 - Never use blanket `shell: true` or unverified PID kills.
 - Reject unsupported hosts before process launch; macOS and Linux are the only supported operating systems.
 - Enforce finite startup/cleanup deadlines.

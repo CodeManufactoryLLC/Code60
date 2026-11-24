@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import {
   cp,
@@ -29,6 +30,7 @@ import {
 } from "../scripts/distribution/descriptor.mjs";
 import { inventory, nativeAllowed, pruneNative } from "../scripts/distribution/policy.mjs";
 import { packageBootstrap } from "../scripts/package-bootstrap.mjs";
+import { readStableBootstrap } from "../src/platform/index.js";
 
 const execute = promisify(execFile);
 const directories = [];
@@ -453,6 +455,24 @@ it("packs only builtins bootstrap files with both exact descriptors and strict s
     execute(process.execPath, [join(unpack, "package/bin/code60.mjs"), "setup", "--unexpected"]),
   ).rejects.toMatchObject({ code: 1 });
   expect((await stat(archive)).size).toBeLessThan(1024 ** 2);
+  const tarball = await readFile(archive);
+  const registryResult = await readStableBootstrap({
+    parent: f.parent,
+    transport: (url) =>
+      Readable.from([
+        url.endsWith("/latest")
+          ? JSON.stringify({
+              name: "code60",
+              version: "0.4.1",
+              dist: {
+                tarball: "https://registry.npmjs.org/code60/-/code60-0.4.1.tgz",
+                integrity: `sha512-${createHash("sha512").update(tarball).digest("base64")}`,
+              },
+            })
+          : tarball,
+      ]),
+  });
+  expect(registryResult.descriptor).toEqual(process.platform === "darwin" ? mac : f.expected);
   await writeFile(join(input, mac.archive.name), "changed");
   await expect(packageBootstrap(root, input)).rejects.toThrow("checksum");
 });
