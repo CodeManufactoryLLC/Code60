@@ -1,7 +1,8 @@
 # Uninstall and recovery
 
-Phase 8's private distribution candidate implements this flow. Full packaged and
-native acceptance is still in progress; packages remain unpublished.
+The private distribution candidate implements state-preserving uninstall.
+Packages remain unpublished; native login-service certification is a separate
+release gate.
 
 ## Remove the managed application
 
@@ -54,6 +55,11 @@ separately inspected maintenance customer owns the writable removal operation.
 the isolated supervisor fixture. `npm run test:installation` additionally exercises
 real shell startup before and after separately consented profile removal.
 These tests do not establish native login/reboot lifecycle behavior.
+Linux concurrent acceptance runs two complete installed journeys and independently
+verifies the survivor's exact backend identity and usable assets after the first
+run removes its resources. Both runs must finish their shutdown, negative fault
+checks and run-owned cleanup. Cleanup is verified on each Docker engine used;
+success elsewhere cannot resolve an unavailable engine's resource inventory.
 Fresh browser tabs use Start and the existing project history after reinstall;
 they do not inherit a previous tab's presentation state. Acceptance checks provider
 request counts to detect repeated work without logging prompt contents.

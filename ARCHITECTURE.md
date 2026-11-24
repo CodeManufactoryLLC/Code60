@@ -195,8 +195,12 @@ refuses unfinished removal and validates retained ownership; old recovery cannot
 remove a later activation. The installed `code60 uninstall [--yes]` command uses
 default-no service/application consent and separate interactive profile approval;
 non-TTY calls need trailing Code60 --yes and never edit profiles. The bootstrap
-does not acquire gateway dependencies or expose uninstall. Packaged/native delivery
-acceptance remains in progress; these candidates are not published.
+does not acquire gateway dependencies or expose uninstall. Isolated installed
+acceptance covers actual removal, standalone recovery and retained-data reinstall.
+Same-host Linux acceptance additionally verifies one run's cleanup leaves the
+other's exact backend and browser assets usable before both finish their fault
+checks and cleanup. Native login/reboot certification remains a separate release
+gate; these distribution candidates are not published.
 
 ## Current exclusions
 
