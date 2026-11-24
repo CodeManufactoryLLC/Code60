@@ -1,8 +1,9 @@
-import { open, readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { browserApp } from "./fixtures/browser-app.js";
 import { syntheticProviderDownload } from "./fixtures/provider-artifacts.js";
+import { assertProviderStateSecretFree } from "./fixtures/provider-state-scan.js";
 
 async function stopped(log: string, relayWorkspace?: string) {
   const records = await Promise.all(
@@ -109,22 +110,7 @@ for (const [id, name] of [
       const saved = await readFile(join(fixture.directory, "state/code60/desktop.json"), "utf8");
       expect(JSON.parse(saved).agentSetup.version).toBe(1);
       expect(saved).not.toMatch(/QA60|PRIVATE-STATE/);
-      for (const entry of await readdir(join(fixture.directory, "state"), { recursive: true })) {
-        // A live diagnostic writer may release its transient ownership lock after enumeration.
-        const file = await open(join(fixture.directory, "state", entry), "r").catch(
-          (error: NodeJS.ErrnoException) => {
-            if (error.code === "ENOENT" && entry.endsWith("/.lock")) return null;
-            throw error;
-          },
-        );
-        if (!file) continue;
-        try {
-          if ((await file.stat()).isFile())
-            expect(await file.readFile("utf8")).not.toMatch(/QA60-1234|QA60-PASTE|PRIVATE-STATE/);
-        } finally {
-          await file.close();
-        }
-      }
+      await assertProviderStateSecretFree(join(fixture.directory, "state"), { live: true });
       await stopped(fixture.processLog, join(fixture.directory, "state/code60/relay/workspace"));
       await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
       await page.getByRole("button", { name: "Start", exact: true }).click();
@@ -135,6 +121,7 @@ for (const [id, name] of [
       expect(fixture.gateway.application.snapshot().agentSetup?.enabled).toEqual([id]);
       await fixture.gateway.stop();
       await stopped(fixture.processLog);
+      await assertProviderStateSecretFree(join(fixture.directory, "state"));
     } finally {
       await fixture.close();
     }
