@@ -42,6 +42,9 @@ import {
   parseProjectPath,
   parsePromptTemplateId,
   parseProviderAction,
+  parseProviderSetupIdentity,
+  parseProviderSetupStart,
+  parseProviderSetupSubmission,
   parseRagCancel,
   parseRagIdentity,
   parseRagQuery,
@@ -166,6 +169,32 @@ export function applicationOperations(
   handle("provider-action", (value) => controller.providerAction(parseProviderAction(value)));
   handle("setup-begin", (value) => controller.beginAgentSetup(parseSetupBegin(value)));
   handle("setup-attempt", (value) => controller.attemptAgentSetup(parseSetupAttempt(value)));
+  handle("setup-provider-install", (value) =>
+    controller.startProviderSetup(
+      parseProviderSetupStart(value),
+      interactions.currentOwner(),
+      true,
+    ),
+  );
+  handle("setup-provider-login", (value) =>
+    controller.startProviderSetup(
+      parseProviderSetupStart(value),
+      interactions.currentOwner(),
+      false,
+    ),
+  );
+  handle("setup-provider-read", (value) =>
+    controller.readProviderSetup(parseProviderSetupIdentity(value), interactions.currentOwner()),
+  );
+  handle("setup-provider-submit", (value) =>
+    controller.submitProviderSetup(
+      parseProviderSetupSubmission(value),
+      interactions.currentOwner(),
+    ),
+  );
+  handle("setup-provider-cancel", (value) =>
+    controller.cancelProviderSetup(parseProviderSetupIdentity(value), interactions.currentOwner()),
+  );
   handle("setup-codex-install", (value) =>
     controller.startCodexSetup(parseSetupSession(value), interactions.currentOwner(), true),
   );

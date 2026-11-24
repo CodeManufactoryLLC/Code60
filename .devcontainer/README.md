@@ -96,7 +96,13 @@ the official registry and disabled lifecycle scripts. It prefers this copy for
 the standard connector without replacing existing installations. Codex credentials
 remain in `/home/node/.codex`; both directories persist across container recreation.
 
-Other providers and custom Codex commands retain manual installation/sign-in.
+The same dialog installs Antigravity, Claude, Copilot, Droid, Kiro and OpenCode.
+Choose Claude subscription or Anthropic Console; OpenCode offers ChatGPT or GitHub
+Copilot. Complete the provider website step, pasting an authorization code back into
+Code60 when requested. Copilot asks before storing credentials in its private-file
+fallback when no keychain is available. Their private managed tools and normal login
+files stay in this home volume through container recreation. No host credentials
+are imported. Custom launch commands and enterprise endpoints retain manual setup.
 Global npm installs default to `/home/node/.local`; its `bin` directory is on PATH.
 Install tools under `/home/node` so they persist. Root installs outside that home
 remain part of the disposable container. Project `npm ci` does not remove these

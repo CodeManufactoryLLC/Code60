@@ -292,7 +292,7 @@ process-group cleanup. Late/stale results cannot verify membership. Cancellation
 does not log out the provider or erase credentials it has already issued. The
 persistent dev-container home retains both managed binaries and credentials;
 it must be treated as private user state, not a disposable cache. Custom commands
-and other providers require manual authentication in this release.
+require manual authentication; standard catalog harnesses use the scoped provider setup policy below.
 
 
 ## Web Server Beta
@@ -335,3 +335,18 @@ fifteen seconds and on backend/launcher loss. Cleanup uncertainty remains an err
 not a claim that exposure stopped. Provider storage and approved execution records
 are independent of this policy. TLS, passwords, public hosting and automatic
 firewall changes are outside this beta.
+
+## Scoped provider setup
+
+An explicit human setup action may install only the catalog harness release artifacts
+fixed in application policy into versioned private Code60 storage. Verify integrity,
+archive containment, ownership and executable layout before atomic activation; refuse
+root, external overwrite, lifecycle scripts and shell-profile/service edits.
+Authentication belongs to the controlling page's single setup attempt, including LAN.
+Allow only fixed provider login operations and validated HTTPS destinations. Device
+codes, OAuth URLs and pasted codes are ephemeral owner-bound responses/inputs, excluded
+from shared state, request-receipt caches, diagnostics, transcripts and browser storage.
+No generic terminal, shell, provider-server proxy, package selector or credential reader
+is exposed. Providers own persistent credentials and container home retains them.
+Cancelling never logs out or removes credentials. Cleanup failures block further setup
+until owned processes stop. Custom launch overrides retain external setup.

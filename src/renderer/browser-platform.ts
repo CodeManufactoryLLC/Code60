@@ -34,7 +34,15 @@ export async function copyText(text: string): Promise<void> {
   field.style.opacity = "0";
   field.setAttribute("aria-hidden", "true");
   try {
-    document.body.append(field);
+    // Modal dialogs make the rest of the document inert: focus the fallback inside
+    // the dialog owning the user action, otherwise copy may acknowledge stale text.
+    const parent =
+      previous instanceof HTMLElement
+        ? (previous.closest("dialog[open]") ?? document.body)
+        : document.body;
+    parent.append(field);
+    field.focus({ preventScroll: true });
+    if (document.activeElement !== field) throw new Error("Copy focus unavailable.");
     field.select();
     if (typeof document.execCommand !== "function" || !document.execCommand("copy"))
       throw new Error("Copy denied.");

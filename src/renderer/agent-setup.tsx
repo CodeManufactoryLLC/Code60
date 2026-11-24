@@ -1,9 +1,12 @@
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   type ApplicationClient,
-  type CodexChallenge,
-  codexChallengeSchema,
+  type ProviderLoginChallenge,
+  type ProviderLoginMethod,
+  type ProviderSetupIdentity,
+  providerLoginChallengeSchema,
   type SetupBegin,
+  type SetupProviderId,
   type Snapshot,
 } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
@@ -35,11 +38,12 @@ export function AgentSetupWizard({
   const autoSaveSession = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [codexStarting, setCodexStarting] = useState(false);
-  const [codexAttempt, setCodexAttempt] = useState<{ sessionId: string; attemptId: string } | null>(
-    null,
-  );
-  const [challenge, setChallenge] = useState<CodexChallenge | null>(null);
+  const [loginStarting, setLoginStarting] = useState(false);
+  const [loginAttempt, setLoginAttempt] = useState<ProviderSetupIdentity | null>(null);
+  const [challenge, setChallenge] = useState<ProviderLoginChallenge | null>(null);
+  const [method, setMethod] = useState<ProviderLoginMethod>("default");
+  const [authorizationCode, setAuthorizationCode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const setup = snapshot.agentSetup;
   const session = setup?.session;
   const providers = setup?.providers ?? [];
@@ -49,11 +53,23 @@ export function AgentSetupWizard({
   const candidate = providers.find(
     (p) => p.id === (starting ? pending?.provider : (session?.candidate ?? connected)),
   );
+  useEffect(() => {
+    setMethod(candidate?.loginMethods?.[0] ?? "default");
+  }, [candidate?.loginMethods?.[0]]);
+  const challengeId = challenge?.challengeId ?? null;
+  const previousChallenge = useRef<string | null>(null);
+  useEffect(() => {
+    if (challengeId !== previousChallenge.current) {
+      previousChallenge.current = challengeId;
+      setAuthorizationCode("");
+      setSubmitting(false);
+    }
+  }, [challengeId]);
   const success = connected !== null;
   const busy =
     starting ||
     saving ||
-    codexStarting ||
+    loginStarting ||
     session?.phase === "installing" ||
     session?.phase === "authenticating" ||
     session?.phase === "detecting" ||
@@ -105,11 +121,26 @@ export function AgentSetupWizard({
   }, [session?.phase, session?.id, finish]);
   useEffect(() => {
     setChallenge(null);
-    const read = api.readCodexSetup;
+    const read =
+      api.readProviderSetup ??
+      (api.readCodexSetup
+        ? async (identity: ProviderSetupIdentity) => {
+            const result = await api.readCodexSetup?.({
+              sessionId: identity.sessionId,
+              attemptId: identity.attemptId,
+            });
+            return {
+              ...result,
+              challenge: result?.challenge
+                ? { ...result.challenge, kind: "device" as const, challengeId: identity.attemptId }
+                : null,
+            };
+          }
+        : undefined);
     if (
-      !codexAttempt ||
+      !loginAttempt ||
       !read ||
-      session?.id !== codexAttempt.sessionId ||
+      session?.id !== loginAttempt.sessionId ||
       !["installing", "authenticating", "connecting"].includes(session.phase)
     )
       return;
@@ -117,9 +148,9 @@ export function AgentSetupWizard({
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
-        const progress = await read(codexAttempt);
+        const progress = await read(loginAttempt);
         if (stopped) return;
-        const parsed = codexChallengeSchema.safeParse(progress.challenge);
+        const parsed = providerLoginChallengeSchema.safeParse(progress.challenge);
         setChallenge(progress.phase === "authenticating" && parsed.success ? parsed.data : null);
       } catch {
         if (!stopped) setChallenge(null);
@@ -131,7 +162,7 @@ export function AgentSetupWizard({
       stopped = true;
       clearTimeout(timer);
     };
-  }, [api, codexAttempt, session?.id, session?.phase]);
+  }, [api, loginAttempt, session?.id, session?.phase]);
   async function invoke(action: () => Promise<void>) {
     setError("");
     try {
@@ -153,7 +184,7 @@ export function AgentSetupWizard({
     setPending({ provider, revision: snapshot.revision });
     setError("");
     setChallenge(null);
-    setCodexAttempt(null);
+    setLoginAttempt(null);
     try {
       await api.attemptAgentSetup({ sessionId: session.id, provider });
     } catch (cause) {
@@ -163,21 +194,56 @@ export function AgentSetupWizard({
       attemptInFlight.current = false;
     }
   }
-  async function startCodex(install: boolean) {
-    const start = install ? api.installCodexForSetup : api.loginCodexForSetup;
-    if (!session || !start || attemptInFlight.current || busy) return;
+  async function startLogin(install: boolean) {
+    const generic = install ? api.installProviderForSetup : api.loginProviderForSetup;
+    const legacy = install ? api.installCodexForSetup : api.loginCodexForSetup;
+    if (
+      !session ||
+      !candidate ||
+      (!generic && !(candidate.id === "codex" && legacy)) ||
+      attemptInFlight.current ||
+      busy
+    )
+      return;
     attemptInFlight.current = true;
-    setCodexStarting(true);
+    setLoginStarting(true);
     setError("");
     setChallenge(null);
     try {
-      const result = await start({ sessionId: session.id });
-      setCodexAttempt({ sessionId: session.id, attemptId: result.attemptId });
+      const request = { sessionId: session.id, provider: candidate.id as SetupProviderId, method };
+      const result = generic ? await generic(request) : await legacy?.({ sessionId: session.id });
+      if (result)
+        setLoginAttempt({
+          sessionId: session.id,
+          provider: request.provider,
+          attemptId: result.attemptId,
+        });
     } catch {
-      setError("Could not start Codex setup. Retry.");
+      setError(`Could not start ${candidate.name} setup. Retry.`);
     } finally {
       attemptInFlight.current = false;
-      setCodexStarting(false);
+      setLoginStarting(false);
+    }
+  }
+  async function submitLogin(accepted?: boolean) {
+    if (!loginAttempt || !challenge || !api.submitProviderSetup || submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await api.submitProviderSetup({
+        ...loginAttempt,
+        challengeId: challenge.challengeId,
+        answer:
+          challenge.kind === "confirmation"
+            ? { kind: "confirmation", accepted: accepted === true }
+            : { kind: "code", code: authorizationCode.trim() },
+      });
+      setAuthorizationCode("");
+      setChallenge(null);
+    } catch {
+      setError("Could not submit this sign-in step. Retry or cancel setup.");
+    } finally {
+      setSubmitting(false);
     }
   }
   async function addAnother() {
@@ -281,9 +347,9 @@ export function AgentSetupWizard({
                     ? `${candidate.name} connected`
                     : "Saving connection…"
                   : session?.phase === "installing"
-                    ? "Installing Codex…"
+                    ? `Installing ${candidate.name}…`
                     : session?.phase === "authenticating"
-                      ? "Waiting for Codex sign-in…"
+                      ? `Waiting for ${candidate.name} sign-in…`
                       : session?.phase === "connecting"
                         ? `Connecting to ${candidate.name}…`
                         : success
@@ -291,26 +357,88 @@ export function AgentSetupWizard({
                           : ""}
             </p>
             {challenge && session?.phase === "authenticating" && (
-              <section className="codex-device-login" aria-label="Codex sign-in">
-                <output aria-label="Device code">{challenge.userCode}</output>
-                <div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void copyText(challenge.userCode).catch(() =>
-                        setError("Could not copy the device code. Select and copy it instead."),
-                      )
-                    }
+              <section className="codex-device-login" aria-label={`${candidate.name} sign-in`}>
+                {challenge.kind !== "confirmation" && (
+                  <>
+                    {challenge.kind === "device" && (
+                      <output aria-label="Device code">{challenge.userCode}</output>
+                    )}
+                    <div>
+                      {challenge.kind === "device" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void copyText(challenge.userCode).catch(() =>
+                              setError(
+                                "Could not copy the device code. Select and copy it instead.",
+                              ),
+                            )
+                          }
+                        >
+                          Copy code
+                        </button>
+                      )}
+                      <a href={challenge.verificationUrl} target="_blank" rel="noopener noreferrer">
+                        Open sign-in page
+                      </a>
+                    </div>
+                  </>
+                )}
+                {challenge.kind === "code" ? (
+                  <form
+                    className="provider-code-login"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void submitLogin();
+                    }}
                   >
-                    Copy code
-                  </button>
-                  <a href={challenge.verificationUrl} target="_blank" rel="noopener noreferrer">
-                    Open sign-in page
-                  </a>
-                </div>
-                <section aria-label="Sign-in help">
-                  <p>Enter this code on the sign-in page. Keep this dialog open until connected.</p>
-                </section>
+                    <label>
+                      Authorization code
+                      <input
+                        aria-label="Authorization code"
+                        value={authorizationCode}
+                        onChange={(event) => setAuthorizationCode(event.target.value)}
+                        autoComplete="off"
+                        spellCheck={false}
+                        maxLength={4096}
+                      />
+                    </label>
+                    <button type="submit" disabled={submitting || !authorizationCode.trim()}>
+                      Complete sign-in
+                    </button>
+                    <p>Sign in on the provider’s page, then paste its authorization code here.</p>
+                  </form>
+                ) : challenge.kind === "confirmation" ? (
+                  <>
+                    <p>
+                      The system keychain is unavailable. Save your Copilot login in a private file
+                      on the computer running Code60?
+                    </p>
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => void submitLogin(true)}
+                    >
+                      Save login
+                    </button>
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => void submitLogin(false)}
+                    >
+                      Don’t save
+                    </button>
+                  </>
+                ) : (
+                  <section aria-label="Sign-in help">
+                    <p>
+                      {challenge.kind === "device"
+                        ? "Enter this code on the sign-in page. "
+                        : "Complete sign-in on the provider’s page. "}
+                      Keep this dialog open until connected.
+                    </p>
+                  </section>
+                )}
               </section>
             )}
             {busy && (
@@ -339,9 +467,15 @@ export function AgentSetupWizard({
             onClick={() =>
               session &&
               void invoke(async () => {
-                if (codexAttempt && api.cancelCodexSetup) await api.cancelCodexSetup(codexAttempt);
+                if (loginAttempt && api.cancelProviderSetup)
+                  await api.cancelProviderSetup(loginAttempt);
+                else if (loginAttempt && api.cancelCodexSetup)
+                  await api.cancelCodexSetup({
+                    sessionId: loginAttempt.sessionId,
+                    attemptId: loginAttempt.attemptId,
+                  });
                 else await api.cancelAgentSetup({ sessionId: session.id });
-                setCodexAttempt(null);
+                setLoginAttempt(null);
                 setChallenge(null);
                 setPending(null);
               })
@@ -384,20 +518,47 @@ export function AgentSetupWizard({
                 Choose another provider
               </button>
             )}
-            {candidate?.id === "codex" &&
-              session.codexAction &&
-              (session.codexAction === "install"
-                ? api.installCodexForSetup
-                : api.loginCodexForSetup) && (
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => void startCodex(session.codexAction === "install")}
-                >
-                  {session.codexAction === "install"
-                    ? "Install Codex and sign in"
-                    : "Sign in to Codex"}
-                </button>
+            {candidate &&
+              (session.setupAction || session.codexAction) &&
+              (api.installProviderForSetup ||
+                (candidate.id === "codex" && api.installCodexForSetup)) && (
+                <>
+                  {(candidate.loginMethods?.length ?? 0) > 1 && (
+                    <label>
+                      Sign-in method
+                      <select
+                        aria-label="Sign-in method"
+                        value={method}
+                        onChange={(event) => setMethod(event.target.value as ProviderLoginMethod)}
+                      >
+                        {candidate.loginMethods?.map((item) => (
+                          <option key={item} value={item}>
+                            {
+                              {
+                                "claude-subscription": "Claude subscription",
+                                "claude-console": "Anthropic Console",
+                                chatgpt: "ChatGPT",
+                                "github-copilot": "GitHub Copilot",
+                                default: "Browser sign-in",
+                              }[item]
+                            }
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() =>
+                      void startLogin((session.setupAction ?? session.codexAction) === "install")
+                    }
+                  >
+                    {(session.setupAction ?? session.codexAction) === "install"
+                      ? `Install ${candidate.name} and sign in`
+                      : `Sign in to ${candidate.name}`}
+                  </button>
+                </>
               )}
             <button
               type="button"

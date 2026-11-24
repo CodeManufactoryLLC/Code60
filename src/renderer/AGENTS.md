@@ -1232,3 +1232,13 @@ work. This adds no preference, agent-write field, IPC endpoint or dependency.
 Workflows uses the existing Apps navigation and modal primitives. Create with prompt fills editable fields but never starts work. Preserve form revisions, transient chat, last-known state on errors and explicit cancel/reconnect semantics. Pause polling affects observation only.
 
 The workflow player uses the shared content header, owner-bound controls, bounded newest-first events and an event-derived clock. Legacy runs have no pause/resume controls enabled.
+
+## Provider sign-in
+
+Use the existing setup dialog for all catalog harnesses. Offer explicit installation
+and browser sign-in with optional provider-owned device codes or authorization-code
+paste-back. Render only typed fixed login steps, never raw terminal output. Poll
+owner-bound progress once per second while open; clear challenge/input state when the
+step or owner changes. Keep codes and URLs out of browser storage and shared snapshots.
+Show Connected only after a fresh ACP probe and automatic membership save. Reuse
+HTTP-safe clipboard handling, keyboard controls, cancellation and save retry.

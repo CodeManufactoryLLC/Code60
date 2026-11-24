@@ -14,6 +14,7 @@ export async function browserApp(
   flags: string[] = ["--relay", "--session-info"],
   requirePairing = true,
   codex = false,
+  providerDownload?: typeof import("../../src/application/index.js").ProviderDownload,
 ) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-browser-")));
   const config = join(directory, "config/code60");
@@ -54,7 +55,14 @@ export async function browserApp(
     await mkdir(bin);
     await symlink(process.execPath, join(bin, "node"));
     for (const tool of ["npm", "npx"])
-      await symlink(resolve("test/fixtures/fake-codex-tools.mjs"), join(bin, tool));
+      await symlink(
+        resolve(
+          providerDownload
+            ? "test/fixtures/fake-provider-tools.mjs"
+            : "test/fixtures/fake-codex-tools.mjs",
+        ),
+        join(bin, tool),
+      );
     Object.assign(env, {
       PATH: `${bin}:/usr/bin:/bin`,
       CODEX_PATH: undefined,
@@ -72,7 +80,12 @@ export async function browserApp(
       mode: 0o600,
     });
   }
-  let gateway = await startGateway({ env, roots: [directory], assets: resolve("dist/renderer") });
+  let gateway = await startGateway({
+    env,
+    roots: [directory],
+    assets: resolve("dist/renderer"),
+    ...(providerDownload ? { providerDownload } : {}),
+  });
   const contexts = new Set<Awaited<ReturnType<Browser["newContext"]>>>();
   async function open(options: { hasTouch?: boolean } = {}) {
     const context = await browser.newContext({
@@ -98,7 +111,12 @@ export async function browserApp(
     },
     async restart() {
       await gateway.stop();
-      gateway = await startGateway({ env, roots: [directory], assets: resolve("dist/renderer") });
+      gateway = await startGateway({
+        env,
+        roots: [directory],
+        assets: resolve("dist/renderer"),
+        ...(providerDownload ? { providerDownload } : {}),
+      });
     },
     async close() {
       try {
