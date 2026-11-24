@@ -380,10 +380,9 @@ this phase; they are not grounds to change engine APIs silently.
 
 ## Phase 7 — Explicit updates and installation recovery
 
-**Status:** implemented on `codex/explicit-updates-and-recovery`; local Linux
-installation/update acceptance, native macOS workflow continuity and browser
-regressions pass. Required CI, clean exact-commit native artifacts and paired
-bootstrap verification remain delivery gates before merge.
+**Status:** implemented and merged in PR #324. Required Linux CI, exact-commit
+Apple Silicon validation, native workflow continuity and a private bootstrap
+assembled from both real platform artifacts passed at commit `1ada312`.
 
 **PR outcome:** `code60 update` replaces the manual stop/install/repair/start sequence.
 
@@ -412,6 +411,11 @@ Verify the prior release remains available and recovery never replays work.
 **Depends on:** Phase 6.
 
 ## Phase 8 — State-preserving uninstall
+
+**Status:** in progress on `codex/state-preserving-uninstall`. Internal owned-file
+inventory/removal and separately approved shell-removal previews are being tested.
+The public uninstall command, durable recovery, retained-data reinstall and full
+installation acceptance remain to be implemented and validated.
 
 **PR outcome:** `code60 uninstall` removes owned installation resources predictably.
 

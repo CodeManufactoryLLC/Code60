@@ -26,6 +26,10 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
   lockPrivateState's stale-owner cleanup for distribution. Preserve uncertain
   locks and possibly published activations. Validate private receipts, directory
   containment and file identities; never repair by chmod/chown or sudo.
+  Removal callers must establish receipt ownership before capturing an inventory.
+  Compare the complete remainder before deletion, then recheck each entry and its
+  parent identities. Missing entries may represent prior cleanup; new or changed
+  contents never become owned just because they are in a managed directory.
 
 - Transmission bundle storage is a Node-only filesystem boundary. Validate exact
   supported artifact identities and the complete regular-file inventory before

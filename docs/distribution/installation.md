@@ -58,6 +58,14 @@ content before atomic replacement. Preserve permissions, newline style and unrel
 bytes. An installation-specific marked block and private shell receipt record
 ownership. Modified/unknown blocks receive manual instructions.
 
+The internal removal planner returns only each exact owned addition to remove.
+New receipts retain that addition so unrelated later profile edits can survive
+removal byte for byte. A receipt without its addition fingerprint requires an
+unchanged whole-file hash. Removal also requires separate interactive approval;
+service consent never grants permission to edit profiles. An edit made after the
+preview is preserved, and partial completion is reported. This planner alone does
+not unregister services or uninstall the application.
+
 Bash uses its first existing login profile and `.bashrc`; zsh uses `.zprofile` and
 `.zshrc` under absolute ZDOTDIR or HOME; fish uses XDG_CONFIG_HOME/fish/config.fish
 or its default. No discovery runs user profiles. Unsupported shells, startup

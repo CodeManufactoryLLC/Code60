@@ -230,7 +230,10 @@ export async function applyShellIntegration(
     const receiptPath = join(preview.root, "shell.json");
     let saved = await installationSnapshot(receiptPath, 65_536, true);
     const receipts = saved
-      ? (JSON.parse(saved.text) as Record<string, { hash: string; marker: string }>)
+      ? (JSON.parse(saved.text) as Record<
+          string,
+          { hash: string; marker: string; append?: string }
+        >)
       : {};
     for (const edit of preview.edits) {
       try {
@@ -261,7 +264,7 @@ export async function applyShellIntegration(
           edit.mode,
         );
         applied.push(edit.path);
-        receipts[edit.path] = { hash: identity.hash, marker: record.id };
+        receipts[edit.path] = { hash: identity.hash, marker: record.id, append: edit.append };
         await writeInstallationFile(receiptPath, JSON.stringify(receipts), saved?.identity ?? null);
         saved = await installationSnapshot(receiptPath, 65_536, true);
       } catch (error) {

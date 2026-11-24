@@ -2124,6 +2124,19 @@ describe("retained project runtimes", {
     const second = await newChat(a.id);
     const b = await project("archive-b");
     const other = await newChat(b.id);
+    // The idle event reaches snapshots before its asynchronous run.json write.
+    // Establish durable initial state before asserting archive does not alter it.
+    await vi.waitFor(async () => {
+      for (const chat of [first, second, other]) {
+        const saved = JSON.parse(
+          await fs.readFile(
+            join(chat.directory as string, ".code60/runs", chat.run?.id as string, "run.json"),
+            "utf8",
+          ),
+        ) as { status: string };
+        expect(saved.status).toBe("idle");
+      }
+    });
     const before = controller.snapshot();
     const starts = agents.sessions.length;
     const records = await Promise.all(

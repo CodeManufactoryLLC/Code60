@@ -152,6 +152,13 @@ engine bindings remain outside application replacement. Setup does not update.
 The browser reports the installed version and terminal action only; it cannot
 download, activate, repair or schedule application updates.
 
+Phase 8 work adds Node-only installation removal primitives in platform and
+receipt-owned shell removal planning in management. Removal inventories pin file
+contents, directory identities and contained links; interrupted cleanup may remove
+only the recorded remainder. Shell removal has its own exact preview and explicit
+interactive approval, preserving unrelated profile bytes and changed blocks.
+These internal primitives do not yet expose an application uninstall command.
+
 ## Current exclusions
 
 No Electron shell, native window effects, automatic updater, bundled Node, public/internet

@@ -21,6 +21,12 @@ export {
   writeInstallationFile,
 } from "./installation-files.js";
 export { installationPrerequisite, runInstallationCommand } from "./installation-process.js";
+export {
+  type InstallationRemovalEntry,
+  type InstallationRemovalInventory,
+  inventoryInstallationRemoval,
+  removeInstallationInventory,
+} from "./installation-removal.js";
 export { isPrivateIPv4, primaryPrivateIPv4 } from "./lan-address.js";
 export { containedPath, samePath } from "./paths.js";
 export { acquirePayload, type PayloadTransport } from "./payload-acquire.mjs";

@@ -1,5 +1,26 @@
 # User workflow cards
 
+## State-preserving uninstall
+
+- Start with a real managed installation, retained customer database/preferences,
+  fake verified provider and synthetic Git work. Complete the shared golden
+  journey before removal; capture data, Git/index/HEAD/worktrees and process IDs.
+- Decline service removal and verify no backend interruption or installation
+  changes. With explicit consent, inspect active/uncertain workflow ownership
+  before quiescence, unregister only the owned service and verify exact process
+  exit before removing application files. Inspecting engines must not start them.
+- Interrupt cleanup and resume using durable support after temporary caches are
+  gone. Modified files/directories/links and foreign launchers remain intact with
+  recovery guidance. Repeated uninstall and reinstall preserve and validate data;
+  there is no purge or uncertain-work replay.
+- Approve profile removal separately in an interactive terminal; check real
+  Bash/zsh/fish startup, declined/non-TTY behavior, CRLF/permissions, outside edits
+  and partial completion. Preserve modified or ambiguous blocks and unrelated
+  bytes. Do not install host fish or touch real host profiles/services.
+- Retain full Linux/native evidence and independently verify owned process and
+  Docker resource cleanup. Unit tests establish supporting behavior only; native
+  login/reboot certification remains separate Phase 9 work.
+
 ## Explicit update and recovery
 
 - Start from a real isolated managed installation with a valid custom database,

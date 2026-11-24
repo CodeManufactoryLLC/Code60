@@ -8,3 +8,4 @@ export {
   applyShellIntegration,
   planShellIntegration,
 } from "./shell-integration.js";
+export { applyShellRemoval, planShellRemoval } from "./shell-removal.js";
