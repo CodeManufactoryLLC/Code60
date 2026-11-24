@@ -6,6 +6,7 @@ import { automationClient, schedulerControl } from "../automation/index.js";
 import { CODE60_VERSION } from "../core/index.js";
 import {
   absoluteInstallationPath,
+  captureRemovalServiceProof,
   controlUserService,
   fileCode,
   inspectUserService,
@@ -219,7 +220,17 @@ export async function backendControl(
       )
         throw new Error("Backend absence changed during workflow preparation");
       await requireNoResponder(env);
-      return { installed: false, enginePids };
+      return {
+        installed: false,
+        enginePids,
+        removal: await captureRemovalServiceProof(
+          userHome(env),
+          root,
+          runtime,
+          [...enginePids, ...(removal.pid === null ? [] : [removal.pid])],
+          { inspect: inspectUserService, exited: waitForRuntimeExit },
+        ),
+      };
     }
     if (action === "start") {
       if (!saved?.installed) throw new Error("The backend is not installed.");
@@ -348,7 +359,21 @@ export async function backendControl(
       previous ?? undefined,
       16_384,
     );
-    return { installed: action !== "uninstall", ...(removal ? { enginePids } : {}) };
+    return {
+      installed: action !== "uninstall",
+      ...(removal
+        ? {
+            enginePids,
+            removal: await captureRemovalServiceProof(
+              userHome(env),
+              root,
+              runtime,
+              [...enginePids, ...(removal.pid === null ? [] : [removal.pid])],
+              { inspect: inspectUserService, exited: waitForRuntimeExit },
+            ),
+          }
+        : {}),
+    };
   } finally {
     await release();
   }

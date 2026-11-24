@@ -39,6 +39,13 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
   Compare the complete remainder before deletion, then recheck each entry and its
   parent identities. Missing entries may represent prior cleanup; new or changed
   contents never become owned just because they are in a managed directory.
+  Removal service proofs retain the original runtime, private registration file
+  identity and observed PID set. Under the compatible operation lock, recheck
+  installed:false, native absence and process exit before file cleanup. Proofs
+  authorize no termination, registration repair or new environment-selected scope.
+  Cleanup must also hold the original gateway runtime writer with reclaimStale:false,
+  preventing a direct foreground backend from starting during deletion. Preserve
+  any existing/uncertain writer; never treat service absence alone as runtime ownership.
 
 - Transmission bundle storage is a Node-only filesystem boundary. Validate exact
   supported artifact identities and the complete regular-file inventory before

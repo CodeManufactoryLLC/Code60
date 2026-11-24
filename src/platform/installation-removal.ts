@@ -282,6 +282,29 @@ const same = (left: InstallationRemovalEntry, right: InstallationRemovalEntry) =
     (right.type === "file" && left.size === right.size && left.sha256 === right.sha256)) &&
   (left.type !== "link" || (right.type === "link" && left.target === right.target));
 
+export function validateInstallationRemovalInventory(value: InstallationRemovalInventory) {
+  validate(value.root, value);
+}
+
+/** Preflight a whole receipt before deleting any of its independent trees. */
+export async function verifyInstallationRemovalRemainder(
+  inventory: InstallationRemovalInventory,
+  signal?: AbortSignal,
+) {
+  const expected = validate(inventory.root, inventory);
+  signal?.throwIfAborted();
+  const exists = await lstat(inventory.root).catch((error: unknown) => {
+    if (installationFileCode(error) !== "ENOENT") throw error;
+    return null;
+  });
+  if (!exists) return;
+  const actual = await inventoryInstallationRemoval(inventory.root, signal);
+  for (const entry of actual.entries) {
+    const owned = expected.get(entry.path);
+    if (!owned || !same(owned, entry)) throw fail();
+  }
+}
+
 /** Resume only the recorded removal; missing entries are previous progress, never permission to claim new files. */
 export async function removeInstallationInventory(
   root: string,

@@ -43,3 +43,14 @@ implicitly replace healthy engine bindings, downgrade a database or resume
 uncertain execution during recovery. Browser update views have read authority only.
 Reject an old current pointer that contradicts recorded publication before
 consent or service effects; preserve both the pointer and journal for inspection.
+
+Internal uninstall recovery lives under removals/<attempt>, outside releases and
+activations, with a pinned-Node launcher, immutable hashed receipt/support and CAS
+progress. Recovery must work after entrypoint/cache deletion without readActivation.
+Validate the original installation/root/current identities, complete remaining
+inventory and original service scope before deletion. Hold compatible service
+ownership throughout cleanup; never derive its scope from new caller XDG values.
+Preserve changed support, foreign files/launchers and all data/engine/worktree state.
+Release failures remain failures after completed deletion; do not roll it back.
+Reinstall refuses unfinished removal and recognizes a later healthy activation;
+an old recovery attempt can never delete that new installation.

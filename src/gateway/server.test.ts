@@ -544,7 +544,11 @@ it("prepares uninstall only with private authentication and no payload, then kee
     uninstallPrepared: true,
   });
   await expect(managementRequest(env, "prepare-database")).rejects.toThrow("app is stopping");
-  await expect(managementRequest(env, "prepare-uninstall")).rejects.toThrow("Backend is busy");
+  expect(await managementRequest(env, "prepare-uninstall")).toEqual({
+    quiescent: true,
+    pid: process.pid,
+    enginePids: [],
+  });
   expect(await managementRequest(env, "shutdown")).toEqual({ stopped: true });
 });
 
@@ -561,6 +565,43 @@ it("releases all idle reservations when native state is uncertain, preserving a 
   expect((await fetch(`${gateway.origin}/api/connection`)).status).toBe(200);
   expect((await managementRequest(env, "status")).uninstallPrepared).toBe(false);
   expect(await managementRequest(env, "prepare-database")).toEqual({ state: "ready" });
+});
+
+it("refuses simultaneous uninstall preparation and returns an immutable completed proof on explicit retry", async () => {
+  const f = await fixture();
+  let enter: () => void = () => {};
+  let resume: () => void = () => {};
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
+  const proceed = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  const original = f.gateway.application.reserveIdleForUninstall.bind(f.gateway.application);
+  const spy = vi
+    .spyOn(f.gateway.application, "reserveIdleForUninstall")
+    .mockImplementation(async (signal) => {
+      enter();
+      await proceed;
+      return original(signal);
+    });
+  const preparing = managementRequest(f.env, "prepare-uninstall");
+  try {
+    await entered;
+    await expect(managementRequest(f.env, "prepare-uninstall")).rejects.toThrow("Backend is busy");
+    expect((await managementRequest(f.env, "status")).uninstallPrepared).toBe(false);
+  } finally {
+    resume();
+  }
+  const first = await preparing;
+  try {
+    expect(await managementRequest(f.env, "prepare-uninstall")).toEqual(first);
+    (first.enginePids as number[]).push(123);
+    expect((await managementRequest(f.env, "prepare-uninstall")).enginePids).toEqual([]);
+    expect(spy).toHaveBeenCalledOnce();
+  } finally {
+    spy.mockRestore();
+  }
 });
 
 it("does not mark ordinary shutdown or failed reservation cleanup as completed uninstall preparation", async () => {

@@ -26,6 +26,14 @@
   independent cache in isolated state, exercises production ownership/stop checks,
   compares saved rows and verifies process exit. It calls no provider or real
   login service and does not substitute for complete installed uninstall acceptance.
+  It also removes a deliberately inert synthetic application through durable
+  support, preserves the actual engine cache/history, and refuses a late engine
+  restart before deleting files. Record that fixture distinction in the report.
+- Exercise the actual recovery launcher from another directory after entrypoint
+  and temporary cache deletion. Changed HOME/XDG must not select another service
+  scope. Verify SIGINT/SIGTERM results and helper-process exit independently;
+  release failures remain failures even after completed deletion. Preserve
+  completed receipts and prove an old recovery cannot remove a reinstallation.
 
 ## Explicit update and recovery
 

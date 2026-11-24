@@ -412,10 +412,11 @@ Verify the prior release remains available and recovery never replays work.
 
 ## Phase 8 — State-preserving uninstall
 
-**Status:** in progress on `codex/state-preserving-uninstall`. Internal owned-file
-inventory/removal and separately approved shell-removal previews are being tested.
-The public uninstall command, durable recovery, retained-data reinstall and full
-installation acceptance remain to be implemented and validated.
+**Status:** in progress on `codex/state-preserving-uninstall`. Internal inventory,
+separate shell previews, guarded quiescence and standalone recovery are implemented
+and under validation. Supporting tests cover partial cleanup and retained-data
+file reinstallation. The public uninstall command, full customer-database journeys
+and required Linux/native acceptance remain unfinished.
 
 **PR outcome:** `code60 uninstall` removes owned installation resources predictably.
 

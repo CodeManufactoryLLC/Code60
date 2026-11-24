@@ -33,6 +33,7 @@ import {
   supportedInstallationRuntime,
   verifyBoundNode,
 } from "./install-state.js";
+import { assertRemovalAllowsInstall } from "./removal-state.js";
 
 interface InstallationArtifact {
   identity: ArtifactIdentity;
@@ -160,6 +161,7 @@ export async function installManagedRelease(options: InstallationOptions) {
     let record = await readInstallation(paths);
     const initial = !record;
     record ??= { ...paths, schema: 1, id: randomUUID() };
+    if (!initial) await assertRemovalAllowsInstall(record, !options.repair);
     if (initial) {
       const contents = (await readdir(paths.root)).filter((name) => name !== ".install-lock");
       if (contents.length) {

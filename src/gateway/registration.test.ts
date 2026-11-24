@@ -48,7 +48,8 @@ afterEach(async () => {
     await rm(directory, { recursive: true, force: true });
 });
 async function fixture(installed = false) {
-  if (!installed) fake.inspect.mockResolvedValue({ definitionPresent: false, state: "stopped" });
+  if (!installed)
+    fake.inspect.mockResolvedValue({ definitionPresent: false, state: "stopped", loaded: false });
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-registration-")));
   directories.push(directory);
   const env = {
@@ -208,7 +209,7 @@ async function removalFixture() {
 }
 it("unregisters only the prepared runtime/PID after authenticated idle preparation and verified exit", async () => {
   const f = await removalFixture();
-  expect(await backendControl(f.env, "uninstall", true, f.guard)).toEqual({
+  expect(await backendControl(f.env, "uninstall", true, f.guard)).toMatchObject({
     installed: false,
     enginePids: [],
   });
@@ -261,7 +262,7 @@ it("recovers metadata only after positive native/HTTP absence if the owned defin
   const f = await removalFixture();
   f.removed();
   await unlink(f.definition.path);
-  expect(await backendControl(f.env, "uninstall", true, { ...f.guard, pid: null })).toEqual({
+  expect(await backendControl(f.env, "uninstall", true, { ...f.guard, pid: null })).toMatchObject({
     installed: false,
     enginePids: [],
   });
@@ -320,7 +321,7 @@ it("checks fixed native absence for files-only installations and refuses unexpec
     "unexpected backend",
   );
   fake.management.mockRejectedValue(Object.assign(Error("No metadata"), { code: "ENOENT" }));
-  expect(await backendControl(f.env, "uninstall", true, guard)).toEqual({
+  expect(await backendControl(f.env, "uninstall", true, guard)).toMatchObject({
     installed: false,
     enginePids: [],
   });

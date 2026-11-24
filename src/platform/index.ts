@@ -29,7 +29,15 @@ export {
   removeInstallationInventory,
   removeRecordedInstallationLink,
   snapshotRemovalLink,
+  validateInstallationRemovalInventory,
+  verifyInstallationRemovalRemainder,
 } from "./installation-removal.js";
+export {
+  captureRemovalServiceProof,
+  type RemovalServiceProof,
+  reserveRemovedBackend,
+  validateRemovalServiceProof,
+} from "./installation-removal-service.js";
 export { isPrivateIPv4, primaryPrivateIPv4 } from "./lan-address.js";
 export { containedPath, samePath } from "./paths.js";
 export { acquirePayload, type PayloadTransport } from "./payload-acquire.mjs";

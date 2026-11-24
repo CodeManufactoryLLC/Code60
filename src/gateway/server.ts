@@ -153,6 +153,7 @@ export async function startGateway(options: GatewayOptions = {}) {
   let quiescing = false;
   let preparingUninstall = false;
   let uninstallPrepared = false;
+  let uninstallProof: { quiescent: true; pid: number; enginePids: number[] } | undefined;
   let stopped: Promise<void> | undefined;
   let shutdownRequested = false;
   let transferring = false;
@@ -766,6 +767,8 @@ export async function startGateway(options: GatewayOptions = {}) {
   server.requestTimeout = 30_000;
   server.headersTimeout = 10_000;
   async function prepareUninstall() {
+    if (uninstallPrepared && uninstallProof)
+      return { ...uninstallProof, enginePids: [...uninstallProof.enginePids] };
     if (preparingUninstall || quiescing || changingPairing || transferring)
       throw Error("Backend is busy; finish current changes before uninstalling");
     preparingUninstall = true;
@@ -806,6 +809,8 @@ export async function startGateway(options: GatewayOptions = {}) {
       } else if (failure) quiescing = shutdownStarted;
     }
     if (failure) throw failure;
+    if (!result) throw Error("Uninstall preparation is uncertain; preserve the installation");
+    uninstallProof = result;
     uninstallPrepared = true;
     return result;
   }

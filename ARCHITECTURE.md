@@ -179,7 +179,21 @@ preparation is distinct from ordinary shutdown. Restarted backends, uncertain ex
 or native absence stop removal. An already stopped backend uses strict offline
 workflow preparation without constructing an ApplicationHost or starting engines.
 Partial unregistration can finish its metadata only after positive native and HTTP
-absence; application file deletion and durable recovery remain separate work.
+absence. Successful private preparation returns its saved non-secret proof on
+retry; simultaneous and failed preparations remain refused.
+
+Internal removal support lives outside application releases and activations under
+removals/<attempt>. A private immutable receipt pins the original installation,
+inventories, current/launcher identities, canonical Node and original service scope;
+CAS progress records preparation, removal and completion. Its standalone recovery
+launcher survives partial entrypoint deletion and removal of temporary npm/bootstrap
+files. Cleanup holds compatible service-operation and gateway-runtime writer ownership, verifies process and
+engine absence, and deletes only the recorded remainder. Unknown/changed files,
+registrations and links fail closed or remain explicit residuals. Data, configuration,
+engine caches/evidence and worktrees remain outside these inventories. Reinstall
+refuses unfinished removal and validates retained ownership; old recovery cannot
+remove a later activation. Public uninstall orchestration and acceptance remain
+in progress, so these internals do not yet add a supported product command.
 
 ## Current exclusions
 

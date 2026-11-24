@@ -122,3 +122,24 @@ prune releases or kill an unverified process to make another attempt succeed.
 Repair requires establishing ownership and an explicit operator decision; there is
 no automatic stale-lock recovery command in Phase 4. Failed shell edits leave
 manual continuation instructions and identify any blocks already applied.
+
+## Uninstall recovery internals
+
+Phase 8 is in progress; the public uninstall flow is not yet available. Its internal
+cleanup publishes private support under `removals/<attempt>` before deleting any
+application files. The printed absolute recovery launcher uses recorded Node and
+remains usable after the application entrypoint or temporary bootstrap cache is gone.
+The original `current` pointer is retained until its owned files have been removed.
+
+Recovery uses immutable inventory/support hashes and durable `removal.json` progress.
+It rechecks the original service directory and registration identity under the same
+non-reclaiming operation lock used for guarded removal. It never selects a different
+state directory from a changed environment or stops an uncertain process. Changed
+files and replaced links remain intact; cleanup failures are reported even after
+application deletion has completed.
+
+Databases, configuration, run records, engine evidence/cache and worktrees are
+retained. Reinstall refuses unfinished cleanup, then validates completed removal
+and retained installation ownership. A completed old recovery command refuses a
+later activation. These internal APIs add no product capability yet; full packaged
+uninstall, recovery and real database reinstallation acceptance are still required.

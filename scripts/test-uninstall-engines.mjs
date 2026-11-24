@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import {
   lstat,
@@ -40,21 +42,37 @@ await runCommand(async (cancel) => {
     CODEX_HOME: join(temporary, "codex"),
   };
   const load = (path) => import(pathToFileURL(resolve("dist", path)).href);
-  const { preserveTransmissionBundle, inspectMacRuntimeProcess, waitForRuntimeExit } =
-    await load("platform/index.js");
+  const {
+    preserveTransmissionBundle,
+    inspectMacRuntimeProcess,
+    waitForRuntimeExit,
+    privateDirectory,
+    captureRemovalServiceProof,
+    reserveRemovedBackend,
+  } = await load("platform/index.js");
   const { LocalTransmission } = await load("application/transmission.js");
   const { createTransmissionRemovalPorts, prepareTransmissionRemoval } = await load(
     "application/transmission-removal.js",
   );
   const ports = createTransmissionRemovalPorts();
-  const root = join(temporary, "workflows");
+  const root = join(env.XDG_STATE_HOME, "code60/workflows");
   const started = [];
   const result = {
     status: "RUNNING",
     input: identity,
     node: process.versions.node,
+    code: {
+      commit: execFileSync("git", ["rev-parse", "HEAD"], {
+        encoding: "utf8",
+        timeout: 5000,
+      }).trim(),
+      dirty: !!execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], {
+        encoding: "utf8",
+        timeout: 5000,
+      }).trim(),
+    },
     classification:
-      "actual bundled idle native engine quiescence; no provider, login service or full uninstall claim",
+      "actual bundled idle native engines and durable removal of a synthetic inert app; injected absent supervisor; no provider, login service or full packaged uninstall claim",
   };
   const history = async () =>
     Promise.all(
@@ -108,6 +126,109 @@ await runCommand(async (cancel) => {
       assert.ok(await ports.runtime(env, version, signal));
     }
     result.retainedBindingsAndState = true;
+    const {
+      installManagedRelease,
+      planManagedRemoval,
+      prepareManagedRemoval,
+      finishManagedRemoval,
+    } = await load("management/index.js");
+    const installation = await installManagedRelease({
+      env: { ...env, PATH: "/usr/bin:/bin" },
+      signal,
+      artifact: {
+        identity: {
+          version: identity.version,
+          os: identity.os,
+          arch: identity.arch,
+          archive: {
+            sha256: createHash("sha256")
+              .update(`synthetic removal fixture:${identity.archive.sha256}`)
+              .digest("hex"),
+          },
+        },
+        acquire: async ({ parent }) => {
+          const owned = await mkdtemp(join(parent, ".component-")),
+            root = join(owned, "application");
+          const contents = {
+            "dist/management/cli.js": "export async function runManagement(){}",
+            "dist/gateway/main.js": "// inert component fixture\n",
+            NOTICE: "component notice\n",
+          };
+          for (const [path, text] of Object.entries(contents)) {
+            await mkdir(dirname(join(root, path)), { recursive: true, mode: 0o700 });
+            await writeFile(join(root, path), text, { mode: 0o600 });
+          }
+          await writeFile(
+            join(root, "payload.json"),
+            JSON.stringify({
+              schemaVersion: 1,
+              version: identity.version,
+              os: identity.os,
+              arch: identity.arch,
+              files: Object.entries(contents).map(([path, text]) => ({
+                path,
+                type: "0",
+                size: Buffer.byteLength(text),
+                sha256: createHash("sha256").update(text).digest("hex"),
+              })),
+            }),
+            { mode: 0o600 },
+          );
+          return { root, owned };
+        },
+      },
+    });
+    const plan = await planManagedRemoval(env, signal);
+    assert.ok(plan);
+    const serviceRoot = join(env.XDG_STATE_HOME, "code60/gateway");
+    await privateDirectory(serviceRoot);
+    const servicePorts = {
+      inspect: async () => ({ state: "stopped", definitionPresent: false, loaded: false }),
+      exited: waitForRuntimeExit,
+    };
+    const service = await captureRemovalServiceProof(
+      temporary,
+      serviceRoot,
+      {
+        executable: plan.current.receipt.node.path,
+        args: [join(installation.release, "dist/gateway/main.js")],
+        env: {},
+      },
+      proofs.flatMap((proof) => [...proof.pids]),
+      servicePorts,
+    );
+    const recovery = await prepareManagedRemoval(plan, service, { signal });
+    assert.equal(recovery.receipt.engines.length, 2);
+    const first = started[0];
+    assert.ok(first);
+    first.owner = undefined;
+    const restarted = new LocalTransmission(first.state, env, first.version);
+    await restarted.connect(signal);
+    const health = await restarted.call("health", {}, signal);
+    first.owner = await inspectMacRuntimeProcess(health.pid, first.command, signal);
+    assert.ok(first.owner);
+    const reserve = (proof, signal) => reserveRemovedBackend(proof, signal, servicePorts);
+    await assert.rejects(
+      finishManagedRemoval(plan.record, { signal, reserve }),
+      /Engine ownership or absence changed/,
+    );
+    assert.equal(
+      await readFile(join(installation.release, "NOTICE"), "utf8"),
+      "component notice\n",
+    );
+    assert.ok(await inspectMacRuntimeProcess(health.pid, first.command, signal));
+    result.lateEngine = { pid: health.pid, refusedBeforeFileDeletion: true, remainedRunning: true };
+    for (const proof of await prepareTransmissionRemoval(root, env, [], signal))
+      await proof.stop(signal);
+    await finishManagedRemoval(plan.record, { signal, reserve });
+    assert.equal(await lstat(installation.release).catch(() => null), null);
+    assert.equal(await lstat(installation.launcher).catch(() => null), null);
+    assert.deepEqual(await history(), result.before);
+    for (const { version } of started) assert.ok(await ports.runtime(env, version, signal));
+    result.durableRemoval = {
+      syntheticApplicationRemoved: true,
+      nativeBindingsAndHistoryRetained: true,
+    };
     result.status = "PASS";
   } catch (error) {
     failure = error;
