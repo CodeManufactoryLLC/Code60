@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { expandNavigation } from "./fixtures/browser-actions.js";
@@ -64,7 +64,12 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
         .map((line) => JSON.parse(line));
     expect((await events()).map((event) => event.event)).toEqual(["spawn", "list"]);
     await expect.poll(async () => alive((await events())[0].pid)).toBe(false);
-    expect((await stat(userFile)).mode & 0o777).toBe(0o600);
+    const configuration = await open(userFile, "r");
+    try {
+      expect((await configuration.stat()).mode & 0o777).toBe(0o600);
+    } finally {
+      await configuration.close();
+    }
     await mkdir(join(fixture.directory, "project"));
     await openProject(page, fixture.directory, "project");
     await apps(page);

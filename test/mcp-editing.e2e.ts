@@ -96,7 +96,7 @@ test("MCP JSON: completion, safe validation, exact saves, navigation and guided 
     await guard.getByRole("button", { name: "Save", exact: true }).click();
     await expect(guard).toHaveCount(0);
     expect(await readFile(config(fixture.directory), "utf8")).toBe(
-      text("Retained draft").replace("{", "{ "),
+      `{ ${text("Retained draft").slice(1)}`,
     );
     await page.getByRole("button", { name: "Edit server", exact: true }).click();
     const form = page.getByRole("dialog", { name: /Edit MCP server/ });

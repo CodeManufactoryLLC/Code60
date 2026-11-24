@@ -151,7 +151,7 @@ test("MCP credentials: unavailable persistent storage never silently becomes tem
     const dialog = await authentication(page);
     await dialog.getByLabel("Credential secret", { exact: true }).fill(secret);
     await dialog.getByRole("button", { name: "Save credential", exact: true }).click();
-    await expect(dialog.getByRole("alert")).toContainText("unavailable");
+    await expect(dialog.getByRole("alert").filter({ hasText: "unavailable" })).toBeVisible();
     await expect(dialog.getByLabel("Credential secret", { exact: true })).toHaveValue("");
     await expect(dialog.getByLabel(/Secure OS storage/)).toBeChecked();
     expect(remote.counts.initialize).toBe(0);
