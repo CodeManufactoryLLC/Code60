@@ -19,5 +19,9 @@ export {
   writeInstallationFile,
 } from "./installation-files.js";
 export { installationPrerequisite, runInstallationCommand } from "./installation-process.js";
-export { preserveTransmissionBundle, resolveTransmissionRuntime } from "./transmission-bundle.js";
+export {
+  installedEngineVersions,
+  preserveTransmissionBundle,
+  resolveTransmissionRuntime,
+} from "./transmission-bundle.js";
 export { newerStableRelease } from "./update-registry.js";
