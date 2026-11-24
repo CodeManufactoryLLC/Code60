@@ -55,6 +55,12 @@ separately inspected maintenance customer owns the writable removal operation.
 the isolated supervisor fixture. `npm run test:installation` additionally exercises
 real shell startup before and after separately consented profile removal.
 These tests do not establish native login/reboot lifecycle behavior.
+Host unit checks explicitly report blocked file-holder coverage when Linux denies
+same-user descriptor inspection. The required native Linux container runs the
+process tests in strict mode before payload acceptance; those positive ownership,
+file-holder and absence checks cannot skip on permission or emulator failures.
+The application continues to refuse removal whenever inspection is unavailable.
+
 The installed engine-removal smoke also runs on native Linux x64 in the required
 payload job. It checks the bundled 0.1.1 engine, a late restart refusal, retained
 bindings/history and original process exit. Linux uses kernel procfs for executable,

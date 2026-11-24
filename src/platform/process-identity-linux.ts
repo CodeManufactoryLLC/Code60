@@ -11,7 +11,7 @@ import {
 import { verifyPrivatePath } from "./private-state.js";
 import { type RuntimeProcessIdentity, runtimeProcessExists } from "./process-identity.js";
 
-type InspectionStage = "unverified" | "status" | "stat" | "mixed-uid";
+type InspectionStage = "unverified" | "status" | "stat" | "mixed-uid" | "file-descriptors";
 class LinuxInspectionError extends Error {
   constructor(stage: InspectionStage = "unverified", code?: string) {
     super("Runtime process ownership is unavailable; preserve installation files", {
@@ -343,7 +343,7 @@ export async function linuxFileProcesses(paths: readonly string[], signal?: Abor
     } catch (error) {
       s.throwIfAborted();
       if (installationFileCode(error) === "ENOENT" && !runtimeProcessExists(row.pid)) continue;
-      throw unavailable();
+      throw new LinuxInspectionError("file-descriptors", installationFileCode(error));
     }
   }
   for (let index = 0; index < paths.length; index++) {

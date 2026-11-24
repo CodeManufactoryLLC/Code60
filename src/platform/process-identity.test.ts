@@ -24,6 +24,11 @@ const nativeMapping =
   (statSync("/proc/self/exe").ino === statSync(process.execPath).ino &&
     statSync("/proc/self/exe").dev === statSync(process.execPath).dev);
 const native = nativeTarget && nativeMapping;
+const requireNative = process.env.CODE60_REQUIRE_NATIVE_PROCESS_INSPECTION === "1";
+if (requireNative && !native)
+  throw Error(
+    "Strict native process tests require a supported host and verified Node executable mapping",
+  );
 const roots: string[] = [];
 const owned: OwnedProcess[] = [];
 const raw: { child: ChildProcess; exited: Promise<unknown> }[] = [];
@@ -136,20 +141,41 @@ it.runIf(native)(
 );
 it.runIf(native)(
   "finds exact engine processes and positively inspects private file holders",
-  async () => {
+  async (context) => {
     const f = await fixture();
     expect((await findRuntimeProcesses(f.command)).map((entry) => entry.pid)).toEqual([
       f.child.pid,
     ]);
     const path = join(f.root, "owner.sqlite");
     await writeFile(path, "", { mode: 0o600 });
+    const holders = async () => {
+      try {
+        return await runtimeFileProcesses([path]);
+      } catch (error) {
+        if (
+          !requireNative &&
+          process.platform === "linux" &&
+          error instanceof Error &&
+          error.cause &&
+          typeof error.cause === "object" &&
+          "stage" in error.cause &&
+          error.cause.stage === "file-descriptors" &&
+          "code" in error.cause &&
+          (error.cause.code === "EACCES" || error.cause.code === "EPERM")
+        )
+          context.skip(
+            "BLOCKED: host restricts same-user file inspection; required native container coverage is strict",
+          );
+        throw error;
+      }
+    };
     const file = await open(path, "r");
     try {
-      expect(await runtimeFileProcesses([path])).toContain(process.pid);
+      expect(await holders()).toContain(process.pid);
     } finally {
       await file.close();
     }
-    expect(await runtimeFileProcesses([path])).toEqual([]);
+    expect(await holders()).toEqual([]);
     await f.child.stop();
     expect(await findRuntimeProcesses(f.command)).toEqual([]);
   },

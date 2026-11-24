@@ -124,6 +124,7 @@ jobs:
       - run: npm run devcontainer -- up
       - run: npm run devcontainer -- exec npm ci
       - run: npm run devcontainer -- exec npm run prepare:models
+      - run: npm run devcontainer -- exec env CODE60_REQUIRE_NATIVE_PROCESS_INSPECTION=1 npx --no-install vitest run src/platform/process-identity.test.ts
       - run: npm run devcontainer -- exec npm run package:payload
       - run: npm run devcontainer -- exec npx --no-install playwright install chromium
       - run: npm run devcontainer -- exec npm run test:payload -- --workflows

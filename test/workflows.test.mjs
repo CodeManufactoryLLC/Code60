@@ -82,6 +82,13 @@ describe("browser and package validation", () => {
         workflow.jobs.payload.steps.some(
           (step) =>
             step.run ===
+            "npm run devcontainer -- exec env CODE60_REQUIRE_NATIVE_PROCESS_INSPECTION=1 npx --no-install vitest run src/platform/process-identity.test.ts",
+        ),
+      ).toBe(true);
+      expect(
+        workflow.jobs.payload.steps.some(
+          (step) =>
+            step.run ===
             "npm run devcontainer -- exec npm run test:uninstall:engines -- release/payloads/linux-x64.json",
         ),
       ).toBe(true);

@@ -128,6 +128,11 @@ against the Linux descriptor in the pinned container or native Linux runner. Kee
 actual idle-engine, late-restart, retained-history and process-exit evidence.
 An emulated kernel that cannot prove the recorded Node executable is BLOCKED
 for native adoption; do not weaken identity checks or count it as native evidence.
+Linux host checks can also report file-holder inspection BLOCKED on a kernel
+permission refusal. The required native Linux container runs these process tests
+with `CODE60_REQUIRE_NATIVE_PROCESS_INSPECTION=1`: that test-only setting forbids
+permission-based skips and rejects unverifiable emulation. It does not change
+application inspection or authorize native adoption.
 Linux delivery also requires `npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json`:
 two complete journeys, with independent owner-labelled inventories and a real
 survivor readiness/assets probe after the first cleanup. Retain both run reports
