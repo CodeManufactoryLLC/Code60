@@ -224,11 +224,12 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
     await expect.poll(() => provider.pending).toBeGreaterThan(0);
     for (const pid of family(enginePid)) owned.add(pid);
     await workflows.getByRole("button", { name: "Steer", exact: true }).click();
-    await workflows
+    const steer = page.getByRole("dialog", { name: "Steer workflow", exact: true });
+    await steer
       .getByLabel("Guidance for a subsequent turn", { exact: true })
       .fill("Preserve the public API.");
-    await workflows.getByRole("button", { name: "Queue guidance", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "Steer workflow", exact: true })).toBeHidden();
+    await steer.getByRole("button", { name: "Queue guidance", exact: true }).click();
+    await expect(steer).toBeHidden();
     const registryPath = join(env.XDG_STATE_HOME, "code60/workflows/registry.json");
     const before = JSON.parse(await readFile(registryPath, "utf8"));
     const guidance = (await engine("get_workflow_events", {
