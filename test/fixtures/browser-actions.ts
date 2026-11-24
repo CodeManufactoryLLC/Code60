@@ -22,14 +22,14 @@ export async function onboard(page: Page) {
   await expect(wizard.getByRole("status")).toHaveText("Claude connected");
   await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
 }
-/** A fresh browser explicitly enters and opens an existing, retained project. */
+/** A fresh verified browser opens an existing, retained project through visible controls. */
 export async function reopenRetainedProject(page: Page, directory: string, database: string) {
-  await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+  await expect(page.getByRole("banner", { name: "Code60", exact: true })).toBeVisible();
   await expect(page.locator(".agent-setup-dialog")).toHaveCount(0);
   await expect
     .poll(async () => (await page.evaluate(() => window.code60.snapshot())).database)
     .toBe(database);
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await expandNavigation(page, "Work");
   await page.getByRole("tab", { name: "Projects", exact: true }).click();
   await page
     .locator("#panel-projects")
