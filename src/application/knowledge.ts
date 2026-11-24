@@ -220,7 +220,10 @@ export class DesktopKnowledge {
     let status: "available" | "blocked" | "unsupported" | "unknown" = "available";
     let reason = "Shipped; existing permissions and confirmations still apply.";
     let action: string | null = null;
-    if (cap.id === "orchestration-permissions") {
+    if (cap.id === "mcp-servers") {
+      reason =
+        "Human-only configuration, connection and authentication controls. User scope needs no database; project scope requires a live open project. Storage validity/recovery may block writes and new connections. Project definitions require approval for the exact saved revision. Authentication and observed health are separate; catalog availability does not check them. Persistent credentials require unlocked macOS Keychain or Linux Secret Service; temporary storage requires explicit consent.";
+    } else if (cap.id === "orchestration-permissions") {
       reason =
         "One toggle controls new permission requests across orchestration chats and their workers, including during a turn.";
       action = `Open ${cap.access}.`;

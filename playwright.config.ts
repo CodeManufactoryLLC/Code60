@@ -4,6 +4,11 @@ export default defineConfig({
   outputDir: "test-results/browser",
   testMatch: [
     "browser-workflow.e2e.ts",
+    "mcp-management.e2e.ts",
+    "mcp-editing.e2e.ts",
+    "mcp-runtime.e2e.ts",
+    "mcp-authentication.e2e.ts",
+    "mcp-recovery.e2e.ts",
     "development.e2e.ts",
     "browser-features.e2e.ts",
     "file-browser.e2e.ts",

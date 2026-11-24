@@ -110,7 +110,14 @@ for (const [id, name] of [
       expect(JSON.parse(saved).agentSetup.version).toBe(1);
       expect(saved).not.toMatch(/QA60|PRIVATE-STATE/);
       for (const entry of await readdir(join(fixture.directory, "state"), { recursive: true })) {
-        const file = await open(join(fixture.directory, "state", entry), "r");
+        // A live diagnostic writer may release its transient ownership lock after enumeration.
+        const file = await open(join(fixture.directory, "state", entry), "r").catch(
+          (error: NodeJS.ErrnoException) => {
+            if (error.code === "ENOENT" && entry.endsWith("/.lock")) return null;
+            throw error;
+          },
+        );
+        if (!file) continue;
         try {
           if ((await file.stat()).isFile())
             expect(await file.readFile("utf8")).not.toMatch(/QA60-1234|QA60-PASTE|PRIVATE-STATE/);

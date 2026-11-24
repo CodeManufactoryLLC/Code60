@@ -6,6 +6,7 @@ Preserve evidence and identify ownership before changing anything. Use Scheduled
 - [Low disk space](low-disk.md)
 - [Diagnostic storage unavailable](diagnostics.md)
 - [Damaged Relay history](relay-history.md)
+- [MCP configuration storage recovery](mcp-configuration.md)
 
 Recovery is not permission to delete history, locks, databases or worktrees.
 Stop and escalate when ownership, storage identity or safety cannot be verified.

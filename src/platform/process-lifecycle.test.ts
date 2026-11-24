@@ -77,3 +77,15 @@ it("refuses success while descendants remain unverifiable after the root exits",
   expect(kill).toHaveBeenCalledWith(-12345, "SIGTERM");
   expect(kill).toHaveBeenCalledWith(-12345, "SIGKILL");
 });
+
+it("preserves structured startup error codes for secret-safe boundary classification", async () => {
+  mocks.spawn.mockImplementation(() => {
+    queueMicrotask(() =>
+      child.emit("error", Object.assign(new Error("private executable path"), { code: "ENOENT" })),
+    );
+    return child;
+  });
+  await expect(spawnOwnedProcess(["missing-agent"], "/project")).rejects.toMatchObject({
+    cause: { code: "ENOENT" },
+  });
+});

@@ -23,6 +23,7 @@ if (process.env.FAKE_AGENT_STDERR) process.stderr.write(process.env.FAKE_AGENT_S
 const promptLogIndex = process.argv.indexOf("--prompt-log");
 let promptSequence = 0;
 createFakeAgent({
+  restoreSupported: process.argv.includes("--restore"),
   onPrompt: () => {
     if (promptLogIndex >= 0)
       writeFileSync(

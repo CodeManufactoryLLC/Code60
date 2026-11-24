@@ -58,6 +58,7 @@ describe("navigation registry", () => {
       "prompts",
       "system-manager",
       "workflows",
+      "mcp-servers",
     ]);
     expect(pagesInGroup("primary")).toEqual([
       "home",

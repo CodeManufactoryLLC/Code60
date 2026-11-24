@@ -1,6 +1,6 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { diagnosticText } from "../platform/index.js";
+import { diagnosticText, registerPrivateListener } from "../platform/index.js";
 
 // Worker prompts can be up to 100,000 characters, which is at most 400 KB of UTF-8 plus JSON.
 const MAX_REQUEST_BYTES = 512 * 1024;
@@ -132,6 +132,8 @@ export async function createMcpGateway(handler: McpCallHandler): Promise<McpGate
   }
 
   let closed = false;
+  const unregister = registerPrivateListener(address.port);
+  server.once("close", unregister);
   return {
     url: `http://127.0.0.1:${address.port}/v1/call`,
     token,

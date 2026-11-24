@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, rename } from "node:fs/promises";
 import { isBuiltin } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { cleanBuild } from "./clean-build.mjs";
@@ -11,6 +11,8 @@ execFileSync(
   ["node_modules/typescript/bin/tsc", "-p", "tsconfig.distribution.json"],
   { stdio: "inherit", timeout: 120000 },
 );
+// Preserve the public index.js import while selecting the Node-only platform facade.
+await rename(join(output, "platform/index.bootstrap.js"), join(output, "platform/index.js"));
 for (const item of await readdir(output, { recursive: true, withFileTypes: true })) {
   if (!item.isFile()) continue;
   const path = join(item.parentPath, item.name);

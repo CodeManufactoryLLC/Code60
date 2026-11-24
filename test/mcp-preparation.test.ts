@@ -12,36 +12,20 @@ import {
 } from "../src/core/index.js";
 import { FakeAgents, FakeClock, FakeGit, FakeProcesses, flush } from "./fakes.js";
 
-const mcpServers = {
-  local: {
-    type: "stdio",
-    command: "node",
-    args: ["/private/server.js"],
-    env: { TOKEN: "private-token" },
-  },
-  remote: {
-    type: "http",
-    url: "https://example.com/mcp",
-    headers: { Authorization: "private-header" },
-  },
-  legacy: { type: "sse", url: "http://localhost/sse" },
-};
 const expected = [
   {
-    name: "local",
-    type: "stdio",
-    command: "node",
-    args: ["/private/server.js"],
-    env: [{ name: "TOKEN", value: "private-token" }],
+    name: "fixture",
+    type: "stdio" as const,
+    command: "/fixed-node",
+    args: ["/fixed-adapter.js"],
+    env: [{ name: "CAPABILITY", value: "fresh-capability" }],
   },
-  {
-    name: "remote",
-    type: "http",
-    url: "https://example.com/mcp",
-    headers: [{ name: "Authorization", value: "private-header" }],
-  },
-  { name: "legacy", type: "sse", url: "http://localhost/sse", headers: [] },
 ];
+const resourceCalls: string[] = [];
+const sessionResources: import("../src/core/index.js").SessionResourceFactory = async ({ cwd }) => {
+  resourceCalls.push(cwd);
+  return { servers: expected, beginTurn() {}, endTurn() {}, close: async () => {} };
+};
 
 describe("MCP session preparation", () => {
   let directory: string;
@@ -68,7 +52,7 @@ describe("MCP session preparation", () => {
     await fs.mkdir(join(env.XDG_CONFIG_HOME as string, "code60"), { recursive: true });
     await fs.writeFile(
       join(env.XDG_CONFIG_HOME as string, "code60", "config.json"),
-      JSON.stringify({ mcpServers }),
+      JSON.stringify({}),
     );
   });
   afterEach(async () => {
@@ -76,32 +60,8 @@ describe("MCP session preparation", () => {
     await fs.rm(directory, { recursive: true, force: true });
   });
 
-  it("passes the starter servers only after explicitly adding them to user config", async () => {
-    const starter = JSON.parse(
-      await fs.readFile(new URL("../mcp.default.json", import.meta.url), "utf8"),
-    );
-    await fs.writeFile(
-      join(env.XDG_CONFIG_HOME as string, "code60", "config.json"),
-      JSON.stringify(starter),
-    );
-    const { orchestrator } = await prepareRuns(deps, {
-      cwd: directory,
-      env,
-      mode: "headless",
-      agents: [],
-      prompt: "hello",
-    });
-    orchestrators.push(orchestrator);
-    orchestrator.start();
-    await orchestrator.done;
-    expect(agents.specs[0]?.mcpServers).toEqual([
-      { name: "playwright", ...starter.mcpServers.playwright, env: [] },
-      { name: "context7", ...starter.mcpServers.context7, env: [] },
-    ]);
-  });
-
   it.each(["headless", "interactive"] as const)(
-    "passes configured servers to %s runs without exposing definitions",
+    "passes explicitly injected resources to %s runs without exposing definitions",
     async (mode) => {
       const { orchestrator, workspace } = await prepareRuns(deps, {
         cwd: directory,
@@ -109,12 +69,14 @@ describe("MCP session preparation", () => {
         mode,
         agents: [],
         prompt: "hello",
+        sessionResources,
       });
       orchestrators.push(orchestrator);
       orchestrator.start();
       if (mode === "headless") await orchestrator.done;
       else await expect.poll(() => agents.specs.length).toBe(1);
       expect(agents.specs[0]?.mcpServers).toEqual(expected);
+      expect(resourceCalls).toContain(agents.specs[0]?.cwd);
       if (mode === "interactive") await orchestrator.shutdown(true);
       const record = (await workspace.store.list())[0];
       expect(record).toBeDefined();
@@ -135,19 +97,19 @@ describe("MCP session preparation", () => {
     },
   );
 
-  it("combines configured servers with only the chat's built-in stdio server", async () => {
+  it("combines fresh resources with only the chat's built-in stdio server", async () => {
     const builtin = { name: "code60", command: "/node", args: ["/code60/mcp-server.js"], env: [] };
     const orchestrator = await prepareOrchestrationChat(
       deps,
       join(directory, "chat"),
       "claude",
-      parseConfig({ mcpServers }),
-      { mcpServers: [builtin] },
+      parseConfig({}),
+      { mcpServers: [builtin], sessionResources },
     );
     orchestrators.push(orchestrator);
     orchestrator.start();
     await expect.poll(() => agents.specs.length).toBe(1);
-    expect(agents.specs[0]?.mcpServers).toEqual([...expected, builtin]);
+    expect(agents.specs[0]?.mcpServers).toEqual([builtin, ...expected]);
   });
 
   it.each(["restoration", "fresh handoff"] as const)(
@@ -163,7 +125,17 @@ describe("MCP session preparation", () => {
       await initial.orchestrator.done;
       const record = (await initial.workspace.store.list())[0];
       if (!record) throw new Error("missing record");
-      const { orchestrator } = await prepareRecovery(deps, initial.workspace, record, env);
+      const { orchestrator } = await prepareRecovery(
+        deps,
+        initial.workspace,
+        record,
+        env,
+        {},
+        undefined,
+        undefined,
+        undefined,
+        sessionResources,
+      );
       orchestrators.push(orchestrator);
       if (method === "restoration") {
         expect(await orchestrator.restore(record.id)).toEqual({ type: "restored" });

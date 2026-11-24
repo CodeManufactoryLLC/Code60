@@ -1,16 +1,21 @@
 {
-  "mcpServers": {
+  "version": 1,
+  "servers": {
     "playwright": {
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@playwright/mcp@0.0.84", "--isolated", "--headless"],
-      "env": {}
+      "env": {},
+      "label": "Playwright",
+      "enabled": false
     },
     "context7": {
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@upstash/context7-mcp@4.5.1"],
-      "env": {}
+      "env": {},
+      "label": "Context7",
+      "enabled": false
     }
   }
 }

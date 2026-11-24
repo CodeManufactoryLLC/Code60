@@ -33,6 +33,16 @@ export const parentPageIds = [
 export type ParentPageId = (typeof parentPageIds)[number];
 export const pages = [
   {
+    id: "mcp-servers",
+    label: "MCP Servers",
+    group: "apps",
+    parent: "apps",
+    order: 5,
+    initialOrder: 27,
+    database: false,
+    icon: "app-helmet",
+  },
+  {
     id: "assistants",
     label: "Assistants",
     group: "primary",

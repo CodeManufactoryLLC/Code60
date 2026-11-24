@@ -6,6 +6,7 @@ import { AcpError, AcpRestoreUnavailableError, openSession, restoreSession } fro
 import { describeExit, spawnAgent } from "./process.js";
 import { type AgentSession, type AgentSpec, AgentStartError, type Agents } from "./types.js";
 
+export { connectMcpUpstream } from "./mcp-transport.js";
 export type * from "./types.js";
 export { AgentStartError, TOOL_KINDS } from "./types.js";
 
@@ -76,6 +77,7 @@ export function createAgents(options: { clientVersion: string; log?: LogSink }):
 
     return {
       sessionId: session.sessionId,
+      restoreSupported: session.restoreSupported,
       get sessionState() {
         return session.sessionState;
       },

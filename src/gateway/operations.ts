@@ -6,6 +6,16 @@ import type {
 } from "../application/index.js";
 import { logProjectId } from "../application/index.js";
 import {
+  mcpBackupSchema,
+  mcpMovePreviewSchema,
+  mcpMoveSchema,
+  mcpRecoveryRequestSchema,
+  mcpResetPreviewSchema,
+  mcpResetSchema,
+  mcpRestoreSchema,
+  mcpSaveSchema,
+  mcpSaveTextSchema,
+  mcpTargetSchema,
   parseAction,
   parseBoolean,
   parseCodexSetupIdentity,
@@ -25,6 +35,7 @@ import {
   parseLogClear,
   parseLogDetail,
   parseLogQuery,
+  parseMcpManagement,
   parseMemoryAction,
   parseMemoryBrowse,
   parseMemoryDetail,
@@ -78,6 +89,40 @@ export function applicationOperations(
   const handle = (name: string, action: (value: unknown) => unknown) => {
     operations.set(name, action);
   };
+  handle("mcp-recovery", (value) =>
+    controller.mcpRecovery(parseMcpManagement(mcpRecoveryRequestSchema, value)),
+  );
+  handle("mcp-runtime", (value) => controller.mcpRuntime(value, interactions.page()));
+  handle("mcp-authentication", (value) => controller.mcpAuthentication(value, interactions.page()));
+  handle("mcp-read-text", (value) =>
+    controller.mcpReadText(parseMcpManagement(mcpTargetSchema, value)),
+  );
+  handle("mcp-save-text", (value) =>
+    controller.mcpSaveText(parseMcpManagement(mcpSaveTextSchema, value)),
+  );
+  handle("mcp-backups", (value) =>
+    controller.mcpBackups(parseMcpManagement(mcpTargetSchema, value)),
+  );
+  handle("mcp-preview-backup", (value) =>
+    controller.mcpPreviewBackup(parseMcpManagement(mcpBackupSchema, value)),
+  );
+  handle("mcp-restore", (value) =>
+    controller.mcpRestore(parseMcpManagement(mcpRestoreSchema, value)),
+  );
+  handle("mcp-preview-reset", (value) =>
+    controller.mcpPreviewReset(parseMcpManagement(mcpResetPreviewSchema, value)),
+  );
+  handle("mcp-reset", (value) => controller.mcpReset(parseMcpManagement(mcpResetSchema, value)));
+  handle("mcp-targets", (value) => {
+    if (value !== undefined) throw new Error("Invalid MCP management request.");
+    return controller.mcpTargets();
+  });
+  handle("mcp-read", (value) => controller.mcpRead(parseMcpManagement(mcpTargetSchema, value)));
+  handle("mcp-save", (value) => controller.mcpSave(parseMcpManagement(mcpSaveSchema, value)));
+  handle("mcp-preview-move", (value) =>
+    controller.mcpPreviewMove(parseMcpManagement(mcpMovePreviewSchema, value)),
+  );
+  handle("mcp-move", (value) => controller.mcpMove(parseMcpManagement(mcpMoveSchema, value)));
   handle("workflow", (value) => workflows.request(value));
   handle("automation", (value) => automations.request(value));
   handle("model-default", (value) => controller.modelDefault(parseModelDefaultAction(value)));

@@ -759,6 +759,32 @@ it("describes workflow drafting and execution prerequisites without starting the
   }
   expect(reads).toEqual([]);
 });
+
+it("describes human MCP authentication prerequisites without exposing definitions or credentials", async () => {
+  const { knowledge } = setup({ database: null, providers: [], projectOpen: false });
+  const capabilities = result(
+    await knowledge.call("code60_get_capabilities", { query: "MCP Servers" }, relay),
+  );
+  expect(capabilities.entries).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: "mcp-servers",
+        agentAccess: "human-only",
+        availability: expect.objectContaining({
+          status: "available",
+          reason: expect.stringContaining("connection and authentication controls"),
+        }),
+      }),
+    ]),
+  );
+  expect(JSON.stringify(capabilities)).toContain(
+    "Enablement and approval changes affect future connections",
+  );
+  expect(JSON.stringify(capabilities)).toContain("Linux Secret Service");
+  expect(JSON.stringify(capabilities)).toContain("Explicit temporary storage");
+  expect(JSON.stringify(capabilities)).not.toContain("credentialRef");
+});
+
 it("keeps LAN beta discoverable without probing or granting server authority", async () => {
   const { knowledge } = setup({ database: null, providers: [] });
   const capabilities = result(

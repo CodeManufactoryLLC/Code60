@@ -1,6 +1,5 @@
 import { join } from "node:path";
 import { z } from "zod";
-import type { AgentMcpServer } from "../agents/index.js";
 import {
   DEFAULT_PROMPT_TEMPLATES,
   durationSchema,
@@ -35,7 +34,6 @@ export const DEFAULT_CONFIG: Config = {
   worktreeDir: null,
   permissions: DEFAULT_PERMISSIONS,
   agents: DEFAULT_AGENTS,
-  mcpServers: {},
   prompts: DEFAULT_PROMPT_TEMPLATES,
 };
 
@@ -60,50 +58,6 @@ const permissionsSchema = z.record(z.string(), permissionRuleSchema).superRefine
     }
   }
 });
-const nonemptyString = z.string().refine((value) => value.trim().length > 0);
-const stringMap = z.record(z.string(), z.string());
-const mcpUrl = z.url({ protocol: /^https?$/, hostname: /.+/ });
-const mcpServerSchema = z.discriminatedUnion("type", [
-  z.strictObject({
-    type: z.literal("stdio"),
-    command: nonemptyString,
-    args: z.array(z.string()).default([]),
-    env: stringMap.default({}),
-  }),
-  z.strictObject({
-    type: z.literal("http"),
-    url: mcpUrl,
-    headers: stringMap.default({}),
-  }),
-  z.strictObject({
-    type: z.literal("sse"),
-    url: mcpUrl,
-    headers: stringMap.default({}),
-  }),
-]);
-
-export type McpServerConfig = z.infer<typeof mcpServerSchema>;
-
-/** Resolve a private per-preparation copy, never record or expose these definitions. */
-export function configuredMcpServers(config: Config): AgentMcpServer[] {
-  return Object.entries(config.mcpServers).map(([name, server]) =>
-    server.type === "stdio"
-      ? {
-          name,
-          type: server.type,
-          command: server.command,
-          args: [...server.args],
-          env: Object.entries(server.env).map(([name, value]) => ({ name, value })),
-        }
-      : {
-          name,
-          type: server.type,
-          url: server.url,
-          headers: Object.entries(server.headers).map(([name, value]) => ({ name, value })),
-        },
-  );
-}
-
 const configSchema = z.strictObject({
   defaultAgent: z.string().min(1).optional(),
   maxParallel: z.number().int().positive().optional(),
@@ -123,24 +77,15 @@ const configSchema = z.strictObject({
   agents: z
     .record(z.string(), z.strictObject({ command: z.tuple([z.string().min(1)], z.string()) }))
     .optional(),
-  mcpServers: z
-    .record(
-      nonemptyString.refine((name) => name !== "code60"),
-      mcpServerSchema,
-    )
-    .optional(),
   prompts: promptTemplatesSchema.optional(),
 });
 
 /** Keep CLI diagnostics concise and independent of Zod's internal error format. */
 function configError(issue: z.core.$ZodIssue): string {
-  // Do not include Zod messages, input values, or arbitrary nested keys for MCP credentials.
-  if (issue.path[0] === "mcpServers") {
-    return "mcpServers must map non-empty names (except reserved 'code60') to strict stdio (command, string args/env) or http/sse (HTTP(S) url, string headers) definitions";
-  }
   if (issue.code === "custom") return issue.message;
   const [key, name] = issue.path;
   if (issue.code === "unrecognized_keys") {
+    if (issue.keys.includes("mcpServers")) return "configuration contains unsupported fields";
     const prefix = issue.path.length ? `${issue.path.join(".")}: ` : "";
     return `${prefix}unknown key '${issue.keys[0]}'`;
   }
@@ -187,7 +132,6 @@ export function parseConfig(raw: unknown, source = "config"): Config {
     worktreeDir: value.worktreeDir === undefined ? DEFAULT_CONFIG.worktreeDir : value.worktreeDir,
     permissions: { ...DEFAULT_PERMISSIONS, ...value.permissions },
     agents: { ...DEFAULT_AGENTS, ...value.agents },
-    mcpServers: value.mcpServers ?? {},
     prompts: {
       operatingContract:
         value.prompts?.operatingContract ?? DEFAULT_PROMPT_TEMPLATES.operatingContract,
