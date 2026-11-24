@@ -87,6 +87,10 @@ regressions and each complete application update journey. Each consumer verifies
 the exact artifact against its source checkout before execution. At most two
 workflow jobs run concurrently, each with one browser worker and separate evidence.
 All jobs are required; their original journey and suite deadlines remain in place.
+Native update file preparation uses a separately bounded fixture before visible
+onboarding and approval begin. It records candidate/install timings and forwards
+cancellation without starting a backend or engine. The update journey retains its
+six-minute limit and the whole suite retains its ten-minute limit.
 Uninstall and idle-engine removal run in a separate dependent Apple Silicon job,
 using that same tested payload. `npm run verify:artifact` checks its clean commit,
 version, platform, byte count and SHA-256 against the consumer's source checkout
@@ -94,3 +98,9 @@ before installation. Every native job must pass. The baseline job retains its
 45-minute limit; consumer jobs have separate 35-minute limits and always upload
 their handoff and acceptance evidence.
 This validation installs no real login service and uses no live provider.
+
+Linux concurrent uninstall acceptance runs in its own 30-minute job after baseline
+payload acceptance. It verifies the downloaded producer artifact against the exact
+checkout before running both complete journeys. `CI passed` and manual bootstrap
+assembly require this job as well as the baseline. The existing 20-minute runner,
+nine-minute maintenance and 90-second cleanup bounds remain unchanged.

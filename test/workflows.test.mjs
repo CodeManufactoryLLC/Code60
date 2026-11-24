@@ -62,6 +62,7 @@ describe("branch protection policy", () => {
       "package",
       "clean-install",
       "payload",
+      "uninstall",
     ]);
   });
 });
@@ -69,7 +70,7 @@ describe("branch protection policy", () => {
 describe("browser and package validation", () => {
   it("requires real installed uninstall/reinstall and isolated native engine checks", () => {
     expect(
-      ci.jobs.payload.steps.some(
+      ci.jobs.uninstall.steps.some(
         (step) =>
           step.run ===
           "npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json",
@@ -78,6 +79,41 @@ describe("browser and package validation", () => {
     for (const command of ["npm run test:uninstall", "npm run test:uninstall:engines"])
       expect(nativeTests.jobs.uninstall.steps.some((step) => step.run === command)).toBe(true);
     for (const workflow of [ci, release]) {
+      const job = workflow.jobs.uninstall;
+      expect([job.needs].flat()).toContain("payload");
+      expect(job["timeout-minutes"]).toBe(30);
+      expect(job.steps[0].with.ref).toBe(workflow.jobs.payload.steps[0].with.ref);
+      const download = job.steps.findIndex((step) =>
+        step.uses?.startsWith("actions/download-artifact@"),
+      );
+      const verify = job.steps.findIndex(
+        (step) => step.run === "npm run verify:artifact -- release/payloads/linux-x64.json",
+      );
+      const run = job.steps.findIndex(
+        (step) =>
+          step.run ===
+          "npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json",
+      );
+      expect(job.steps[download].with.name).toBe("code60-linux-payload");
+      expect(download).toBeLessThan(verify);
+      expect(verify).toBeLessThan(run);
+      const build = job.steps.findIndex((step) => step.run === "npm run build:distribution");
+      const install = job.steps.findIndex(
+        (step) => step.run === "ONNXRUNTIME_NODE_INSTALL=skip npm ci",
+      );
+      expect(install).toBeGreaterThanOrEqual(0);
+      expect(build).toBeGreaterThan(install);
+      expect(build).toBeLessThan(run);
+      expect(
+        job.steps.some(
+          (step) =>
+            step.if === "always()" &&
+            step.with?.path?.includes("test-results/clean-install-concurrent/"),
+        ),
+      ).toBe(true);
+      expect(
+        workflow.jobs.payload.steps.some((step) => step.run?.includes("test:packaged:concurrent")),
+      ).toBe(false);
       expect(
         workflow.jobs.payload.steps.some(
           (step) =>
@@ -131,11 +167,11 @@ describe("browser and package validation", () => {
         .path,
     ).toContain("test-results/clean-install/");
     expect(
-      ci.jobs.payload.steps.find((step) => step.with?.name === "payload-acceptance-evidence").with
-        .path,
+      ci.jobs.uninstall.steps.find((step) => step.with?.name === "concurrent-uninstall-evidence")
+        .with.path,
     ).toContain("test-results/clean-install-concurrent/");
     expect(
-      release.jobs.payload.steps.some(
+      release.jobs.uninstall.steps.some(
         (step) =>
           step.run ===
           "npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json",
@@ -247,6 +283,8 @@ describe("browser and package validation", () => {
       ),
     ).toBe(true);
     expect(ci.jobs.passed.steps[0].env.PAYLOAD).toContain("needs.payload.result");
+    expect(ci.jobs.passed.steps[0].env.UNINSTALL).toContain("needs.uninstall.result");
+    expect(ci.jobs.passed.steps[0].run).toContain('test "$UNINSTALL" = success');
     expect(
       ci.jobs.payload.steps.some(
         (step) =>
@@ -275,7 +313,7 @@ describe("browser and package validation", () => {
     expect(release.jobs.preflight.if).toBe("github.ref == 'refs/heads/main'");
     expect(release.jobs.package.needs).toEqual(["preflight", "mac"]);
     expect(release.jobs.payload.env).toEqual({ COMPOSE_BAKE: "false" });
-    expect(release.jobs.bootstrap.needs).toEqual(["preflight", "mac", "payload"]);
+    expect(release.jobs.bootstrap.needs).toEqual(["preflight", "mac", "payload", "uninstall"]);
     expect(nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:payload")).toBe(
       true,
     );

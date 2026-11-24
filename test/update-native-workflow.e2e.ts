@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs";
 import {
   chmod,
   cp,
+  lstat,
   mkdir,
   mkdtemp,
   readdir,
@@ -20,7 +21,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { expect, test } from "@playwright/test";
+import { test as baseTest, expect, type TestInfo } from "@playwright/test";
 import type { LocalTransmission as TransmissionFactory } from "../src/application/index.js";
 import type { installManagedRelease as InstallFactory } from "../src/management/index.js";
 import type {
@@ -51,33 +52,141 @@ interface UpdateFixture {
   registry: unknown;
 }
 
+async function prepareInstallation(info: TestInfo) {
+  if (`${process.platform}-${process.arch}` !== "darwin-arm64")
+    throw Error("Native update acceptance requires macOS arm64");
+  const root = resolve(".");
+  const identity = JSON.parse(
+    await readFile(join(root, "release/payloads/darwin-arm64.json"), "utf8"),
+  ) as PayloadDescriptor;
+  const input = join(root, "release/payloads", identity.archive.name);
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60 active update ' ")));
+  const owner = await lstat(directory, { bigint: true });
+  const home = join(directory, "home"),
+    bin = join(directory, "bin"),
+    repo = join(home, "workflow repository");
+  const env = {
+    HOME: home,
+    SHELL: "/bin/bash",
+    PATH: `${bin}:${dirname(process.execPath)}:/usr/bin:/bin`,
+    XDG_DATA_HOME: join(home, "data"),
+    XDG_CONFIG_HOME: join(home, "config"),
+    XDG_STATE_HOME: join(home, "state"),
+    CODEX_HOME: join(home, "workflow-codex"),
+    CODE60_TEST_BACKEND_SOCKET: "",
+    CODE60_TEST_FORBIDDEN_LOG: join(home, "forbidden.log"),
+  };
+  // Leave cleanup time inside the fixture's six-minute setup budget.
+  const signal = AbortSignal.timeout(330000);
+  const started = performance.now();
+  const checkpoints: { stage: string; elapsedMs: number }[] = [];
+  const checkpoint = async (stage: string) => {
+    checkpoints.push({ stage, elapsedMs: performance.now() - started });
+    await writeFile(
+      info.outputPath("installation-preparation.json"),
+      JSON.stringify({
+        input: identity,
+        fixture: {
+          path: directory,
+          dev: String(owner.dev),
+          ino: String(owner.ino),
+          uid: String(owner.uid),
+        },
+        checkpoints,
+      }),
+      { mode: 0o600 },
+    );
+  };
+  try {
+    for (const path of [
+      home,
+      bin,
+      repo,
+      env.CODEX_HOME,
+      join(home, "processes"),
+      join(env.XDG_CONFIG_HOME, "code60"),
+    ])
+      await mkdir(path, { recursive: true, mode: 0o700 });
+    const { installManagedRelease } = (await import(
+      pathToFileURL(join(root, "build/distribution/management/index.js")).href
+    )) as { installManagedRelease: typeof InstallFactory };
+    const { acquirePayload } = (await import(
+      pathToFileURL(join(root, "dist/platform/index.js")).href
+    )) as { acquirePayload: typeof AcquireFactory };
+    const { updateFixture } = (await import(
+      pathToFileURL(join(root, "scripts/distribution/update-fixture.mjs")).href
+    )) as {
+      updateFixture(
+        identity: PayloadDescriptor,
+        parent: string,
+        transport: () => ReturnType<typeof createReadStream>,
+        signal?: AbortSignal,
+      ): Promise<UpdateFixture>;
+    };
+    await checkpoint("preparing-candidate");
+    const candidate = await updateFixture(
+      identity,
+      directory,
+      () => createReadStream(input),
+      signal,
+    );
+    await checkpoint("candidate-ready");
+    const installed = await installManagedRelease({
+      env,
+      signal,
+      runtimeDirectory: join(root, "build/distribution"),
+      artifact: {
+        identity,
+        acquire: ({ parent, signal: requestSignal }) =>
+          acquirePayload(identity, {
+            parent,
+            signal: requestSignal ?? signal,
+            transport: () => createReadStream(input),
+          }),
+      },
+    });
+    await checkpoint("installation-ready");
+    return { root, identity, directory, home, bin, repo, env, candidate, installed };
+  } catch (error) {
+    // No backend, provider or engine has been started during file preparation.
+    // Only this fresh synthetic customer's verified directory can be removed.
+    try {
+      const current = await lstat(directory, { bigint: true });
+      if (
+        !current.isDirectory() ||
+        current.dev !== owner.dev ||
+        current.ino !== owner.ino ||
+        current.uid !== owner.uid ||
+        current.mode !== owner.mode
+      )
+        throw Error("Native update preparation cleanup ownership changed");
+      await rm(directory, { recursive: true });
+      await checkpoint("preparation-failed-cleaned");
+    } catch (cleanup) {
+      throw new AggregateError(
+        [error, cleanup],
+        "Native update preparation failed; preserved uncertain fixture",
+      );
+    }
+    throw error;
+  }
+}
+
+const test = baseTest.extend<{ installation: Awaited<ReturnType<typeof prepareInstallation>> }>({
+  installation: [
+    // biome-ignore lint/correctness/noEmptyPattern: Playwright requires a destructured dependency list; this fixture has none.
+    async ({}, use, info) => use(await prepareInstallation(info)),
+    { timeout: 360000 },
+  ],
+});
+
 for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
   test(`native update: ${engineVersion} ${engineVersion.endsWith("18") ? "retained uncertain start" : "approved workflow"} keeps its original engine while the application is replaced`, async ({
     browser,
+    installation,
   }, info) => {
     test.setTimeout(360000);
-    if (`${process.platform}-${process.arch}` !== "darwin-arm64")
-      throw Error("Native update acceptance requires macOS arm64");
-    const root = resolve(".");
-    const identity = JSON.parse(
-      await readFile(join(root, "release/payloads/darwin-arm64.json"), "utf8"),
-    ) as PayloadDescriptor;
-    const input = join(root, "release/payloads", identity.archive.name);
-    const directory = await realpath(await mkdtemp(join(tmpdir(), "code60 active update ' ")));
-    const home = join(directory, "home"),
-      bin = join(directory, "bin"),
-      repo = join(home, "workflow repository");
-    const env = {
-      HOME: home,
-      SHELL: "/bin/bash",
-      PATH: `${bin}:${dirname(process.execPath)}:/usr/bin:/bin`,
-      XDG_DATA_HOME: join(home, "data"),
-      XDG_CONFIG_HOME: join(home, "config"),
-      XDG_STATE_HOME: join(home, "state"),
-      CODEX_HOME: join(home, "workflow-codex"),
-      CODE60_TEST_BACKEND_SOCKET: "",
-      CODE60_TEST_FORBIDDEN_LOG: join(home, "forbidden.log"),
-    };
+    const { root, identity, directory, home, bin, repo, env, installed, candidate } = installation;
     const engineRoot = join(env.XDG_STATE_HOME, `code60/workflows/transmission-${engineVersion}`);
     const owned = new Set<number>();
     let supervisor: Supervisor | undefined;
@@ -86,41 +195,6 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
     let provider: Awaited<ReturnType<typeof transmissionProvider>> | undefined;
     const errors: unknown[] = [];
     try {
-      for (const path of [
-        home,
-        bin,
-        repo,
-        env.CODEX_HOME,
-        join(home, "processes"),
-        join(env.XDG_CONFIG_HOME, "code60"),
-      ])
-        await mkdir(path, { recursive: true, mode: 0o700 });
-      const { installManagedRelease } = (await import(
-        pathToFileURL(join(root, "build/distribution/management/index.js")).href
-      )) as { installManagedRelease: typeof InstallFactory };
-      const { acquirePayload } = (await import(
-        pathToFileURL(join(root, "dist/platform/index.js")).href
-      )) as { acquirePayload: typeof AcquireFactory };
-      const { updateFixture } = (await import(
-        pathToFileURL(join(root, "scripts/distribution/update-fixture.mjs")).href
-      )) as {
-        updateFixture(
-          identity: PayloadDescriptor,
-          parent: string,
-          transport: () => ReturnType<typeof createReadStream>,
-          signal?: AbortSignal,
-        ): Promise<UpdateFixture>;
-      };
-      const candidate = await updateFixture(identity, directory, () => createReadStream(input));
-      const installed = await installManagedRelease({
-        env,
-        runtimeDirectory: join(root, "build/distribution"),
-        artifact: {
-          identity,
-          acquire: ({ parent }) =>
-            acquirePayload(identity, { parent, transport: () => createReadStream(input) }),
-        },
-      });
       const bindings = new Map<string, string>();
       for (const version of ["0.1.0-staging.18", "0.1.0-staging.20"])
         bindings.set(

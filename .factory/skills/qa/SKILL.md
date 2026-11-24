@@ -110,6 +110,10 @@ Use the existing harness, not a new QA plugin or a live agent.
   Exercise the shared golden journey after source caches are removed and while
   release/activation trees are read-only. On native macOS additionally verify
   approved workflows survive the actual update on their original engine/runtime.
+  Native update file preparation is an independently bounded fixture, before
+  visible onboarding, provider verification and approval. It creates no live
+  backend or engine authority. Keep its recorded timing/cleanup evidence and the
+  existing six-minute user journey and ten-minute suite limits.
 
 ## Report what actually happened
 
@@ -134,6 +138,8 @@ with `CODE60_REQUIRE_NATIVE_PROCESS_INSPECTION=1`: that test-only setting forbid
 permission-based skips and rejects unverifiable emulation. It does not change
 application inspection or authorize native adoption.
 Linux delivery also requires `npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json`:
+CI runs it in a separately bounded required job after verifying the baseline
+producer's exact artifact; do not append it to a nearly exhausted baseline job.
 two complete journeys, with independent owner-labelled inventories and a real
 survivor readiness/assets probe after the first cleanup. Retain both run reports
 and the orchestration summary; injected gate tests alone are supporting evidence.
