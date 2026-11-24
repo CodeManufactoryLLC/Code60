@@ -59,7 +59,7 @@ async function launch(args, onOutput) {
     .then(async ({ code }) => {
       children.delete(child);
       await child.stop(0);
-      if (args[0] === "scripts/dev-backend.mjs" && !expectedExits.has(child) && !stopping)
+      if (args[0] === "scripts/dev-gateway.mjs" && !expectedExits.has(child) && !stopping)
         await stop(code ?? 1);
     })
     .catch(() => void stop(1));
@@ -75,9 +75,9 @@ async function restart() {
   try {
     if (app) expectedExits.add(app);
     await app?.stop(25_000);
-    if (!stopping) app = await launch(["scripts/dev-backend.mjs"]);
+    if (!stopping) app = await launch(["scripts/dev-gateway.mjs"]);
   } catch {
-    process.stderr.write("Development backend restart failed.\n");
+    process.stderr.write("Development Gateway restart failed.\n");
     await stop(1);
   } finally {
     restarting = false;

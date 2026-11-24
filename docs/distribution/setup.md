@@ -15,7 +15,7 @@ It installs verified application files and a durable `~/.local/bin/code60`, then
 delegates to that launcher. Shell integration has its own exact preview and
 interactive approval; Code60's `--yes` never approves profile edits.
 
-Background service enrollment is opt-in and defaults to No. Without a TTY, use
+Code60 Gateway enrollment is opt-in and defaults to No. Without a TTY, use
 Code60's trailing `--yes` to authorize it. npm's leading `--yes` only accepts npm's
 own package prompt. Declining enrollment exits 0 with an explicit **incomplete**
 result, installed launcher fallback and the exact continuation command. It creates
@@ -58,7 +58,7 @@ available independently.
 
 ## Status and failures
 
-`code60 status` returns JSON for installation/runtime, service/backend, database
+`code60 status` returns JSON for installation/runtime, Gateway status (the top-level `gateway` field), database
 and existing engine availability. Unavailable and offline components are explicit.
 Status never creates storage, installs/repairs services, issues pairing codes or
 starts an engine. macOS installation candidates preserve pinned workflow engines
@@ -78,7 +78,7 @@ not rolled back or uninstalled.
 
 `npm run test:setup` exercises the real installed CLI, private preparation,
 files-only/repeat/restart/pairing behavior and offline models using a bounded fake
-backend supervisor. `npm run test:packaged:clean -- --setup release/payloads/linux-x64.json`
+Gateway supervisor. `npm run test:packaged:clean -- --setup release/payloads/linux-x64.json`
 adds the complete installed browser golden journey and independent Git/process
 assertions. Release/helper trees remain read-only; metadata and databases are
 writable. Original manual-database, tarball, artifact-only and managed journeys

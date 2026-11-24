@@ -34,7 +34,7 @@ const { preserveTransmissionBundle } = (await import(
 const { LocalTransmission } = (await import(
   pathToFileURL(join(root, "dist/application/index.js")).href
 )) as { LocalTransmission: typeof ClientFactory };
-test("native workflow: bundled engine survives backend restart, pauses, resumes and verifies isolated edits", async ({
+test("native workflow: bundled engine survives Gateway restart, pauses, resumes and verifies isolated edits", async ({
   browser,
 }, info) => {
   if (!["darwin-arm64", "linux-x64"].includes(`${process.platform}-${process.arch}`))
@@ -317,7 +317,7 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
         bundle: bundles[0],
         runId: after.entries[0].snapshot.runId,
         keyPreserved: true,
-        completedWithoutBackend: true,
+        completedWithoutGateway: true,
         guidancePersisted: true,
         indexPreserved: true,
         headPreserved: true,

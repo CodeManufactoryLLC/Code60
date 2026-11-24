@@ -6,7 +6,7 @@
   verified fake provider and synthetic Git project. Obtain a newer stable
   bootstrap through internal registry transport injection; verify its integrity
   and embedded descriptors as data, without executing its code.
-- Assert that preparation and declined consent preserve the original backend PID
+- Assert that preparation and declined consent preserve the original Gateway PID
   and current activation. With consent, verify full quiescence and PID exit before
   publication, then new-version authenticated readiness through the durable launcher.
   Complete the shared golden journey, including attachment, refresh and both Undo decisions.
@@ -28,11 +28,11 @@
   external model endpoint and the separate application provider.
 - **Actions:** verify the application provider visibly, manually review/start a
   workflow, pause/resume and queue guidance. Close the browser and stop/restart
-  the backend while the engine is active; reopen through visible Start/history.
+  the Gateway while the engine is active; reopen through visible Start/history.
   Complete verification and inspect the retained worktree and accepted diff.
   Separately exercise cancellation, uncertain starts and both legacy versions.
 - **Invariants:** reads/review do not launch anything. Original state roots,
-  start keys, run IDs, engine PID and executable/runtime bindings survive backend
+  start keys, run IDs, engine PID and executable/runtime bindings survive Gateway
   replacement. Wait for guidance acknowledgement and its persisted engine event
   before detaching. Source files/index/HEAD stay unchanged; native tools write only
   the dedicated worktree. After visible Start, distinguish cold bundle/engine
@@ -57,7 +57,7 @@ and supported controls before extending tests. Retain evidence under ignored
 
 ## Request through undo (golden path)
 
-- **Prerequisites:** built Node backend and bundled browser app, Git, fake ACP executable,
+- **Prerequisites:** built Node.js Gateway and bundled browser app, Git, fake ACP executable,
   real host chooser and browser confirmations, committed synthetic repository.
 - **Starting state:** empty HOME/config/state, provider command configured but no
   verified setup; repository has unrelated staged and unstaged edits.
@@ -80,13 +80,13 @@ and supported controls before extending tests. Retain evidence under ignored
   warn and test that manual edits since their checkpoint rewind too.
 - **Evidence:** selected plan/revision and dialog assertions, worker/result paths
   in synthetic artifacts, Git/index comparisons, retained failure trace.
-- **Cleanup:** close the isolated backend, verify owned processes gone, remove isolated fixture
+- **Cleanup:** close the isolated Gateway, verify owned processes gone, remove isolated fixture
   only after checks; retain artifacts/cache; no native service is installed.
 
 ## Setup-created database first use
 
 - Start with isolated empty state and invoke the actual packaged setup entry with
-  internal artifact transport injection and a bounded backend supervisor fixture.
+  internal artifact transport injection and a bounded Gateway supervisor fixture.
 - Default-no/non-TTY setup reports files-only success; explicit service consent
   reaches authenticated readiness and database preparation without provider authority.
 - Remove transient caches, run the persistent launcher elsewhere and complete the
@@ -100,13 +100,13 @@ and supported controls before extending tests. Retain evidence under ignored
 - **Prerequisites/start:** fake provider only, empty private storage, committed
   synthetic repository; no preseeded setup/database/project selection.
 - **Actions:** visible setup, database create/select, Start, Open Project; complete
-  a real request, stop/restart the isolated backend using the same isolated state.
+  a real request, stop/restart the isolated Gateway using the same isolated state.
 - **Invariants:** setup verification comes from connection, database picker
   cancellation does not fake a connection, reopening retains evidence but does
   not grant saved workers or pending plans authority.
 - **Independent checks/evidence:** private settings and SQLite existence, no
   duplicate worker worktrees/process launches; UI checkpoint/trace.
-- **Cleanup:** close browser contexts and the isolated backend and verify no children remain.
+- **Cleanup:** close browser contexts and the isolated Gateway and verify no children remain.
 
 ## Navigation and concurrent ownership
 
@@ -119,21 +119,21 @@ and supported controls before extending tests. Retain evidence under ignored
   stops A-owned work, not Relay work merely using that directory.
 - **Independent checks/evidence:** distinct worktree outputs/PIDs and owner-local
   revisions; compare both repositories, UI selection/stream checkpoint trace.
-- **Cleanup:** stop each owner explicitly, close the isolated backend and verify child exit;
+- **Cleanup:** stop each owner explicitly, close the isolated Gateway and verify child exit;
   preserve evidence needed for failed ownership checks before fixture removal.
 
 ## Cancellation, reload and restart
 
 - **Prerequisites/start:** fake slow worker at a condition-controlled checkpoint,
   plus completed worker evidence and an accepted plan.
-- **Actions:** navigate/reload during progress, cancel via UI, stop/restart the backend after
+- **Actions:** navigate/reload during progress, cancel via UI, stop/restart the Gateway after
   completion; try historical review and supported explicit continuation only.
 - **Invariants:** cancellation settles owned cleanup; reload does not dispatch
-  another worker; backend restart restores evidence, not live authority, pending
+  another worker; Gateway restart restores evidence, not live authority, pending
   feedback, provider context or uncertain work.
 - **Independent checks/evidence:** PID exit, no late filesystem changes, exact
   worktree/run counts and retained transcripts; checkpoint trace and cleanup.
-- **Cleanup:** release fixture gates, close the isolated backend and check all owned process trees.
+- **Cleanup:** release fixture gates, close the isolated Gateway and check all owned process trees.
 
 ## Scheduler ownership and recovery
 
@@ -146,7 +146,7 @@ and supported controls before extending tests. Retain evidence under ignored
 - **Invariants:** interactive Stop all/browser close do not stop service-owned automation;
   no catch-up/retry, automatic apply or restored uncertain work; service remains
   sole metadata writer. No unit-only injected-clock result counts as UI E2E.
-- **Independent checks/evidence:** backend versus provider PIDs, persisted occurrence
+- **Independent checks/evidence:** Gateway versus provider PIDs, persisted occurrence
   claims/history, worktree diff and absence of checkout/index mutation.
 - **Cleanup:** explicitly stop the isolated service and its children, uninstall
   only a registration created for this run with authorization. Otherwise BLOCKED.

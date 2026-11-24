@@ -22,9 +22,9 @@ test("browser: skips pairing by default and can require or skip it again without
     const { page } = await fixture.open();
     await start(page, fixture.directory);
     await expect(page.getByLabel("Pairing code", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Backend connected", { exact: true })).toBeVisible();
+    await expect(page.getByText("Code60 Gateway connected", { exact: true })).toBeVisible();
     await page.reload();
-    await expect(page.getByText("Backend connected", { exact: true })).toBeVisible();
+    await expect(page.getByText("Code60 Gateway connected", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Pairing code", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const chat = page.locator(".orchestration-chat-page:visible");
@@ -43,9 +43,9 @@ test("browser: skips pairing by default and can require or skip it again without
     await expect(page.getByLabel("Pairing code", { exact: true })).toBeVisible();
     await page.getByLabel("Pairing code", { exact: true }).fill(fixture.gateway.proof());
     await page.getByRole("button", { name: "Connect to Code60", exact: true }).click();
-    await expect(page.getByText("Backend connected", { exact: true })).toBeVisible();
+    await expect(page.getByText("Code60 Gateway connected", { exact: true })).toBeVisible();
     await policy("off");
-    await expect(page.getByText("Backend connected", { exact: true })).toBeVisible();
+    await expect(page.getByText("Code60 Gateway connected", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Pairing code", { exact: true })).toHaveCount(0);
     expect(await readdir(fixture.processLog)).toEqual(launches);
     await writeFile(gate, "continue");
@@ -637,17 +637,38 @@ test("browser: Carbon scheduled jobs edit, run, evidence, cancellation and brows
   }
 });
 
-test("browser: confirmed Stop Backend closes the runtime and preserves its database", async ({
+test("browser: confirmed Stop Code60 Gateway closes the runtime and preserves its database", async ({
   browser,
 }) => {
   const fixture = await browserApp(browser);
   try {
     const { page } = await fixture.open();
     await start(page, fixture.directory);
+    await app(page, "System Manager");
+    const service = page.getByRole("region", { name: "Code60 Gateway", exact: true });
+    await expect(service.getByRole("status")).toContainText("Running");
+    await page.getByRole("button", { name: "System Manager actions" }).click();
+    await Promise.all([
+      page.waitForResponse((response) => {
+        if (!response.url().endsWith("/api/operation") || !response.ok()) return false;
+        const request = response.request().postDataJSON();
+        return request.operation === "automation" && request.value?.control === "status";
+      }),
+      page.getByRole("menuitem", { name: "Refresh Code60 Gateway", exact: true }).click(),
+    ]);
+    await expect(service).toHaveAttribute("aria-busy", "false");
+    await expect(service.getByRole("status")).toContainText("Running");
     await page.getByRole("button", { name: "Workspace", exact: true }).click();
-    await page.getByRole("button", { name: "Stop Code60 Backend", exact: true }).click();
+    await Promise.all([
+      page.waitForRequest(
+        (request) =>
+          request.url().endsWith("/api/operation") &&
+          request.postDataJSON()?.operation === "gateway-stop",
+      ),
+      page.getByRole("button", { name: "Stop Code60 Gateway", exact: true }).click(),
+    ]);
     await page
-      .getByRole("dialog", { name: "Stop Code60 Backend?", exact: true })
+      .getByRole("dialog", { name: "Stop Code60 Gateway?", exact: true })
       .getByRole("button", { name: "Confirm", exact: true })
       .click();
     await expect

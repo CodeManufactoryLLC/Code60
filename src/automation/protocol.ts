@@ -24,7 +24,7 @@ async function connectionMetadata(root: string) {
     if (fileCode(error) !== "ENOENT") throw error;
     throw new AutomationError(
       "unavailable",
-      "Scheduler is not running. Check the Scheduling Service in System Manager.",
+      "Scheduler is not running. Check the Code60 Gateway in System Manager.",
     );
   })) as { v?: unknown; token?: unknown } | null;
   if (raw?.v !== 1 || typeof raw.token !== "string" || !/^[a-f0-9]{64}$/.test(raw.token))

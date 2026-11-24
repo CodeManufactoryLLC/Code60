@@ -5,7 +5,7 @@
 ### Goal
 
 Give users predictable MCP configuration, authentication, connection status and
-recovery while keeping upstream credentials in the local Code60 backend.
+recovery while keeping upstream credentials in the local Code60 Gateway.
 
 ### Problem
 

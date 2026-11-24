@@ -6,7 +6,7 @@ limitations below before giving an agent access to sensitive repositories.
 
 ## Runtime safeguards and limits
 
-- **Authenticated browser interface.** The Node backend binds only to
+- **Authenticated browser interface.** The Node.js Gateway binds only to
   `127.0.0.1` on an ephemeral port and serves bundled assets. By default a same-origin JSON handshake creates a tab session without a code.
   Local `code60 pairing on` can require a short-lived, single-use code instead;
   `code60 pairing off` restores direct entry. With pairing off, browsers on this
@@ -23,7 +23,7 @@ limitations below before giving an agent access to sensitive repositories.
   require explicit local consent. Pairing policy changes are local management
   actions and revoke current browser sessions without cancelling approved work.
   Closing a tab preserves approved execution;
-  stopping the backend stops application and scheduler work. Restart restores
+  stopping the Gateway stops application and scheduler work. Restart restores
   evidence without replaying uncertain work or approvals.
 - **Scoped local agent controls.** The orchestration MCP sidecar connects to a
   token-authenticated gateway bound to `127.0.0.1`. Requests have size and time
@@ -197,7 +197,7 @@ Local record storage does not mean that your task data stays on your machine:
   not filesystem sandboxes.
 - Updates are manual npm tarball installations. The browser does not check for,
   download or install packages. Stop work, install the reviewed package, repair
-  the local backend registration and start it again. Provider network access is
+  the local Gateway registration and start it again. Provider network access is
   independent of the update process.
 
 See [ended-run recovery](ARCHITECTURE.md#ended-run-recovery),
@@ -280,7 +280,7 @@ The authenticated controlling browser can explicitly request installation of the
 fixed `@openai/codex@0.171.0` package from `https://registry.npmjs.org`. No browser
 operation accepts a command, path, package name or environment override. This is
 a narrow exception to application/package installation restrictions, not a general
-installer. Installation runs as the non-root backend user, with npm lifecycle
+installer. Installation runs as the non-root Gateway user, with npm lifecycle
 scripts disabled, isolated npm configuration, private staging and atomic activation
 under `~/.local/share/code60/providers/codex/0.171.0`. Existing CLIs and user
 configuration are preserved. The managed copy is preferred by the standard connector.
@@ -288,7 +288,7 @@ configuration are preserved. The managed copy is preferred by the standard conne
 A short-lived owned Codex app-server process performs only initialization and
 structured ChatGPT device-code login over bounded stdio. Only the exact HTTPS
 verification destination `https://auth.openai.com/codex/device` is accepted. The
-provider owns credentials in its normal backend-user storage. Code60 receives a
+provider owns credentials in its normal Gateway user storage. Code60 receives a
 temporary device challenge, not the account password or credentials. Challenges
 are returned only by setup/attempt-bound requests owned by the controlling page;
 they are excluded from shared snapshots, browser storage, diagnostics and transcripts.
@@ -316,7 +316,7 @@ enabled preference in private gateway settings.
 
 LAN always requires a single-use 60-second pairing code, independently of local
 pairing policy. Codes belong to an exact LAN activation/origin; rotation, disable,
-address change and backend restart invalidate them. Ten pairing submissions per
+address change and Gateway restart invalidate them. Ten pairing submissions per
 minute are permitted. Codes use six cryptographically random digits, displayed
 as `123-456`, and accept entry with or without the hyphen. Local pairing retains
 its existing hexadecimal format. Rotation excludes the immediately previous code
@@ -341,7 +341,7 @@ forwards to a separate loopback ingress in its own container. A private user-own
 Unix socket and bounded stdio channel carry fixed address/publish/withdraw/heartbeat
 messages. No browser controls commands, ports, paths or environments. Protocol
 requests have ten-second deadlines; the host withdraws unrenewed publication after
-fifteen seconds and on backend/launcher loss. Cleanup uncertainty remains an error,
+fifteen seconds and on Gateway/launcher loss. Cleanup uncertainty remains an error,
 not a claim that exposure stopped. Provider storage and approved execution records
 are independent of this policy. TLS, passwords, public hosting and automatic
 firewall changes are outside this beta.
@@ -365,7 +365,7 @@ until owned processes stop. Custom launch overrides retain external setup.
 
 SHA-256 in MCP identity/review metadata binds configuration, public discovery,
 client identity and scope. Authentication and credential-write replay fingerprints
-that include secret inputs remain in backend memory only. They are never persisted
+that include secret inputs remain in Gateway memory only. They are never persisted
 as password verifiers; tokens, client secrets and credential values use the secure
 store or explicitly accepted temporary memory. This is separate from password
 storage and its password-derivation requirements.

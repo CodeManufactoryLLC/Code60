@@ -17,7 +17,7 @@ const stop = () =>
       process.exitCode = 0;
     },
     () => {
-      process.stderr.write("Development backend cleanup failed.\n");
+      process.stderr.write("Development Gateway cleanup failed.\n");
       process.exitCode = 1;
     },
   );

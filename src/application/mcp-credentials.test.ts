@@ -137,7 +137,7 @@ it("revokes immediately and retains an honest deletion tombstone while locked, i
   await vault.forget(value);
   expect(secrets.size).toBe(0);
 });
-it("requires fresh entry after an unclean backend epoch instead of resurrecting uncertain authority", async () => {
+it("requires fresh entry after an unclean Gateway epoch instead of resurrecting uncertain authority", async () => {
   const value = binding();
   await vault.put(value, "synthetic", "persistent", randomUUID());
   await vault.close();

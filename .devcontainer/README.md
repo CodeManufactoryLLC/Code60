@@ -30,7 +30,7 @@ isolated development environment; host credentials are not copied. Provider tool
 and file-based logins persist in this worktree's private home volume.
 
 Keep the command running while using the app. Ctrl+C stops development, closes
-both forwards and gracefully stops the backend before removing this worktree's
+both forwards and gracefully stops the Gateway before removing this worktree's
 containers and exported images, even
 if startup fails. The private provider home, named caches and `test-results`
 evidence are retained.
@@ -52,13 +52,13 @@ With the standalone `start` command running, open **Settings → Advanced → We
 Server Beta** through localhost. Enable it and use the displayed host LAN URL
 and single-use pairing code from the other device. LAN always requires pairing;
 only the controlling localhost browser manages the switch or creates codes.
-The preference persists with development state. Backend restart requires fresh
+The preference persists with development state. Gateway restart requires fresh
 pairing, while disabling access leaves approved work running.
 
 The host launcher owns an additional listener on the primary private IPv4 address,
 using this worktree's existing gateway port. It forwards only to a separate private
 gateway ingress; Docker ports remain unpublished. Its private control channel has
-bounded messages/deadlines and a renewable fifteen-second lease. Backend reload,
+bounded messages/deadlines and a renewable fifteen-second lease. Gateway reload,
 launcher exit and lost leases withdraw forwarding. Local forwards are unchanged.
 Normal `up`/`exec` and editor sessions without the standalone controller report LAN
 unavailable rather than advertising a container address.
@@ -184,8 +184,8 @@ ports: identify an occupied port's owner and stop only your own listener/forward
 or coordinate with its owner before retrying. Both servers retain their loopback bindings and existing
 Host/Origin checks. No Docker ports are published to the LAN.
 
-React Fast Refresh preserves the backend; compiled backend changes restart only
-that backend. Closing the editor leaves this development container available.
+React Fast Refresh preserves the Gateway; compiled Gateway changes restart only
+that gateway. Closing the editor leaves this development container available.
 Use the explicit cleanup command below when finished.
 
 ## Terminal workflow
@@ -213,7 +213,7 @@ and coverage gates remain unchanged. Browser artifacts live in
 `test-results/browser`, separate from development state and QA evidence.
 
 These commands run no live provider or per-user service. The existing development
-backend uses isolated state under `test-results/dev`. For Git commits, supply a
+Gateway uses isolated state under `test-results/dev`. For Git commits, supply a
 synthetic identity locally in test repositories or perform commits on the host.
 
 ## Concurrent agents

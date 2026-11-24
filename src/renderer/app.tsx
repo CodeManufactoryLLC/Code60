@@ -54,12 +54,12 @@ export function App({
   api: transport,
   preferences,
   connected,
-  backendControls,
+  gatewayControls,
 }: {
   api: ApplicationClient;
   preferences: ReturnType<typeof useAppPreferences>;
   connected?: boolean;
-  backendControls?: ReactNode;
+  gatewayControls?: ReactNode;
 }) {
   usePressFeedback();
   const [error, setError] = useState("");
@@ -403,7 +403,7 @@ export function App({
             workspace={(close) => (
               <>
                 {footer(close)}
-                {backendControls}
+                {gatewayControls}
               </>
             )}
             connected={connected}
@@ -473,7 +473,7 @@ export function App({
           accept={accept}
         />
       </div>
-      {splash && backendControls}
+      {splash && gatewayControls}
       {!splash &&
         snapshot &&
         (providerManagement.mode ||

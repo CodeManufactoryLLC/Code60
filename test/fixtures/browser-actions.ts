@@ -33,6 +33,9 @@ export async function createDatabase(page: Page, directory: string) {
   await chooser.getByLabel("Database filename", { exact: true }).fill("projects.sqlite");
   await chooser.getByRole("button", { name: "Create database", exact: true }).click();
   await expect(chooser).toHaveCount(0);
+  await expect
+    .poll(async () => (await page.evaluate(() => window.code60.snapshot())).database)
+    .toBe(join(directory, "projects.sqlite"));
 }
 export async function openProject(page: Page, directory: string, name: string) {
   await expandNavigation(page, "Work");

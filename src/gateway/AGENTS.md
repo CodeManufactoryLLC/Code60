@@ -1,4 +1,6 @@
-# Gateway
+# Gateway module
+
+This module assembles and runs the [Code60 Gateway](../../TERMINOLOGY.md).
 
 Own one application host and scheduler. Depend on application, automation, bridge, contracts, core, platform and agents through indexes. Keep authenticated loopback HTTP and the explicit private-LAN Web Server Beta ingress described in ARCHITECTURE.md; never expose generic commands or paths. Private management authentication is separate from browser sessions. Revoke page interactions on detach and never replay uncertain effects. Preserve cleanup ownership on failure.
 
@@ -65,7 +67,7 @@ and payload-free notices only. Dedicated integrations and recovery GUI stay excl
 ## MCP secure authentication (phase 6)
 
 Phase 6 supersedes earlier deferred credential/OAuth text. Follow the MCP credential
-and authorization ownership section in ARCHITECTURE.md. Keep secrets in the backend
+and authorization ownership section in ARCHITECTURE.md. Keep secrets in the Gateway
 native store or explicitly selected temporary RAM, never configuration, diagnostics,
 records, browser storage or provider setup. Native keyring loading is platform-only,
 in a bounded private-pipe helper; Linux must explicitly use Secret Service. Gateway
@@ -76,7 +78,7 @@ OAuth uses reviewed registration, S256 and single-use five-minute callbacks. Kee
 SDK authentication/replay disabled; a grant has one refresh, and uncertain exchanges
 require explicit authorization. Revoke before cleanup/deletion, preserve tombstones
 and unresolved ownership, and never reactivate old credential heads. Temporary
-storage requires explicit consent and survives only until backend restart/sign-out.
+storage requires explicit consent and survives only until Gateway restart/sign-out.
 Credential writes/forget/sign-out are narrow human operations with safe metadata;
 there is no browser secret-read endpoint. Preserve existing JSON drafts/recovery.
 Dedicated integrations, Code60 registrations/hosted auth and recovery GUI stay out.
@@ -107,17 +109,17 @@ Origin and requires the management token. Call ApplicationHost serialization;
 never initialize databases in ordinary startup or expose this route through the
 browser bridge. Management status reports bounded database/engine availability
 without provider probes, pairing codes or repair. Preserve XDG_DATA_HOME in the
-registered runtime so setup and the backend use the same data location.
+registered runtime so setup and the Gateway use the same data location.
 
 Update interruption inspection is a payload-free authenticated management read.
 Report only bounded interactive/scheduled availability; do not mint pairing codes,
 stop work, launch engines or grant a browser replacement authority. Terminal
-updates must verify quiescence and native/backend process exit before activation.
+updates must verify quiescence and native/Gateway process exit before activation.
 
 The service-definition serializer is part of registration ownership version 1.
 Changing its byte format requires an explicit versioned ownership/migration path
 and old/new-definition tests. Preserve outside edits; do not bypass ownership
-checks to accommodate a new formatter.
+checks to accommodate a new formatter. The [Gateway rename cutover](../../README.md#one-time-cutover-from-backend-service) creates a new OS service identity after the old CLI has removed its registration.
 
 
 Provider installation/authentication operations accept strict catalog/session/attempt
@@ -128,7 +130,7 @@ expose provider server APIs, install descriptors, commands, paths or environment
 Preserve an explicitly configured absolute CODEX_HOME path for workflow login and
 execution. Never persist CODEX_CONFIG payloads or provider credential environment
 variables in the service definition. Existing engines retain their startup
-environment; backend repair must not silently replace or cancel them.
+environment; Gateway repair must not silently replace or cancel them.
 
 Host path refresh and provider transport callbacks are trusted Node composition
 ports, never browser/CLI/environment overrides. Isolated provider tests must own

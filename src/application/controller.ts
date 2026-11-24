@@ -502,7 +502,7 @@ export class ApplicationHost {
     }
     if (this.mcpAuthenticationRequests.size >= 4096)
       throw new Error(
-        "Authentication request limit reached; restart the backend before more requests",
+        "Authentication request limit reached; restart the Gateway before more requests",
       );
     const result = this.performMcpAuthentication(request, page);
     this.mcpAuthenticationRequests.set(request.requestId, { fingerprint, result });
@@ -605,7 +605,7 @@ export class ApplicationHost {
     }
     if (this.mcpRuntimeRequests.size >= 4096)
       throw new Error(
-        "MCP runtime request limit reached; restart the backend before more requests",
+        "MCP runtime request limit reached; restart the Gateway before more requests",
       );
     const result = this.performMcpRuntime(request, page);
     this.mcpRuntimeRequests.set(request.requestId, { fingerprint, result });

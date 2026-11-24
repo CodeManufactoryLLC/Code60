@@ -1,4 +1,4 @@
-import { backendControl, restoreSchedulerHandoff } from "./registration.js";
+import { gatewayControl, restoreSchedulerHandoff } from "./registration.js";
 import { startGateway } from "./server.js";
 
 if (Number(process.versions.node.split(".")[0]) !== 24) {
@@ -7,7 +7,7 @@ if (Number(process.versions.node.split(".")[0]) !== 24) {
 } else {
   startGateway({
     onStop: async () => {
-      await backendControl(process.env, "stop", true);
+      await gatewayControl(process.env, "stop", true);
     },
   })
     .then(async (gateway) => {
@@ -21,7 +21,7 @@ if (Number(process.versions.node.split(".")[0]) !== 24) {
             process.exitCode = 0;
           },
           () => {
-            process.stderr.write("Backend cleanup could not finish. Ownership was retained.\n");
+            process.stderr.write("Gateway cleanup could not finish. Ownership was retained.\n");
             process.exitCode = 1;
           },
         );
@@ -31,7 +31,7 @@ if (Number(process.versions.node.split(".")[0]) !== 24) {
     })
     .catch(() => {
       process.stderr.write(
-        "Code60 backend could not start. Check Node 24, private storage, assets and service ownership.\n",
+        "Code60 Gateway could not start. Check Node 24, private storage, assets and service ownership.\n",
       );
       process.exitCode = 1;
     });

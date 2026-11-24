@@ -13,7 +13,7 @@ For a bug fix, describe the original problem and how this change resolves it. --
 
 <!-- Record exact commands and results, not just "tested".
 Run `npm run check` before each commit. For behavior changes, also run
-`npm run test:browser` (headless Chromium against the built Node backend). Include
+`npm run test:browser` (headless Chromium against the built Node.js Gateway). Include
 regression coverage for behavior changes and manual reproduction steps where
 relevant. -->
 

@@ -443,7 +443,7 @@ export class McpAuthentication {
       throw new Error("Authentication attempt limit reached");
     if (this.attempts.size >= 4096)
       throw new Error(
-        "Authentication history limit reached; restart the backend before more attempts",
+        "Authentication history limit reached; restart the Gateway before more attempts",
       );
     await capture.validate();
     await this.open();

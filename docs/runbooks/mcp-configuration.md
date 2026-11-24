@@ -126,7 +126,7 @@ Unverified cleanup remains unresolved; preserve ownership and process evidence.
 Use **Verify cleanup**, then confirm to retry only retained revoked cleanup handles
 for the selected configuration. It does not start connectors, replay calls, search
 for process names or stop unrelated processes. If verification still fails, retain
-the backend/evidence and resolve the underlying OS/network condition. Remote HTTP
+the Gateway/evidence and resolve the underlying OS/network condition. Remote HTTP
 cleanup may remain unverifiable independently of local transport closure.
 
 
@@ -138,7 +138,7 @@ secret in JSON, a command argument, an environment literal, a journal or a repor
 Persistent entry requires unlocked macOS Keychain or Linux Secret Service. A locked
 or unavailable store never switches to keyutils or temporary memory. Unlock/fix the
 OS store separately, or explicitly choose a new temporary operation. Temporary
-credentials last until backend restart or sign-out; they are never recovered from
+credentials last until Gateway restart or sign-out; they are never recovered from
 records.
 
 A security-relevant edit or move requires review in the new namespace. Label and

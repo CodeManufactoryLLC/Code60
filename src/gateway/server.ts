@@ -261,7 +261,7 @@ export async function startGateway(options: GatewayOptions = {}) {
       subscribe: (listener) => scheduler?.subscribe(listener) ?? (() => {}),
       control: async (_env, action) => {
         if (action !== "status")
-          throw new Error("Use code60 service commands to manage the backend.");
+          throw new Error("Use code60 service commands to manage the Gateway.");
         const registration = (await readPrivateJson(join(root, "registration.json"), 16_384).catch(
           (error) => {
             if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -292,10 +292,10 @@ export async function startGateway(options: GatewayOptions = {}) {
     emit,
     workflows,
   );
-  operations.set("backend-stop", async () => {
+  operations.set("gateway-stop", async () => {
     if (
       await interactions.confirm(
-        "Stop Code60 Backend?",
+        "Stop Code60 Gateway?",
         "Interactive agents and scheduled jobs will stop. Approved Transmission workflows keep running; use Apps → Workflows to stop them. History and worktrees are kept. Start Code60 again with code60 service start.",
       )
     )
@@ -385,7 +385,7 @@ export async function startGateway(options: GatewayOptions = {}) {
           return;
         }
         if (closing) {
-          respond(response, { error: "Backend is stopping." }, 503);
+          respond(response, { error: "Gateway is stopping." }, 503);
           return;
         }
         if (
@@ -455,7 +455,7 @@ export async function startGateway(options: GatewayOptions = {}) {
             const value = await body(request);
             if (value !== null) {
               if (changingPairing || transferring || quiescing)
-                throw new Error("Backend is busy. Try again.");
+                throw new Error("Gateway is busy. Try again.");
               const next = pairingPolicySchema.parse(value).requirePairing;
               if (next !== requirePairing || settings?.requirePairing !== next) {
                 changingPairing = true;
@@ -518,7 +518,7 @@ export async function startGateway(options: GatewayOptions = {}) {
         }
         if (path.startsWith("/api/")) {
           if (quiescing || changingPairing) {
-            respond(response, { error: "Backend is stopping." }, 503);
+            respond(response, { error: "Gateway is stopping." }, 503);
             return;
           }
           if (
@@ -806,7 +806,7 @@ export async function startGateway(options: GatewayOptions = {}) {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
         // Work is already quiescent. Reconnecting fetch/SSE keepalive sockets
-        // must not retain the backend lock after its listener has closed.
+        // must not retain the Gateway lock after its listener has closed.
         server.closeAllConnections();
       });
       await logs.close();
@@ -824,7 +824,7 @@ export async function startGateway(options: GatewayOptions = {}) {
       server.listen(options.developmentPort ?? 0, "127.0.0.1", resolve);
     });
     const address = server.address();
-    if (!address || typeof address === "string") throw new Error("Could not bind the backend.");
+    if (!address || typeof address === "string") throw new Error("Could not bind the Gateway.");
     const unregister = registerPrivateListener(address.port);
     server.once("close", unregister);
     origin = `http://127.0.0.1:${address.port}`;
@@ -843,7 +843,7 @@ export async function startGateway(options: GatewayOptions = {}) {
       }
       if (!dead)
         throw new Error(
-          "Backend connection ownership could not be verified. Existing state was preserved.",
+          "Gateway connection ownership could not be verified. Existing state was preserved.",
         );
     }
     await writePrivateJson(
@@ -901,7 +901,7 @@ async function readGatewayConnection(env: Readonly<NodeJS.ProcessEnv>): Promise<
     !Number.isSafeInteger(value.pid) ||
     value.pid <= 0
   )
-    throw new Error("Backend connection is invalid. Use code60 service status.");
+    throw new Error("Gateway connection is invalid. Use code60 service status.");
   return value;
 }
 export async function managementRequest(
@@ -922,6 +922,8 @@ export async function managementRequest(
   });
   const result = (await response.json()) as Record<string, unknown>;
   if (!response.ok)
-    throw new Error(typeof result.error === "string" ? result.error : "Backend operation failed.");
+    throw new Error(
+      typeof result.error === "string" ? result.error : "Code60 Gateway operation failed.",
+    );
   return result;
 }

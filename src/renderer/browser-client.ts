@@ -267,7 +267,7 @@ ${url}`)
         signal: abort.signal,
       });
       if (!response.ok || !response.body)
-        throw new Error("Connection lost. Pair again if the backend restarted.");
+        throw new Error("Connection lost. Pair again if the Gateway restarted.");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";

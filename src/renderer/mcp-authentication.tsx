@@ -205,7 +205,7 @@ export function McpAuthenticationPanel({
             change that binding.
           </p>
           <p>
-            Credentials stay in the backend. They are never written to mcp.json or sent to the agent
+            Credentials stay in the Gateway. They are never written to mcp.json or sent to the agent
             provider. Moving a definition transfers neither credentials nor approval.
           </p>
           {error && <p role="alert">{error}</p>}
@@ -362,7 +362,7 @@ export function McpAuthenticationPanel({
               onChange={() => setStorage("persistent")}
             />
             <RadioButton
-              labelText="Temporary backend memory — explicitly keep until backend restart or Sign out"
+              labelText="Temporary Gateway memory — explicitly keep until Gateway restart or Sign out"
               name="mcp-credential-storage"
               checked={storage === "temporary"}
               onChange={() => setStorage("temporary")}

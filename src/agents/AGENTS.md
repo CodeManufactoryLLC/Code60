@@ -45,7 +45,7 @@ and payload-free notices only. Dedicated integrations and recovery GUI stay excl
 ## MCP secure authentication (phase 6)
 
 Phase 6 supersedes earlier deferred credential/OAuth text. Follow the MCP credential
-and authorization ownership section in ARCHITECTURE.md. Keep secrets in the backend
+and authorization ownership section in ARCHITECTURE.md. Keep secrets in the Gateway
 native store or explicitly selected temporary RAM, never configuration, diagnostics,
 records, browser storage or provider setup. Native keyring loading is platform-only,
 in a bounded private-pipe helper; Linux must explicitly use Secret Service. Gateway
@@ -56,7 +56,7 @@ OAuth uses reviewed registration, S256 and single-use five-minute callbacks. Kee
 SDK authentication/replay disabled; a grant has one refresh, and uncertain exchanges
 require explicit authorization. Revoke before cleanup/deletion, preserve tombstones
 and unresolved ownership, and never reactivate old credential heads. Temporary
-storage requires explicit consent and survives only until backend restart/sign-out.
+storage requires explicit consent and survives only until Gateway restart/sign-out.
 Credential writes/forget/sign-out are narrow human operations with safe metadata;
 there is no browser secret-read endpoint. Preserve existing JSON drafts/recovery.
 Dedicated integrations, Code60 registrations/hosted auth and recovery GUI stay out.

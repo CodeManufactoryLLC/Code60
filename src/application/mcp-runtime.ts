@@ -845,7 +845,7 @@ export class McpRuntime {
           const retained = upstream;
           this.unresolved.set(() => retained.close(), { targetId: input.targetId });
           throw new Error(
-            "MCP test cleanup could not be verified; retain backend ownership and process evidence",
+            "MCP test cleanup could not be verified; retain Gateway ownership and process evidence",
           );
         }
       }
@@ -1019,7 +1019,7 @@ export class McpRuntime {
     }
     if (this.actions.size >= 4096)
       throw new Error(
-        "MCP action receipt limit reached; start a new backend before more connection actions",
+        "MCP action receipt limit reached; start a new Gateway before more connection actions",
       );
     const result = (async () => {
       await validate();

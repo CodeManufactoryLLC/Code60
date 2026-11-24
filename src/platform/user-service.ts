@@ -44,7 +44,7 @@ export function userServiceDefinition(
   home: string,
   root: string,
   runtime: ServiceRuntime,
-  kind: "scheduler" | "backend" = "scheduler",
+  kind: "scheduler" | "gateway" = "scheduler",
 ): UserServiceDefinition {
   const LABEL = `com.codemanufactory.code60.${kind}`;
   const unitName = `code60-${kind}.service`;
@@ -57,7 +57,7 @@ export function userServiceDefinition(
     ) ||
     Object.keys(runtime.env).some((v) => !/^[A-Z_][A-Z0-9_]*$/.test(v))
   )
-    throw new Error("Invalid Scheduling Service runtime");
+    throw new Error("Invalid user service runtime");
   if (platform === "darwin") {
     const path = join(home, "Library", "LaunchAgents", `${LABEL}.plist`);
     const target = `gui/${process.getuid?.() ?? -1}`;
@@ -89,7 +89,7 @@ export function userServiceDefinition(
     const path = join(home, ".config", "systemd", "user", unitName);
     return {
       path,
-      contents: `[Unit]\nDescription=Code60 ${kind}\n
+      contents: `[Unit]\nDescription=Code60 ${kind === "gateway" ? "Gateway" : kind}\n
 [Service]\nType=simple
 ExecStart=${[runtime.executable, ...runtime.args].map(unit).join(" ")}
 ${Object.entries(runtime.env)
@@ -148,7 +148,7 @@ export async function inspectUserService(
     return null;
   });
   if (file && (!file.isFile() || file.size > 64 * 1024))
-    throw new Error("Scheduling Service registration is unavailable.");
+    throw new Error("User service registration is unavailable.");
   const definitionPresent = file !== null;
   if (definition.status[0] === "systemctl") {
     const result = await command([
@@ -253,9 +253,7 @@ export async function controlUserService(
         if (!(await command(argv))) {
           const native = await inspectUserService(definition, inspectionCommand);
           if (native.state !== "stopped" || (argv[0] === "launchctl" && native.loaded !== false))
-            throw new Error(
-              "Scheduling Service could not stop. Its registration was not replaced.",
-            );
+            throw new Error("User service could not stop. Its registration was not replaced.");
         }
     if (Object.hasOwn(ownership, "expected")) {
       await createInstallationParents(join(definition.path, ".."));
@@ -275,7 +273,7 @@ export async function controlUserService(
     for (const argv of definition.install)
       if (!(await command(argv)))
         throw new Error(
-          "Scheduling Service registration failed. The native user supervisor may be unavailable.",
+          "User service registration failed. The native user supervisor may be unavailable.",
         );
     return { available: true };
   }
@@ -294,7 +292,7 @@ export async function controlUserService(
         const native = await inspectUserService(definition, inspectionCommand);
         if (native.state === "stopped" && native.loaded === false) continue;
       }
-      throw new Error("Scheduling Service control failed. Check the native user supervisor.");
+      throw new Error("User service control failed. Check the native user supervisor.");
     }
   if (action === "uninstall") {
     await verifyOwnership();

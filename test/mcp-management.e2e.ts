@@ -236,7 +236,7 @@ test("MCP management: malformed files and interrupted transactions block guided 
     const { McpConfigurationStore } = (await import(
       pathToFileURL(resolve("dist/application/index.js")).href
     )) as { McpConfigurationStore: typeof StoreType };
-    // Release the backend's private writer through real backend shutdown, then seed a synthetic interrupted publication.
+    // Release the Gateway's private writer through real Gateway shutdown, then seed a synthetic interrupted publication.
     await fixture.gateway.stop();
     const io = await import("node:fs/promises");
     const store = await McpConfigurationStore.open({

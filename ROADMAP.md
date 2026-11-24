@@ -9,11 +9,11 @@ outcomes; they do not claim that the capabilities have shipped.
 ## Current architecture direction
 
 Feature delivery speed is the primary design goal. Code60 now uses one local
-Node 24 backend for interactive work and scheduling, with a React browser UI.
+Code60 Gateway on Node 24 for interactive work and scheduling, with a React browser UI.
 Electron, package and native service behavior and automatic updates have been removed. The narrow
 management CLI opens/pairs the browser and manages an opt-in per-user login
-service. Browser closure preserves approved work; confirmed Stop Backend stops
-both components. Backend restart restores evidence, never uncertain work authority.
+service. Browser closure preserves approved work; confirmed Stop Gateway stops
+both components. Gateway restart restores evidence, never uncertain work authority.
 
 Supported targets are macOS Apple Silicon and Linux x64. Distribution is an npm
 tarball with manual updates. See [the migration record](docs/gateway-daemon-migration-plan.md)
@@ -35,7 +35,7 @@ reconciliation before they can be treated as a current delivery sequence.
 | [v0.10.0 — Safe reconciliation and bounded recovery](https://github.com/CodeManufactoryLLC/code60/milestone/9) | Reconcile interrupted effects and add bounded recovery, retries and useful-progress checks. |
 | [v0.11.0 — Versioned workflows and extensions](https://github.com/CodeManufactoryLLC/code60/milestone/10) | Add immutable workflows with branches, joins, loops, durable waits and governed code/tool/retrieval steps. |
 | [v0.12.0 — Operability and product readiness](https://github.com/CodeManufactoryLLC/code60/milestone/11) | Complete diagnostics, export/restore, performance, accessibility, quickstarts and operational disclosures. |
-| [v1.0.0 — Supported release](https://github.com/CodeManufactoryLLC/code60/milestone/12) | Establish supported contracts and verify final package and native service behavior, provider/backend combinations and checklist claims. |
+| [v1.0.0 — Supported release](https://github.com/CodeManufactoryLLC/code60/milestone/12) | Establish supported contracts and verify final package and native service behavior, provider/gateway combinations and checklist claims. |
 
 ## Why this order
 
@@ -55,10 +55,10 @@ preparation issue.
 
 ## Product direction
 
-- Deliver the browser UI and one local backend, with direct foreground operation
+- Deliver the browser UI and one local Gateway, with direct foreground operation
   for development and explicit per-user service enrollment for normal use.
 - Preserve repositories, worktrees, records and existing domain capabilities.
-- Keep agent execution in the backend; the public CLI is limited to open/service
+- Keep agent execution in the Gateway; the public CLI is limited to open/service
   management and has no run, prompt or scheduling execution commands.
 - Keep macOS Apple Silicon and Linux x64 support. Login services require a logged-in,
   awake machine; no privileged service or Linux linger.

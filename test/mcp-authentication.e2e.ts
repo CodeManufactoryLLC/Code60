@@ -71,7 +71,7 @@ test("MCP credentials: explicit temporary entry, clearing, reload, no plaintext 
     let dialog = await authentication(page);
     expect(
       await dialog
-        .getByLabel(/Temporary backend memory/)
+        .getByLabel(/Temporary Gateway memory/)
         .evaluate((input) => input.getBoundingClientRect().width),
     ).toBeLessThanOrEqual(24);
     expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
@@ -79,8 +79,8 @@ test("MCP credentials: explicit temporary entry, clearing, reload, no plaintext 
     );
     await page.screenshot({ path: test.info().outputPath("authentication-storage-choice.png") });
     await dialog.getByLabel("Credential secret", { exact: true }).fill(secret);
-    await dialog.getByText(/^Temporary backend memory —/).click();
-    await expect(dialog.getByRole("radio", { name: /Temporary backend memory/ })).toBeChecked();
+    await dialog.getByText(/^Temporary Gateway memory —/).click();
+    await expect(dialog.getByRole("radio", { name: /Temporary Gateway memory/ })).toBeChecked();
     await dialog.getByRole("button", { name: "Save credential", exact: true }).click();
     await expect(dialog.getByLabel("Credential secret", { exact: true })).toHaveValue("");
     await expect(dialog.getByRole("status").filter({ hasText: "Credential saved" })).toBeVisible();
@@ -155,8 +155,8 @@ test("MCP credentials: unavailable persistent storage never silently becomes tem
     await expect(dialog.getByLabel("Credential secret", { exact: true })).toHaveValue("");
     await expect(dialog.getByLabel(/Secure OS storage/)).toBeChecked();
     expect(remote.counts.initialize).toBe(0);
-    await dialog.getByText(/^Temporary backend memory —/).click();
-    await expect(dialog.getByRole("radio", { name: /Temporary backend memory/ })).toBeChecked();
+    await dialog.getByText(/^Temporary Gateway memory —/).click();
+    await expect(dialog.getByRole("radio", { name: /Temporary Gateway memory/ })).toBeChecked();
     await dialog.getByLabel("Credential secret", { exact: true }).fill(secret);
     await dialog.getByRole("button", { name: "Save credential", exact: true }).click();
     await expect(dialog.getByRole("status").filter({ hasText: "Credential saved" })).toBeVisible();
@@ -201,8 +201,8 @@ test("MCP OAuth: reviewed issuer/registration, browser consent, retained JSON dr
     await dialog.getByRole("button", { name: "Review issuer and scopes", exact: true }).click();
     await expect(dialog).toContainText("tools.read");
     await expect(dialog).toContainText("per installation");
-    await dialog.getByText(/^Temporary backend memory —/).click();
-    await expect(dialog.getByRole("radio", { name: /Temporary backend memory/ })).toBeChecked();
+    await dialog.getByText(/^Temporary Gateway memory —/).click();
+    await expect(dialog.getByRole("radio", { name: /Temporary Gateway memory/ })).toBeChecked();
     await dialog.getByRole("button", { name: "Start sign-in", exact: true }).click();
     await expect(
       dialog.getByRole("link", { name: "Continue to authorization server", exact: true }),
@@ -298,8 +298,8 @@ test("MCP OAuth: Cancel and browser detach revoke pending loopback callbacks", a
     await apps(page);
     const dialog = await authentication(page);
     await dialog.getByRole("button", { name: "Review issuer and scopes", exact: true }).click();
-    await dialog.getByText(/^Temporary backend memory —/).click();
-    await expect(dialog.getByRole("radio", { name: /Temporary backend memory/ })).toBeChecked();
+    await dialog.getByText(/^Temporary Gateway memory —/).click();
+    await expect(dialog.getByRole("radio", { name: /Temporary Gateway memory/ })).toBeChecked();
     await dialog.getByRole("button", { name: "Start sign-in", exact: true }).click();
     let link = await dialog
       .getByRole("link", { name: "Continue to authorization server", exact: true })
@@ -315,7 +315,7 @@ test("MCP OAuth: Cancel and browser detach revoke pending loopback callbacks", a
       .getByRole("link", { name: "Continue to authorization server", exact: true })
       .getAttribute("href");
     port = Number(new URL(new URL(link!).searchParams.get("redirect_uri")!).port);
-    // Drop only the cancellation packet, leaving the real backend attempt intact.
+    // Drop only the cancellation packet, leaving the real Gateway attempt intact.
     await page.route("**/api/operation", async (route) => {
       const packet = route.request().postDataJSON();
       if (packet.operation === "mcp-authentication" && packet.value?.action === "cancel")

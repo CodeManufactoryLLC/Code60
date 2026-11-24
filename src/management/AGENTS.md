@@ -33,7 +33,7 @@ closure; only the installed CLI owns this interaction.
 Use the verified cached native Codex even when CODEX_PATH configures a different
 application provider executable.
 
-Explicit updates must verify a candidate before stopping the backend, retain the
+Explicit updates must verify a candidate before stopping the Gateway, retain the
 prior activation and record durable progress at activation boundaries. Setup
 remains limited to the matching release. Never execute acquired bootstrap code,
 implicitly replace healthy engine bindings, downgrade a database or resume

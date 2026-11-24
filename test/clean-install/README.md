@@ -60,7 +60,7 @@ dependency versions, phase summary, private command logs, runtime identities,
 successful golden screenshots/traces and process/cleanup results. Connection
 management tokens and raw private connection files are not exported. Logs/traces
 contain only synthetic application data; browser tokens expire when the test
-backend stops.
+Gateway stops.
 
 Containers, exported images and temporary installation/state/mask volumes are
 removed on success, failure and cancellation. BuildKit caches and host evidence
@@ -92,7 +92,7 @@ Run `npm run test:packaged:clean -- --setup release/payloads/linux-x64.json` aft
 building the Linux candidate. The test-only single-platform bootstrap uses the
 actual CLI entry and installer adapter; production packaging still requires both
 real descriptors. A files-only stage preserves its isolated HOME/config/state;
-explicit approval then runs real backend setup through the dedicated bounded
+explicit approval then runs real Gateway setup through the dedicated bounded
 supervisor, with no actual systemd registration. The launcher runs after cache
 removal, then the shared golden journey verifies the provider through UI and uses
 the setup-created database. Release/activation volume subpaths are read-only;
@@ -109,7 +109,7 @@ Only the test artifact transport and native supervisor are injected. It exercise
 integrity failure, declined consent, SIGINT before publication, explicit recovery,
 concurrent update rejection, successful activation and read-only/no-op behavior.
 
-The preparer stops its real backend before handoff. The host validates the new
+The preparer stops its real Gateway before handoff. The host validates the new
 layout and removes the temporary installer/bootstrap support before starting a
 fresh customer. Releases and activations are mounted read-only; preserved custom
 database, preferences and management metadata remain writable. A separate driver

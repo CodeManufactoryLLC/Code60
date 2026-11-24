@@ -1,11 +1,11 @@
-# Browser backend ownership
+# Code60 Gateway ownership
 
-ApplicationHost is owned by the unified gateway, never by a browser page. These rules
-define backend lifetime independently of browser views.
+The Code60 Gateway owns ApplicationHost independently of browser pages. These rules
+define Gateway lifetime independently of browser views.
 No Electron imports or UI/HTTP listeners belong here. UI detach cancels only view reads,
 setup and pending human interactions; approved execution and memory extraction continue.
 Gateway interaction ports replace native dialogs and pickers. Scheduled jobs have a separate
-runtime/policy but share the owning gateway process. Backend shutdown stops all owners.
+runtime/policy but share the owning gateway process. Gateway shutdown stops all owners.
 Keep existing storage formats and domain/ownership safeguards. Import other modules through indexes.
 
 ## MCP connector foundation
@@ -200,7 +200,7 @@ Read [ARCHITECTURE.md](../../ARCHITECTURE.md) before changing it.
 
 - Depend only on `core`, `bridge`, `automation` and the Node-only `platform` leaf.
 - Scheduled automations belong to the separate scheduler runtime, not controller
-  batches. Stop all affects application work; backend shutdown stops both owners.
+  batches. Stop all affects application work; Gateway shutdown stops both owners.
 - Human interaction ports are supplied by gateway; never create native UI or HTTP
   listeners here. Browser disconnect releases views and pending decisions only.
 - Validate application arguments through `bridge`, and act only on owned runs.
@@ -209,7 +209,7 @@ Read [ARCHITECTURE.md](../../ARCHITECTURE.md) before changing it.
 - The host Open Project chooser enables explicit directory creation; opening never initializes Git. After a folder choice, confirm the full project path before opening or adding it to history. Default to Cancel; declining must leave the current project and history unchanged.
 - Return only newly created session IDs from start. Require Git readiness on every project launch and continuation, with required isolation during core preparation. Never continue legacy non-isolated workers. Keep Chat and read-only history usable before Git setup.
 - Use the supplied confirmation port before destructive actions. Reject unisolated project workers; guided Git setup uses its own explicit initial-commit confirmation.
-- On backend shutdown, shut down every run through `core` and wait before releasing ownership. Never remove worktrees automatically.
+- On Gateway shutdown, shut down every run through `core` and wait before releasing ownership. Never remove worktrees automatically.
 - Keep the project database (`projects.ts`) to repository paths, open times, saved run configurations (name, batch settings, use count, last use), validated prompt template edits and explicitly saved reusable commands. Never store per-turn user task prompts or transcripts in it, never modify a database that is not a Code60 database, and never recreate a missing one silently. Use the supported Node 24 SQLite runtime.
 - Validate command saves/deletes again in main, confirm deletion through the confirmation port, and resolve commands from the connected database at send time. Preserve exact typed transcript text separately from delivered expansion. Commands are shared across projects, not databases. The current orchestrator's authenticated MCP gateway may create commands on user request using the same validation and serialized writes, but cannot update/delete them; workers gain no command capability.
 - Route every repeated external read (run history, config, run configurations, worktrees) through the `Poller` in `poller.ts`. Keep reads single-flight, discard results after a workspace or database switch, keep worktree scans outside the exclusive queue, and stop the poller on shutdown. Never poll agent events or watch files. Persist only user overrides under `polling` in desktop.json.
@@ -356,7 +356,7 @@ and payload-free notices only. Dedicated integrations and recovery GUI stay excl
 ## MCP secure authentication (phase 6)
 
 Phase 6 supersedes earlier deferred credential/OAuth text. Follow the MCP credential
-and authorization ownership section in ARCHITECTURE.md. Keep secrets in the backend
+and authorization ownership section in ARCHITECTURE.md. Keep secrets in the Gateway
 native store or explicitly selected temporary RAM, never configuration, diagnostics,
 records, browser storage or provider setup. Native keyring loading is platform-only,
 in a bounded private-pipe helper; Linux must explicitly use Secret Service. Gateway
@@ -367,7 +367,7 @@ OAuth uses reviewed registration, S256 and single-use five-minute callbacks. Kee
 SDK authentication/replay disabled; a grant has one refresh, and uncertain exchanges
 require explicit authorization. Revoke before cleanup/deletion, preserve tombstones
 and unresolved ownership, and never reactivate old credential heads. Temporary
-storage requires explicit consent and survives only until backend restart/sign-out.
+storage requires explicit consent and survives only until Gateway restart/sign-out.
 Credential writes/forget/sign-out are narrow human operations with safe metadata;
 there is no browser secret-read endpoint. Preserve existing JSON drafts/recovery.
 Dedicated integrations, Code60 registrations/hosted auth and recovery GUI stay out.
@@ -396,7 +396,7 @@ pinned release's MCP bootstrap and authenticated HTTP operations. Never run npm,
 npx or a compiler at execution time. A missing bundle may be cached from prepared
 local assets only on explicit start/reconnect; damaged bindings require recovery,
 never fallback. Keep Transmission provider authentication separate from Code60's
-verified provider membership. Backend shutdown does not cancel approved workflows.
+verified provider membership. Gateway shutdown does not cancel approved workflows.
 Pin CODEX_PATH to the verified cached native Codex for new engines; application
 provider overrides must not replace this runtime. Preserve healthy existing engines.
 

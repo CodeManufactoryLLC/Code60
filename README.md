@@ -1,8 +1,8 @@
 # Code60
 
-Code60 runs coding agents in isolated Git worktrees, with a browser interface and a local Node backend. It supports macOS Apple Silicon and Linux x64 and requires Node 24, npm, Git and a supported coding-agent provider.
+Code60 runs coding agents in isolated Git worktrees, with a browser interface and a local Code60 Gateway. It supports macOS Apple Silicon and Linux x64 and requires Node 24, npm, Git and a supported coding-agent provider.
 
-The opt-in per-user backend starts at login. Closing the browser keeps approved agents and scheduled jobs running. Stop all in Chat stops interactive work; Stop Code60 Backend stops interactive and scheduled work together. Your computer must be awake and logged in for scheduling.
+The Gateway starts at login when enrolled as a per-user service. Closing the browser keeps approved agents and scheduled jobs running. Stop all in Chat stops interactive work; Stop Code60 Gateway stops interactive and scheduled work together. Your computer must be awake and logged in for scheduling. See the [official terminology](TERMINOLOGY.md).
 
 ## Install and open
 
@@ -24,10 +24,10 @@ To require a code, run `code60 pairing on`. Use `code60 pairing off` to skip it
 again, or `code60 pairing status` to inspect the setting. Changes ask for local
 confirmation; add `--yes` for an explicitly intended noninteractive change. The
 setting works before service installation and takes effect immediately when the
-backend is running. Browser sessions reconnect; approved agents keep running.
+Gateway is running. Browser sessions reconnect; approved agents keep running.
 
 When pairing is enabled, `code60 open` prints a single-use code valid for sixty
-seconds. Enter it in the browser. Restarting the backend requires a new code in
+seconds. Enter it in the browser. Restarting the Gateway requires a new code in
 that mode. With pairing off, any browser on this computer can connect; enable
 pairing when you want an explicit local authorization step.
 
@@ -35,9 +35,9 @@ Complete provider verification in the browser. Select **Codex** to connect an ex
 
 The same dialog installs and signs in to **Antigravity, Claude, Copilot, Droid, Kiro and OpenCode**. Choose Claude subscription or Anthropic Console, or choose ChatGPT/GitHub Copilot for OpenCode. Some providers return an authorization code to paste into Code60; others display a device code to enter on their website. If Copilot cannot use a system keychain, Code60 asks before allowing its private-file credential fallback. Keep setup open until verification and saving finish.
 
-Installations use fixed, integrity-verified releases in private versioned backend-user storage, preserving existing CLIs and configuration. Native archives and platform packages run without vendor install scripts; the Claude ACP adapter uses npm with lifecycle scripts disabled. Provider logins stay in each harness’s own backend-user storage and survive normal dev-container recreation. Custom launch commands, enterprise endpoint forms and API-key entry retain external setup.
+Installations use fixed, integrity-verified releases in private versioned Gateway user storage, preserving existing CLIs and configuration. Native archives and platform packages run without vendor install scripts; the Claude ACP adapter uses npm with lifecycle scripts disabled. Provider logins stay in each harness’s own Gateway user storage and survive normal dev-container recreation. Custom launch commands, enterprise endpoint forms and API-key entry retain external setup.
 
-Codex installation uses non-root npm with lifecycle scripts disabled and the official registry, pinned to `@openai/codex@0.171.0`. Code60 activates its private copy under `~/.local/share/code60/providers/codex/0.171.0` and prefers it for the standard Codex connector without changing configuration or replacing an existing CLI. Codex stores credentials in its normal backend-user home. Closing/cancelling setup, reloading, taking control in another tab or stopping the backend cancels the owned installation/login process; it does not log out an account or remove issued credentials. Retry requests a new attempt. Unsupported CLIs offer the compatible installation; custom launch commands retain manual setup. Account switching, logout and API-key entry are outside this setup flow.
+Codex installation uses non-root npm with lifecycle scripts disabled and the official registry, pinned to `@openai/codex@0.171.0`. Code60 activates its private copy under `~/.local/share/code60/providers/codex/0.171.0` and prefers it for the standard Codex connector without changing configuration or replacing an existing CLI. Codex stores credentials in the home directory of the account running the Gateway. Closing/cancelling setup, reloading, taking control in another tab or stopping the Gateway cancels the owned installation/login process; it does not log out an account or remove issued credentials. Retry requests a new attempt. Unsupported CLIs offer the compatible installation; custom launch commands retain manual setup. Account switching, logout and API-key entry are outside this setup flow.
 
 After verification Code60 returns to your last available destination for that database and browser. If it is gone, Code60 opens Relay. Use **Workspace** in the header for database selection and theme. **Work** keeps your projects and conversations directly reachable, **Automation** contains Scheduled Jobs and Workflows, **Inspect** opens Data Viewer, and **Manage** provides setup and recovery.
 
@@ -68,7 +68,7 @@ router/firewall configuration. This works with native Code60 and the standalone
 `npm run devcontainer -- start` launcher. Leave the localhost URL available for
 server administration and recovery.
 
-## Backend management
+## Gateway management
 
 ```sh
 code60 service status
@@ -78,9 +78,9 @@ code60 service repair
 code60 service uninstall
 ```
 
-Status is read-only. Stop, repair and uninstall require consent and preserve histories, databases, worktrees and settings. Repair refreshes the registered Node/application paths after an update or runtime move. Only one backend can own application state. An existing scheduler service is transferred only with installation consent and verified shutdown; uncertain work is never replayed.
+Status is read-only. Stop, repair and uninstall require consent and preserve histories, databases, worktrees and settings. Repair refreshes the registered Node/application paths after an update or runtime move. Only one Gateway can own application state. An existing scheduler service is transferred only with installation consent and verified shutdown; uncertain work is never replayed.
 
-Workspace chooser roots default to the user's home directory. To add another root, stop the backend and edit private `gateway/settings.json` under the Code60 state directory with `{"roots":["/absolute/workspace/root"]}`, then start it again. Use only directories you intend Code60 to access. The chooser lists the backend computer's files; it is not an upload dialog.
+Workspace chooser roots default to the user's home directory. To add another root, stop the Gateway and edit private `gateway/settings.json` under the Code60 state directory with `{"roots":["/absolute/workspace/root"]}`, then start it again. Use only directories you intend Code60 to access. The chooser lists files on the computer running the Gateway; it is not an upload dialog.
 
 In the chooser, click a row to select it. Double-click or press Enter to open it, or select a folder and use **Open folder**. Back and Forward revisit locations; Up goes to the parent or the workspace roots. **Choose folder** accepts the selected folder or the current location. To create a database, navigate to its destination and enter the filename. **New folder** creates a directory inside the current location.
 
@@ -89,7 +89,17 @@ In the chat File Explorer, click a row to select it. Use the chevron or Left and
 
 ## Manual updates
 
-Stop the backend before replacing its package:
+### One-time cutover from Backend Service
+
+1. Finish active interactive and scheduled work. With the **old CLI**, run `code60 service status`. If it reports `installed: true`, run `code60 service uninstall` and confirm. Run `code60 service status` again and verify `installed: false` and `nativeState: "stopped"` before replacing the old build.
+2. Verify the old registration is gone. On macOS, `launchctl print "gui/$(id -u)/com.codemanufactory.code60.backend"` should report the service missing and its plist should be absent from `~/Library/LaunchAgents/`. On Linux, `systemctl --user show code60-backend.service -p LoadState` should report `not-found`. If the old service was never enrolled, skip uninstallation.
+3. Install the renamed build with the same account and state directories. Use the CLI from that build for the remaining steps (check `command -v code60` if you have multiple installs). For a downloaded tarball, use `ONNXRUNTIME_NODE_INSTALL=skip npm install --global "./code60-<new-version>.tgz"`. Run the **new CLI** with `code60 service install`, then `code60 status`. Verify `gateway.installed` and `gateway.available` are both true. Open the UI with `code60 open`.
+
+Service uninstallation preserves databases, histories, worktrees, and settings. The new registration reuses the existing `gateway/` state directory. Scripts consuming `code60 status` must read `gateway` in place of `backend`.
+
+### Subsequent Gateway updates
+
+Stop the Gateway before replacing its package:
 
 ```sh
 code60 service stop
@@ -109,7 +119,7 @@ npm run prepare:models
 npm run dev
 ```
 
-Development uses isolated configuration/state under ignored `test-results/dev`, a foreground Node backend and Vite React Fast Refresh. It prints a browser address, plus a code only when pairing is enabled. UI edits preserve running agents; backend edits restart gracefully. Production login services and user data are untouched.
+Development uses isolated configuration/state under ignored `test-results/dev`, a foreground Node.js Gateway and Vite React Fast Refresh. It prints a browser address, plus a code only when pairing is enabled. UI edits preserve running agents; Gateway edits restart gracefully. Production login services and user data are untouched.
 
 An optional [Linux development container](.devcontainer/README.md) provides an
 isolated non-root x64 environment for development and headless browser tests.
@@ -138,7 +148,7 @@ See [architecture](ARCHITECTURE.md), [capabilities](docs/capabilities.md), [MCP 
 Apps → Workflows creates ordered coding workflows manually or with **Create with
 prompt**, then shows implementation, verification, repair and decision status.
 Execution uses pinned Transmission staging.20 on macOS in dedicated saved-file
-worktrees and continues after closing the browser or stopping the backend. See the
+worktrees and continues after closing the browser or stopping the Gateway. See the
 [workflow guide](docs/transmission-workflows.md) for prerequisites, approval defaults,
 background ownership and the known server recovery limitation.
 

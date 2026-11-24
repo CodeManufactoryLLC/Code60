@@ -26,7 +26,7 @@ test("browser: setup-prepared database through provider verification and accepte
   }
 });
 
-test("browser: closing and reconnecting preserves the backend; takeover and stop require explicit action", async ({
+test("browser: closing and reconnecting preserves the Gateway; takeover and stop require explicit action", async ({
   browser,
 }) => {
   const fixture = await browserApp(browser);
@@ -48,9 +48,9 @@ test("browser: closing and reconnecting preserves the backend; takeover and stop
     await first.page.getByRole("button", { name: "Take control", exact: true }).click();
     await expect(first.page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await first.page.getByRole("button", { name: "Workspace", exact: true }).click();
-    await first.page.getByRole("button", { name: "Stop Code60 Backend", exact: true }).click();
+    await first.page.getByRole("button", { name: "Stop Code60 Gateway", exact: true }).click();
     await first.page
-      .getByRole("dialog", { name: "Stop Code60 Backend?", exact: true })
+      .getByRole("dialog", { name: "Stop Code60 Gateway?", exact: true })
       .getByRole("button", { name: "Cancel", exact: true })
       .click();
     expect((await fetch(fixture.gateway.origin)).status).toBe(200);

@@ -98,8 +98,8 @@ Use the existing harness, not a new QA plugin or a live agent.
 
 - Setup changes additionally require `npm run test:setup` and the clean-install
   `--setup` mode. Assert files-only consent, strict metadata/data preservation,
-  cache removal, repeated/restarted backend identity, read-only status and the full
-  golden journey from a setup-created database. Use the dedicated bounded backend
+  cache removal, Gateway identity after repeat setup and restart, read-only status and the full
+  golden journey from a setup-created database. Use the dedicated bounded Gateway
   supervisor fixture, never legacy scheduler fixtures or a real host service.
 
 - Update changes additionally require `npm run test:update` and clean-install

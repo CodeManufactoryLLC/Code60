@@ -1,7 +1,7 @@
 # Agent Instructions
 
-This project is a Node.js application for orchestrating agents, with an
-React browser app with a unified login backend. Keep
+This project is a Node.js application for orchestrating agents, with a
+React browser app served by the Code60 Gateway. Use the [official terminology](TERMINOLOGY.md). Keep
 changes reliable in both the desktop app and automated, non-interactive
 environments.
 
@@ -62,8 +62,8 @@ environments.
   JSON, and workflow files. Markdown is not auto-formatted.
 - `npm run build` compiles `src` to `dist` and builds the renderer with Vite.
   The scheduler uses its fixed internal service entrypoint.
-- `npm run dev` starts an isolated foreground Node backend and Vite with Fast Refresh.
-  `npm start` opens the installed backend in a browser.
+- `npm run dev` starts an isolated foreground Node.js Gateway and Vite with Fast Refresh.
+  `npm start` opens the installed Gateway in a browser.
 - The optional [Linux dev container](.devcontainer/README.md) uses
   `npm run devcontainer` on the host with `prepare`, `up`, `start`, `exec` or `down`. Docker must already
   be running. Keep container dependencies separate from host files; clean up owned
@@ -72,7 +72,7 @@ environments.
   reopening; it generates matching unique ports. Never share a worktree's lifecycle
   or bypass exact-origin forwarding with port remapping.
 - Run browser journeys with `npm run test:browser` using headless Playwright and isolated
-  HOME/config/state. They exercise the built Node backend and real UI. Never install a
+  HOME/config/state. They exercise the built Node.js Gateway and real UI. Never install a
   real user service or use live providers during routine testing. Native service validation
   requires an explicitly isolated/authorized environment. Unit/static checks do not prove E2E success.
 - Run `npm run test:packaged:clean` on the host for the
@@ -87,7 +87,7 @@ environments.
   bootstrap candidates support setup; registry/release publication remains deferred.
 - Managed installation changes follow the [installation internals](docs/distribution/installation.md).
   Run the managed clean-install mode and real shell tests as well as artifact-only
-  regression checks. Setup uses isolated backend supervisor fixtures; do not install a real service,
+  regression checks. Setup uses isolated Gateway supervisor fixtures; do not install a real service,
   edit this user's profiles, add legacy compatibility or reclaim uncertain locks.
 - Put unit tests next to the code as `*.test.ts`. Cross-cutting tests live in
   `test/`. `test/boundaries.test.ts` enforces the module dependency rules from
