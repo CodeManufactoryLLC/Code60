@@ -171,8 +171,8 @@ engine inspection uses the pinned SQLite schema read-only, never the restart-cap
 engine constructor. Both versions must have terminal, matching saved ownership;
 fixed authenticated health/stop operations and native process/file inspection prove
 exit. Inspection never starts an engine. Ordinary shutdown and application updates
-continue to preserve independent engines. This private operation is not yet a public
-application uninstall command or permission to remove installation files.
+continue to preserve independent engines. This private operation grants no file
+removal authority; installed management separately verifies consent and installation ownership.
 Guarded service removal additionally checks the original runtime and prepared PID
 under a compatible, non-reclaiming service-operation lock. Completed private
 preparation is distinct from ordinary shutdown. Restarted backends, uncertain exit

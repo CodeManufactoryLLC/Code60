@@ -42,6 +42,12 @@ await runCommand(async (cancel) => {
     input: identity,
     node: process.versions.node,
     platform: platform(),
+    runner: {
+      commit: (await execute("git", ["rev-parse", "HEAD"])).stdout.trim(),
+      dirty: Boolean(
+        (await execute("git", ["status", "--porcelain", "--untracked-files=normal"])).stdout.trim(),
+      ),
+    },
     nativeService: "bounded fixture only; no login/reboot certification",
   };
   let supervisor, failure;
@@ -85,9 +91,11 @@ await runCommand(async (cancel) => {
     const installed = await install();
     await lstat(join(installed.release, "dist/management/uninstall.js"));
     const provider = join(temporary, "provider"),
-      processLog = join(temporary, "processes");
+      processLog = join(temporary, "processes"),
+      promptLog = join(temporary, "prompts");
     await mkdir(provider, { mode: 0o700 });
     await mkdir(processLog, { mode: 0o700 });
+    await mkdir(promptLog, { mode: 0o700 });
     for (const name of ["fake-agent.mjs", "fake-agent-app.mjs"])
       await cp(join("test/fixtures", name), join(provider, name));
     await symlink(join(installed.release, "node_modules"), join(provider, "node_modules"));
@@ -104,6 +112,8 @@ await runCommand(async (cancel) => {
               "--session-info",
               "--process-log",
               processLog,
+              "--prompt-log",
+              promptLog,
             ],
           },
         },
@@ -215,6 +225,7 @@ await runCommand(async (cancel) => {
         database,
         project: join(home, "project with spaces"),
         processLog,
+        promptLog,
         connection,
         install,
         output,
@@ -222,6 +233,8 @@ await runCommand(async (cancel) => {
       })
     ).result;
     await browser(true);
+    assert.deepEqual((await readdir(promptLog)).sort(), result.checks.original.prompts);
+    result.noDuplicateWorkAfterReopen = true;
     const model = await execute(
       process.execPath,
       [resolve("scripts/distribution/probe-native.mjs"), installed.release],

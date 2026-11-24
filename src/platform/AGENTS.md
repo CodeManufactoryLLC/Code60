@@ -49,6 +49,9 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
   Cleanup must also hold the original gateway runtime writer with reclaimStale:false,
   preventing a direct foreground backend from starting during deletion. Preserve
   any existing/uncertain writer; never treat service absence alone as runtime ownership.
+  File publication keeps its ordinary 1 MiB bound. Large private removal receipts
+  must request the explicit bounded limit (at most 64 MiB), including CAS reads
+  and the final identity snapshot; reject oversized content before publication.
 
 - Transmission bundle storage is a Node-only filesystem boundary. Validate exact
   supported artifact identities and the complete regular-file inventory before

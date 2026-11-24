@@ -416,7 +416,11 @@ Verify the prior release remains available and recovery never replays work.
 separate shell previews, guarded quiescence and standalone recovery are implemented
 and under validation. Supporting tests cover partial cleanup and retained-data
 file reinstallation. The public uninstall command is implemented and under test;
-full customer-database journeys and required Linux/native acceptance remain unfinished.
+the full native installed golden/uninstall/reinstall journey has passed locally,
+including retained SQLite/Git state, offline embeddings and independent process
+cleanup. Linux acceptance was interrupted by Docker unavailability; owned-resource
+cleanup, concurrent Linux runs and exact-commit CI/native delivery gates remain
+unfinished. No native login-service validation is claimed.
 
 **PR outcome:** `code60 uninstall` removes owned installation resources predictably.
 

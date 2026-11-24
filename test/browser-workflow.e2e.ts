@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { managementRequest } from "../src/gateway/index.js";
 import { runtimeProcessExists } from "../src/platform/index.js";
+import { reopenRetainedProject } from "./fixtures/browser-actions.js";
 import { browserApp, onboard } from "./fixtures/browser-app.js";
 import { goldenJourney } from "./fixtures/golden-journey.js";
 
@@ -95,6 +96,39 @@ test("browser: first use through accepted plan, automatic edits, diff, attachmen
       }
     },
   });
+});
+
+test("browser: completed work remains selectable after backend restart", async ({ browser }) => {
+  const fixture = await browserApp(browser);
+  let view: Awaited<ReturnType<typeof fixture.open>> | undefined;
+  try {
+    await goldenJourney({
+      directory: fixture.directory,
+      async open() {
+        view = await fixture.open();
+        return view;
+      },
+      async close() {
+        await view?.context.close();
+      },
+    });
+    const repo = join(fixture.directory, "project with spaces");
+    const index = await readFile(join(repo, ".git/index"));
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" });
+    await fixture.restart();
+    const { page } = await fixture.open();
+    await reopenRetainedProject(
+      page,
+      fixture.directory,
+      join(fixture.directory, "projects.sqlite"),
+    );
+    expect(await readFile(join(repo, ".git/index"))).toEqual(index);
+    expect(execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" })).toBe(head);
+    expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("original\n");
+    await page.screenshot({ path: test.info().outputPath("retained-project.png") });
+  } finally {
+    await fixture.close();
+  }
 });
 
 test("browser: setup-prepared database through provider verification and accepted work", async ({

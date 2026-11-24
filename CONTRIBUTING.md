@@ -467,3 +467,13 @@ full packaged application or native login-service validation. Supply an exact
 macOS descriptor as its optional argument. Never point tests at a real user
 service or profiles. Full installed golden/reinstall and isolated Linux/native
 delivery evidence remain required before Phase 8 is complete.
+
+Run `npm run test:uninstall` against the native payload and
+`npm run test:packaged:clean -- --uninstall release/payloads/linux-x64.json`
+against Linux. Both execute the installed CLI, retain independent SQLite/Git and
+process evidence, repeat durable recovery and reinstall retained data. A fresh
+browser enters through Start and selects the existing project from recent history;
+provider-boundary request counts must show no repeated work. The Linux golden
+journey keeps application trees read-only; only the separately inspected maintenance
+customer receives writable test installation volumes. Keep Docker cleanup failures
+unresolved until exact run-labelled inventories can be inspected again.

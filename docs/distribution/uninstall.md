@@ -54,3 +54,6 @@ separately inspected maintenance customer owns the writable removal operation.
 the isolated supervisor fixture. `npm run test:installation` additionally exercises
 real shell startup before and after separately consented profile removal.
 These tests do not establish native login/reboot lifecycle behavior.
+Fresh browser tabs use Start and the existing project history after reinstall;
+they do not inherit a previous tab's presentation state. Acceptance checks provider
+request counts to detect repeated work without logging prompt contents.

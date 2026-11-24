@@ -71,6 +71,7 @@ export async function uninstallJourney({
   database,
   project,
   processLog,
+  promptLog,
   connection,
   install,
   output,
@@ -105,6 +106,7 @@ export async function uninstallJourney({
           }),
       })),
     ),
+    prompts: (await readdir(promptLog)).sort(),
     engines: await Promise.all(
       ["0.1.0-staging.18", "0.1.0-staging.20"].map(async (version) => ({
         version,
@@ -118,6 +120,13 @@ export async function uninstallJourney({
     ),
   });
   const before = await preserved();
+  assert.ok(before.prompts.length > 0, "Golden-journey dispatch evidence missing");
+  await writeFile(
+    join(output, "uninstall-before.json"),
+    JSON.stringify({ original, current, state: before }, null, 2),
+    { mode: 0o600 },
+  );
+  console.log("Installed uninstall: inspect consent and unexpected-file refusal");
   await assert.rejects(cli(["uninstall", "--purge"]), /Use code60 uninstall/);
   await assert.rejects(cli(["uninstall"]), /requires explicit consent/);
   assert.equal((await connection()).pid, original.pid);
@@ -134,6 +143,7 @@ export async function uninstallJourney({
   } finally {
     await unlink(foreign);
   }
+  console.log("Installed uninstall: consented removal and original process exit");
   const removed = await cli(["uninstall", "--yes"]);
   await writeFile(join(output, "uninstall.log"), `${removed.stdout}${removed.stderr}`, {
     mode: 0o600,
@@ -155,8 +165,30 @@ export async function uninstallJourney({
   assert.equal(progress.phase, "complete");
   assert.match(progress.attempt, /^[a-f0-9-]{36}$/);
   const recovery = join(root, "removals", progress.attempt, "code60");
-  const receipt = JSON.parse(
-    await readFile(join(root, "removals", progress.attempt, "receipt.json"), "utf8"),
+  const receiptText = await readFile(
+    join(root, "removals", progress.attempt, "receipt.json"),
+    "utf8",
+  );
+  assert.equal(digest(receiptText), progress.receiptHash);
+  const receipt = JSON.parse(receiptText);
+  await writeFile(
+    join(output, "verified-removal-inventories.json"),
+    JSON.stringify(
+      {
+        receiptSha256: progress.receiptHash,
+        attempt: progress.attempt,
+        installationId: receipt.installation.id,
+        generation: receipt.generation,
+        current: receipt.current,
+        launcher: receipt.launcher,
+        node: receipt.node,
+        inventories: receipt.inventories,
+        engineVersions: receipt.engines.map((engine) => engine.version),
+      },
+      null,
+      2,
+    ),
+    { mode: 0o600 },
   );
   for (const inventory of receipt.inventories) {
     assert.ok(
@@ -178,6 +210,7 @@ export async function uninstallJourney({
   await command(recovery, ["uninstall", "--yes"]);
   assert.deepEqual(await preserved(), before);
 
+  console.log("Installed uninstall: retained-data reinstall and stale recovery refusal");
   const installed = await install();
   assert.equal(installed.release, application);
   assert.notEqual(await readlink(join(root, "current")), current);

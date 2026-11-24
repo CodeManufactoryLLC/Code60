@@ -22,6 +22,7 @@ const { result, ...connection } = await uninstallJourney({
   database: original.setupDatabase,
   project: "/work/home/project with spaces",
   processLog: "/work/processes",
+  promptLog: "/work/prompts",
   connection: publicConnection,
   output: "/evidence",
   signal: AbortSignal.timeout(9 * 60_000),
