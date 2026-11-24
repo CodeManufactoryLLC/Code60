@@ -20,6 +20,11 @@ browser bridge. Management status reports bounded database/engine availability
 without provider probes, pairing codes or repair. Preserve XDG_DATA_HOME in the
 registered runtime so setup and the backend use the same data location.
 
+Update interruption inspection is a payload-free authenticated management read.
+Report only bounded interactive/scheduled availability; do not mint pairing codes,
+stop work, launch engines or grant a browser replacement authority. Terminal
+updates must verify quiescence and native/backend process exit before activation.
+
 Preserve an explicitly configured absolute CODEX_HOME path for workflow login and
 execution. Never persist CODEX_CONFIG payloads or provider credential environment
 variables in the service definition. Existing engines retain their startup

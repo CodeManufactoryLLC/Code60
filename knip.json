@@ -36,10 +36,11 @@
     "src/management/installed-launcher.ts",
     "test/clean-install/install-managed.mjs",
     "test/fixtures/backend-supervisor-command.mjs",
-    "test/clean-install/install-setup.mjs"
+    "test/clean-install/install-setup.mjs",
+    "test/fixtures/update-command.mjs"
   ],
   "project": [
-    "src/**/*.{ts,tsx,cts}",
+    "src/**/*.{ts,tsx,cts,mjs,mts}",
     "scripts/**/*.{mjs,cjs}",
     ".devcontainer/*.mjs",
     "test/**/*.{ts,tsx,mjs}",

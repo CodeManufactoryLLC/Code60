@@ -18,6 +18,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { bootstrapAdapter } from "./distribution/bootstrap-adapter.mjs";
+import { copyPayloadVerifier, writeBootstrapVerifier } from "./distribution/copy-verifier.mjs";
 import { descriptor } from "./distribution/descriptor.mjs";
 
 const execute = promisify(execFile);
@@ -142,11 +143,7 @@ async function stage(context, input, harness, archive, version, payload, managed
     await cp(join(repository, "build/distribution"), join(harness, "bootstrap/lib/runtime"), {
       recursive: true,
     });
-    for (const name of ["acquire.mjs", "archive.mjs", "descriptor.mjs"])
-      await cp(
-        join(repository, "scripts/distribution", name),
-        join(harness, "bootstrap/lib", name),
-      );
+    await writeBootstrapVerifier(join(harness, "bootstrap/lib"));
     await writeFile(
       join(harness, "bootstrap/package.json"),
       JSON.stringify({ type: "module", private: true, version: payload.version }),
@@ -165,6 +162,8 @@ async function stage(context, input, harness, archive, version, payload, managed
   if (payload) {
     await writeFile(join(input, "descriptor.json"), JSON.stringify(payload));
     await mkdir(join(harness, "scripts/distribution"), { recursive: true });
+    await mkdir(join(harness, "src/platform"), { recursive: true });
+    await copyPayloadVerifier(join(harness, "src"));
     for (const name of ["acquire.mjs", "archive.mjs", "descriptor.mjs"])
       await cp(
         join(repository, "scripts/distribution", name),

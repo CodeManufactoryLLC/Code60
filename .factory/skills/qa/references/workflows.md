@@ -1,5 +1,25 @@
 # User workflow cards
 
+## Explicit update and recovery
+
+- Start from a real isolated managed installation with a valid custom database,
+  verified fake provider and synthetic Git project. Obtain a newer stable
+  bootstrap through internal registry transport injection; verify its integrity
+  and embedded descriptors as data, without executing its code.
+- Assert that preparation and declined consent preserve the original backend PID
+  and current activation. With consent, verify full quiescence and PID exit before
+  publication, then new-version authenticated readiness through the durable launcher.
+  Complete the shared golden journey, including attachment, refresh and both Undo decisions.
+- Compare database/preferences, Git/index/HEAD/worktrees and retained prior files
+  independently. On native macOS, keep staging.18/.20 version/Node/run/start-key/PID
+  identities through the update while approved independent work continues.
+- Fault registry/hash, shutdown, registration, readiness and publication boundaries.
+  Recovery retains whichever generation was published, never downgrades a database,
+  replays work, overwrites outside service edits or reclaims uncertain locks.
+- Use bounded supervisor fixtures only; retain logs/traces and unique artifact,
+  process/container/image/volume identities. Verify cleanup without touching other
+  agents' state. Real login/reboot certification remains separate Phase 9 work.
+
 ## Bundled Transmission
 
 - **Start:** native macOS arm64, freshly prepared locked bundle, isolated HOME,

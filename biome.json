@@ -16,6 +16,8 @@
       ".github/rulesets/*.json",
       ".github/**/*.yml",
       "src/**/*.cts",
+      "src/**/*.mjs",
+      "src/**/*.mts",
       "src/**/*.css",
       "*.config.ts",
       "scripts/**/*.mjs",

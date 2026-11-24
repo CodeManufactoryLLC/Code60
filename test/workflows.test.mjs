@@ -82,6 +82,14 @@ describe("browser and package validation", () => {
       true,
     );
     expect(
+      ci.jobs.payload.steps.some(
+        (step) => step.run === "npm run devcontainer -- exec npm run test:update",
+      ),
+    ).toBe(true);
+    expect(nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:update")).toBe(
+      true,
+    );
+    expect(
       nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:transmission"),
     ).toBe(true);
   });

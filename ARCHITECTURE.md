@@ -66,7 +66,7 @@ Code60-managed user storage; it cannot select packages, commands or destinations
   bridge, automation and platform and has no browser or Electron dependency.
 - gateway composes application and automation once, validates HTTP/session boundaries,
   serves assets, owns client interactions and private local service management.
-- management parses the narrow code60 setup/status/open/service/pairing CLI and calls gateway/platform APIs.
+- management parses the narrow code60 setup/status/update/open/service/pairing CLI and calls gateway/platform APIs.
   Its fixed workflows login command delegates provider authentication to the
   preserved Codex CLI in an interactive terminal, without starting an engine.
   It offers no run, prompt or agent-command execution interface.
@@ -106,8 +106,8 @@ Provider state survives normal container/image cleanup. Explicit gateway ports r
 production still uses an allocated loopback port. See the
 [container workflow](.devcontainer/README.md). No user service is installed.
 Production is an npm tarball requiring Node 24 and npm, with compiled assets, notices and
-explicitly prepared pinned models. Updates are manual: stop, replace package, repair service,
-start. Release preparation and protected-branch/version/tag rules remain in RELEASING.md.
+explicitly prepared pinned models. Managed installations additionally support the
+explicit code60 update flow described below; the legacy tarball remains available. Release preparation and protected-branch/version/tag rules remain in RELEASING.md.
 Headless Playwright exercises the built browser/backend path on host or CI; native service
 changes use fake supervisors unless separately authorized. Old Electron tests and native
 installer gates are replaced by browser journeys and clean-prefix tarball checks.
@@ -136,6 +136,21 @@ Shell edits require a preview and explicit interactive approval; user profiles a
 never executed for discovery. No legacy migration, public setup, database/service
 initialization, implicit update or uninstall is introduced. See the
 [installation internals](docs/distribution/installation.md).
+
+## Explicit installation updates
+
+Phase 7 adds a terminal-owned update and recovery flow. Management resolves the
+stable npm bootstrap as data, verifies npm integrity and reads its embedded exact
+platform descriptors. The installed updater never executes downloaded bootstrap
+code. The bootstrap and installed application share the Node-only payload verifier
+in platform; host acceptance scripts use that same source without importing dist.
+
+Candidates are verified before consent, backend shutdown or activation. Update
+progress and immutable activation receipts retain the prior release for explicit
+recovery. Existing database selections, scheduler evidence and independently pinned
+engine bindings remain outside application replacement. Setup does not update.
+The browser reports the installed version and terminal action only; it cannot
+download, activate, repair or schedule application updates.
 
 ## Current exclusions
 
@@ -2863,8 +2878,8 @@ background opacity and introduces no setting or capability/catalog change.
 ## Apps-owned preferences and Update Manager
 
 Apps retains appearance, memory, polling and Update Manager navigation.
-Update Manager displays manual installation and backend repair instructions.
-It performs no network checks or binary replacement.
+Update Manager displays the running installed version and terminal update/recovery
+instructions. It performs no network checks or binary replacement.
 
 ## Simplified workspace header and title artwork
 

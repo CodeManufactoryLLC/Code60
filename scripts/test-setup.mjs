@@ -19,6 +19,7 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { backendSupervisor } from "../test/fixtures/backend-supervisor.mjs";
 import { bootstrapAdapter } from "./distribution/bootstrap-adapter.mjs";
+import { writeBootstrapVerifier } from "./distribution/copy-verifier.mjs";
 import { descriptor } from "./distribution/descriptor.mjs";
 
 const execute = promisify(execFile);
@@ -42,8 +43,7 @@ try {
   await mkdir(join(cache, "lib"), { recursive: true });
   await mkdir(join(cache, "bin"));
   await cp("build/distribution", join(cache, "lib/runtime"), { recursive: true });
-  for (const name of ["acquire.mjs", "archive.mjs", "descriptor.mjs"])
-    await cp(join("scripts/distribution", name), join(cache, "lib", name));
+  await writeBootstrapVerifier(join(cache, "lib"));
   await cp("scripts/distribution/bootstrap.mjs", join(cache, "bin/code60.mjs"));
   await writeFile(join(cache, "lib/index.mjs"), bootstrapAdapter);
   await writeFile(

@@ -181,6 +181,154 @@ it("never implicitly activates a different release identity", async () => {
     ).rejects.toThrow("different release");
   expect(await readlink(join(f.root, "current"))).toBe(before);
 });
+it("prepares an explicit update before the interruption gate and retains the previous usable activation", async () => {
+  const f = await fixture();
+  await installManagedRelease(f.options);
+  const previous = await readlink(join(f.root, "current"));
+  const previousReceipt = await readFile(join(f.root, previous, "receipt.json"), "utf8");
+  const priorRelease = JSON.parse(previousReceipt).release.path;
+  const customData = join(f.root, "databases");
+  await mkdir(customData, { mode: 0o700 });
+  await writeFile(join(customData, "custom.sqlite"), "retained database fixture");
+  const beforePublish = vi.fn(
+    async ({ candidate }: { candidate: { release: { path: string } } }) => {
+      expect(await readlink(join(f.root, "current"))).toBe(previous);
+      expect((await lstat(join(candidate.release.path, "dist/management/cli.js"))).isFile()).toBe(
+        true,
+      );
+      expect((await execute(f.launcher, ["before"], { env: f.env })).stdout).toContain("before");
+    },
+  );
+  const result = await installManagedRelease({
+    ...f.options,
+    artifact: {
+      ...f.options.artifact,
+      identity: {
+        ...f.options.artifact.identity,
+        version: "1.1.0",
+        archive: { sha256: "b".repeat(64) },
+      },
+    },
+    update: { expectedGeneration: previous.slice(12), beforePublish },
+  });
+  expect(beforePublish).toHaveBeenCalledOnce();
+  expect(result.reused).toBe(false);
+  expect(result.release).not.toBe(priorRelease);
+  expect(await readlink(join(f.root, "current"))).not.toBe(previous);
+  expect(await readFile(join(f.root, previous, "receipt.json"), "utf8")).toBe(previousReceipt);
+  expect(
+    (await execute(join(f.root, previous, "code60"), ["prior"], { env: f.env })).stdout,
+  ).toContain("prior");
+  expect((await execute(f.launcher, ["updated"], { env: f.env })).stdout).toContain("updated");
+  expect(await readFile(join(customData, "custom.sqlite"), "utf8")).toBe(
+    "retained database fixture",
+  );
+});
+it.each(["decline", "shutdown", "cancel", "corrupt-candidate"])(
+  "preserves prior activation and cleans only candidate resources when update fails before publication (%s)",
+  async (mode) => {
+    const f = await fixture();
+    await installManagedRelease(f.options);
+    const previous = await readlink(join(f.root, "current"));
+    const receipt = JSON.parse(await readFile(join(f.root, previous, "receipt.json"), "utf8"));
+    const controller = new AbortController();
+    let candidatePath: string | undefined;
+    await expect(
+      installManagedRelease({
+        ...f.options,
+        signal: controller.signal,
+        artifact: {
+          ...f.options.artifact,
+          identity: {
+            ...f.options.artifact.identity,
+            version: "1.1.0",
+            archive: { sha256: "b".repeat(64) },
+          },
+        },
+        update: {
+          expectedGeneration: receipt.generation,
+          beforePublish: async ({ candidate }) => {
+            candidatePath = candidate.release.path;
+            if (mode === "cancel") {
+              controller.abort();
+              return;
+            }
+            if (mode === "corrupt-candidate") {
+              await writeFile(
+                join(f.root, "activations", candidate.generation, "code60"),
+                "changed",
+              );
+              return;
+            }
+            throw Error(mode);
+          },
+        },
+      }),
+    ).rejects.toThrow();
+    expect(await readlink(join(f.root, "current"))).toBe(previous);
+    expect((await execute(f.launcher, ["preserved"], { env: f.env })).stdout).toContain(
+      "preserved",
+    );
+    expect(candidatePath).toBeTruthy();
+    await expect(lstat(candidatePath as string)).rejects.toMatchObject({ code: "ENOENT" });
+  },
+);
+it("preserves both generations and reports publication when a later update checkpoint fails", async () => {
+  const f = await fixture();
+  await installManagedRelease(f.options);
+  const previous = await readlink(join(f.root, "current"));
+  await expect(
+    installManagedRelease({
+      ...f.options,
+      artifact: {
+        ...f.options.artifact,
+        identity: {
+          ...f.options.artifact.identity,
+          version: "1.1.0",
+          archive: { sha256: "b".repeat(64) },
+        },
+      },
+      update: { expectedGeneration: previous.slice(12), beforePublish: async () => {} },
+      checkpoint: async (phase) => {
+        if (phase === "published") throw Error("interrupted after activation");
+      },
+    }),
+  ).rejects.toMatchObject({ activationPublished: true });
+  expect(await readlink(join(f.root, "current"))).not.toBe(previous);
+  expect((await execute(f.launcher, ["current"], { env: f.env })).stdout).toContain("current");
+  expect(
+    (await execute(join(f.root, previous, "code60"), ["retained"], { env: f.env })).stdout,
+  ).toContain("retained");
+});
+it.each(["stale", "same-version", "older", "preview", "repair"])(
+  "rejects invalid explicit update intent before acquiring a candidate (%s)",
+  async (mode) => {
+    const f = await fixture();
+    await installManagedRelease(f.options);
+    const previous = await readlink(join(f.root, "current"));
+    const identity = {
+      ...f.options.artifact.identity,
+      version: "1.1.0",
+      archive: { sha256: "b".repeat(64) },
+    };
+    if (mode === "same-version") identity.version = "1.0.0";
+    if (mode === "older") identity.version = "0.9.0";
+    if (mode === "preview") identity.version = "1.1.0-rc.1";
+    await expect(
+      installManagedRelease({
+        ...f.options,
+        ...(mode === "repair" ? { repair: true } : {}),
+        artifact: { ...f.options.artifact, identity },
+        update: {
+          expectedGeneration: mode === "stale" ? "unknown" : previous.slice(12),
+          beforePublish: async () => {},
+        },
+      }),
+    ).rejects.toThrow();
+    expect(f.acquire).toHaveBeenCalledTimes(1);
+    expect(await readlink(join(f.root, "current"))).toBe(previous);
+  },
+);
 it("does not reclaim stale locks and releases only its own token", async () => {
   const f = await fixture();
   await createInstallationParents(f.root, true);

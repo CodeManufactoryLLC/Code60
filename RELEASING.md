@@ -1,6 +1,9 @@
 # Releasing Code60
 
-Code60 is distributed as a Node 24 npm tarball. Node and npm are prerequisites; no native installer, bundled runtime or automatic updater is shipped. Publishing remains an explicit release action.
+Code60 retains its Node 24 npm tarball and builds private platform payloads plus
+a small bootstrap. Managed candidates support explicit terminal update/recovery;
+no native installer, bundled Node or background updater is shipped. Publishing
+remains an explicit release action. See [update behavior](docs/distribution/updates.md).
 
 ## Prepare a release
 

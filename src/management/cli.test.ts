@@ -100,3 +100,14 @@ it("combined status is read-only on fresh state and accepts no mutation flags", 
   expect(await readdir(directory)).toEqual([]);
   await expect(runManagement(["status", "--yes"], env)).rejects.toThrow("Use code60 status");
 });
+
+it("parses update arguments before filesystem/registry/service effects", async () => {
+  const { env, directory } = await environment();
+  for (const args of [
+    ["update", "--force"],
+    ["update", "status", "--yes"],
+    ["update", "recover", "--yes", "--yes"],
+  ])
+    await expect(runManagement(args, env)).rejects.toThrow("Use code60 update");
+  expect(await readdir(directory)).toEqual([]);
+});

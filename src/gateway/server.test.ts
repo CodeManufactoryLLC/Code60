@@ -1,5 +1,5 @@
 import { once } from "node:events";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer, request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -439,6 +439,34 @@ it("persists an explicit choice matching the default without disconnecting the b
       })
     ).status,
   ).toBe(200);
+});
+
+it("inspects update interruption only through authenticated payload-free private management", async () => {
+  const { gateway, env, directory } = await fixture();
+  const saved = (await readPrivateJson(
+    join(directory, "state/code60/gateway/connection.json"),
+    4096,
+  )) as { token: string };
+  const call = (headers: Record<string, string>, body?: string) =>
+    fetch(`${gateway.origin}/management/update-summary`, {
+      method: "POST",
+      headers,
+      ...(body ? { body } : {}),
+    });
+  expect((await call({})).status).toBe(403);
+  expect((await call({ "X-Code60-Management": saved.token, Origin: gateway.origin })).status).toBe(
+    403,
+  );
+  expect((await call({ "X-Code60-Management": saved.token }, "{}")).status).toBe(400);
+  const before = await readdir(join(directory, "state/code60/gateway"));
+  expect(await managementRequest(env, "update-summary")).toMatchObject({
+    pid: process.pid,
+    interactiveActive: false,
+    scheduledActive: false,
+    schedulerAvailable: true,
+  });
+  expect(await readdir(join(directory, "state/code60/gateway"))).toEqual(before);
+  expect((await managementRequest(env, "status")).database).toEqual({ state: "not-selected" });
 });
 
 it("prepares a database only through authenticated payload-free private management", async () => {

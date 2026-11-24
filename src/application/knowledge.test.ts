@@ -205,7 +205,7 @@ describe("DesktopKnowledge", () => {
           id: "updates",
           availability: expect.objectContaining({
             status: "available",
-            reason: expect.stringContaining("Manual npm package updates"),
+            reason: expect.stringContaining("Explicit code60 update"),
           }),
         }),
       ]),

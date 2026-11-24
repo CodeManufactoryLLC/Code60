@@ -35,6 +35,7 @@ jobs:
       - run: npm run package:payload
       - run: npm run test:payload
       - run: npm run test:setup
+      - run: npm run test:update
       - run: npm run test:transmission
       - uses: actions/upload-artifact@v7.0.2
         with:
@@ -49,6 +50,7 @@ jobs:
           path: |
             test-results/installation/
             test-results/setup/
+            test-results/update/
             test-results/payload/
             test-results/transmission-native/
           retention-days: 7

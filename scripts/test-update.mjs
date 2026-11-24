@@ -1,0 +1,298 @@
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { createReadStream } from "node:fs";
+import {
+  chmod,
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readlink,
+  realpath,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { setTimeout as delay } from "node:timers/promises";
+import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
+import { backendSupervisor } from "../test/fixtures/backend-supervisor.mjs";
+import { acquirePayload, sha256 } from "./distribution/acquire.mjs";
+import { runCommand } from "./distribution/command.mjs";
+import { descriptor, platform } from "./distribution/descriptor.mjs";
+import { updateFixture } from "./distribution/update-fixture.mjs";
+
+const execute = promisify(execFile);
+await runCommand(async (cancel) => {
+  if (process.argv.length > 3 || process.argv[2]?.startsWith("-"))
+    throw Error("Use npm run test:update -- [descriptor.json]");
+  const signal = AbortSignal.any([cancel, AbortSignal.timeout(20 * 60_000)]);
+  const input = resolve(process.argv[2] ?? `release/payloads/${platform()}.json`);
+  const identity = descriptor(JSON.parse(await readFile(input, "utf8")));
+  const inputArchive = join(dirname(input), identity.archive.name);
+  const temporary = await realpath(await mkdtemp(join(tmpdir(), "code60 update ' acceptance ")));
+  const temporaryIdentity = await lstat(temporary, { bigint: true });
+  const removeTemporary = async () => {
+    const observed = await lstat(temporary, { bigint: true });
+    if (
+      !observed.isDirectory() ||
+      observed.isSymbolicLink() ||
+      observed.dev !== temporaryIdentity.dev ||
+      observed.ino !== temporaryIdentity.ino ||
+      observed.uid !== temporaryIdentity.uid
+    )
+      throw Error("Update fixture cleanup ownership changed");
+    await rm(temporary, { recursive: true });
+  };
+  const output = resolve("test-results/update", `${Date.now()}-${process.pid}`);
+  await mkdir(output, { recursive: true, mode: 0o700 });
+  let supervisor, server, failure;
+  const result = {
+    status: "RUNNING",
+    input: identity,
+    platform: platform(),
+    node: process.versions.node,
+    classification:
+      "installed runtime integration; browser golden journey and real login/reboot certification are separate",
+  };
+  try {
+    const fixture = await updateFixture(
+      identity,
+      temporary,
+      () => createReadStream(inputArchive),
+      signal,
+    );
+    result.candidate = fixture.descriptor;
+    result.syntheticVersionFixture = true;
+    const home = join(temporary, "home"),
+      bin = join(temporary, "bin");
+    await mkdir(home, { mode: 0o700 });
+    await mkdir(bin, { mode: 0o700 });
+    const env = {
+      HOME: home,
+      PATH: [bin, dirname(process.execPath), "/usr/bin", "/bin"].join(":"),
+      SHELL: "/bin/bash",
+      XDG_DATA_HOME: join(home, "data"),
+      XDG_STATE_HOME: join(home, "state"),
+      XDG_CONFIG_HOME: join(home, "config"),
+      CODEX_HOME: join(home, "isolated-codex"),
+    };
+    await mkdir(env.CODEX_HOME, { mode: 0o700 });
+    await cp("test/fixtures/backend-supervisor-command.mjs", join(bin, "supervisor.mjs"));
+    await chmod(join(bin, "supervisor.mjs"), 0o700);
+    for (const name of ["systemctl", "launchctl", "xdg-open"])
+      await symlink("supervisor.mjs", join(bin, name));
+    const installer = await import(
+      pathToFileURL(resolve("build/distribution/management/index.js")).href
+    );
+    const installed = await installer.installManagedRelease({
+      env,
+      runtimeDirectory: resolve("build/distribution"),
+      artifact: {
+        identity,
+        acquire: ({ parent }) =>
+          acquirePayload(identity, {
+            parent,
+            signal,
+            transport: () => createReadStream(inputArchive),
+          }),
+      },
+    });
+    const root = installed.root,
+      launcher = installed.launcher;
+    assert.ok(
+      (await stat(join(installed.release, "dist/management/update.js"))).isFile(),
+      "Build the current update-capable payload before acceptance",
+    );
+    const candidateApplication = join(root, "releases", fixture.descriptor.archive.sha256);
+    supervisor = await backendSupervisor({
+      directory: join(temporary, "supervisor"),
+      application: installed.release,
+      candidateApplication,
+      env,
+      log: join(output, "backend.log"),
+    });
+    env.CODE60_TEST_BACKEND_SOCKET = supervisor.socket;
+    const command = async (file, args, timeout = 120000) =>
+      execute(file, args, { env, cwd: "/", signal, timeout, maxBuffer: 1024 ** 2 });
+    const cli = async (args) => (await command(launcher, args)).stdout;
+    await cli(["setup", "--yes", "--no-open"]);
+    await cli(["service", "stop", "--yes"]);
+    const selection = join(env.XDG_STATE_HOME, "code60/desktop.json");
+    const custom = join(home, "custom database.sqlite");
+    const preferences = JSON.parse(await readFile(selection, "utf8"));
+    await cp(preferences.database, custom);
+    preferences.database = custom;
+    preferences.updateFixtureUnrelated = "preserve";
+    await writeFile(selection, JSON.stringify(preferences), { mode: 0o600 });
+    await cli(["service", "start"]);
+    const deadline = Date.now() + 30000;
+    let beforeStatus;
+    while (Date.now() < deadline) {
+      beforeStatus = JSON.parse(await cli(["status"]));
+      if (beforeStatus.backend.available) break;
+      await delay(100, undefined, { signal });
+    }
+    assert.equal(beforeStatus.backend.available, true);
+    assert.equal(beforeStatus.database.state, "ready");
+    const prior = await readlink(join(root, "current"));
+    const previousReceipt = await readFile(join(root, prior, "receipt.json"));
+    const beforePid = supervisor.pid();
+    assert.ok(beforePid);
+    const databaseHash = await sha256(custom, signal);
+    const engineBindings = {};
+    if (process.platform === "darwin")
+      for (const version of ["0.1.0-staging.18", "0.1.0-staging.20"])
+        engineBindings[version] = await readFile(join(root, "engines", `${version}.json`), "utf8");
+    const requests = [];
+    server = createServer((request, response) => {
+      requests.push(request.url);
+      if (request.url === "/metadata") {
+        response.setHeader("Content-Type", "application/json");
+        response.end(JSON.stringify(fixture.registry));
+        return;
+      }
+      const file =
+        request.url === "/bootstrap"
+          ? fixture.bootstrap
+          : request.url === "/payload"
+            ? fixture.archive
+            : null;
+      if (!file) {
+        response.statusCode = 404;
+        response.end();
+        return;
+      }
+      createReadStream(file)
+        .on("error", () => response.destroy())
+        .pipe(response);
+    });
+    await new Promise((resolveStart, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolveStart);
+    });
+    const configPath = join(temporary, "update.json");
+    const config = {
+      application: installed.release,
+      version: fixture.descriptor.version,
+      payloadUrl: fixture.descriptor.archive.url,
+      origin: `http://127.0.0.1:${server.address().port}`,
+      progressLog: join(output, "progress.jsonl"),
+    };
+    await writeFile(configPath, JSON.stringify(config), { mode: 0o600 });
+    const entry = resolve("test/fixtures/update-command.mjs");
+    const updated = await command(process.execPath, [entry, configPath, "--yes"], 10 * 60_000);
+    await writeFile(join(output, "update.log"), updated.stdout + updated.stderr, { mode: 0o600 });
+    assert.match(updated.stdout, /is ready/);
+    const current = await readlink(join(root, "current"));
+    assert.notEqual(current, prior);
+    const receipt = JSON.parse(await readFile(join(root, current, "receipt.json"), "utf8"));
+    assert.equal(receipt.release.version, fixture.descriptor.version);
+    assert.equal(receipt.release.path, candidateApplication);
+    assert.deepEqual(await readFile(join(root, prior, "receipt.json")), previousReceipt);
+    assert.notEqual(supervisor.pid(), beforePid);
+    assert.throws(
+      () => process.kill(beforePid, 0),
+      (error) => error.code === "ESRCH",
+    );
+    assert.equal(await sha256(custom, signal), databaseHash);
+    const retained = JSON.parse(await readFile(selection, "utf8"));
+    assert.equal(retained.database, custom);
+    assert.equal(retained.updateFixtureUnrelated, "preserve");
+    const database = new DatabaseSync(custom, { readOnly: true });
+    try {
+      assert.ok(
+        database.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().length > 0,
+      );
+    } finally {
+      database.close();
+    }
+    for (const [version, binding] of Object.entries(engineBindings))
+      assert.equal(await readFile(join(root, "engines", `${version}.json`), "utf8"), binding);
+    const newPid = supervisor.pid();
+    config.application = candidateApplication;
+    await writeFile(configPath, JSON.stringify(config), { mode: 0o600 });
+    const noop = await command(process.execPath, [entry, configPath, "--yes"]);
+    assert.match(noop.stdout, /no changes made/);
+    assert.equal(supervisor.pid(), newPid);
+    await rm(fixture.archive);
+    await rm(fixture.bootstrap);
+    await rm(join(temporary, "registry-source"), { recursive: true });
+    const count = requests.length;
+    const status = await command(process.execPath, [entry, configPath, "status"]);
+    assert.equal(JSON.parse(status.stdout).installedVersion, fixture.descriptor.version);
+    assert.equal(requests.length, count);
+    assert.match(await cli(["--help"]), /code60 update/);
+    const probe = await command(process.execPath, [
+      resolve("scripts/distribution/probe-native.mjs"),
+      candidateApplication,
+    ]);
+    await writeFile(join(output, "native-models.log"), probe.stdout + probe.stderr, {
+      mode: 0o600,
+    });
+    for (const profile of [".bash_profile", ".bashrc", ".zprofile", ".zshrc"])
+      await assert.rejects(stat(join(home, profile)), { code: "ENOENT" });
+    result.checks = {
+      oldPidExited: true,
+      newPid,
+      previousGeneration: prior,
+      currentGeneration: current,
+      customDatabaseSha256: databaseHash,
+      customSelectionPreserved: true,
+      unrelatedPreferencesPreserved: true,
+      engineBindingsPreserved: Object.keys(engineBindings),
+      cachesRemoved: true,
+      noOpPreservesPid: true,
+      readOnlyStatus: true,
+      offlineModels: true,
+      unchangedProfiles: true,
+      requests,
+    };
+    await writeFile(join(output, "supervisor.json"), JSON.stringify(supervisor.calls, null, 2));
+    result.status = "PASS";
+  } catch (error) {
+    failure = error;
+    result.status = "FAIL";
+    result.error = error.message;
+  } finally {
+    const errors = [];
+    if (supervisor)
+      try {
+        await supervisor.close();
+        result.backendExited = supervisor.pid() === null;
+      } catch (error) {
+        errors.push(error);
+      }
+    if (server)
+      try {
+        server.closeAllConnections();
+        await new Promise((resolveClose, reject) =>
+          server.close((error) => (error ? reject(error) : resolveClose())),
+        );
+      } catch (error) {
+        errors.push(error);
+      }
+    try {
+      await removeTemporary();
+      result.ownedStagingRemoved = true;
+    } catch (error) {
+      errors.push(error);
+    }
+    if (errors.length) {
+      result.status = "FAIL";
+      failure = new AggregateError(
+        [...(failure ? [failure] : []), ...errors],
+        "Update acceptance cleanup failed",
+      );
+    }
+    await writeFile(join(output, "result.json"), JSON.stringify(result, null, 2), { mode: 0o600 });
+  }
+  if (failure) throw failure;
+  console.log(`Installed update acceptance: ${output}`);
+});

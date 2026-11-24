@@ -30,7 +30,8 @@ await runCommand(async (signal) => {
         (entry) =>
           /^package\/(?:bin\/code60\.mjs|lib\/(?:index|acquire|archive|descriptor)\.mjs|package\.json|platforms\.json|LICENSE|NOTICE|TRADEMARKS\.md)$/.test(
             entry.path,
-          ) || /^package\/lib\/runtime\/(?:management|platform)\/[a-z-]+\.js$/.test(entry.path),
+          ) ||
+          /^package\/lib\/runtime\/(?:management|platform)\/[a-z-]+\.(?:js|mjs)$/.test(entry.path),
       ),
     );
     const root = join(temporary, "unpacked/package");

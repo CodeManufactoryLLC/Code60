@@ -284,6 +284,15 @@ volumes; preserve caches and other work's resources. Never globally prune Docker
 
 ## Dependency updates
 
+Application distribution updates are separate from development dependency updates.
+See [explicit update acceptance and recovery](docs/distribution/updates.md).
+Use isolated HOME/config/data/state and the bounded backend supervisor fixture;
+never install a real host service to test update/recovery. Preserve prior releases,
+custom database selections, exact workflow runtime bindings and independent
+filesystem/Git/process evidence. The bootstrap and installed updater share the
+platform payload verifier; host tooling must remain usable without development
+dist. Keep both build closures and bootstrap size/content checks covered.
+
 [Dependabot](.github/dependabot.yml) checks npm dependencies (including development
 tools) and GitHub Actions every Monday at 09:00 UTC. It updates the npm manifest
 and lockfile together. Minor and patch updates are grouped separately for

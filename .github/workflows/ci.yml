@@ -138,6 +138,7 @@ jobs:
       - run: npm run devcontainer -- exec npm run package:payload
       - run: npm run devcontainer -- exec npm run test:payload
       - run: npm run devcontainer -- exec npm run test:setup
+      - run: npm run devcontainer -- exec npm run test:update
       - run: npm run devcontainer -- exec npm run test:installation -- --require-fish
       - run: npm run test:packaged:clean -- --payload release/payloads/linux-x64.json
       - run: npm run test:packaged:clean -- --managed release/payloads/linux-x64.json
@@ -160,6 +161,7 @@ jobs:
             test-results/payload/
             test-results/installation/
             test-results/setup/
+            test-results/update/
           retention-days: 7
           if-no-files-found: warn
   passed:

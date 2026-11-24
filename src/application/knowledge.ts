@@ -324,7 +324,7 @@ export class DesktopKnowledge {
       action = "Apps → System Manager.";
     } else if (cap.id === "updates") {
       reason =
-        "Manual npm package updates require Node 24. Stop, replace, repair registration and start; awareness never checks or downloads.";
+        "Explicit code60 update verifies the stable npm bootstrap and payload before consent and shutdown. Read-only code60 update status and explicit code60 update recover diagnose interruption; awareness never checks, downloads or replaces code.";
       action = "Apps → Update Manager.";
     } else if (cap.prerequisite === "runtime") {
       status = "unknown";

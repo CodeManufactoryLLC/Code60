@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   absoluteInstallationPath,
   installationDirectory,
+  installationFileCode,
   installationLink,
   installationSnapshot,
   userHome,
@@ -122,7 +123,10 @@ export async function readActivation(
   if (!manifest || manifest.identity.hash !== value.release.manifestHash)
     throw new Error("Installed payload identity changed");
   for (const [path, hash] of Object.entries(value.runtimeFiles)) {
-    if (!/^(?:management|platform)\/[a-z0-9-]+\.js$/.test(path) || !/^[a-f0-9]{64}$/.test(hash))
+    if (
+      !/^(?:management|platform)\/[a-z0-9-]+\.(?:js|mjs)$/.test(path) ||
+      !/^[a-f0-9]{64}$/.test(hash)
+    )
       throw new Error("Unsafe launcher support path");
     const support = verifySupport
       ? await installationSnapshot(join(directory, "runtime", path))
@@ -155,4 +159,19 @@ export async function verifyBoundNode(receipt: ActivationRecord) {
     throw new Error(
       "The recorded Node executable moved or changed; reconcile this installation using supported Node",
     );
+}
+
+export async function managedInstallation(env: NodeJS.ProcessEnv) {
+  const paths = await installationPaths(env);
+  const root = await lstat(paths.root).catch((error: unknown) => {
+    if (installationFileCode(error) !== "ENOENT") throw error;
+    return null;
+  });
+  if (!root) return null;
+  const record = await readInstallation(paths);
+  if (!record) throw Error("Installation receipt is missing; preserve existing files");
+  const current = await currentInstallation(record);
+  if (!current) throw Error("Installation activation is missing; preserve existing files");
+  await verifyBoundNode(current.receipt);
+  return { record, receipt: current.receipt };
 }

@@ -498,12 +498,12 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
     "updates",
     "Update Manager",
-    "Review the manual package update procedure.",
+    "Inspect the installed version and terminal update/recovery commands.",
     "Apps → Update Manager",
     "none",
     "human-only",
-    "Requires Node 24 and npm. Stop the backend, install the replacement npm tarball, repair the service registration and start the backend. No automatic downloads, native installers or bundled runtime.",
-    "Local terminal consent is required for service changes. Histories, worktrees and settings are preserved.",
+    "Managed installations require Node >=24.22.0 <25 on macOS arm64 or Linux x64. code60 update resolves the stable npm bootstrap, verifies registry integrity and exact platform payloads before shutdown, then activates atomically and repairs service registration. code60 update status is read-only; code60 update recover explicitly repairs the current activation after interruption without database downgrade or replay. Setup never updates. No automatic downloads or checks from browser awareness, native installers or bundled Node.",
+    "Local terminal consent is required before interrupting interactive/scheduled work; non-TTY changes require Code60's --yes. Prior releases, histories, custom databases, worktrees, settings and pinned engine/runtime bindings are preserved. The browser shows installed version and terminal instructions only.",
   ),
   feature(
     "browser-runtime",

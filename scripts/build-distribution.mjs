@@ -15,7 +15,7 @@ for (const item of await readdir(output, { recursive: true, withFileTypes: true 
   if (!item.isFile()) continue;
   const path = join(item.parentPath, item.name);
   const local = relative(output, path).replaceAll("\\", "/");
-  if (!/^(management|platform)\/[a-z-]+\.js$/.test(local))
+  if (!/^(management|platform)\/[a-z-]+\.(?:js|mjs)$/.test(local))
     throw Error("Distribution build escaped its Node-only module closure");
   const text = await readFile(path, "utf8");
   for (const match of text.matchAll(/(?:from\s*|import\s*\(\s*)["']([^"']+)["']/g)) {
