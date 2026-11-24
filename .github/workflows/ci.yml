@@ -19,7 +19,7 @@ jobs:
         with: { persist-credentials: false }
       - uses: actions/setup-node@v7
         with: { node-version: "24", cache: npm, package-manager-cache: false }
-      - run: npm ci
+      - run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
       - uses: ./.github/actions/private-node
       - run: npm run check
       - uses: actions/upload-artifact@v7.0.2
@@ -40,7 +40,7 @@ jobs:
         with: { persist-credentials: false }
       - uses: actions/setup-node@v7
         with: { node-version: "24", cache: npm, package-manager-cache: false }
-      - run: npm ci
+      - run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
       - run: npx --no-install playwright install --with-deps chromium
       - run: npm run prepare:models
       - run: npm run test:browser
@@ -62,7 +62,7 @@ jobs:
         with: { persist-credentials: false }
       - uses: actions/setup-node@v7
         with: { node-version: "24", cache: npm, package-manager-cache: false }
-      - run: npm ci
+      - run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
       - uses: ./.github/actions/private-node
       - run: npm run prepare:models
       - run: npm run package:app
@@ -115,7 +115,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v7
         with: { node-version: "24", cache: npm, package-manager-cache: false }
-      - run: npm ci
+      - run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
       - name: Prepare isolated runner Docker engine
         timeout-minutes: 2
         run: |

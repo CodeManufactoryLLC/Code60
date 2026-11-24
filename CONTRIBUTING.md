@@ -58,7 +58,7 @@ support requires updating the architecture and adding validation.
 Use Node 24 and npm on macOS Apple Silicon or Linux x64:
 
 ```sh
-npm ci
+ONNXRUNTIME_NODE_INSTALL=skip npm ci
 npm run prepare:models
 npm run dev
 ```
@@ -127,7 +127,7 @@ For the container workflow, run these commands from your own checkout:
 
 | Location | Work |
 | --- | --- |
-| Host | Initial `npm ci` for the pinned CLI; `npm run devcontainer -- prepare`, `up`, `start`, `exec` and `down`; authenticated Git fetch/commit/push and PR operations. |
+| Host | Initial CPU-only dependency install for the pinned CLI; `npm run devcontainer -- prepare`, `up`, `start`, `exec` and `down`; authenticated Git fetch/commit/push and PR operations. |
 | Container | Explicit dependency/Chromium/model preparation, development, builds and checks through `exec` or the isolated editor terminal. Use synthetic Git identities in test repositories. |
 
 For example, `npm run devcontainer -- exec npm run check` runs Linux checks with

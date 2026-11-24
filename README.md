@@ -6,10 +6,10 @@ The opt-in per-user backend starts at login. Closing the browser keeps approved 
 
 ## Install and open
 
-Install a downloaded Code60 npm tarball using Node 24:
+Install a downloaded Code60 npm tarball using Node 24. Code60 runs embeddings on the CPU. The install command skips the optional ONNX GPU download and uses the CPU runtime bundled in the npm package.
 
 ```sh
-npm install --global ./code60-<version>.tgz
+ONNXRUNTIME_NODE_INSTALL=skip npm install --global "./code60-<version>.tgz"
 code60 service install
 code60 open
 ```
@@ -99,7 +99,7 @@ Stop the backend before replacing its package:
 
 ```sh
 code60 service stop
-npm install --global ./code60-<new-version>.tgz
+ONNXRUNTIME_NODE_INSTALL=skip npm install --global "./code60-<new-version>.tgz"
 code60 service repair
 code60 service start
 code60 open
@@ -110,7 +110,7 @@ There is no automatic updater, Electron shell, bundled Node runtime, DMG, DEB or
 ## Development
 
 ```sh
-npm ci
+ONNXRUNTIME_NODE_INSTALL=skip npm ci
 npm run prepare:models
 npm run dev
 ```
@@ -120,7 +120,7 @@ Development uses isolated configuration/state under ignored `test-results/dev`, 
 An optional [Linux development container](.devcontainer/README.md) provides an
 isolated non-root x64 environment for development and headless browser tests.
 Docker Desktop is optional; the container uses a local Linux Docker engine with
-Compose v2. After the host's initial `npm ci`, run `npm run devcontainer -- start`
+Compose v2. After installing the host dependencies above, run `npm run devcontainer -- start`
 to prepare the container and open the printed browser URL without VS Code.
 Ctrl+C stops it and cleans up its containers/images, retaining caches and each
 worktree's private provider home. Provider tools and file-based logins persist

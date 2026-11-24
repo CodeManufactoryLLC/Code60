@@ -413,14 +413,18 @@ Verify the prior release remains available and recovery never replays work.
 ## Phase 8 — State-preserving uninstall
 
 **Status:** implemented on `codex/state-preserving-uninstall`. Recorded isolated
-acceptance at `d713212` covers the full native installed golden/uninstall/reinstall
+acceptance covers the full native installed golden/uninstall/reinstall
 journey, retained SQLite/Git state, offline embeddings and independent process
 cleanup. Full Linux CI passes, including two concurrent installed journeys and
 proof that one run's cleanup leaves the other's backend and assets usable.
 Inventory ownership, separate shell consent, guarded quiescence and standalone
 recovery have focused and installed coverage. Delivery still requires the PR's
 required Linux/native gates and verified cleanup of owned test resources on each
-engine used. Real login-service lifecycle certification belongs to Phase 9.
+engine used. PR #325 retains the final evidence. Native update, workflow and
+uninstall consumers verify the producer's exact payload independently; Linux
+native process inspection must pass on a genuine Linux x64 runner. Emulation
+without a verifiable Node executable mapping remains blocked for native ownership.
+Real login-service lifecycle certification belongs to Phase 9.
 
 **PR outcome:** `code60 uninstall` removes owned installation resources predictably.
 

@@ -98,6 +98,7 @@ it("generates isolated amd64 mounts and keeps root initialization away from the 
   expect(service.environment.GIT_CONFIG_GLOBAL).toBe("/dev/null");
   expect(service.environment.CODE60_DEV_GATEWAY_PORT).toBe("44000");
   expect(service.environment.CODE60_VITE_PORT).toBe("44001");
+  expect(service.environment.ONNXRUNTIME_NODE_INSTALL).toBe("skip");
   expect(service.environment.NPM_CONFIG_PREFIX).toBe("/home/node/.local");
   expect(service.environment.PATH.split(":")[0]).toBe("/home/node/.local/bin");
   expect(compose.volumes.home.name).toBe(`code60-dev-${id}-home`);
@@ -122,7 +123,7 @@ it.each([false, true])(
     const calls = ports.run.mock.calls.filter(([file]) => file === process.execPath);
     expect(calls.map(([, args]) => args.slice(args.indexOf("--") + 1))).toEqual([
       calls[0][1],
-      ["env", "ONNXRUNTIME_NODE_INSTALL=skip", "npm", "ci"],
+      ["npm", "ci"],
       ["npm", "run", "prepare:models"],
     ]);
     expect(calls[2][2]).toMatchObject({ inherit: true, stdin: "ignore" });

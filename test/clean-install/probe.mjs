@@ -87,6 +87,16 @@ if (mode === "ready" || mode === "assets") {
   await stat(`${application}/models/jinaai/jina-embeddings-v2-base-code/config.json`).catch(() => {
     throw new Error("Installed bundled model assets are missing");
   });
+  const appRequire = createRequire(`${application}/package.json`);
+  const transformersRequire = createRequire(appRequire.resolve("@huggingface/transformers"));
+  const onnxPackage = pathToFileURL(transformersRequire.resolve("onnxruntime-node/package.json"));
+  const native = new URL("./bin/napi-v6/linux/x64/", onnxPackage);
+  await stat(new URL("onnxruntime_binding.node", native));
+  for (const provider of ["cuda", "tensorrt"]) {
+    await assert.rejects(stat(new URL(`libonnxruntime_providers_${provider}.so`, native)), {
+      code: "ENOENT",
+    });
+  }
   globalThis.fetch = async () => {
     throw new Error("Network forbidden during installed embedding check");
   };
@@ -99,6 +109,7 @@ if (mode === "ready" || mode === "assets") {
   assert.ok([...vector].every(Number.isFinite));
   assert.ok(Math.abs(Math.hypot(...vector) - 1) < 0.001);
   await evidence("model", {
+    gpuProviders: "absent",
     dimensions: vector.length,
     finite: true,
     externalNetworking: "disabled",

@@ -11,8 +11,21 @@ import {
 import { verifyPrivatePath } from "./private-state.js";
 import { type RuntimeProcessIdentity, runtimeProcessExists } from "./process-identity.js";
 
-const unavailable = () =>
-  Error("Runtime process ownership is unavailable; preserve installation files");
+type InspectionStage = "unverified" | "status" | "stat" | "mixed-uid";
+class LinuxInspectionError extends Error {
+  constructor(
+    readonly stage: InspectionStage = "unverified",
+    code?: string,
+  ) {
+    super("Runtime process ownership is unavailable; preserve installation files", {
+      cause: {
+        stage,
+        code: code && /^(EACCES|EPERM|ENOENT|ESRCH|EIO|ELOOP)$/.test(code) ? code : undefined,
+      },
+    });
+  }
+}
+const unavailable = () => new LinuxInspectionError();
 function pidValue(pid: number) {
   if (!Number.isInteger(pid) || pid < 1 || pid > 2 ** 31 - 1) throw unavailable();
 }
@@ -90,12 +103,15 @@ async function boot(signal: AbortSignal) {
 }
 async function metadata(pid: number, bootId: string, signal: AbortSignal, includeForeign = false) {
   pidValue(pid);
+  let stage: InspectionStage = "status";
   try {
     const uids = parseLinuxProcessUid(await text(`/proc/${pid}/status`, 16_384, signal));
     const uid = process.getuid?.();
     if (uid === undefined) throw unavailable();
     if (!uids.includes(uid) && !includeForeign) return null;
-    if (uids.includes(uid) && uids.some((value) => value !== uid)) throw unavailable();
+    if (uids.includes(uid) && uids.some((value) => value !== uid))
+      throw new LinuxInspectionError("mixed-uid");
+    stage = "stat";
     const row = parseLinuxProcessStat(await text(`/proc/${pid}/stat`, 16_384, signal), pid);
     const effectiveUid = uids[1];
     if (effectiveUid === undefined) throw unavailable();
@@ -103,7 +119,8 @@ async function metadata(pid: number, bootId: string, signal: AbortSignal, includ
   } catch (error) {
     signal.throwIfAborted();
     if (installationFileCode(error) === "ENOENT" && !runtimeProcessExists(pid)) return null;
-    throw unavailable();
+    if (error instanceof LinuxInspectionError && error.stage === "mixed-uid") throw error;
+    throw new LinuxInspectionError(stage, installationFileCode(error));
   }
 }
 async function users(bootId: string, signal: AbortSignal, includeForeign = false) {

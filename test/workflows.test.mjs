@@ -98,6 +98,7 @@ describe("browser and package validation", () => {
       false,
     );
     const steps = nativeTests.jobs.uninstall.steps;
+    expect(steps.some((step) => step.run === "ONNXRUNTIME_NODE_INSTALL=skip npm ci")).toBe(true);
     const download = steps.findIndex((step) => step.uses?.startsWith("actions/download-artifact@"));
     expect(steps[download].with).toEqual({
       name: "code60-darwin-payload",
@@ -168,19 +169,42 @@ describe("browser and package validation", () => {
           step.run === "npm run test:packaged:clean -- --update release/payloads/linux-x64.json",
       ),
     ).toBe(true);
-    expect(nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:update")).toBe(
-      true,
+    expect(nativeTests.jobs.workflows.strategy.matrix.include[0].command).toBe(
+      "npm run test:update",
     );
   });
   it("requires every native journey in bounded single-worker batches with separate evidence", () => {
-    const commands = nativeTests.jobs.test.steps
-      .map((step) => step.run)
-      .filter((command) => command?.startsWith("npm run test:transmission"));
+    const job = nativeTests.jobs.workflows;
+    const commands = job.strategy.matrix.include.map((entry) => entry.command).slice(1);
     expect(commands).toEqual([
       "npm run test:transmission -- --grep-invert 'native update:' --output test-results/transmission-native/regressions",
       "npm run test:transmission -- --grep 'native update:' --fully-parallel --shard=1/2 --output test-results/transmission-native/update-1",
       "npm run test:transmission -- --grep 'native update:' --fully-parallel --shard=2/2 --output test-results/transmission-native/update-2",
     ]);
+    expect(job.needs).toBe("test");
+    expect(job["timeout-minutes"]).toBe(35);
+    expect(job.strategy["fail-fast"]).toBe(false);
+    expect(job.strategy["max-parallel"]).toBe(2);
+    expect(job.steps[0].with.ref).toBe(nativeTests.jobs.test.steps[0].with.ref);
+    const download = job.steps.findIndex((step) =>
+      step.uses?.startsWith("actions/download-artifact@"),
+    );
+    const verify = job.steps.findIndex(
+      (step) => step.run === "npm run verify:artifact -- release/payloads/darwin-arm64.json",
+    );
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression
+    const run = job.steps.findIndex((step) => step.run === "${{ matrix.command }}");
+    expect(job.steps[download].with.name).toBe("code60-darwin-payload");
+    expect(download).toBeLessThan(verify);
+    expect(verify).toBeLessThan(run);
+    expect(job.steps.some((step) => step.run === "npm run prepare:engines")).toBe(true);
+    expect(
+      job.steps.some(
+        (step) =>
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression
+          step.if === "always()" && step.with?.name === "native-workflows-${{ matrix.name }}",
+      ),
+    ).toBe(true);
   });
   it("uses Node 24 and validates the real browser and installed package", () => {
     for (const name of ["check", "browser", "package"])

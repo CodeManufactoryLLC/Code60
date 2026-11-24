@@ -81,14 +81,16 @@ across app replacement; never delete workflow state to force a new runtime.
 The native update journey requires the freshly built macOS payload and retains
 the approved engine/worker processes through an actual managed update before
 completing the original workflow and comparing its source Git state.
-The [native workflow](.github/workflows/native-tests.yml) runs existing regressions
-and each complete update journey in separate, sequential single-worker batches.
-This preserves their original per-journey and suite deadlines on the slower hosted
-runner; all batches are required and retain separate trace directories.
+The [native workflow](.github/workflows/native-tests.yml) builds and tests one
+payload, then hands it to separate jobs for managed update, retained/restart
+regressions and each complete application update journey. Each consumer verifies
+the exact artifact against its source checkout before execution. At most two
+workflow jobs run concurrently, each with one browser worker and separate evidence.
+All jobs are required; their original journey and suite deadlines remain in place.
 Uninstall and idle-engine removal run in a separate dependent Apple Silicon job,
 using that same tested payload. `npm run verify:artifact` checks its clean commit,
 version, platform, byte count and SHA-256 against the consumer's source checkout
-before installation. Both native jobs must pass. The baseline job retains its
-45-minute limit and existing journey deadlines; the extra job retains its own
-bounded acceptance and always uploads handoff/uninstall evidence.
+before installation. Every native job must pass. The baseline job retains its
+45-minute limit; consumer jobs have separate 35-minute limits and always upload
+their handoff and acceptance evidence.
 This validation installs no real login service and uses no live provider.

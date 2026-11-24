@@ -24,7 +24,7 @@ await new Promise((ready, reject) => {
   server.listen(0, "127.0.0.1", ready);
 });
 const origin = `http://127.0.0.1:${server.address().port}`;
-const env = environment("/work/installer-home");
+const env = { ...environment("/work/installer-home"), ONNXRUNTIME_NODE_INSTALL: "skip" };
 await mkdir(env.HOME, { recursive: true, mode: 0o700 });
 const install = (target, url) =>
   execute(

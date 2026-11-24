@@ -25,6 +25,7 @@ try {
     archive,
   ]);
   execFileSync(command.file, command.args, {
+    env: { ...process.env, ONNXRUNTIME_NODE_INSTALL: "skip" },
     encoding: "utf8",
     timeout: 180_000,
     maxBuffer: 8 * 1024 * 1024,

@@ -125,7 +125,7 @@ await runCommand(async (cancel) => {
     }
     result.before = await history();
     const proofs = await prepareTransmissionRemoval(root, env, [], signal);
-    assert.equal(proofs.length, 2);
+    assert.equal(proofs.length, installedEngineVersions().length);
     result.processes = proofs.map(({ version, pids }) => ({ version, pids }));
     for (const proof of proofs) await proof.stop(signal);
     result.after = await history();
