@@ -99,5 +99,9 @@ transaction, then completes its original workflow. It compares engine/worker PID
 original runtime bindings, run/start identity, selected database and source Git
 state. Only the remote model and service supervisor are fixtures; this is separate
 from a backend restart without application replacement.
+The manual native workflow separates the original regressions and two complete
+update journeys into sequential single-worker batches with distinct evidence
+directories. It keeps the existing journey and suite deadlines; no journey is
+split across runs or replaced with a shorter checkpoint.
 Fake supervisor boundaries do not certify actual launchd/systemd login or reboot
 behavior; that remains Phase 9 validation in an authorized disposable environment.

@@ -45,6 +45,10 @@
   screenshots, artifact/native identities, independent Git/filesystem assertions
   and every owned engine/provider/helper PID verified gone. Preserve failures;
   scripted HTTP engine tests remain independent protocol/UI regression coverage.
+  Hosted native validation runs the original regressions and two complete update
+  shards sequentially with one worker and separate output directories. Verify
+  collection covers the full suite exactly once before changing selectors;
+  Playwright matches file-prefixed titles. Keep journey/suite deadlines unchanged.
 
 Use synthetic projects and isolated private state. Each card is a user journey,
 not a claim that all of its steps are already automated. Check current selectors

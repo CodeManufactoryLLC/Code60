@@ -19,7 +19,14 @@ Tag the merged release commit on main with its exact package version. Push the t
 
 ## Updating an installation
 
-Stop the backend, install the replacement tarball, repair its service registration, start the backend and pair the browser again. Preserve the old package for rollback. Never downgrade application data or erase locks/history to make an older package start.
+Managed installations use `code60 update`, with `code60 update status` and
+`code60 update recover` for inspection and explicit recovery. Follow the
+[update behavior](docs/distribution/updates.md).
+
+For a legacy npm tarball, stop the backend, install the replacement tarball,
+repair its service registration, start the backend and pair the browser again.
+Preserve the old package for inspection. Never downgrade application data or
+erase locks/history to make an older package start.
 
 ## Platform payload and bootstrap candidates
 
@@ -68,4 +75,8 @@ across app replacement; never delete workflow state to force a new runtime.
 The native update journey requires the freshly built macOS payload and retains
 the approved engine/worker processes through an actual managed update before
 completing the original workflow and comparing its source Git state.
+The [native workflow](.github/workflows/native-tests.yml) runs existing regressions
+and each complete update journey in separate, sequential single-worker batches.
+This preserves their original per-journey and suite deadlines on the slower hosted
+runner; all batches are required and retain separate trace directories.
 This validation installs no real login service and uses no live provider.
