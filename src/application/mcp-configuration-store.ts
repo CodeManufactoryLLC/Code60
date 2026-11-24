@@ -794,6 +794,46 @@ export class McpConfigurationStore {
       );
     });
   }
+  setEnabled(request: {
+    targetId: string;
+    expectedRevision: string;
+    requestId: string;
+    serverId: string;
+    enabled: boolean;
+  }): Promise<Result> {
+    return this.run(async () => {
+      const fingerprint = hash(
+        JSON.stringify([
+          "enable",
+          request.targetId,
+          request.expectedRevision,
+          request.serverId,
+          request.enabled,
+        ]),
+      );
+      const replay = await this.replay(request.requestId, fingerprint);
+      if (replay) return replay;
+      const { target, current } = await this.expected(request.targetId, request.expectedRevision);
+      const document = this.inspect(current).document;
+      if (!document || !Object.hasOwn(document.servers, request.serverId))
+        throw new McpStorageError("invalid");
+      const definition = document.servers[request.serverId]!;
+      if (definition.enabled === request.enabled) {
+        const result: Result = {
+          status: "unchanged",
+          transactionId: request.requestId,
+          revisions: { [target.id]: current.revision },
+        };
+        await this.reserve(16_384);
+        await this.receipt(request.requestId, fingerprint, result);
+        return result;
+      }
+      definition.enabled = request.enabled;
+      const text = `${JSON.stringify(document, null, 2)}\n`;
+      this.validate(text);
+      return this.begin(request.requestId, fingerprint, "saved", [{ target, current, text }]);
+    });
+  }
   move(
     request: {
       sourceId: string;

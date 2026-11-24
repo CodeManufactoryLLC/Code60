@@ -12,6 +12,7 @@ import type {
 import { AnchoredMenu } from "./anchored-menu.js";
 import { DataTable, type TableOptions } from "./data-table.js";
 import { McpForm, type McpFormDraft, mcpFormFields } from "./mcp-form.js";
+import { McpRuntimePanel } from "./mcp-runtime.js";
 import { Modal } from "./modal.js";
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -161,9 +162,19 @@ export function McpServersPage({
     transport: row.transport === "http" ? "HTTP" : "stdio",
     source: `${row.source.scope === "user" ? "User" : (target?.label ?? "Project")}${row.shadowedSources.length ? " (overrides User)" : ""}`,
     enabled: row.enabled ? "Yes" : "No",
-    approval: row.approval === "required" ? "Required" : "Not required",
-    authentication: "Not checked",
-    connection: "Not tested",
+    approval:
+      row.approval === "required"
+        ? "Required"
+        : row.approval === "approved"
+          ? "Approved"
+          : "Not required",
+    authentication:
+      row.observation?.authentication === "required"
+        ? "Authentication required"
+        : row.observation?.authentication === "not-required"
+          ? "Not required"
+          : "Not checked",
+    connection: row.observation?.connection?.replace(/-/g, " ") ?? "Not tested",
   }));
   const selectedId = rows.some((r) => r.id === selected) ? selected : rows[0]?.id;
   const status = read?.rows.find((r) => r.id === selectedId);
@@ -253,8 +264,8 @@ export function McpServersPage({
   return (
     <section className="mcp-servers-page">
       <p className="mcp-notice">
-        Manage definitions for future connector support. Saving does not activate servers.
-        Authentication and connections have not been checked.
+        Manage servers for new agent sessions. Tests only initialize and discover tools; they never
+        call business tools.
       </p>
       {error && !editor && !remove && !move && <p role="alert">{error}</p>}
       {targets?.unavailableProjects ? (
@@ -267,8 +278,8 @@ export function McpServersPage({
         <div role="alert">
           {!read.document ? (
             <p>
-              Invalid configuration. Guided changes are blocked. Correct the file externally; direct
-              editing is planned for the next phase.
+              Invalid configuration. Guided changes and new connections are blocked. Repair the file
+              in the JSON view.
             </p>
           ) : (
             <p>Pending configuration recovery blocks writes to this configuration.</p>
@@ -396,6 +407,15 @@ export function McpServersPage({
             </button>
           )}
         </section>
+      )}
+      {read && !editor && !remove && !move && (
+        <McpRuntimePanel
+          active={active && visible}
+          api={api}
+          read={read}
+          serverId={selectedId}
+          blocked={blocked}
+        />
       )}
       {active && visible && menu && (
         <AnchoredMenu

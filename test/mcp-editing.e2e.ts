@@ -49,6 +49,13 @@ test("MCP JSON: completion, safe validation, exact saves, navigation and guided 
     await page.keyboard.press("Control+Space");
     await expect(page.locator(".suggest-widget.visible")).toContainText("version");
     await page.keyboard.press("Escape");
+    await edit(
+      page,
+      '{"version":1,"servers":{"docs":{"label":"Docs","enabled":false,"type":"stdio","command":"node","env":{"TOKEN":{"cred',
+    );
+    await page.keyboard.press("Control+Space");
+    await expect(page.locator(".suggest-widget.visible")).toContainText("credentialRef");
+    await page.keyboard.press("Escape");
     await edit(page, '{"secret-unknown":"synthetic-value",}');
     await expect(
       page.getByRole("button", { name: "Save configuration", exact: true }),

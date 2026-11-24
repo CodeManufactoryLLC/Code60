@@ -188,3 +188,24 @@ unchanged inheritance guards; User publishes before project. Missing/empty targe
 are not rewritten. Use local Zod-derived Monaco completion and JSON workers with
 fixed shared-validator markers, no remote schemas or widened CSP. No recovery
 replay, path capability, resolved credentials or new runtime authority.
+
+## MCP production connections (phase 5)
+
+Phase 5 supersedes the earlier deferred-runtime guidance. Dedicated mcp.json files
+are authoritative; config.json.mcpServers has no reader or migration. Application
+reuses its existing store and owns resolution, private exact-revision approvals and
+session/turn authority. Core's optional resource hook creates fresh per-session
+resources on new/load/resume/handoff/continuity replacement; helpers and scheduler
+remain excluded. Gateway owns the private capability broker and injects the agents
+transport port. The pinned MCP SDK belongs only to agents. Platform owns process
+groups. Providers receive fixed stdio adapter descriptors and ephemeral capabilities,
+never upstream definitions or credentials. No application-to-agents dependency.
+
+Tools only; keep ACP permissions independent of turn authority. Revoke before
+cleanup; never replay uncertain calls or resume HTTP transport automatically. Tests
+only initialize/discover, with page ownership and stdio launch confirmation. Enable
+and approval changes affect future connections; Disconnect/Reconnect are explicit.
+Reconnect requires idle and provider load/resume support, previews every affected
+connector, and sends no prompt. Keep JSON drafts and existing recovery evidence.
+Credential references/OAuth require authentication until phase 6. Publish safe status
+and payload-free notices only. Dedicated integrations and recovery GUI stay excluded.

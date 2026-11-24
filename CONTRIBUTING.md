@@ -114,7 +114,12 @@ For the container workflow, run these commands from your own checkout:
 For example, `npm run devcontainer -- exec npm run check` runs Linux checks with
 that worktree's dependencies. Plain `npm run check` on the host validates the
 native host environment. Record which environment you used; keep host/container
-dependencies and build output separate. Native host development is still supported.
+dependencies and build output separate. Native host development is still supported. After a containerized package build,
+`npm run test:mcp:native` checks the installed MCP adapter on the selected native
+macOS/Linux Node 24 host using a disposable installation/home and synthetic private
+broker. It never installs a service. Set `CODE60_NATIVE_EVIDENCE` to this task's QA
+folder to retain its result and dependency cache. Run this targeted native check
+separately from the full emulated suite and record process/listener cleanup.
 
 Linked worktrees share refs, stashes, repository configuration and hooks. Use
 command-local `git -c` options for temporary settings. If you temporarily stash

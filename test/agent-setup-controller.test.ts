@@ -91,9 +91,10 @@ it("sets up primary and two additions before a database, persists identities and
     await fixture();
   await fs.mkdir(join(dir, "config", "code60"), { recursive: true });
   await fs.writeFile(
-    join(dir, "config", "code60", "config.json"),
+    join(dir, "config", "code60", "mcp.json"),
     JSON.stringify({
-      mcpServers: { tools: { type: "stdio", command: "node" } },
+      version: 1,
+      servers: { tools: { label: "Tools", enabled: true, type: "stdio", command: "node" } },
     }),
   );
   await controller.poll(["config"]);

@@ -80,7 +80,7 @@ absent-file backup explicitly removes the dedicated configuration file. Preserve
 private evidence and use the backend recovery procedure above with verified
 ownership. Never clear a writer lock as a repair. After an external edit, reload
 the configuration explicitly; failed drafts do not grant authority to a reopened
-project or replacement root. Authentication/connection status is not checked.
+project or replacement root. Connection health and authentication are independent observations. Phase 5 adds human runtime controls; unresolved references/OAuth require authentication.
 
 
 ## Interrupted reset
@@ -96,3 +96,17 @@ ordinary backup restoration refuses malformed/pinned evidence. Startup never rep
 Do not discard the browser draft after a conflict or recovery-required result.
 Compare saved versus draft, retain evidence and resolve the underlying ownership
 or transaction condition. Reset does not disconnect running work or remove credentials.
+
+## Connection failures
+
+A failed server leaves the agent and other tools usable. Check the captured target,
+revision, enabled state and project approval independently of health. A changed
+project file/native identity needs renewed approval for new connections. Invalid,
+unsafe or recovery-blocked files do not fall back to shadowed User definitions.
+Test only initializes/discovers and confirms stdio execution; cancel closes its
+owned process group. Browser detach cancels tests, while approved session work
+continues. Reconnect only when idle with provider load/resume support, reviewing
+all affected connectors. Otherwise start a new session. Never retry an uncertain
+tool call automatically, clear writer locks, or treat tool annotations as approval.
+Disconnect revokes selected instances without changing configured enablement.
+Unverified cleanup remains unresolved; preserve ownership and process evidence.

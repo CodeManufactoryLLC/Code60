@@ -9,7 +9,7 @@ recovery while keeping upstream credentials in the local Code60 backend.
 
 ### Problem
 
-The current runtime forwards definitions to ACP providers, which own connections
+The previous runtime forwarded definitions to ACP providers, which own connections
 and authentication. That boundary cannot establish uniform Code60-managed health,
 credential refresh or teardown. Project configuration also needs explicit review
 and deterministic precedence independent of sidebar selection.
@@ -41,9 +41,10 @@ Phase 1 supplies schemas, pure resolution and protocol fixtures; phase 2 supplie
 validated recoverable storage. Phase 3 adds guided human configuration management
 with stable canonical targets and transient runtime/database fences. Phase 4 adds
 exact-text editing and reviewed backup/reset operations using the same ownership
-and recoverable journals, including unchanged inheritance guards. Active config
-loading, production transport/adapter composition, secure storage, OAuth and
-activation remain later work. The proof does not certify real provider behavior.
+and recoverable journals, including unchanged inheritance guards. Phase 5 composes
+production connections, fixed stdio adapters, exact-revision private approvals and
+turn-scoped authority with human activation controls. Secure storage and OAuth
+remain phase 6. The phase 1 proof alone does not certify production behavior.
 Detailed contracts and lifecycle rules live in
 [MCP connector architecture](../../ARCHITECTURE.md#mcp-connector-foundation-and-target-runtime).
 

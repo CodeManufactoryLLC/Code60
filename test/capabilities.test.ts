@@ -27,7 +27,10 @@ describe("browser capability catalog", () => {
     expect(mcp?.limitations).toContain("Pending recovery blocks affected writes");
     expect(mcp?.limitations).toContain("User and this project");
     expect(mcp?.confirmation).toContain("Save, Discard or Cancel");
-    expect(mcp?.purpose).toContain("without activating connections");
+    expect(mcp?.purpose).toContain("enable, approve, test");
+    expect(mcp?.limitations).toContain("idle Reconnect");
+    expect(mcp?.limitations).toContain("Tests initialize/discover only");
+    expect(mcp?.confirmation).toContain("stdio tests");
   });
   it("describes scheduler upgrade recovery without granting service authority", () => {
     const updates = APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates");

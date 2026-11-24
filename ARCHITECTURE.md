@@ -1074,7 +1074,6 @@ Configuration is one JSON file at `$XDG_CONFIG_HOME/code60/config.json` (default
   "maxParallel": 4,
   "turnTimeout": "30m",
   "worktreeDir": null,
-  "mcpServers": {},
   "permissions": { "read": "allow", "search": "allow", "think": "allow", "edit": "allow", "default": "ask" },
   "agents": {
     "claude":   { "command": ["npx", "-y", "@agentclientprotocol/claude-agent-acp"] },
@@ -1097,8 +1096,9 @@ The model is part of an agent's command or of the agent's own configuration. The
 Phases 1–2 provide the contracts, resolver, strict text validation and guarded
 `McpConfigurationStore`. Phase 3 composes one lazy application-owned management
 service with Apps → MCP Servers. It reads/writes dedicated user/project mcp.json
-files but does not replace current runtime loading or launch configured servers.
-Credential resolution, approval persistence and connection controls remain deferred.
+files. Phase 4 adds JSON editing, backup restore and reset. Phase 5 makes these
+files authoritative for desktop execution with private project approvals, managed
+connections and human activation controls. Secure credentials/OAuth remain phase 6.
 
 #### Guided configuration management
 
@@ -1131,7 +1131,8 @@ collisions, affected open-project context and unverifiable references; no closed
 repositories are scanned. Guided saves produce two-space JSON with a final newline.
 Forms retain drafts on recoverable failures and reject changed owner/revision;
 phase 4 adds validated exact-text repair, backup restoration and confirmed reset.
-In-app transaction recovery, secure authentication and activation remain deferred.
+In-app transaction recovery and secure authentication remain deferred. Phase 5
+adds activation and private exact-revision project approval.
 
 #### Configuration storage service
 
@@ -1207,13 +1208,11 @@ self-knowledge catalog; definition contents remain excluded from agent awareness
 
 #### Foundation status
 
-Phase 1 implements browser-safe document/status contracts and pure scope resolution,
-with a supporting ACP/stdio protocol proof. Phases 3–4 add guided and JSON management UI/APIs;
-execution still does not load the new files, store credentials or start a production
-connector runtime.
-The existing user MCP behavior in the next section remains active until the later
-storage and runtime phases replace it. This intermediate state is not a promise
-to support old configuration formats; no migration or compatibility reader is planned.
+Phases 1–4 provide contracts, guarded storage, guided/JSON management and recovery
+primitives. Phase 5 adds production tools-only stdio/Streamable HTTP connections,
+per-session adapters and private exact-revision project approval. The dedicated
+files now feed desktop sessions; legacy config.json.mcpServers is rejected with no
+migration or fallback. Credential resolution and OAuth are not implemented yet.
 See [the implementation plan](ad-hoc-plans/mcp-connectors-plan.md) and
 [the architectural view](docs/architectural-views/mcp-connector-ownership.md).
 
@@ -1315,19 +1314,9 @@ catalog change is needed until a new user-facing capability becomes available.
 
 ### User MCP servers (current runtime)
 
-The optional top-level `mcpServers` map defaults to empty. See [MCP configuration](MCP.md)
-for stdio, HTTP and SSE examples. Each definition has an explicit `type`: stdio
-accepts only `command`, `args` and `env`; HTTP/SSE accept only `url` and `headers`.
-Names and commands must be nonempty, arguments and environment/header values must
-be strings, and URLs must use HTTP(S). Omitted `args`, `env` and `headers` become
-empty collections. Unknown fields and the reserved server name `code60` are usage
-errors (a configuration error). MCP validation and malformed-JSON errors never echo values.
-
-The distributed `mcp.default.json` is an opt-in starter containing pinned stdio
-Playwright MCP (isolated/headless) and Context7 definitions without credentials.
-It ships in desktop resources, but is never loaded
-automatically or copied over user configuration. Users explicitly merge selected
-entries into `config.json`; runtime defaults remain empty.
+Dedicated `mcp.json` files are authoritative; see [MCP configuration](MCP.md).
+The bundled `mcp.default.json` is a valid disabled version-one template document,
+never automatically loaded, copied or launched. No legacy reader or migration exists.
 
 The default orchestration contract permits explicitly requested tasks through
 user-configured MCP tools, while project edits still go to workers. It follows
@@ -1347,34 +1336,38 @@ Attribution is presentation metadata, never authority or evidence of success.
 The built-in worker transcript projection flattens attribution to `mcp` and
 `server` fields, keeping its scalar-only contract.
 
-Core resolves a detached server list when preparing scheduled runs, desktop
-manual runs, dispatched workers, orchestration chats and explicit ended-run
-recovery. Only chats also receive their own built-in Code60 stdio gateway.
-Workers and manual sessions receive configured servers without that gateway.
-Setup/connection probes, episodic-memory extraction and search-summary helpers
-receive neither user servers nor the gateway.
+Desktop session creation receives a generic optional core resource hook. New,
+load/resume, handoff and memory continuity replacement get fresh resources. Core
+stores neither descriptors nor capabilities in records. Helpers, verification and
+scheduler launches have no hook. Application resolves against the captured canonical
+project, while agents/platform use the actual session worktree as process cwd.
 
-The ACP adapter sends definitions on `session/new`, `session/load` and
-`session/resume`, translating maps to ACP environment/header entries and omitting
-the stdio `type` on the wire. After initialization it requires the provider's
-`agentCapabilities.mcpCapabilities.http` or `.sse` to be `true` for every configured
-remote transport. Missing support fails session startup explicitly and follows
-normal connection/process cleanup; servers are never silently dropped.
-Stdio requires no optional capability.
+Application owns resolution, exact-revision approvals and turn-scoped authority.
+Gateway injects agents-owned transports and owns a capability-only private loopback
+broker. Both upstream transports use a fixed local stdio adapter; ACP setup sees
+only ephemeral per-session/per-connector capabilities, never upstream definitions.
+Adapters exit on stdin or backend lease closure. Tools are the only advertised
+surface; unsupported resources, prompts, sampling and elicitation are rejected.
 
-Config reloads do not restart or alter active sessions, including idle sessions.
-Later runs/workers, new/retried chats and explicit recovery use the newly resolved
-configuration. Restoration and fresh handoffs do not use saved server definitions.
-Definitions stay in main-process memory and ACP setup requests, not run records,
-transcripts, renderer snapshots or execution results. The agent owns MCP connections and
-stdio children; Code60 retains its existing agent process-tree cleanup and
-once-only permission policies. This is not a new sandbox or a permission grant.
+The pinned MCP SDK 1.32.2 is agents-owned. Stdio uses platform process groups and an
+allowlisted base environment; HTTP supports JSON/event-stream responses with zero
+resumption retries and no SDK auth provider. Lost responses are uncertain and never
+replayed. Initialization is capped at four concurrently, 30 seconds per setup/test,
+256 live upstreams, 512 discovered tools and 8 MiB messages. Tool calls inherit turn
+deadlines. Existing ACP permission handling remains independent of call authority;
+tool annotations cannot authorize calls. Cancellation/replacement/shutdown revoke
+admitted generations before cleanup. Browser detach cancels page tests/decisions,
+while approved session work continues. Unverifiable cleanup remains unresolved.
 
-Configuration stays user-managed and read-only, without a Settings editor,
-credential writes, OAuth implementation or environment-variable interpolation.
-Users must trust their providers and servers: configured environment/header values
-are sent to the selected provider, and agent/tool output can still contain sensitive
-content in ordinary transcripts. Keep the config private and out of source control.
+Human-only runtime operations capture opaque targets/revisions and runtime/database
+fences. Enable/Disable changes future connections through the backed-up writer.
+Project approval is private and binds canonical/native target identity plus exact
+revision. Changed configuration does not retarget existing instances. Disconnect
+revokes selected instances without changing enablement. Reconnect previews all
+connectors in the owning ACP session and requires idle plus load/resume support;
+it never manufactures a prompt or falls back to replay. Failed connectors warn and
+leave available tools/session work usable. Phase 5 reports unresolved references
+or OAuth as Authentication required; secure credential handling remains phase 6.
 
 ### Conversational browser automation
 

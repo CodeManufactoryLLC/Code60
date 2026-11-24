@@ -47,6 +47,38 @@ describe("MCP configuration store (supporting filesystem integration)", () => {
       now: () => ++clock,
     };
   });
+  it("changes only enablement through durable replay, preserving references and backed-up exact bytes", async () => {
+    const { store, user } = await open();
+    const missing = await store.read(user);
+    const original = `${content()}\n`;
+    const saved = await store.save({
+      targetId: user,
+      expectedRevision: missing.revision,
+      requestId: randomUUID(),
+      text: original,
+    });
+    const expectedRevision = saved.revisions[user];
+    if (!expectedRevision) throw new Error("Missing saved revision");
+    const request = {
+      targetId: user,
+      expectedRevision,
+      requestId: randomUUID(),
+      serverId: "docs",
+      enabled: false,
+    };
+    const result = await store.setEnabled(request);
+    expect(await store.setEnabled(request)).toEqual(result);
+    await expect(store.setEnabled({ ...request, enabled: true })).rejects.toThrow();
+    const after = await store.read(user);
+    expect(after.document?.servers.docs).toMatchObject({
+      enabled: false,
+      env: { TOKEN: { credentialRef: "local-only" } },
+    });
+    expect((await store.listBackups(user)).length).toBe(2);
+    const bytes = await fs.readFile(join(options.userDirectory, "mcp.json"), "utf8");
+    expect(bytes).toBe(`${JSON.stringify(after.document, null, 2)}\n`);
+    expect((await fs.stat(join(options.userDirectory, "mcp.json"))).mode & 0o777).toBe(0o600);
+  });
   afterEach(async () => {
     try {
       const results = await Promise.allSettled(stores.splice(0).map((store) => store.close()));

@@ -120,6 +120,16 @@ describe("MCP connector document v1", () => {
     delete server[field];
     invalid(document(server));
   });
+  it("rejects prototype record keys instead of silently dropping configured bindings or IDs", () => {
+    const binding = JSON.parse('{"__proto__":{"value":"synthetic"}}');
+    invalid(document({ ...stdio(), env: binding }));
+    invalid(document({ ...http(), headers: binding }));
+    invalid(
+      JSON.parse(
+        '{"version":1,"servers":{"__proto__":{"label":"Invalid ID","enabled":false,"type":"stdio","command":"node"}}}',
+      ),
+    );
+  });
   it("requires explicit enabled and transport fields", () => {
     for (const field of ["enabled", "type"]) {
       const server: Record<string, unknown> = stdio();

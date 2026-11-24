@@ -28,6 +28,7 @@ import {
   parseActivityContextArgs,
   planMarkdown,
 } from "../bridge/index.js";
+import type { SessionResourceFactory } from "../core/index.js";
 import {
   ACTIVE_STATUSES,
   type Config,
@@ -45,6 +46,7 @@ import { ConversationReplies } from "./conversation-replies.js";
 import { EventWindow } from "./event-window.js";
 import { ExecutionHost, type ExecutionOwner, type ExecutionWorker } from "./execution-host.js";
 import type { DesktopKnowledge, KnowledgeCaller } from "./knowledge.js";
+import type { McpConnectorRole } from "./mcp-configuration.js";
 import {
   formatWorkerUpdate,
   parseControlArgs,
@@ -162,6 +164,11 @@ export class RelayService {
     private readonly modelDefaults?: ModelDefaults,
     private readonly orchestrationAutoApproval: () => boolean = () => true,
     private readonly onPlanTimingError: () => void = () => {},
+    private readonly connectorResources?: (
+      role: McpConnectorRole,
+      root: string | undefined,
+      warning: (message: string) => void,
+    ) => SessionResourceFactory,
   ) {
     const changed = () => this.changed();
     this.activity = new ActivityDisplay({ changed });
@@ -182,6 +189,11 @@ export class RelayService {
         this.associateReview(worker, Math.max(1, worker.orchestrator.runs()[0]?.turns ?? 1)),
       changed: (targetId) => this.changed(targetId),
       initialSettings: (provider) => this.modelDefaults?.selections(provider, "worker") ?? [],
+      sessionResources: (_owner, target) =>
+        this.connectorResources?.("worker", target.cwd, (warning) => {
+          this.error = warning;
+          changed();
+        }),
       warning: () => {
         this.error = "A worker record could not be saved. Inspect the worker before retrying work.";
         changed();
@@ -717,6 +729,21 @@ export class RelayService {
               if (!current()) throw new Error("Relay connection was superseded");
               return this.deps.agents.start(spec, signal);
             },
+            ...(this.deps.agents.restore
+              ? {
+                  restore: async (
+                    spec: Parameters<CoreDeps["agents"]["start"]>[0],
+                    sessionId: string,
+                    signal?: AbortSignal,
+                  ) => {
+                    if (!current()) throw new Error("Relay connection was superseded");
+                    await store.validateWorkspace();
+                    if (!current() || !this.deps.agents.restore)
+                      throw new Error("Relay connection was superseded");
+                    return this.deps.agents.restore(spec, sessionId, signal);
+                  },
+                }
+              : {}),
           },
         },
         store.workspace,
@@ -726,6 +753,18 @@ export class RelayService {
           prompts: DEFAULT_PROMPT_TEMPLATES,
         },
         {
+          ...(this.connectorResources
+            ? {
+                sessionResources: this.connectorResources(
+                  this.identity ? "custom-assistant" : "relay",
+                  undefined,
+                  (warning) => {
+                    this.error = warning;
+                    this.notify();
+                  },
+                ),
+              }
+            : {}),
           orchestrationAutoApproval: this.orchestrationAutoApproval,
           initialSettings: this.modelDefaults?.selections(provider, "orchestrator") ?? [],
           mcpServers: [

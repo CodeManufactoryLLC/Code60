@@ -21,7 +21,9 @@
     "src/application/memory-worker.ts",
     "scripts/dev-backend.mjs",
     ".devcontainer/init-volumes.mjs",
-    "test/fixtures/fake-transmission.mjs"
+    "test/fixtures/fake-transmission.mjs",
+    "src/agents/mcp-adapter.ts",
+    "test/fixtures/mcp-upstream.mjs"
   ],
   "project": [
     "src/**/*.{ts,tsx,cts}",

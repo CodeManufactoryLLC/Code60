@@ -22,6 +22,7 @@ const ALLOWED: Readonly<Record<string, readonly string[]>> = {
 /** Packages only one module may import, so integrations stay in their module. */
 const PACKAGE_OWNERS: Readonly<Record<string, string>> = {
   "@agentclientprotocol/sdk": "agents",
+  "@modelcontextprotocol/sdk": "agents",
   react: "renderer",
   "react-dom": "renderer",
   "react-markdown": "renderer",

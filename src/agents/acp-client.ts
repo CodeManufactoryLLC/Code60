@@ -24,6 +24,7 @@ import {
 const AUTH_REQUIRED = -32000;
 
 export interface AcpSession {
+  readonly restoreSupported: boolean;
   readonly sessionId: string;
   readonly sessionState: SessionState;
   setMode(change: ModeChange): Promise<void>;
@@ -365,6 +366,7 @@ async function connectSession(
     }
   };
 
+  let restoreSupported = false;
   try {
     const init = await call(
       ctx.request(methods.agent.initialize, {
@@ -378,6 +380,7 @@ async function connectSession(
     if (init.protocolVersion !== PROTOCOL_VERSION) {
       throw new AcpError(`agent uses unsupported ACP protocol version ${init.protocolVersion}`);
     }
+    restoreSupported = restoreMethod(init.agentCapabilities ?? {}) !== undefined;
     for (const server of options.mcpServers ?? []) {
       if (
         (server.type === "http" || server.type === "sse") &&
@@ -446,6 +449,7 @@ async function connectSession(
 
   return {
     sessionId: id,
+    restoreSupported,
     get sessionState() {
       return state.state;
     },

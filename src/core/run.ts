@@ -28,6 +28,7 @@ import type { Clock } from "./clock.js";
 import { type Processes, recordedAgentAlive } from "./processes.js";
 import type { RecordStore } from "./records.js";
 import { buildHandoffPrompt, HANDOFF_PROMPT_LIMIT } from "./recovery.js";
+import { type SessionResourceFactory, sessionResourceAgents } from "./session-resources.js";
 import type {
   FinalRunStatus,
   Mode,
@@ -65,6 +66,7 @@ export interface RunSettings {
   command: readonly [string, ...string[]];
   env?: Readonly<Record<string, string>>;
   mcpServers?: readonly AgentMcpServer[];
+  sessionResources?: SessionResourceFactory;
   /** Additional context sent with each user turn, but not recorded as user-authored text. */
   promptContext?: () => string;
   turnTimeoutMs: number;
@@ -128,6 +130,7 @@ let permissionSequence = 0;
 /** One agent session, in its own worktree or directly in a directory, driven through the run lifecycle. */
 export class Run {
   private readonly memory: RunMemory | undefined;
+  private readonly agents: Agents;
   private readonly lifecycleOperation = randomUUID();
   private turnOperation = this.lifecycleOperation;
   private turnStarted = 0;
@@ -160,6 +163,23 @@ export class Run {
     private readonly deps: RunDeps,
     private readonly settings: RunSettings,
   ) {
+    this.agents = sessionResourceAgents(
+      deps.agents,
+      settings.sessionResources,
+      record.id,
+      settings.turnTimeoutMs,
+      {
+        idle: () =>
+          this.status === "idle" &&
+          !this.turnActive &&
+          !this.ending &&
+          !this.modeChanging &&
+          !this.shutdownRequested,
+        canRestore: () =>
+          this.session?.restoreSupported === true && this.agents.restore !== undefined,
+        reconnect: () => this.reconnect(),
+      },
+    );
     this.memory =
       settings.mode === "interactive" ? deps.memory?.(record, settings.repoDir) : undefined;
     this.finished = new Promise((resolve) => {
@@ -270,7 +290,7 @@ export class Run {
         reason: "This run has no saved ACP session ID to restore.",
       };
     }
-    if (!this.deps.agents.restore) {
+    if (!this.agents.restore) {
       this.log("recovery.end", "failed");
       return {
         type: "handoff-required",
@@ -288,7 +308,7 @@ export class Run {
           ),
         );
       session = await this.startRecoveryAgent((signal) =>
-        (this.deps.agents.restore as NonNullable<Agents["restore"]>)(
+        (this.agents.restore as NonNullable<Agents["restore"]>)(
           {
             name: this.record.agent,
             ...this.diagnostic(),
@@ -357,7 +377,7 @@ export class Run {
     let session: AgentSession;
     try {
       session = await this.startRecoveryAgent((signal) =>
-        this.deps.agents.start(
+        this.agents.start(
           {
             name: this.record.agent,
             ...this.diagnostic(),
@@ -387,6 +407,57 @@ export class Run {
     });
     await this.setStatus("running", "Started a fresh session with a handoff summary.");
     void this.runTurn(text, true, true, sent, origin);
+  }
+
+  /** Replace an idle physical session without manufacturing or replaying a prompt. */
+  private async reconnect(): Promise<void> {
+    const previous = this.session;
+    if (
+      this.status !== "idle" ||
+      this.turnActive ||
+      this.modeChanging ||
+      this.ending ||
+      this.shutdownRequested ||
+      !previous?.restoreSupported ||
+      !this.agents.restore
+    )
+      throw new RefusedError("Reconnect requires an idle session with ACP restoration support");
+    this.modeChanging = true;
+    this.deps.onChange();
+    this.session = undefined;
+    try {
+      await previous.stop(this.settings.killGraceMs);
+      const session = await this.startRecoveryAgent((signal) =>
+        (this.agents.restore as NonNullable<Agents["restore"]>)(
+          {
+            name: this.record.agent,
+            command: this.settings.command,
+            cwd: this.record.worktree,
+            ...(this.settings.env === undefined ? {} : { env: this.settings.env }),
+            ...(this.settings.mcpServers === undefined
+              ? {}
+              : { mcpServers: this.settings.mcpServers }),
+          },
+          previous.sessionId,
+          signal,
+        ),
+      );
+      await this.installSession(session);
+      this.emit({
+        type: "note",
+        text: "Reconnected MCP resources in a fresh ACP session. No prompt was replayed.",
+      });
+    } catch {
+      this.session ??= previous;
+      await this.end({
+        status: "failed",
+        reason: "Session reconnect failed; no work was replayed",
+      });
+      throw new RefusedError("Session reconnect failed; start a new session");
+    } finally {
+      this.modeChanging = false;
+      this.deps.onChange();
+    }
   }
 
   async setMode(value: ModeChange): Promise<void> {
@@ -544,7 +615,8 @@ export class Run {
   }
 
   private async startAndRun(): Promise<void> {
-    const { git, agents, clock } = this.deps;
+    const { git, clock } = this.deps;
+    const agents = this.agents;
     const { record, settings } = this;
     await this.setStatus("running");
     if (record.branch !== null && record.base !== null) {
@@ -906,7 +978,7 @@ export class Run {
               await session.stop(this.settings.killGraceMs);
               session = await this.startRecoveryAgent(
                 (start) =>
-                  this.deps.agents.start(
+                  this.agents.start(
                     {
                       name: this.record.agent,
                       command: settings.command,

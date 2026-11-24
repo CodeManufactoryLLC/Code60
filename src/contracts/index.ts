@@ -65,4 +65,9 @@ export function boundedString(label: string, max: number) {
 
 export * from "./mcp-editing.js";
 export * from "./mcp-management.js";
+export type {
+  McpRuntimeRequest,
+  McpRuntimeResponse,
+} from "./mcp-runtime.js";
+export { mcpRuntimeRequestSchema } from "./mcp-runtime.js";
 export * from "./workflows.js";

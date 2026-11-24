@@ -221,7 +221,7 @@ export class DesktopKnowledge {
     let action: string | null = null;
     if (cap.id === "mcp-servers") {
       reason =
-        "Human-only configuration management. User scope needs no database; project scope requires a live open project. Storage validity/recovery may block writes. Authentication and connection health are not checked.";
+        "Human-only configuration and connection controls. User scope needs no database; project scope requires a live open project. Storage validity/recovery may block writes and new connections. Project definitions require approval for the exact saved revision. Authentication and observed health are separate; catalog availability does not check them.";
     } else if (cap.id === "orchestration-permissions") {
       reason =
         "One toggle controls new permission requests across orchestration chats and their workers, including during a turn.";

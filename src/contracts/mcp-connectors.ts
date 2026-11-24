@@ -37,11 +37,17 @@ const headerName = z
   .string()
   .max(MCP_CONNECTOR_LIMITS.bindingName)
   .regex(/^[!#$%&'*+.^_`|~0-9a-z-]+$/i);
-const env = z
-  .record(environmentName, z.union([literal, secret]))
+// Zod records deliberately skip this key. Reject it before parsing rather than silently losing data.
+const recordInput = z
+  .unknown()
+  .refine(
+    (value) => value === null || typeof value !== "object" || !Object.hasOwn(value, "__proto__"),
+  );
+const env = recordInput
+  .pipe(z.record(environmentName, z.union([literal, secret])))
   .refine((value) => Object.keys(value).length <= MCP_CONNECTOR_LIMITS.bindings);
-const headers = z
-  .record(headerName, z.union([literal, headerSecret]))
+const headers = recordInput
+  .pipe(z.record(headerName, z.union([literal, headerSecret])))
   .refine((value) => Object.keys(value).length <= MCP_CONNECTOR_LIMITS.bindings)
   .refine((value) => {
     const names = Object.keys(value).map((name) => name.toLowerCase());
@@ -112,14 +118,16 @@ const definition = z.discriminatedUnion("type", [
 
 export const mcpConnectorDocumentSchema = z.strictObject({
   version: z.literal(1),
-  servers: z
-    .record(
-      z
-        .string()
-        .max(MCP_CONNECTOR_LIMITS.id)
-        .regex(/^[a-z0-9][a-z0-9-]*$/)
-        .refine((id) => id !== "code60"),
-      definition,
+  servers: recordInput
+    .pipe(
+      z.record(
+        z
+          .string()
+          .max(MCP_CONNECTOR_LIMITS.id)
+          .regex(/^[a-z0-9][a-z0-9-]*$/)
+          .refine((id) => id !== "code60"),
+        definition,
+      ),
     )
     .refine((servers) => Object.keys(servers).length <= MCP_CONNECTOR_LIMITS.servers),
 });
@@ -153,7 +161,14 @@ export interface McpConnectorConfigurationStatus {
 /** Observations are independent of configuration eligibility; absence means not checked. */
 interface McpConnectorObservation {
   authentication: "not-checked" | "not-required" | "required" | "authenticated" | "failed";
-  connection: "not-tested" | "connecting" | "connected" | "failed" | "unsupported" | "disconnected";
+  connection:
+    | "not-tested"
+    | "connecting"
+    | "connected"
+    | "failed"
+    | "unsupported"
+    | "disconnected"
+    | "cleanup-unresolved";
   observedAt?: string;
   sessionId?: string;
   provider?: string;

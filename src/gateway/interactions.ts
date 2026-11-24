@@ -30,6 +30,11 @@ export class Interactions {
     private readonly emit: (owner: string, value: Interaction) => void,
     private readonly ended: (owner: string, id: string) => void = () => {},
   ) {}
+  page(): string {
+    const owner = this.context.getStore();
+    if (!owner || !this.active.has(owner)) throw new Error("Authenticated page is detached");
+    return owner;
+  }
   run<T>(owner: string, action: () => T): T {
     return this.context.run(owner, action);
   }

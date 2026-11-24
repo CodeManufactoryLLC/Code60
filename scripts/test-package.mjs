@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -32,6 +32,16 @@ try {
   const root = join(prefix, "node_modules/code60");
   const installed = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
   assert.equal(installed.engines.node, ">=24 <25");
+  assert.equal(installed.dependencies["@modelcontextprotocol/sdk"], "1.32.2");
+  const adapter = join(root, "dist/agents/mcp-adapter.js");
+  await stat(adapter);
+  const denied = spawnSync(process.execPath, [adapter], {
+    env: {},
+    encoding: "utf8",
+    timeout: 10_000,
+  });
+  assert.equal(denied.status, 1);
+  assert.equal(denied.stdout, "");
   assert.equal(installed.dependencies.electron, undefined);
   assert.equal(installed.dependencies["electron-updater"], undefined);
   const help = execFileSync(process.execPath, [join(root, installed.bin.code60), "--help"], {

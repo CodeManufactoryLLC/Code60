@@ -3,6 +3,7 @@ import { readdir, readFile, rm } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { connectMcpUpstream } from "../agents/index.js";
 import {
   ApplicationHost,
   DesktopAutomations,
@@ -34,6 +35,7 @@ import {
   writePrivateJson,
 } from "../platform/index.js";
 import { Interactions } from "./interactions.js";
+import { createMcpBroker } from "./mcp-broker.js";
 import { applicationOperations } from "./operations.js";
 import { Sessions, sameSecret } from "./sessions.js";
 import { readGatewaySettings, writeGatewaySettings } from "./settings.js";
@@ -165,11 +167,26 @@ export async function startGateway(options: GatewayOptions = {}) {
     (owner, value) => send(owner.split(":")[0] ?? "", "interaction", value),
     (owner, id) => send(owner.split(":")[0] ?? "", "interaction-ended", id),
   );
+  let connectorBroker: ReturnType<typeof createMcpBroker> | undefined;
+  const closeConnectors = async () => {
+    await connectorBroker?.then(
+      (broker) => broker.close(),
+      () => {},
+    );
+  };
   const application = new ApplicationHost(
     options.deps ?? defaultDeps(logs.sink),
     env,
     interactions,
     {
+      mcpRuntime: {
+        connect: connectMcpUpstream,
+        expose: async (input) => {
+          if (closing) throw new Error("MCP broker is stopping");
+          connectorBroker ??= createMcpBroker();
+          return (await connectorBroker).expose(input);
+        },
+      },
       relay: true,
       memory: true,
       openDatabase: openProjectDatabase,
@@ -263,7 +280,10 @@ export async function startGateway(options: GatewayOptions = {}) {
   ];
   const detach = async (session: string) => {
     const owner = owners.get(session);
-    if (owner) interactions.detach(owner);
+    if (owner) {
+      interactions.detach(owner);
+      application.mcpDetach(owner);
+    }
     owners.delete(session);
     clients.delete(session);
     if (sessions.controlling !== session) return;
@@ -599,7 +619,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     await pairingChange?.catch(() => {});
     interactions.close();
     const results = await Promise.allSettled([
-      application.shutdown(),
+      application.shutdown().finally(closeConnectors),
       scheduler?.stop(),
       workflows.close(),
     ]);
@@ -658,7 +678,7 @@ export async function startGateway(options: GatewayOptions = {}) {
   } catch (error) {
     for (const dispose of disposers) dispose();
     await Promise.allSettled([
-      application.shutdown(),
+      application.shutdown().finally(closeConnectors),
       scheduler?.stop(),
       workflows.close(),
       logs.close(),

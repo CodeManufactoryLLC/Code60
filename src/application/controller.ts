@@ -74,6 +74,8 @@ import {
   type McpResetRequest,
   type McpResetSelection,
   type McpRestore,
+  type McpRuntimeRequest,
+  type McpRuntimeResponse,
   type McpSaveRequest,
   type McpSaveText,
   type McpTargetAddress,
@@ -83,6 +85,7 @@ import {
   mcpResetPreviewSchema,
   mcpResetSchema,
   mcpRestoreSchema,
+  mcpRuntimeRequestSchema,
   mcpSaveSchema,
   mcpSaveTextSchema,
   mcpTargetSchema,
@@ -218,6 +221,7 @@ import {
   type KnowledgeRuntime,
 } from "./knowledge.js";
 import { logProjectId } from "./log-store.js";
+import type { McpConnectorRole } from "./mcp-configuration.js";
 import {
   type ControlArgs,
   formatWorkerUpdate,
@@ -226,6 +230,7 @@ import {
 } from "./mcp-control.js";
 import { createMcpGateway } from "./mcp-gateway.js";
 import { McpManagement } from "./mcp-management.js";
+import { McpRuntime, type McpRuntimePorts } from "./mcp-runtime.js";
 import { type McpTableRow, readMcpTool } from "./mcp-tables.js";
 import { MemoryService } from "./memory-service.js";
 import { ModelDefaults } from "./model-defaults.js";
@@ -257,6 +262,7 @@ export interface DesktopDialogs {
 }
 
 export interface DesktopStorage {
+  mcpRuntime?: McpRuntimePorts;
   /** App-owned Relay runtime. Omit for consumers that host only project work. */
   relay?: boolean;
   ragModelRoot?: string;
@@ -341,6 +347,7 @@ interface Batch {
 /** Owns one workspace and independent batches. All history mutations are serialized. */
 export class ApplicationHost {
   readonly mcp: McpManagement;
+  private readonly connectors: McpRuntime;
   mcpReadText(value: McpTargetAddress) {
     const request = parseMcpManagement(mcpTargetSchema, value);
     return this.mcpOperation(() => this.mcp.readText(request));
@@ -374,7 +381,34 @@ export class ApplicationHost {
   }
   mcpRead(value: McpTargetAddress) {
     const target = parseMcpManagement(mcpTargetSchema, value);
-    return this.mcpOperation(() => this.mcp.read(target));
+    return this.mcpOperation(async () => {
+      const read = await this.mcp.read(target);
+      const approved =
+        target.scope === "project" &&
+        (await this.connectors.approval(target.targetId, read.revision).catch(() => false));
+      for (const row of read.rows) {
+        if (approved && row.source.scope === "project") {
+          row.approval = "approved";
+          row.eligibility = row.enabled ? "eligible" : "disabled";
+        }
+        const targetId =
+          row.source.scope === "project"
+            ? row.source.projectId
+            : (await this.mcp.targets()).targets.find((t) => t.address.scope === "user")!.address
+                .targetId;
+        const observed = this.connectors.observation(targetId, row.id, row.source.revision);
+        row.observation = {
+          authentication:
+            observed === "authentication-required"
+              ? "required"
+              : observed === "connected"
+                ? "not-required"
+                : "not-checked",
+          connection: observed === "authentication-required" ? "failed" : observed,
+        };
+      }
+      return read;
+    });
   }
   mcpSave(value: McpSaveRequest) {
     const request = parseMcpManagement(mcpSaveSchema, value);
@@ -388,6 +422,191 @@ export class ApplicationHost {
     const request = parseMcpManagement(mcpMoveSchema, value);
     return this.mcpOperation(() => this.mcp.move(request));
   }
+  private connectorResources(role: McpConnectorRole, root?: string) {
+    const owner = this.projectHost.current;
+    let projectPin: string | undefined;
+    return this.connectors.factory(
+      async () => {
+        this.projectHost.assertCurrent(owner);
+        const snapshot = await this.mcp.runtimeSnapshot(
+          role === "project-chat" && !root ? "relay" : role,
+          root,
+          projectPin,
+        );
+        this.projectHost.assertCurrent(owner);
+        projectPin ??= snapshot.project?.projectId;
+        return snapshot;
+      },
+      (warning) => {
+        owner.state.warnings.push(warning);
+        this.changed();
+      },
+    );
+  }
+  mcpDetach(page: string) {
+    this.connectors.detach(page);
+  }
+  private readonly mcpRuntimeRequests = new Map<
+    string,
+    { fingerprint: string; result: Promise<McpRuntimeResponse> }
+  >();
+  async mcpRuntime(value: unknown, page: string): Promise<McpRuntimeResponse> {
+    const request = parseMcpManagement(mcpRuntimeRequestSchema, value);
+    if ("target" in request)
+      await this.mcpOperation(() => this.mcp.authorizeRuntimeAddress(request.target));
+    if (!("requestId" in request) || request.action === "cancel-test")
+      return this.performMcpRuntime(request, page);
+    const fingerprint = createHash("sha256")
+      .update(JSON.stringify([request, page]))
+      .digest("hex");
+    const previous = this.mcpRuntimeRequests.get(request.requestId);
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) throw new Error("Conflicting MCP request ID");
+      return previous.result;
+    }
+    if (this.mcpRuntimeRequests.size >= 4096)
+      throw new Error(
+        "MCP runtime request limit reached; restart the backend before more requests",
+      );
+    const result = this.performMcpRuntime(request, page);
+    this.mcpRuntimeRequests.set(request.requestId, { fingerprint, result });
+    return result;
+  }
+  private async performMcpRuntime(
+    request: McpRuntimeRequest,
+    page: string,
+  ): Promise<McpRuntimeResponse> {
+    if (request.action === "cancel-test") {
+      this.connectors.cancelTest(page, request.requestId);
+      return { completed: true };
+    }
+    if (request.action === "enable") {
+      const result = await this.mcpOperation(() => this.mcp.setEnabled(request));
+      if (result.status === "recovery-required")
+        throw new Error("MCP configuration recovery is required; enablement outcome is uncertain");
+      return { completed: true };
+    }
+    if (request.action === "approve" || request.action === "revoke-approval") {
+      if (request.target.scope !== "project")
+        throw new Error("Only project configuration requires approval");
+      await this.mcpOperation(() =>
+        this.connectors.approve(
+          request.target.targetId,
+          request.expectedRevision,
+          request.requestId,
+          request.action === "approve",
+          () => this.mcp.runtimeTarget(request.target, request.expectedRevision),
+        ),
+      );
+      return { completed: true };
+    }
+    if (request.action === "status") {
+      await this.mcpOperation(() => this.mcp.authorizeRuntimeAddress(request.target));
+      const current = await this.mcpOperation(() => this.mcp.runtimeTarget(request.target)).catch(
+        () => null,
+      );
+      return {
+        sessions: this.connectors.status(request.target.targetId),
+        approved:
+          request.target.scope === "user" ||
+          Boolean(
+            current &&
+              (await this.connectors
+                .approval(request.target.targetId, current.saved.revision)
+                .catch(() => false)),
+          ),
+      };
+    }
+    if (request.action === "preview-disconnect") {
+      await this.mcpOperation(() => this.mcp.authorizeRuntimeAddress(request.target));
+      return this.connectors.review(
+        request.target.targetId,
+        request.sessionGeneration,
+        "disconnect",
+        request.serverIds,
+        page,
+      );
+    }
+    if (request.action === "reconnect" || request.action === "disconnect") {
+      await this.connectors.connectionAction(
+        request.target.targetId,
+        request.sessionGeneration,
+        request.action,
+        request.serverIds,
+        request.requestId,
+        async () => {
+          await this.mcpOperation<unknown>(() =>
+            request.action === "disconnect"
+              ? this.mcp.authorizeRuntimeAddress(request.target)
+              : this.mcp.runtimeTarget(request.target, request.expectedRevision),
+          );
+          await this.connectors.validateReview(
+            request.previewId,
+            page,
+            request.target.targetId,
+            request.sessionGeneration,
+            request.action,
+            request.serverIds,
+          );
+        },
+      );
+      return { completed: true };
+    }
+    const captured = await this.mcpOperation(() =>
+      this.mcp.runtimeTarget(
+        request.target,
+        "expectedRevision" in request ? request.expectedRevision : undefined,
+      ),
+    );
+    if (request.action === "review-approval")
+      return {
+        approved:
+          request.target.scope === "user" ||
+          (await this.connectors.approval(request.target.targetId, captured.saved.revision)),
+      };
+    if (request.action === "test") {
+      const definition = captured.saved.document!.servers[request.serverId];
+      if (!definition) throw new Error("MCP server no longer exists");
+      if (
+        request.target.scope === "project" &&
+        !(await this.connectors.approval(request.target.targetId, request.expectedRevision))
+      )
+        throw new Error("Review and approve this project configuration before testing");
+      if (
+        definition.type === "stdio" &&
+        !(await this.dialogs.confirm(
+          "Test MCP server?",
+          "This launches the configured command with its arguments and bindings. Only initialization and tool discovery are performed.",
+        ))
+      )
+        return { connection: "cancelled", tools: 0 };
+      await this.mcpOperation(() =>
+        this.mcp.runtimeTarget(request.target, request.expectedRevision),
+      );
+      const result = await this.connectors.test({
+        definition,
+        cwd: captured.cwd,
+        page,
+        requestId: request.requestId,
+      });
+      this.connectors.noteTest(
+        request.target.targetId,
+        request.serverId,
+        request.expectedRevision,
+        result.connection,
+      );
+      return result;
+    }
+    const action = request.action.endsWith("reconnect") ? "reconnect" : "disconnect";
+    return this.connectors.review(
+      request.target.targetId,
+      request.sessionGeneration,
+      action,
+      request.serverIds,
+      page,
+    );
+  }
+
   private mcpOperation<T>(operation: () => Promise<T>) {
     // Scope is explicit in requests, never captured from the selected sidebar owner.
     return this.projectHost.run(this.projectHost.fallback, () => this.exclusive(operation));
@@ -1982,6 +2201,27 @@ export class ApplicationHost {
             : [],
         ),
     );
+    this.connectors = new McpRuntime(
+      join(stateHome(env), "code60", "mcp-runtime"),
+      storage.mcpRuntime,
+      () => this.mcp.notifyRuntime(),
+      Object.fromEntries(
+        Object.entries(env).filter(
+          (entry): entry is [string, string] =>
+            [
+              "PATH",
+              "HOME",
+              "USER",
+              "LOGNAME",
+              "TMPDIR",
+              "LANG",
+              "LC_ALL",
+              "SHELL",
+              "SYSTEMROOT",
+            ].includes(entry[0]) && entry[1] !== undefined,
+        ),
+      ),
+    );
     this.modelDefaults = new ModelDefaults(storage.preferences, () => this.changed(null));
     this.memory = new MemoryService(
       join(stateHome(env), "code60", "memory"),
@@ -2015,6 +2255,14 @@ export class ApplicationHost {
           this.modelDefaults,
           this.orchestrationAutoApproval,
           this.reportPlanTimingFailure,
+          (role, root, warning) => {
+            let projectPin: string | undefined;
+            return this.connectors.factory(async () => {
+              const snapshot = await this.mcp.runtimeSnapshot(role, root, projectPin);
+              projectPin ??= snapshot.project?.projectId;
+              return snapshot;
+            }, warning);
+          },
         )
       : undefined;
     this.relay?.attachKnowledge(this.knowledge);
@@ -3272,6 +3520,7 @@ export class ApplicationHost {
         config,
         {
           mcpServers,
+          sessionResources: this.connectorResources("project-chat", this.workspace?.dir),
           orchestrationAutoApproval: this.orchestrationAutoApproval,
           initialSettings: this.modelDefaults.selections(provider, "orchestrator"),
           promptContext: () =>
@@ -3443,6 +3692,7 @@ export class ApplicationHost {
           orchestrationAutoApproval: this.orchestrationAutoApproval,
           initialSettings: this.modelDefaults.selections(saved.provider, "orchestrator"),
           mcpServers: await this.mcpAgentServer(session),
+          sessionResources: this.connectorResources("project-chat", this.workspace?.dir),
           promptContext: () =>
             `${assembleOperatingContract(
               effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
@@ -5492,6 +5742,7 @@ export class ApplicationHost {
         this.workerOverrides(id),
         enabledConfig,
         this.modelDefaults.selections(run.record.agent, "worker"),
+        this.connectorResources("worker", workspace.dir),
       );
     } catch (error) {
       if (
@@ -5549,6 +5800,7 @@ export class ApplicationHost {
       this.workerOverrides(id),
       enabledConfig,
       this.modelDefaults.selections(run.record.agent, "worker"),
+      this.connectorResources("worker", workspace.dir),
     );
     const summary = buildHandoffPrompt(
       run.record,
@@ -5626,6 +5878,7 @@ export class ApplicationHost {
         env: this.env,
         mode: "interactive",
         requireIsolation: true,
+        sessionResources: this.connectorResources("worker", workspace.dir),
         ...(registerWorkers ? { orchestrationAutoApproval: this.orchestrationAutoApproval } : {}),
         initialSettings: (provider) => this.modelDefaults.selections(provider, "worker"),
       },
@@ -6404,7 +6657,10 @@ export class ApplicationHost {
     this.details.clear();
     this.closing = true;
     const results = await Promise.allSettled([
-      this.queue.then(() => this.mcp.close()),
+      this.connectors
+        .close()
+        .then(() => this.queue)
+        .then(() => this.mcp.close()),
       this.memory.close(),
       this.clearSearch(),
       this.cancelRag(),

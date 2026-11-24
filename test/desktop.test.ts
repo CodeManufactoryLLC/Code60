@@ -9,6 +9,7 @@ import type {
   ChatSession,
   ConversationCoordinator,
 } from "../src/application/conversation-coordinator.js";
+import type { McpRuntimePorts } from "../src/application/index.js";
 import type { DesktopPreferences } from "../src/application/preferences.js";
 import { ProjectSessionStore } from "../src/application/project-session.js";
 import { type ProjectDatabase, sqliteAvailable } from "../src/application/projects.js";
@@ -43,6 +44,7 @@ import { privateDirectory } from "../src/platform/index.js";
 import { FakeAgents, FakeGit, FakeProcesses } from "./fakes.js";
 import { verifiedAgents } from "./fixtures/verified-agents.js";
 
+let connectorStarts: Parameters<McpRuntimePorts["connect"]>[0][];
 let directory: string;
 let controller: ApplicationHost;
 let agents: FakeAgents;
@@ -237,6 +239,7 @@ beforeEach(async () => {
   // Keep those generated paths below the Windows helper's 248-character limit.
   directory = await fs.mkdtemp(join(tmpdir(), "c60-"));
   agents = new FakeAgents();
+  connectorStarts = [];
   git = new FakeGit();
   git.repoInfo = async () => ({ topLevel: directory, commonDir: join(directory, ".git") });
   confirm = vi.fn(async () => true);
@@ -259,6 +262,22 @@ beforeEach(async () => {
     {
       openDatabase,
       preferences,
+      mcpRuntime: {
+        connect: async (input) => {
+          connectorStarts.push(input);
+          return { tools: [], call: async () => ({ content: [] }), close: async () => {} };
+        },
+        expose: async (input) => ({
+          descriptor: {
+            type: "stdio",
+            name: input.id,
+            command: "/fixed-adapter",
+            args: [],
+            env: [{ name: "CAPABILITY", value: randomUUID() }],
+          },
+          revoke: async () => {},
+        }),
+      },
       ragExecutor,
     },
   );
@@ -462,26 +481,30 @@ async function configureMcp(version = "first") {
   const path = join(directory, "config", "code60");
   await fs.mkdir(path, { recursive: true });
   await fs.writeFile(
-    join(path, "config.json"),
+    join(path, "mcp.json"),
     JSON.stringify({
-      mcpServers: {
+      version: 1,
+      servers: {
         tools: {
+          label: "Tools",
+          enabled: true,
           type: "stdio",
           command: "node",
           args: [`/private/${version}.js`],
-          env: { TOKEN: `private-${version}` },
+          env: { TOKEN: { value: `private-${version}` } },
         },
       },
     }),
+    { mode: 0o600 },
   );
   await controller.poll(["config"]);
   return [
     {
-      name: "tools",
       type: "stdio",
-      command: "node",
-      args: [`/private/${version}.js`],
-      env: [{ name: "TOKEN", value: `private-${version}` }],
+      name: "tools",
+      command: "/fixed-adapter",
+      args: [],
+      env: [{ name: "CAPABILITY", value: expect.any(String) }],
     },
   ];
 }
@@ -2335,7 +2358,11 @@ describe("retained project runtimes", {
     });
     expect(controller.snapshot().directory).toBe(b.path);
     expect(controller.snapshot().runs.some((run) => run.record.id === worker.runId)).toBe(false);
-    const session = agents.sessions.at(-1);
+    await vi.waitFor(() =>
+      expect(agents.specs.some((spec) => spec.cwd.endsWith(worker.runId as string))).toBe(true),
+    );
+    const session =
+      agents.sessions[agents.specs.findIndex((spec) => spec.cwd.endsWith(worker.runId as string))];
     await vi.waitFor(() => expect(session?.turnActive).toBe(true));
     session?.update({ type: "message", text: "A result while B is selected" });
     await controller.projectAction({ type: "select", projectId: a.id });
@@ -3932,6 +3959,52 @@ describe("app-wide orchestration chat", {
     expect((await call("code60_get_activity_context")).body.result.scope).not.toBe(context.scope);
   });
 
+  it("replays identical human runtime requests without another confirmation or publication and rejects changed arguments", async () => {
+    await configureMcp();
+    const target = (await controller.mcpTargets()).targets.find(
+      (target) => target.address.scope === "user",
+    )?.address;
+    if (!target) throw new Error("Missing user target");
+    const before = await controller.mcpRead(target);
+    const request = {
+      action: "enable",
+      target,
+      expectedRevision: before.revision,
+      requestId: randomUUID(),
+      serverId: "tools",
+      enabled: false,
+    };
+    const saved = await controller.mcpRuntime(request, "synthetic-page");
+    expect(await controller.mcpRuntime(request, "synthetic-page")).toEqual(saved);
+    await expect(
+      controller.mcpRuntime({ ...request, enabled: true }, "synthetic-page"),
+    ).rejects.toThrow("Conflicting MCP request ID");
+    expect((await controller.mcpBackups(target)).length).toBe(1);
+    const current = await controller.mcpRead(target);
+    const test = {
+      action: "test",
+      target,
+      expectedRevision: current.revision,
+      requestId: randomUUID(),
+      serverId: "tools",
+    };
+    confirm.mockClear();
+    const tested = await controller.mcpRuntime(test, "synthetic-page");
+    expect(await controller.mcpRuntime(test, "synthetic-page")).toEqual(tested);
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(connectorStarts).toHaveLength(1);
+    await expect(
+      controller.mcpRuntime({ ...test, expectedRevision: before.revision }, "synthetic-page"),
+    ).rejects.toThrow("Conflicting MCP request ID");
+    expect(
+      await controller.mcpRuntime(
+        { action: "cancel-test", requestId: test.requestId },
+        "synthetic-page",
+      ),
+    ).toEqual({ completed: true });
+    expect(JSON.stringify(controller.snapshot())).not.toContain("private-first");
+  });
+
   it("keeps live chat/manual servers on reload and applies new config to new/retried chats and manual runs", async () => {
     const first = await configureMcp();
     const id = await ready();
@@ -3939,8 +4012,8 @@ describe("app-wide orchestration chat", {
     const [manualId] = await controller.start({ ...request, prompt: "hello" });
     await vi.waitFor(() => expect(agents.specs).toHaveLength(2));
     expect(agents.specs[0]?.mcpServers).toEqual([
-      ...first,
       expect.objectContaining({ name: "code60" }),
+      ...first,
     ]);
     expect(agents.specs[1]?.mcpServers).toEqual(first);
     const original = structuredClone(agents.specs);
@@ -3962,14 +4035,25 @@ describe("app-wide orchestration chat", {
     await controller.orchestrationChatAction({ type: "new" });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     expect(agents.specs[3]?.mcpServers).toEqual([
-      ...next,
       expect.objectContaining({ name: "code60" }),
+      ...next,
     ]);
     await controller.orchestrationChatAction({ type: "restart", id });
     await vi.waitFor(() => expect(agents.specs).toHaveLength(5));
     expect(agents.specs[4]?.mcpServers).toEqual([
-      ...next,
       expect.objectContaining({ name: "code60" }),
+      ...next,
+    ]);
+    expect(
+      connectorStarts.map((input) =>
+        input.definition.type === "stdio" ? input.definition.args : [],
+      ),
+    ).toEqual([
+      ["/private/first.js"],
+      ["/private/first.js"],
+      ["/private/next.js"],
+      ["/private/next.js"],
+      ["/private/next.js"],
     ]);
     expect(JSON.stringify(controller.snapshot())).not.toContain("private-next");
     expect(JSON.stringify(controller.snapshot())).not.toContain("/private/first.js");
@@ -5812,8 +5896,8 @@ describe("orchestrated workers over ACP", {
     expect(agents.specs.find((spec) => spec.cwd.endsWith(runId))?.mcpServers).toEqual(first);
     const next = await configureMcp("next");
     expect(agents.specs[0]?.mcpServers).toEqual([
-      ...first,
       expect.objectContaining({ name: "code60" }),
+      ...first,
     ]);
     await call("code60_finish_agent", { scope, runId });
     await vi.waitFor(() =>

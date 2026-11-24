@@ -40,3 +40,24 @@ it("expires unanswered decisions and dismisses the browser dialog", async () => 
   expect(interactions.list("page")).toEqual([]);
   await expect(interactions.choices("page", { id })).rejects.toThrow("expired");
 });
+
+it("captures authenticated page ownership across awaits and rejects detached or absent owners", async () => {
+  const interactions = new Interactions([], () => {});
+  expect(() => interactions.page()).toThrow("detached");
+  expect(() => interactions.run("absent", () => interactions.page())).toThrow("detached");
+  interactions.attach("first");
+  interactions.attach("second");
+  await Promise.all(
+    ["first", "second"].map((owner) =>
+      interactions.run(owner, async () => {
+        await Promise.resolve();
+        expect(interactions.page()).toBe(owner);
+      }),
+    ),
+  );
+  interactions.detach("first");
+  expect(() => interactions.run("first", () => interactions.page())).toThrow("detached");
+  expect(interactions.run("second", () => interactions.page())).toBe("second");
+  interactions.close();
+  expect(() => interactions.run("second", () => interactions.page())).toThrow("detached");
+});

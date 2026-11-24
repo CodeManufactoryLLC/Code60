@@ -7,6 +7,7 @@ import type {
   Orchestrator,
   RunEvent,
   RunRecord,
+  SessionResourceFactory,
   SessionSelection,
   Workspace,
 } from "../core/index.js";
@@ -79,6 +80,10 @@ export class ExecutionHost {
     private readonly hooks: {
       orchestrationAutoApproval?: () => boolean;
       authorize(owner: ExecutionOwner): void;
+      sessionResources?(
+        owner: ExecutionOwner,
+        target: ExecutionTarget,
+      ): SessionResourceFactory | undefined;
       event(worker: ExecutionWorker, event: RunEvent): void;
       changed(targetId?: string): void;
       warning(message: string): void;
@@ -287,6 +292,9 @@ export class ExecutionHost {
     const prepared = await prepareRuns(
       deps,
       {
+        ...(this.hooks.sessionResources?.(owner, target)
+          ? { sessionResources: this.hooks.sessionResources(owner, target)! }
+          : {}),
         cwd: target.cwd,
         env: this.env,
         mode: "interactive",

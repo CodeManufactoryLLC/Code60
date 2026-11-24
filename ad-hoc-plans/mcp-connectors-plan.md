@@ -512,3 +512,65 @@ native-platform validation and clean up session-owned test resources.
 **Completion:** all seven phases satisfy their acceptance checks, complete browser
 journeys pass, documentation reflects actual behavior, and any remaining platform
 validation is explicitly recorded before release.
+
+## Phase 5 implementation record (complete)
+
+The dedicated version-one files now supply desktop connections through the same
+application-owned configuration store. Legacy config.json.mcpServers loading is
+removed without migration/fallback. User/open-project guided and JSON operations,
+backups, guarded writes and explicit backend recovery remain intact.
+
+Delivered artifacts include the optional core session-resource hook; application
+connection coordination and private exact-revision/canonical-identity approval;
+agents-owned pinned MCP SDK 1.32.2 stdio/Streamable HTTP transport; a gateway-owned
+private capability broker; and the fixed production stdio adapter. New/load/resume,
+handoff and continuity replacement obtain fresh per-session capabilities. Scheduler,
+verification and isolated helpers have no hook. Canonical resolution is separate
+from actual execution cwd. Both upstream transports use the same provider boundary.
+
+Calls require owning active-turn authority and existing ACP permissions. Cancel,
+Disconnect, replacement and shutdown revoke before cleanup; no business-call replay
+or HTTP resumption/auth retry exists. Limits are four concurrent initializations,
+30-second MCP setup/test budgets, 256 live upstreams, 512 tools and 8 MiB messages.
+Successful connections outlive setup budgets. Stateful HTTP cleanup sends bounded
+DELETE; uncertain cleanup retains ownership/capacity and reports unresolved state.
+
+Human controls cover Enable/Disable, project review/Approve/Revoke, Test/Cancel and
+reviewed Disconnect/Reconnect. Reconnect requires idle plus load/resume, previews
+old and newly eligible connectors, binds the page/configuration/approval/generation
+and never manufactures a prompt. Invalid files block new connections while existing
+instances remain disconnectable. Browser detach cancels tests/decisions and retains
+approved work. JSON drafts remain renderer-owned. References/OAuth still report
+Authentication required; secure credentials and generic OAuth remain phase 6.
+
+Validation is complete. The isolated Linux amd64 devcontainer passed one-worker
+`npm run check`: 308 files / 2,932 tests in 666.12 seconds, including all four
+unchanged coverage gates. Focused production protocol, authority, approval, limits,
+resource/reconnect and durable enablement checks passed. Actual ACP/stdio fixtures
+cover new/load/resume, permissions, calls/cancellation and revoked/cross-session
+capabilities; modern HTTP JSON/event-stream responses and stateful cleanup are
+covered separately. Gated setup/disconnect tests prove that neither an upstream nor
+an adapter completing late can revive revoked authority.
+
+All 11 real-browser MCP journeys passed (nine configuration/editor regressions and
+two runtime journeys), with independent file/private-metadata/native-process checks.
+The separate first-use → acceptance → automatic edits → reload → Undo journey passed.
+Packaging, installed Linux smoke (including local JSON worker and offline model),
+and native macOS packaged-adapter/lease/process-group checks passed. Earlier
+schema/completion/coverage failures and contended five-second real-Git timeouts are
+preserved. The unchanged Relay suite passed all 30 cases in the final full run
+after competing jobs ended; no assertion, timeout or coverage floor was relaxed.
+
+The two owned containers and exported image were removed; empty task-label
+container/image inventories and native PID/listener/temporary-root absence were
+independently verified. Other work's resources and the pre-existing default bridge
+network were preserved. Dependency/build/npm/browser/model caches, BuildKit cache,
+port reservations and evidence remain. Commands, failures and results are under
+`test-results/qa/mcp-connectors-phase-5/`. Phase 5 is delivered as one DCO-signed
+commit pushed to the existing draft PR #317.
+
+The MCP Servers capability descriptor, availability assertions and generated catalog
+are updated for the new human controls. Phase 6 authentication and phase 7 recovery
+GUI/troubleshooting reports remain outstanding; all dedicated-integration, shared
+registration/client ID/secret, hosted-authentication, migration and legacy-SSE
+exclusions remain.

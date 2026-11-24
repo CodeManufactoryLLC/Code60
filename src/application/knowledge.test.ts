@@ -741,7 +741,7 @@ it("describes workflow drafting and execution prerequisites without starting the
   expect(reads).toEqual([]);
 });
 
-it("describes MCP management without claiming authentication, runtime activation or reading definitions", async () => {
+it("describes human MCP connection controls without claiming authentication or exposing definitions", async () => {
   const { knowledge } = setup({ database: null, providers: [], projectOpen: false });
   const capabilities = result(
     await knowledge.call("code60_get_capabilities", { query: "MCP Servers" }, relay),
@@ -753,11 +753,13 @@ it("describes MCP management without claiming authentication, runtime activation
         agentAccess: "human-only",
         availability: expect.objectContaining({
           status: "available",
-          reason: expect.stringContaining("not checked"),
+          reason: expect.stringContaining("configuration and connection controls"),
         }),
       }),
     ]),
   );
-  expect(JSON.stringify(capabilities)).toContain("activation");
+  expect(JSON.stringify(capabilities)).toContain(
+    "Enablement and approval changes affect future connections",
+  );
   expect(JSON.stringify(capabilities)).not.toContain("credentialRef");
 });

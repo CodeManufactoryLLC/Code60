@@ -99,8 +99,17 @@ export function decodeMcpText(value: string): string {
   }
 }
 /** Data conversion only: Zod JIT remains disabled. Refinements stay authoritative in text validation. */
-export const MCP_COMPLETION_SCHEMA = z.toJSONSchema(mcpConnectorDocumentSchema, {
-  io: "input",
-  unrepresentable: "any",
-  target: "draft-07",
-});
+function completionSchema(schema: z.core.$ZodType): z.core.JSONSchema.BaseSchema {
+  return z.toJSONSchema(schema, {
+    io: "input",
+    unrepresentable: "any",
+    target: "draft-07",
+    override: ({ zodSchema, jsonSchema }) => {
+      // Raw-key guards precede normalization. Traverse their structural output
+      // in input mode so optional defaults stay optional, including nested maps.
+      if (zodSchema instanceof z.ZodPipe)
+        Object.assign(jsonSchema, completionSchema(zodSchema.out));
+    },
+  });
+}
+export const MCP_COMPLETION_SCHEMA = completionSchema(mcpConnectorDocumentSchema);

@@ -387,6 +387,9 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface ApplicationClient {
+  mcpRuntime(
+    request: import("./index.js").McpRuntimeRequest,
+  ): Promise<import("./index.js").McpRuntimeResponse>;
   mcpReadText(
     target: import("./index.js").McpTargetAddress,
   ): Promise<import("./index.js").McpTextRead>;
@@ -1065,6 +1068,10 @@ export const parseSearchSummary = (value: unknown): SearchSummaryRequest =>
 export const parseSearchSummaryRequestId = (value: unknown): string =>
   parseValue(memoryRequestIdSchema, value);
 
+export type {
+  McpRuntimeRequest,
+  McpRuntimeResponse,
+} from "../contracts/index.js";
 export {
   decodeMcpText,
   encodeMcpText,
@@ -1095,6 +1102,7 @@ export {
   mcpResetPreviewSchema,
   mcpResetSchema,
   mcpRestoreSchema,
+  mcpRuntimeRequestSchema,
   mcpSaveSchema,
   mcpSaveTextSchema,
   mcpTargetSchema,

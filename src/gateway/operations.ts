@@ -84,6 +84,7 @@ export function applicationOperations(
   const handle = (name: string, action: (value: unknown) => unknown) => {
     operations.set(name, action);
   };
+  handle("mcp-runtime", (value) => controller.mcpRuntime(value, interactions.page()));
   handle("mcp-read-text", (value) =>
     controller.mcpReadText(parseMcpManagement(mcpTargetSchema, value)),
   );

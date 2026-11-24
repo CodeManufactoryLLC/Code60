@@ -343,8 +343,9 @@ export function McpWorkspace({
         <>
           <PageTitle page="mcp-servers" />
           <p>
-            Save writes this dedicated configuration exactly. It does not activate connections. Use
-            credential references; resolved credentials are never inserted here.
+            Save writes this dedicated configuration exactly for future sessions. Existing
+            connections keep their captured state. Use credential references; resolved credentials
+            are never inserted here.
           </p>
           {draft && state && (
             <>

@@ -20,8 +20,10 @@ import {
   type McpTargetAddress,
   type McpTextRead,
 } from "../bridge/index.js";
+import type { McpConnectorRole } from "./mcp-configuration.js";
 import { resolveMcpConnectors } from "./mcp-configuration.js";
 import { McpConfigurationStore, McpStorageError } from "./mcp-configuration-store.js";
+import type { McpRuntimeSnapshot } from "./mcp-runtime.js";
 
 interface Project {
   projectId: string;
@@ -68,6 +70,75 @@ export class McpManagement {
         this.listeners.delete(listener);
       }
     }
+  }
+  notifyRuntime() {
+    this.changed();
+  }
+  async authorizeRuntimeAddress(address: McpTargetAddress) {
+    const store = await this.storage();
+    if (address.scope === "user") {
+      if (
+        !store
+          .targetIds()
+          .some((target) => target.scope === "user" && target.targetId === address.targetId)
+      )
+        throw new McpStorageError("conflict");
+    } else {
+      if (
+        !this.projects().some(
+          (project) =>
+            project.projectId === address.projectId &&
+            project.databaseEpoch === address.databaseEpoch,
+        ) ||
+        this.projectPins.get(`${address.projectId}:${address.databaseEpoch}`) !== address.targetId
+      )
+        throw new McpStorageError("conflict");
+    }
+  }
+  /** Backend only: the bound canonical root is supplied by an execution owner. */
+  async runtimeSnapshot(
+    role: McpConnectorRole,
+    root?: string,
+    expectedProjectId?: string,
+  ): Promise<McpRuntimeSnapshot> {
+    const store = await this.storage();
+    const userId = store.targetIds().find((target) => target.scope === "user")?.targetId;
+    if (!userId) throw new McpStorageError("unavailable");
+    const user = await store.read(userId);
+    if (!user.document || user.pendingRecovery.length) throw new McpStorageError("invalid");
+    let project: McpRuntimeSnapshot["project"];
+    if (root && (role === "project-chat" || role === "worker")) {
+      const owner = this.projects().find((project) => project.root === root);
+      const pin =
+        expectedProjectId ??
+        (owner ? this.projectPins.get(`${owner.projectId}:${owner.databaseEpoch}`) : undefined);
+      const projectId = await store.registerProject(root, pin);
+      const saved = await store.read(projectId);
+      if (!saved.document || saved.pendingRecovery.length) throw new McpStorageError("invalid");
+      project = { document: saved.document, revision: saved.revision, projectId };
+    }
+    return {
+      role,
+      user: { document: user.document, revision: user.revision, targetId: userId },
+      ...(project ? { project } : {}),
+    };
+  }
+  async runtimeTarget(address: McpTargetAddress, expectedRevision?: string) {
+    await this.target(address);
+    const saved = await (await this.storage()).read(address.targetId);
+    if (expectedRevision && saved.revision !== expectedRevision)
+      throw new McpStorageError("conflict");
+    if (!saved.document || saved.pendingRecovery.length) throw new McpStorageError("invalid");
+    const owner =
+      address.scope === "project"
+        ? this.projects().find(
+            (project) =>
+              project.projectId === address.projectId &&
+              project.databaseEpoch === address.databaseEpoch,
+          )
+        : undefined;
+    await this.target(address);
+    return { saved, cwd: owner?.root ?? this.userDirectory };
   }
   targets(): Promise<McpManagementTargets> {
     const listing = this.registrations.then(() => this.listTargets());
@@ -291,6 +362,21 @@ export class McpManagement {
       requestId: request.requestId,
       text,
       requireValidOriginal: true,
+    });
+    this.changed();
+    return result;
+  }
+  async setEnabled(request: {
+    target: McpTargetAddress;
+    expectedRevision: string;
+    requestId: string;
+    serverId: string;
+    enabled: boolean;
+  }) {
+    await this.target(request.target);
+    const result = await (await this.storage()).setEnabled({
+      ...request,
+      targetId: request.target.targetId,
     });
     this.changed();
     return result;
