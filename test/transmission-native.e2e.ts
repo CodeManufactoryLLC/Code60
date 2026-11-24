@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
+import type { LocalTransmission as ClientFactory } from "../src/application/index.js";
 import type { startGateway as GatewayFactory } from "../src/gateway/index.js";
 import type { preserveTransmissionBundle as PreserveFactory } from "../src/platform/index.js";
 import { commitFixture } from "./fixtures/git-repository.js";
@@ -25,6 +26,9 @@ const { preserveTransmissionBundle } = (await import(
 )) as {
   preserveTransmissionBundle: typeof PreserveFactory;
 };
+const { LocalTransmission } = (await import(
+  pathToFileURL(join(root, "dist/application/index.js")).href
+)) as { LocalTransmission: typeof ClientFactory };
 test("native workflow: bundled engine survives backend restart, pauses, resumes and verifies isolated edits", async ({
   browser,
 }, info) => {
@@ -54,24 +58,13 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
   const git = (...args: string[]) =>
     execFileSync("/usr/bin/git", ["-C", repo, ...args], { env, encoding: "utf8" }).trim();
   const engineRoot = join(env.XDG_STATE_HOME, "code60/workflows/transmission-0.1.0-staging.20");
+  const client = new LocalTransmission(engineRoot, env);
   let gateway: Awaited<ReturnType<typeof startGateway>> | undefined;
   let context: Awaited<ReturnType<typeof browser.newContext>> | undefined;
   const owned = new Set<number>();
   let enginePid: number | undefined;
-  const engine = async (operation: string, args = {}) => {
-    const endpoint = JSON.parse(await readFile(join(engineRoot, "endpoint.json"), "utf8")) as {
-      port: number;
-      token: string;
-    };
-    const response = await fetch(`http://127.0.0.1:${endpoint.port}/${operation}`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${endpoint.token}`, "content-type": "application/json" },
-      body: JSON.stringify(args),
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!response.ok) throw Error("Owned native engine rejected acceptance request");
-    return response.json();
-  };
+  const engine = (operation: string, args: Record<string, unknown> = {}) =>
+    client.call(operation, args);
   const errors: unknown[] = [];
   try {
     for (const path of [repo, config, join(home, "codex"), join(home, "bin")])

@@ -1,7 +1,22 @@
 import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { z } from "zod";
+import { readPrivateJson } from "../../src/platform/index.js";
+
+const endpointSchema = z.strictObject({
+  port: z.number().int().min(1).max(65535),
+  token: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export async function readNativeEndpoint(root: string) {
+  const value = await readPrivateJson(join(root, "endpoint.json"), 4096).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+      return undefined;
+    },
+  );
+  return value === undefined ? null : endpointSchema.parse(value);
+}
 
 export function nativeProcessAlive(pid: number) {
   try {
@@ -34,17 +49,12 @@ export async function stopNativeEngines(roots: readonly string[], owned: Set<num
   const errors: unknown[] = [];
   for (const root of roots) {
     try {
-      const text = await readFile(join(root, "endpoint.json"), "utf8").catch(
-        (error: NodeJS.ErrnoException) => {
-          if (error.code !== "ENOENT") throw error;
-          return null;
-        },
-      );
-      if (!text) continue;
-      const endpoint = JSON.parse(text) as { port: number; token: string };
+      const endpoint = await readNativeEndpoint(root);
+      if (!endpoint) continue;
       const request = async (operation: string) =>
         fetch(`http://127.0.0.1:${endpoint.port}/${operation}`, {
           method: "POST",
+          redirect: "error",
           headers: { authorization: `Bearer ${endpoint.token}` },
           body: "{}",
           signal: AbortSignal.timeout(operation === "health" ? 2000 : 15000),
