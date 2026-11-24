@@ -121,7 +121,7 @@ export class DesktopAutomations {
       const result = await client({ ...request, draft: { ...fields, repository } });
       if (token) this.repositories.delete(token);
       await this.watch();
-      return result ? { ok: true } : null;
+      return result ? { ok: true, id: (result as Automation).id } : null;
     }
     if (request.action === "delete") {
       if (

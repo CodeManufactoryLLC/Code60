@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApplicationClient, AutomationUiRequest, SchedulerStatus } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { Icon } from "./icons.js";
 import { PageTitle } from "./page-title.js";
 import { schedulingServiceLabels, schedulingServiceState } from "./scheduling-service.js";
@@ -204,13 +205,13 @@ export function SystemManagerPage({
           </div>
           <div className="automation-service-actions">
             {live?.pausedAll && (
-              <button
+              <AppButton
                 type="button"
                 disabled={busy || reading}
                 onClick={() => void act({ action: "resumeAll" })}
               >
                 Resume jobs
-              </button>
+              </AppButton>
             )}
           </div>
         </div>
@@ -226,14 +227,14 @@ export function SystemManagerPage({
                 ? "An unfinished agent process needs recovery."
                 : "The service could not save its private state."}
             </span>
-            <button
+            <AppButton
               type="button"
               className="small"
               disabled={busy || reading}
               onClick={() => void act({ action: "resolveBlock" })}
             >
               Recheck
-            </button>
+            </AppButton>
           </div>
         )}
         <p>

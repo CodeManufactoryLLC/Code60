@@ -4,7 +4,6 @@ import {
   lazy,
   Suspense,
   useEffect,
-  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -19,11 +18,14 @@ import type {
   FileSnapshot,
   Snapshot,
 } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Checkbox as CarbonCheckbox } from "./carbon/choices.js";
+import { Select as CarbonSelect } from "./carbon/fields.js";
 import { FileBrowserState } from "./file-browser-state.js";
 import { sameFileContext } from "./file-navigation.js";
 import { Icon } from "./icons.js";
+import { Modal } from "./modal.js";
 import type { PreviewViewState } from "./monaco-preview.js";
-import { DialogContent } from "./neobrutalism/dialog.js";
 import { PageTitle } from "./page-title.js";
 import { pathLabel } from "./path-label.js";
 
@@ -174,7 +176,7 @@ export function FilesPage({
           <PageTitle page="files" as="h2" breadcrumbs={false}>
             File Explorer
           </PageTitle>
-          <button
+          <AppButton
             type="button"
             className="icon-button"
             aria-label="File Explorer settings"
@@ -183,16 +185,16 @@ export function FilesPage({
             onClick={() => setSettings(true)}
           >
             <Icon name="settings" />
-          </button>
+          </AppButton>
         </div>
         {browser.root &&
           (browser.setRoot &&
           (browser.roots.length > 1 ||
             !browser.roots.some((root) => root.path === browser.root)) ? (
             <div className="files-controls">
-              <label>
-                Root
-                <select
+              <div>
+                <CarbonSelect
+                  labelText={<>Root</>}
                   aria-label="File root"
                   value={browser.root}
                   onChange={(event) => browser.setRoot?.(event.target.value)}
@@ -205,8 +207,8 @@ export function FilesPage({
                       {root.label}
                     </option>
                   ))}
-                </select>
-              </label>
+                </CarbonSelect>
+              </div>
             </div>
           ) : (
             <span className="file-root-name" title={browser.root}>
@@ -216,9 +218,9 @@ export function FilesPage({
       </header>
       {!browser.root && (
         <div className="files-status">
-          <button type="button" onClick={onOpenProject}>
+          <AppButton type="button" onClick={onOpenProject}>
             Open project
-          </button>
+          </AppButton>
         </div>
       )}
       {browser.error && (
@@ -250,55 +252,21 @@ function FileSettings({
   onHidden(value: boolean): void;
   onClose(): void;
 }) {
-  const id = useId();
-  const dialog = useRef<HTMLDialogElement>(null);
-  const checkbox = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const element = dialog.current;
-    element?.showModal();
-    checkbox.current?.focus();
-    return () => {
-      element?.close();
-      previous?.focus();
-    };
-  }, []);
   return (
-    <DialogContent
-      ref={dialog}
-      className="setup-dialog picker-dialog"
-      aria-labelledby={id}
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-    >
-      <div className="modal-heading">
-        <h2 id={id}>File Explorer settings</h2>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Close File Explorer settings"
-          onClick={onClose}
-        >
-          <Icon name="close" />
-        </button>
-      </div>
-      <label className="files-hidden">
-        <input
-          ref={checkbox}
-          type="checkbox"
+    <Modal title="File Explorer settings" busy={false} onClose={onClose} initialFocus="input">
+      <div className="files-hidden">
+        <CarbonCheckbox
+          labelText={<>Show hidden files</>}
           checked={hidden}
           onChange={(event) => onHidden(event.target.checked)}
         />
-        Show hidden files
-      </label>
-      <div className="modal-footer">
-        <button type="button" onClick={onClose}>
-          Done
-        </button>
       </div>
-    </DialogContent>
+      <div className="modal-footer">
+        <AppButton type="button" onClick={onClose}>
+          Done
+        </AppButton>
+      </div>
+    </Modal>
   );
 }
 
@@ -361,7 +329,7 @@ function FileTree({
       ))}
       <div {...tree.getContainerProps("Project files")} className="file-tree">
         {tree.getItems().map((item) => (
-          <button
+          <AppButton
             {...item.getProps()}
             role="treeitem"
             type="button"
@@ -402,7 +370,7 @@ function FileTree({
             <span className="file-entry-name">{item.getItemName()}</span>
             {item.getItemData().kind === "symlink" && <span className="muted">Symbolic link</span>}
             {item.getItemData().kind === "other" && <span className="muted">Unsupported file</span>}
-          </button>
+          </AppButton>
         ))}
       </div>
       {browser.files && !browser.loading && tree.getItems().length === 0 && issues.length === 0 && (

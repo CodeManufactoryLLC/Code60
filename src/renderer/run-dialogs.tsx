@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { Snapshot, StartRequest } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Checkbox as CarbonCheckbox } from "./carbon/choices.js";
+import { Select as CarbonSelect, TextInput as CarbonTextInput } from "./carbon/fields.js";
+import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
 import { agentCount, providers } from "./configurations.js";
 import { Icon } from "./icons.js";
 import { Modal } from "./modal.js";
-import { DialogContent } from "./neobrutalism/dialog.js";
 
 const kinds = [
   "read",
@@ -49,7 +52,7 @@ export function NewSession(props: {
       <ul className="project-list" aria-label="Available run configurations">
         {props.snapshot.configurations.map((entry) => (
           <li key={entry.id}>
-            <button
+            <AppButton
               type="button"
               className="project-item"
               disabled={props.busy}
@@ -62,15 +65,15 @@ export function NewSession(props: {
               <span>
                 {providers(entry)} / {agentCount(entry)} agents
               </span>
-            </button>
+            </AppButton>
           </li>
         ))}
       </ul>
       <div className="modal-footer">
-        <button type="button" disabled={props.busy} onClick={props.onClose}>
+        <AppButton type="button" disabled={props.busy} onClick={props.onClose}>
           Cancel
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           type="button"
           className="primary"
           disabled={props.busy}
@@ -80,7 +83,7 @@ export function NewSession(props: {
           }}
         >
           Do not use a run configuration
-        </button>
+        </AppButton>
       </div>
     </Modal>
   );
@@ -119,26 +122,25 @@ export function LaunchConfirmation({
             });
           }}
         >
-          <label className="check-label">
-            <input
-              type="checkbox"
+          <div className="check-label">
+            <CarbonCheckbox
+              labelText={<>Save Run Configuration</>}
               checked={save}
               disabled={busy}
               onChange={(event) => setSave(event.target.checked)}
             />
-            Save Run Configuration
-          </label>
+          </div>
           {save && (
-            <label className="space-top">
-              Configuration name
-              <input
+            <div className="space-top">
+              <CarbonTextInput
+                labelText={<>Configuration name</>}
                 required
                 maxLength={128}
                 value={name}
                 disabled={busy}
                 onChange={(event) => setName(event.target.value)}
               />
-            </label>
+            </div>
           )}
           {error && (
             <div className="error-banner" role="alert">
@@ -147,17 +149,17 @@ export function LaunchConfirmation({
           )}
           {save && (
             <div className="modal-footer">
-              <button type="submit" className="primary" disabled={busy || !name.trim()}>
+              <AppButton type="submit" className="primary" disabled={busy || !name.trim()}>
                 {busy ? "Saving…" : "Save configuration"}
-              </button>
+              </AppButton>
             </div>
           )}
         </form>
       )}
       <div className="modal-footer">
-        <button type="button" disabled={busy} onClick={onClose}>
+        <AppButton type="button" disabled={busy} onClick={onClose}>
           Done
-        </button>
+        </AppButton>
       </div>
     </Modal>
   );
@@ -204,20 +206,13 @@ export function NewRun({
     ...(timeout ? { turnTimeout: timeout } : {}),
   });
   const unavailable = agents.filter((agent) => !snapshot.agents.includes(agent.name));
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    dialog.current?.showModal();
-    dialog.current?.querySelector<HTMLElement>("[data-initial-focus]")?.focus();
-  }, []);
   return (
-    <DialogContent
-      ref={dialog}
-      className="setup-dialog"
-      aria-label={editing ? "Run configuration" : "New agent sessions"}
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!busy) onClose();
-      }}
+    <Modal
+      title={editing ? "Run configuration" : "New agent sessions"}
+      busy={busy}
+      onClose={onClose}
+      closeLabel="Close new run"
+      initialFocus="[data-initial-focus]"
     >
       <form
         onSubmit={(event) => {
@@ -225,20 +220,6 @@ export function NewRun({
           void onStart(request(), name);
         }}
       >
-        <div className="modal-heading">
-          <div>
-            <h2>{editing ? "Run configuration" : "Put your agents to work"}</h2>
-          </div>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Close new run"
-            disabled={busy}
-            onClick={onClose}
-          >
-            <Icon name="close" />
-          </button>
-        </div>
         {unavailable.length > 0 && (
           <p role="alert" className="error-banner">
             Unavailable providers: {[...new Set(unavailable.map((agent) => agent.name))].join(", ")}
@@ -252,33 +233,37 @@ export function NewRun({
         )}
         <fieldset disabled={busy}>
           {editing && (
-            <label>
-              Configuration name
-              <input
+            <div>
+              <CarbonTextInput
+                labelText={<>Configuration name</>}
                 data-initial-focus
                 required
                 maxLength={128}
                 value={name}
                 onChange={(event) => setName(event.target.value)}
               />
-            </label>
+            </div>
           )}
           {!editing && (
-            <label>
-              Task prompt <span className="muted">(optional)</span>
-              <textarea
+            <div>
+              <CarbonTextArea
+                labelText={
+                  <>
+                    Task prompt <span className="muted">(optional)</span>
+                  </>
+                }
                 data-initial-focus
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
                 placeholder="What would you like your agents to do?"
                 rows={5}
               />
-            </label>
+            </div>
           )}
           <p className="field-label">Agents</p>
           {agents.map((agent, index) => (
             <div className="agent-row" key={agent.id}>
-              <select
+              <CarbonSelect
                 aria-label={`Agent ${index + 1}`}
                 value={agent.name}
                 onChange={(event) =>
@@ -295,9 +280,9 @@ export function NewRun({
                 {snapshot.agents.map((name) => (
                   <option key={name}>{name}</option>
                 ))}
-              </select>
+              </CarbonSelect>
               {agents.length > 1 && (
-                <button
+                <AppButton
                   type="button"
                   aria-label={`Remove agent ${index + 1}`}
                   onClick={() =>
@@ -305,11 +290,11 @@ export function NewRun({
                   }
                 >
                   Remove
-                </button>
+                </AppButton>
               )}
             </div>
           ))}
-          <button
+          <AppButton
             type="button"
             disabled={agents.length >= 32}
             onClick={() => {
@@ -318,10 +303,10 @@ export function NewRun({
             }}
           >
             <Icon name="add" /> Add agent
-          </button>
-          <label className="space-top">
-            {agents.length === 1 ? "Parallel copies" : "Maximum active runs"}
-            <input
+          </AppButton>
+          <div className="space-top">
+            <CarbonTextInput
+              labelText={<>{agents.length === 1 ? "Parallel copies" : "Maximum active runs"}</>}
               type="number"
               min="1"
               max={agents.length === 1 ? 32 : undefined}
@@ -329,35 +314,35 @@ export function NewRun({
               placeholder={agents.length === 1 ? "1" : String(snapshot.maxParallel)}
               onChange={(event) => setParallel(event.target.value)}
             />
-          </label>
+          </div>
           <details>
             <summary>Advanced options</summary>
             <div className="form-grid">
-              <label>
-                Base revision
-                <input
+              <div>
+                <CarbonTextInput
+                  labelText={<>Base revision</>}
                   value={base}
                   placeholder="HEAD"
                   onChange={(event) => setBase(event.target.value)}
                 />
-              </label>
-              <label>
-                Turn timeout
-                <input
+              </div>
+              <div>
+                <CarbonTextInput
+                  labelText={<>Turn timeout</>}
                   value={timeout}
                   placeholder={snapshot.turnTimeout}
                   onChange={(event) => setTimeoutValue(event.target.value)}
                 />
-              </label>
+              </div>
             </div>
             <p className="field-hint">
               Permission overrides apply only to this batch. Agent configuration remains read-only.
             </p>
             <div className="permission-grid">
               {kinds.map((kind) => (
-                <label key={kind} className="check-label">
-                  <input
-                    type="checkbox"
+                <div key={kind} className="check-label">
+                  <CarbonCheckbox
+                    labelText={<>Allow {kind}</>}
                     checked={allow.includes(kind)}
                     onChange={(event) =>
                       setAllow((current) =>
@@ -367,30 +352,28 @@ export function NewRun({
                       )
                     }
                   />
-                  Allow {kind}
-                </label>
+                </div>
               ))}
             </div>
-            <label className="check-label danger-text">
-              <input
-                type="checkbox"
+            <div className="check-label danger-text">
+              <CarbonCheckbox
+                labelText={<>Code60 auto-approval</>}
                 checked={allowAll}
                 onChange={(event) => setAllowAll(event.target.checked)}
               />
-              Code60 auto-approval
-            </label>
+            </div>
           </details>
         </fieldset>
         <div className="modal-footer">
           {onBack && (
-            <button type="button" disabled={busy} onClick={() => onBack(request())}>
+            <AppButton type="button" disabled={busy} onClick={() => onBack(request())}>
               Back
-            </button>
+            </AppButton>
           )}
-          <button type="button" disabled={busy} onClick={onClose}>
+          <AppButton type="button" disabled={busy} onClick={onClose}>
             Cancel
-          </button>
-          <button
+          </AppButton>
+          <AppButton
             type="submit"
             className="primary"
             disabled={busy || !agents[0] || unavailable.length > 0 || (editing && !name.trim())}
@@ -402,9 +385,9 @@ export function NewRun({
               : busy
                 ? "Starting…"
                 : "Start agents"}
-          </button>
+          </AppButton>
         </div>
       </form>
-    </DialogContent>
+    </Modal>
   );
 }

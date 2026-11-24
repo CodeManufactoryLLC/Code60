@@ -1,12 +1,12 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { build } from "vite";
-import viewBoxes from "../src/renderer/navigation-icon-viewboxes.json" with { type: "json" };
+import { pages, settingsSections } from "../src/contracts/navigation.js";
 import { fixturePage } from "./fixtures/static-page.js";
 
-test("browser: all navigation SVGs tightly frame their artwork without distortion", async ({
+test("browser: route and settings glyphs remain accessible at enlarged text sizes", async ({
   browser,
 }) => {
   test.setTimeout(60_000);
@@ -36,82 +36,27 @@ test("browser: all navigation SVGs tightly frame their artwork without distortio
     );
     application = await fixturePage(browser, output);
     const page = application.page;
-    await expect(page.locator(".navigation-icon")).toHaveCount(52);
-    for (const image of await page.locator("img.navigation-icon").all()) {
-      await expect(image).toHaveJSProperty("complete", true);
-      expect(
-        await image.evaluate((element) => (element as HTMLImageElement).naturalWidth),
-      ).toBeGreaterThan(0);
-    }
-    const sources = Object.fromEntries(
-      await Promise.all(
-        Object.keys(viewBoxes)
-          .filter((name) => name.startsWith("app-") && name !== "app-window")
-          .map(async (name) => [
-            name,
-            await readFile(
-              resolve(import.meta.dirname, `../src/renderer/icons/apps/${name.slice(4)}.svg`),
-              "utf8",
-            ),
-          ]),
-      ),
-    ) as Record<string, string>;
-    const measurements = await page.locator(".navigation-icon").evaluateAll(
-      (icons, sources) =>
-        icons.map((icon) => {
-          const name = (icon as HTMLElement).dataset.icon as string;
-          const source = sources[name];
-          const svg = source
-            ? (document.importNode(
-                new DOMParser().parseFromString(source, "image/svg+xml").documentElement,
-                true,
-              ) as unknown as SVGSVGElement)
-            : (icon as SVGSVGElement);
-          if (source) {
-            svg.style.position = "absolute";
-            svg.style.visibility = "hidden";
-            document.body.append(svg);
-          }
-          const { x, y, width, height } = svg.getBBox();
-          const viewport = svg.viewBox.baseVal;
-          const viewBox = [viewport.x, viewport.y, viewport.width, viewport.height];
-          if (source) svg.remove();
-          return { name, geometry: [x, y, width, height], viewBox };
-        }),
-      sources,
+    const icons = page.locator("svg.navigation-icon");
+    await expect(icons).toHaveCount(
+      new Set([...pages, ...settingsSections].map((item) => item.icon).filter(Boolean)).size,
     );
-    await writeFile(
-      test.info().outputPath("icon-bounds.json"),
-      JSON.stringify(measurements, null, 2),
-    );
-    for (const { name, geometry, viewBox } of measurements) {
-      for (let axis = 0; axis < 4; axis++)
-        expect(viewBox[axis], `${name}: viewport axis ${axis}`).toBeCloseTo(
-          geometry[axis] as number,
-          3,
+    await expect(page.locator("img")).toHaveCount(0);
+    for (const size of [16, 32]) {
+      await page
+        .locator("html")
+        .evaluate(
+          (element, size) => element.style.setProperty("--fixture-size", `${size}px`),
+          size,
         );
-    }
-    for (const size of [8, 15, 48]) {
-      await page.evaluate(
-        (size) => document.documentElement.style.setProperty("--fixture-size", `${size}px`),
-        size,
-      );
-      for (const icon of await page.locator(".navigation-icon").all()) {
-        const scale =
-          (await icon.getAttribute("data-enlarged")) === "true"
-            ? 2.4
-            : (await icon.getAttribute("data-animated")) === "true"
-              ? 2
-              : 1;
-        const bounds = await icon.boundingBox();
-        expect(bounds?.width ?? 0).toBeCloseTo(size * scale, 1);
-        expect(bounds?.height ?? 0).toBeCloseTo(size * scale, 1);
-        await expect(icon).toHaveCSS("object-fit", "contain");
+      for (const icon of await icons.all()) {
         await expect(icon).toHaveAttribute("aria-hidden", "true");
+        const box = await icon.boundingBox();
+        expect(box?.width).toBe(size);
+        expect(box?.height).toBe(size);
       }
     }
     await page.screenshot({
-      path: test.info().outputPath("navigation-artwork.png"),
+      path: test.info().outputPath("navigation-glyphs.png"),
       fullPage: true,
     });
   } finally {

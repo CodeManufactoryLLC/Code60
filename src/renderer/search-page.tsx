@@ -1,3 +1,4 @@
+import { InlineLoading, Search } from "@carbon/react";
 import { useEffect, useRef, useState } from "react";
 import {
   type ApplicationClient,
@@ -6,6 +7,8 @@ import {
   SEARCH_QUERY_LIMIT,
 } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { Select as CarbonSelect } from "./carbon/fields.js";
 import { Icon } from "./icons.js";
 import { Modal } from "./modal.js";
 import { PageTitle } from "./page-title.js";
@@ -30,6 +33,8 @@ const typeLabels = {
   message: "Message",
   thought: "Thought",
 } satisfies Record<SearchKind | "all", string>;
+// Carbon forwards native input attributes to its search field.
+const searchInput = { type: "search", maxLength: SEARCH_QUERY_LIMIT };
 const sortLabels = { relevance: "Relevance", newest: "Newest" };
 const unappliedLabel = "Unapplied Search Changes";
 
@@ -42,6 +47,7 @@ type SubmittedSearch = SearchCriteria & {
   results: ProjectSearchSource[] | null;
   nextCursor: string | null;
   warnings: string[];
+  error?: string;
 };
 type Overview =
   | { status: "generating" }
@@ -53,6 +59,8 @@ export function SearchPage({
   provider,
   database,
   databaseEpoch,
+  hasProjects,
+  onProjects,
   onOpen,
 }: {
   api: Pick<
@@ -67,6 +75,8 @@ export function SearchPage({
   provider: string | null;
   database: string | null;
   databaseEpoch: number;
+  hasProjects: boolean;
+  onProjects(): void;
   onOpen(result: ProjectSearchOpened): void;
 }) {
   const [query, setQuery] = useState("");
@@ -77,6 +87,7 @@ export function SearchPage({
   const [pageLoading, setPageLoading] = useState(false);
   const [sourceError, setSourceError] = useState("");
   const [opening, setOpening] = useState(false);
+  const [selectedSource, setSelectedSource] = useState<string>();
   const [preview, setPreview] = useState<ProjectSearchSource | null>(null);
   const active = useRef<string | undefined>(undefined);
   const summaryActive = useRef<string | undefined>(undefined);
@@ -85,7 +96,11 @@ export function SearchPage({
   const list = useRef<HTMLUListElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const expanded = submitted !== null;
-  const loading = submitted?.results === null || overview?.status === "generating";
+  const loading =
+    (!submitted?.error && submitted?.results === null) || overview?.status === "generating";
+  const related =
+    submitted?.results?.length === 0 && overview?.status === "complete" ? overview.sources : [];
+  const displayed = submitted?.results?.length ? submitted.results : related;
   const unapplied =
     submitted !== null &&
     (query.trim() !== submitted.query || kind !== submitted.kind || sort !== submitted.sort);
@@ -110,6 +125,9 @@ export function SearchPage({
   }, [api, provider]);
 
   function cancel() {
+    setSelectedSource(undefined);
+    setPreview(null);
+    setOpening(false);
     const id = active.current;
     active.current = undefined;
     if (id) void api.cancelProjectSearch({ requestId: id, databaseEpoch }).catch(() => {});
@@ -137,14 +155,6 @@ export function SearchPage({
       const result = await api.summarizeSearch({ requestId: id, searchId, databaseEpoch });
       if (active.current === searchId && summaryActive.current === id && result.requestId === id) {
         setOverview({ status: "complete", text: result.text, sources: result.sources });
-        setSubmitted((current) => {
-          if (!current) return current;
-          const rows = current.results ?? [];
-          return {
-            ...current,
-            results: rows.length ? rows : result.sources,
-          };
-        });
       }
     } catch (error) {
       if (active.current === searchId && summaryActive.current === id)
@@ -179,9 +189,11 @@ export function SearchPage({
       await generate(id);
     } catch (error) {
       if (active.current === id) {
-        setSubmitted({ ...criteria, results: [], nextCursor: null, warnings: [] });
-        setOverview({
-          status: "error",
+        setSubmitted({
+          ...criteria,
+          results: null,
+          nextCursor: null,
+          warnings: [],
           error: error instanceof Error ? error.message : String(error),
         });
       }
@@ -233,15 +245,14 @@ export function SearchPage({
       if (active.current === id)
         setSourceError(error instanceof Error ? error.message : String(error));
     } finally {
-      setOpening(false);
+      if (active.current === id) setOpening(false);
     }
   }
 
   return (
     <main className="search-page" aria-label="Search" data-expanded={expanded}>
       <PageTitle page="search" className="table-title" />
-      <div className="search-lead-space" aria-hidden="true" />
-      <search className="search-entry">
+      <div className="search-entry">
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -250,12 +261,12 @@ export function SearchPage({
         >
           <div className="search-query-row">
             <div className="search-query-action">
-              <input
+              <Search
+                size="lg"
                 className="search-query"
-                aria-label="Query"
-                type="search"
+                labelText="Query"
+                {...searchInput}
                 value={query}
-                maxLength={SEARCH_QUERY_LIMIT}
                 placeholder="Search all projects"
                 onChange={(event) => {
                   const value = event.target.value;
@@ -273,18 +284,18 @@ export function SearchPage({
                   }
                 }}
               />
-              <button
+              <AppButton
                 className="primary search-submit"
                 type="submit"
-                disabled={!database || !query.trim()}
+                disabled={!database || !hasProjects || !query.trim()}
               >
                 <Icon name="search" />
                 Search
-              </button>
+              </AppButton>
             </div>
             <div className="search-controls">
-              <select
-                aria-label="Type"
+              <CarbonSelect
+                labelText="Record type"
                 value={kind}
                 onChange={(event) => setKind(event.target.value as SearchCriteria["kind"])}
               >
@@ -293,9 +304,9 @@ export function SearchPage({
                     {label}
                   </option>
                 ))}
-              </select>
-              <select
-                aria-label="Sort"
+              </CarbonSelect>
+              <CarbonSelect
+                labelText="Sort by"
                 value={sort}
                 onChange={(event) => setSort(event.target.value as SearchCriteria["sort"])}
               >
@@ -304,7 +315,7 @@ export function SearchPage({
                     {label}
                   </option>
                 ))}
-              </select>
+              </CarbonSelect>
               {unapplied && <span className="search-unapplied">{unappliedLabel}</span>}
               <p className="sr-only" role="status">
                 {unapplied ? unappliedLabel : ""}
@@ -312,18 +323,25 @@ export function SearchPage({
             </div>
           </div>
         </form>
-      </search>
-      <div ref={content} className="search-content" hidden={!expanded && !!database}>
+      </div>
+      <div ref={content} className="search-content" hidden={!expanded && !!database && hasProjects}>
         {!database && <p>Connect to a database to search.</p>}
-        {expanded && (
-          <div className="search-pending" hidden={!loading} inert={!loading}>
-            <div className="search-loading" role="status">
-              <span className="search-loading-art" aria-hidden="true">
-                <Icon name="search" />
-              </span>
-              <span className="search-loading-label">Searching...</span>
-            </div>
-          </div>
+        {database && !hasProjects && (
+          <section>
+            <h2>No projects in this database</h2>
+            <AppButton onClick={onProjects}>Open projects</AppButton>
+          </section>
+        )}
+        {submitted?.error && (
+          <section>
+            <p role="alert">Search unavailable. {submitted.error}</p>
+            <AppButton onClick={() => void submit()}>Retry search</AppButton>
+          </section>
+        )}
+        {loading && (
+          <InlineLoading
+            description={submitted?.results === null ? "Searching…" : "Generating overview…"}
+          />
         )}
         {sourceError && <p role="alert">{sourceError}</p>}
         {!!submitted?.warnings.length && (
@@ -336,31 +354,7 @@ export function SearchPage({
             </ul>
           </details>
         )}
-        {expanded && (
-          <div className="search-pending search-placeholders" hidden={!loading} aria-hidden="true">
-            <div className="search-overview search-summary-skeleton">
-              <span className="search-skeleton-title" />
-              <div className="search-skeleton-paragraph">
-                <span />
-                <span />
-                <span />
-              </div>
-              <div className="search-skeleton-paragraph">
-                <span />
-                <span />
-              </div>
-            </div>
-            <ul className="search-skeleton">
-              {[1, 2].map((row) => (
-                <li key={row}>
-                  <span className="search-skeleton-timestamp" />
-                  <span className="search-skeleton-title" />
-                  <span className="search-skeleton-snippet" />
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+
         {submitted?.results && (
           <div className="search-body">
             {!loading && (
@@ -368,9 +362,9 @@ export function SearchPage({
                 <div className="search-overview-heading">
                   <h2 id="search-overview-heading">AI overview</h2>
                   {overview?.status !== "complete" && (
-                    <button type="button" onClick={retry}>
+                    <AppButton type="button" onClick={retry}>
                       Retry overview
-                    </button>
+                    </AppButton>
                   )}
                 </div>
                 {overview?.status === "complete" ? (
@@ -379,7 +373,7 @@ export function SearchPage({
                       part.source === undefined ? (
                         part.text
                       ) : (
-                        <button
+                        <AppButton
                           type="button"
                           className="search-citation"
                           key={part.start}
@@ -391,7 +385,7 @@ export function SearchPage({
                           }}
                         >
                           {part.text}
-                        </button>
+                        </AppButton>
                       ),
                     )}
                   </div>
@@ -402,10 +396,26 @@ export function SearchPage({
                 )}
               </section>
             )}
-            {!submitted.results.length && !loading && <p role="status">No matching results.</p>}
+            {!submitted.results.length && !loading && !sourceError && (
+              <section>
+                <p role="status">No matching results.</p>
+                <AppButton
+                  onClick={() => {
+                    cancel();
+                    setQuery("");
+                    setSubmitted(null);
+                    setOverview(null);
+                    list.current?.closest("main")?.querySelector("input")?.focus();
+                  }}
+                >
+                  Clear search
+                </AppButton>
+              </section>
+            )}
+            {related.length > 0 && <h2>Related sources</h2>}
             <ul
               className="search-results"
-              aria-label="Search results"
+              aria-label={related.length ? "Related sources" : "Search results"}
               ref={list}
               onKeyDown={(event) => {
                 const buttons = [
@@ -430,7 +440,7 @@ export function SearchPage({
                 }
               }}
             >
-              {submitted.results.map((result, i) => {
+              {displayed.map((result, i) => {
                 const type = typeLabels[result.kind];
                 const showType = !result.title.startsWith(`${type} / `);
                 return (
@@ -445,29 +455,46 @@ export function SearchPage({
                       </div>
                     )}
                     <h2>
-                      <button
+                      <AppButton
                         type="button"
                         className="search-result-title"
+                        variant="quiet"
                         data-result-index={i}
-                        onClick={() => void openSource(result)}
+                        aria-expanded={selectedSource === result.id}
+                        onClick={() =>
+                          setSelectedSource(selectedSource === result.id ? undefined : result.id)
+                        }
                       >
                         <Highlight text={result.title} query={submitted.query} />
-                      </button>
+                      </AppButton>
                     </h2>
-                    <p className="result-excerpt">
-                      <Highlight
-                        text={searchExcerpt(result.text, submitted.query)}
-                        query={submitted.query}
-                      />
-                    </p>
+                    {selectedSource === result.id ? (
+                      <section className="search-source-detail" aria-label="Selected record">
+                        <pre>{result.text}</pre>
+                        <AppButton
+                          type="button"
+                          disabled={opening}
+                          onClick={() => void openSource(result)}
+                        >
+                          Open source
+                        </AppButton>
+                      </section>
+                    ) : (
+                      <p className="result-excerpt">
+                        <Highlight
+                          text={searchExcerpt(result.text, submitted.query)}
+                          query={submitted.query}
+                        />
+                      </p>
+                    )}
                   </li>
                 );
               })}
             </ul>
             {submitted.nextCursor && (
-              <button type="button" disabled={pageLoading} onClick={() => void loadMore()}>
+              <AppButton type="button" disabled={pageLoading} onClick={() => void loadMore()}>
                 {pageLoading ? "Loading…" : "Load more"}
-              </button>
+              </AppButton>
             )}
           </div>
         )}

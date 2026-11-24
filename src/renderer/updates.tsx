@@ -32,13 +32,15 @@ export function UpdatesSection({ updates }: { updates: ReturnType<typeof useUpda
   return (
     <section id="app-updates" className="settings-section" aria-labelledby={id}>
       <SettingsHeader page="updates" id={id} />
-      <SettingsCard>
+      <SettingsCard title="Installed release">
         <p>Installed version: {updates.state.version ?? "Unavailable"}</p>
         <p>
           Run <code>code60 update</code> in a terminal to check and install the latest stable
           release. It verifies the download before asking to stop interactive and scheduled work.
           Your histories, databases, worktrees and pinned workflow engines are kept.
         </p>
+      </SettingsCard>
+      <SettingsCard title="Reconnect and recover">
         <p>
           After updating, run <code>code60 open</code> to reconnect. For an interrupted update, use
           <code> code60 update status</code> and <code>code60 update recover</code> in the terminal.

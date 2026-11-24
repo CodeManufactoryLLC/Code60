@@ -19,7 +19,7 @@ it("keeps agent creation available without a database and renders user names as 
   expect(html).toContain('aria-label="Custom Assistants actions"');
   expect(html).not.toContain(">Archived</button>");
   expect(html).toContain('aria-haspopup="menu" aria-expanded="false"');
-  expect(html).toContain('class="icon-button home-card-actions"');
+  expect(html).toMatch(/class="[^"]*home-card-actions[^"]*cds--btn/);
   expect(html).not.toContain('class="custom-agent-actions"');
   expect(html).not.toContain('aria-label="Edit ');
   expect(html).not.toContain('aria-label="Archive ');
@@ -40,11 +40,13 @@ it("keeps editor field labels independent of saved instruction text", () => {
       onClose={() => {}}
     />,
   );
-  const nameId = /<label for="([^"]+)">Name<\/label>/.exec(html)?.[1];
-  const instructionsId = /<label for="([^"]+)">Special instructions<\/label>/.exec(html)?.[1];
+  const nameId = /<label[^>]*for="([^"]+)"[^>]*>Name<\/label>/.exec(html)?.[1];
+  const instructionsId = /<label[^>]*for="([^"]+)"[^>]*>Special instructions<\/label>/.exec(
+    html,
+  )?.[1];
   expect(nameId).toBeTruthy();
   expect(instructionsId).toBeTruthy();
-  expect(html).toContain(`<input id="${nameId}"`);
-  expect(html).toContain(`<textarea id="${instructionsId}"`);
+  expect(html).toMatch(new RegExp(`<input[^>]*id="${nameId}"`));
+  expect(html).toMatch(new RegExp(`<textarea[^>]*id="${instructionsId}"`));
   expect(html).toContain(">Act as Reviewer.</textarea>");
 });

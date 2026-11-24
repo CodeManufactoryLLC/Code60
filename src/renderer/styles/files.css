@@ -626,6 +626,7 @@ dialog.host-picker[open] {
   top: 0;
   bottom: 0;
   width: 6px;
+  height: 100%;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -1258,20 +1259,6 @@ dialog.host-picker[open] {
 
 .plan-toolbar progress::-moz-progress-bar {
   background: var(--accent);
-}
-
-/* Glide's bundled rules are in the vendor layer. Override only its editor geometry. */
-.data-table,
-.table-preview-grid {
-  --gdg-rounding-radius: 0px;
-}
-
-.gdg-search-bar,
-.gdg-seveqep,
-.gdg-style,
-.gdg-clip-region,
-.gdg-edit-icon {
-  border-radius: 0;
 }
 
 /* Monaco adds unlayered runtime CSS. These adapters intentionally target editor internals only. */

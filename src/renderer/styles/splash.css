@@ -20,16 +20,6 @@
   -webkit-app-region: no-drag;
 }
 
-.splash[open] {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.splash::backdrop {
-  background: var(--surface);
-}
-
 .splash > .window-drag-strip {
   position: absolute;
   inset: 0 0 auto;
@@ -91,7 +81,7 @@
   --letter-spacing: normal;
   margin: 0;
   color: var(--splash-logo-text);
-  font-family: "D-DIN", sans-serif;
+  font-family: var(--font);
   font-size: 18px;
   font-weight: 400;
   text-align: center;
@@ -115,7 +105,7 @@
 }
 
 .wordmark {
-  font-family: "D-DIN", sans-serif;
+  font-family: var(--font);
   font-weight: 400;
   --letter-spacing: 0.02em;
   text-transform: none;
@@ -149,6 +139,6 @@
   color: var(--splash-logo-text);
 }
 
-.splash[data-ready="true"] .splash-lockup {
+.splash-overlay[data-ready="true"] .splash-lockup {
   visibility: visible;
 }

@@ -4,18 +4,20 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import type { McpConfigurationStore as StoreType } from "../src/application/index.js";
+import { expandNavigation } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
 
 const config = (directory: string) => join(directory, "config/code60/mcp.json");
 const text = (label: string, enabled = false) =>
   `{"version":1, "servers":{"docs":{"label":"${label}","enabled":${enabled},"type":"stdio","command":"never-launch"}}}\n`;
 async function app(page: Page) {
+  await expandNavigation(page, "Manage");
   await page.getByRole("tab", { name: "Apps", exact: true }).click();
   await page.getByRole("button", { name: "Open MCP Servers", exact: true }).click();
   await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
 }
 async function json(page: Page) {
-  await page.getByRole("button", { name: "JSON", exact: true }).click();
+  await page.getByRole("tab", { name: "JSON", exact: true }).click();
   await expect(page.locator(".mcp-json-editor .monaco-editor")).toBeVisible();
 }
 async function edit(page: Page, value: string) {
@@ -42,7 +44,7 @@ test("MCP JSON: completion, safe validation, exact saves, navigation and guided 
     const requests: string[] = [];
     page.on("request", (request) => requests.push(request.url()));
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
     await json(page);
     await edit(page, '{\n  "ver');
@@ -69,7 +71,7 @@ test("MCP JSON: completion, safe validation, exact saves, navigation and guided 
     const exact = text("Exact");
     await save(page, config(fixture.directory), exact);
     await edit(page, text("Retained draft"));
-    await page.getByRole("button", { name: "Servers", exact: true }).click();
+    await page.getByRole("tab", { name: "Servers", exact: true }).click();
     const guard = page.getByRole("dialog", { name: "Unsaved MCP JSON changes", exact: true });
     await guard.getByRole("button", { name: "Cancel", exact: true }).click();
     expect(await readFile(config(fixture.directory), "utf8")).toBe(exact);
@@ -77,6 +79,7 @@ test("MCP JSON: completion, safe validation, exact saves, navigation and guided 
     await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("ArrowRight");
+    await expandNavigation(page, "Manage");
     await page.getByRole("tab", { name: "Apps", exact: true }).click();
     await app(page);
     await expect(page.locator(".mcp-json-editor")).toContainText("Retained draft");
@@ -89,11 +92,11 @@ test("MCP JSON: completion, safe validation, exact saves, navigation and guided 
     await warning.dismiss();
     expect(page.isClosed()).toBe(false);
     await expect(page.locator(".mcp-json-editor")).toContainText("Retained draft");
-    await page.getByRole("button", { name: "Servers", exact: true }).click();
+    await page.getByRole("tab", { name: "Servers", exact: true }).click();
     await guard.getByRole("button", { name: "Save", exact: true }).click();
     await expect(guard).toHaveCount(0);
     expect(await readFile(config(fixture.directory), "utf8")).toBe(
-      text("Retained draft").replace("{", "{ "),
+      `{ ${text("Retained draft").slice(1)}`,
     );
     await page.getByRole("button", { name: "Edit server", exact: true }).click();
     const form = page.getByRole("dialog", { name: /Edit MCP server/ });
@@ -136,7 +139,7 @@ test("MCP JSON: external conflict, saved comparison, discard and reviewed backup
   try {
     const { page } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
     await json(page);
     await save(page, config(fixture.directory), text("First"));
@@ -211,7 +214,7 @@ test("MCP reset: project inheritance, cancellation, guarded empty target and com
     const { page } = await fixture.open();
     await onboard(page);
     await createDatabase(page, fixture.directory);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await openProject(page, fixture.directory, "alpha");
     await app(page);
     await json(page);
@@ -256,7 +259,7 @@ test("MCP JSON: malformed repair and confirmed malformed reset retain private ev
     await writeFile(config(fixture.directory), malformed, { mode: 0o600 });
     const { page } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
     await json(page);
     await expect(page.locator(".mcp-json-editor")).toContainText("private-preimage");
@@ -301,7 +304,7 @@ test("MCP reset: interrupted publication remains blocked after restart without a
   try {
     const { page } = await fixture.open();
     await onboard(page);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
     await json(page);
     await save(page, config(fixture.directory), text("Before interrupted reset"));
@@ -340,7 +343,7 @@ test("MCP reset: interrupted publication remains blocked after restart without a
     const published = await readFile(config(fixture.directory));
     await fixture.restart();
     const { page: recovered } = await fixture.open();
-    await recovered.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(recovered.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(recovered);
     await json(recovered);
     await expect(recovered.locator("#panel-mcp-servers")).toContainText(
@@ -382,7 +385,7 @@ test("MCP JSON: invalid UTF-8 stays non-editable and a replaced project cannot r
     const { page } = await fixture.open();
     await onboard(page);
     await createDatabase(page, fixture.directory);
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await openProject(page, fixture.directory, "alpha");
     await app(page);
     await json(page);

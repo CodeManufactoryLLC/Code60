@@ -1,16 +1,8 @@
-import {
-  CompactSelection,
-  DataEditor,
-  type GridCell,
-  GridCellKind,
-  type Item,
-} from "@glideapps/glide-data-grid";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTableAppearance } from "./table-appearance.js";
-import { fitWidths, rowHeight } from "./table-preferences.js";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@carbon/react";
+import type { CSSProperties } from "react";
 import type { SettingsColumn } from "./table-settings.js";
 import { orderedColumns, type TableId, type TableView } from "./table-view.js";
-import { applyCase, type TextStyles } from "./typography.js";
+import type { TextStyles } from "./typography.js";
 
 // Deliberately fictional, deterministic values. The preview never reads project records.
 const sampleValues: Record<string, readonly string[]> = {
@@ -47,7 +39,6 @@ const sampleDates = [
   "11/06/2026, 9:10 AM",
   "11/06/2026, 9:15 AM",
 ];
-const emptySelection = { rows: CompactSelection.empty(), columns: CompactSelection.empty() };
 
 function sampleValue(tableId: TableId, column: SettingsColumn, row: number) {
   if (tableId === "polling" && column.key === "name")
@@ -64,7 +55,7 @@ export function TablePreview({
   columns,
   view,
   actions,
-  textStyles,
+  textStyles: _textStyles,
 }: {
   tableId: TableId;
   columns: SettingsColumn[];
@@ -72,116 +63,50 @@ export function TablePreview({
   actions: boolean;
   textStyles: TextStyles;
 }) {
-  const { color, heading, normal, cellTheme, theme, tracking, getRowThemeOverride } =
-    useTableAppearance(textStyles, view.lines);
-  const container = useRef<HTMLDivElement>(null);
-  const [available, setAvailable] = useState(0);
-  useEffect(() => {
-    const element = container.current;
-    if (!element) return;
-    const measure = () => setAvailable(element.clientWidth - 40);
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    measure();
-    return () => observer.disconnect();
-  }, []);
-  const visible = useMemo(() => {
-    const result = orderedColumns(columns, view);
-    if (actions) result.splice(1, 0, { key: "actions", title: "Actions", width: 90 });
-    return result;
-  }, [columns, view, actions]);
-  const gridColumns = useMemo(() => {
-    const widths = visible.map((column) => view.widths[column.key] ?? column.width);
-    const fitted = view.fit && available > 0 ? fitWidths(widths, available) : widths;
-    return visible.map((column, i) => ({
-      id: column.key,
-      title: applyCase(column.title, heading.case),
-      width: fitted[i] ?? column.width,
-    }));
-  }, [visible, view.fit, view.widths, available, heading.case]);
-  const getCellContent = useCallback(
-    ([col, row]: Item): GridCell => {
-      const column = visible[col];
-      const value = column ? sampleValue(tableId, column, row) : "";
-      return {
-        kind: GridCellKind.Text,
-        data: value,
-        displayData: applyCase(value, normal.case),
-        readonly: true,
-        allowOverlay: false,
-        themeOverride: cellTheme,
-      };
-    },
-    [visible, tableId, normal.case, cellTheme],
-  );
+  const visible = orderedColumns(columns, view);
+  if (actions) visible.push({ key: "actions", title: "Actions", width: 96 });
   return (
     <div
-      ref={container}
-      className="table-preview-grid"
-      data-row-height={rowHeight(view.density)}
-      data-fit={view.fit}
+      className="table-preview-grid carbon-table-scroll"
+      data-fit-columns={view.fit}
+      data-horizontal={view.lines.horizontal}
+      data-vertical={view.lines.vertical}
       data-heading-lines={view.lines.heading}
+      style={
+        {
+          "--table-width": `${visible.reduce((sum, column) => sum + (view.widths[column.key] ?? column.width), 0)}px`,
+        } as CSSProperties
+      }
     >
-      <DataEditor
-        columns={gridColumns}
-        rows={4}
-        width="100%"
-        height={Math.max(32, heading.size + 12) + 4 * rowHeight(view.density) + 18}
-        getCellContent={getCellContent}
-        theme={theme}
-        rowHeight={rowHeight(view.density)}
-        headerHeight={Math.max(32, heading.size + 12)}
-        rowMarkers={{
-          kind: "number",
-          width: 40,
-          theme: { ...cellTheme, textLight: color("--muted") },
-        }}
-        getRowThemeOverride={getRowThemeOverride}
-        verticalBorder={view.lines.vertical}
-        rowSelect="none"
-        columnSelect="none"
-        rangeSelect="none"
-        gridSelection={emptySelection}
-        minColumnWidth={view.fit ? 20 : 50}
-        maxColumnWidth={view.fit ? 4000 : 500}
-        onPaste={false}
-        onDelete={() => false}
-        keybindings={{ search: false }}
-        drawHeader={(args, content) => tracking.header(args, content)}
-        drawCell={(args, content) => {
-          const column = visible[args.col];
-          if (!column?.chart) return tracking.cell(args, content);
-          const { ctx, rect } = args;
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(rect.x, rect.y, rect.width, rect.height);
-          ctx.clip();
-          ctx.strokeStyle = color("--accent");
-          ctx.fillStyle = color("--accent");
-          ctx.lineWidth = 1.5;
-          const values = [3, 6, 4, 8, 5, 7];
-          const width = Math.max(0, rect.width - 16);
-          const height = Math.min(20, rect.height - 8);
-          const x = rect.x + 8;
-          const y = rect.y + (rect.height + height) / 2;
-          if (column.key === "turnTime") {
-            ctx.beginPath();
-            values.forEach((value, index) => {
-              const px = x + (index * width) / 5;
-              const py = y - ((value + args.row) / 11) * height;
-              if (index === 0) ctx.moveTo(px, py);
-              else ctx.lineTo(px, py);
-            });
-            ctx.stroke();
-          } else {
-            values.forEach((value, index) => {
-              const bar = column.key === "history" ? height / 2 : (value / 8) * height;
-              ctx.fillRect(x + (index * width) / 6, y - bar, Math.max(0, width / 6 - 2), bar);
-            });
-          }
-          ctx.restore();
-        }}
-      />
+      <Table
+        aria-label="Table appearance preview"
+        size={view.density === "high" ? "sm" : view.density === "medium" ? "md" : "lg"}
+      >
+        <colgroup>
+          {visible.map((column) => (
+            <col
+              key={column.key}
+              style={{ width: view.fit ? undefined : (view.widths[column.key] ?? column.width) }}
+            />
+          ))}
+        </colgroup>
+        <TableHead>
+          <TableRow>
+            {visible.map((column) => (
+              <TableHeader key={column.key}>{column.title}</TableHeader>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {[0, 1, 2, 3].map((row) => (
+            <TableRow key={row}>
+              {visible.map((column) => (
+                <TableCell key={column.key}>{sampleValue(tableId, column, row)}</TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

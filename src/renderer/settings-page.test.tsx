@@ -16,14 +16,6 @@ const props: ComponentProps<typeof SettingsPage> = {
   pollingControls: <SettingsHeader page="polling-settings" />,
   theme: "dark",
   onTheme: unchanged,
-  iconAppearance: { animations: true, monochrome: false, color: "#808080", contrast: 100 },
-  iconAppearanceSaved: true,
-  onIconAppearance: unchanged,
-  sidebarAppearance: { opacity: 100, blur: 0 },
-  sidebarAppearanceSaved: true,
-  sidebarBlurSupported: true,
-  sidebarBlurError: "",
-  onSidebarAppearance: unchanged,
   textStyles: defaultTextStyles,
   onTextStyles: unchanged,
   lines: parseTableLines(null),
@@ -41,32 +33,12 @@ const props: ComponentProps<typeof SettingsPage> = {
 };
 
 describe("Settings page titles", () => {
-  it("offers a named monochrome switch, gray color selector and save failure feedback", () => {
-    const html = renderToStaticMarkup(
-      <SettingsPage {...props} section="appearance" iconAppearanceSaved={false} />,
-    );
-    expect(html).toContain('Monochrome<input type="checkbox" role="switch" aria-checked="false"');
-    expect(html).toContain('Icon color<input type="color" disabled="" value="#808080"');
-    expect(html).toContain("Icon appearance could not be saved.");
-    expect(html).toContain(
-      'type="range" min="0" max="200" step="1" disabled="" aria-valuetext="100%"',
-    );
-    const enabled = renderToStaticMarkup(
-      <SettingsPage
-        {...props}
-        section="appearance"
-        iconAppearance={{ animations: true, monochrome: true, color: "#348a56", contrast: 150 }}
-      />,
-    );
-    expect(enabled).toContain('Icon color<input type="color" value="#348a56"');
-    expect(enabled).toContain('aria-valuetext="150%"');
-  });
   it("omits native window effects while preserving browser appearance", () => {
     const html = renderToStaticMarkup(<SettingsPage {...props} section="appearance" />);
     expect(html).not.toContain("Background opacity</label>");
     expect(html).not.toContain("Background blur</label>");
     expect(html).toContain('aria-label="Theme"');
-    expect(html).toContain("Monochrome");
+    expect(html).not.toContain("Monochrome");
   });
   it.each(settingsSectionIds)(
     "uses the specific %s page name instead of a Settings heading",

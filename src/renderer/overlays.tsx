@@ -1,14 +1,9 @@
-import {
-  type CSSProperties,
-  Fragment,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { ActionableNotification, ToastNotification } from "@carbon/react";
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { Button as AppButton } from "./carbon/button.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { Icon, type IconName } from "./icons.js";
-import { DialogContent } from "./neobrutalism/dialog.js";
+import { Modal } from "./modal.js";
 import { markParts, rankCommands } from "./palette.js";
 import { captureTooltipScroll } from "./tooltip-scroll.js";
 
@@ -31,7 +26,6 @@ export interface Command {
 }
 
 export function CommandPalette({ commands, onClose }: { commands: Command[]; onClose(): void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
@@ -41,12 +35,6 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
   const matches = rankCommands(commands, query);
   const enabled = matches.filter((entry) => !entry.command.disabled);
   const active = enabled[index % Math.max(1, enabled.length)]?.command;
-  useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    dialog.current?.showModal();
-    input.current?.focus();
-    return () => previous?.focus();
-  }, []);
   useEffect(() => {
     if (active)
       list.current
@@ -65,14 +53,12 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
         entries: matches.filter((entry) => entry.command.group === name),
       }));
   return (
-    <DialogContent
-      ref={dialog}
+    <Modal
+      title="Command palette"
+      busy={false}
+      onClose={onClose}
+      initialFocus="input"
       className="command-palette"
-      aria-label="Command palette"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
       onKeyDown={(event) => {
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
@@ -89,7 +75,7 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
     >
       <div className="palette-input">
         <Icon name="chevron--right" />
-        <input
+        <CarbonTextInput
           ref={input}
           role="combobox"
           aria-label="Search commands"
@@ -108,7 +94,7 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
       <div role="listbox" aria-label="Commands" id={`${id}-list`} ref={list}>
         {groups.map((group) => {
           const options = group.entries.map(({ command, marks }) => (
-            <button
+            <AppButton
               key={command.id}
               id={`${id}-${command.id}`}
               type="button"
@@ -138,7 +124,7 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
               ) : (
                 <span className="command-hint">{command.keys}</span>
               )}
-            </button>
+            </AppButton>
           ));
           return group.name ? (
             // biome-ignore lint/a11y/useSemanticElements: a fieldset would add form semantics and its own frame to a row of buttons.
@@ -168,7 +154,7 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
           {matches.length} {matches.length === 1 ? "result" : "results"}
         </span>
       </footer>
-    </DialogContent>
+    </Modal>
   );
 }
 
@@ -337,11 +323,11 @@ export interface ToastMessage {
   tone: ToastTone;
   action?: { label: string; run(): void } | undefined;
 }
-const tones: Record<ToastTone, { kind: string; icon: IconName; duration: number | null }> = {
-  info: { kind: "Note", icon: "information", duration: 4000 },
-  success: { kind: "Done", icon: "checkmark--outline", duration: 6000 },
-  warning: { kind: "Warning", icon: "warning--alt", duration: 8000 },
-  error: { kind: "Error", icon: "error", duration: null },
+const tones: Record<ToastTone, { kind: string; duration: number | null }> = {
+  info: { kind: "Note", duration: 4000 },
+  success: { kind: "Done", duration: 6000 },
+  warning: { kind: "Warning", duration: 8000 },
+  error: { kind: "Error", duration: null },
 };
 /** At most three toasts remain; a new one displaces the oldest, errors included. */
 export const maxToasts = 3;
@@ -378,13 +364,23 @@ function Toast({ message, onDismiss }: { message: ToastMessage; onDismiss(id: nu
       remaining.current = Math.max(0, remaining.current - (Date.now() - started));
     };
   }, [message.id, onDismiss, paused, tone.duration]);
+  const notification = {
+    title: tone.kind,
+    subtitle: message.text,
+    kind: message.tone,
+    "aria-label": "Dismiss notification",
+    role: message.tone === "error" ? ("alert" as const) : ("log" as const),
+    "aria-live": message.tone === "error" ? ("assertive" as const) : ("off" as const),
+    onClose: () => {
+      onDismiss(message.id);
+      return false;
+    },
+  };
   return (
     <fieldset
       aria-label={`${tone.kind} notification`}
-      className="app-toast"
-      data-tone={message.tone}
+      className="carbon-toast-owner"
       data-paused={paused}
-      role={message.tone === "error" ? "alert" : undefined}
       onPointerEnter={() => setPaused(true)}
       onPointerLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
@@ -392,44 +388,24 @@ function Toast({ message, onDismiss }: { message: ToastMessage; onDismiss(id: nu
         if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false);
       }}
       onKeyDown={(event) => {
-        if (event.key !== "Escape") return;
-        event.preventDefault();
-        event.stopPropagation();
-        onDismiss(message.id);
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onDismiss(message.id);
+        }
       }}
     >
-      <Icon name={tone.icon} />
-      <span className="toast-body">
-        <span className="toast-kind">{tone.kind}</span>
-        <span>{message.text}</span>
-        {message.action && (
-          <span className="toast-actions">
-            <button
-              type="button"
-              onClick={() => {
-                message.action?.run();
-                onDismiss(message.id);
-              }}
-            >
-              {message.action.label}
-            </button>
-          </span>
-        )}
-      </span>
-      <button
-        type="button"
-        className="icon-button"
-        aria-label="Dismiss notification"
-        onClick={() => onDismiss(message.id)}
-      >
-        <Icon name="close" />
-      </button>
-      {tone.duration !== null && (
-        <span
-          className="toast-timer"
-          aria-hidden="true"
-          style={{ "--duration": `${tone.duration}ms` } as CSSProperties}
+      {message.action ? (
+        <ActionableNotification
+          {...notification}
+          actionButtonLabel={message.action.label}
+          onActionButtonClick={() => {
+            message.action?.run();
+            onDismiss(message.id);
+          }}
         />
+      ) : (
+        <ToastNotification {...notification} />
       )}
     </fieldset>
   );

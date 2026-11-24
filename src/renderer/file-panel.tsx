@@ -5,6 +5,7 @@ import type {
   PlanSummary,
   ReviewSummary,
 } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { type FileTabAction, type FileTabs, fileMainViews, fileTabLabel } from "./file-tabs.js";
 import { type FileBrowser, FileInspector, FilesPage } from "./files.js";
 import { Icon } from "./icons.js";
@@ -49,7 +50,7 @@ export function RevisionList({
           <ul>
             {review.revisions.map((revision, index) => (
               <li key={revision.id}>
-                <button
+                <AppButton
                   type="button"
                   className="revision-item"
                   title={new Date(revision.at).toLocaleString()}
@@ -72,7 +73,7 @@ export function RevisionList({
                     <span className="sr-only">(open)</span>
                   )}
                   <time dateTime={revision.at}>{revisionTime(revision.at)}</time>
-                </button>
+                </AppButton>
               </li>
             ))}
           </ul>
@@ -233,7 +234,7 @@ export function FilePanel({
               <div className="file-panel-empty-actions">
                 {emptyContent}
                 {currentPlan && (
-                  <button
+                  <AppButton
                     type="button"
                     className="file-open-link"
                     onClick={() => {
@@ -245,9 +246,9 @@ export function FilePanel({
                     }}
                   >
                     View Plan
-                  </button>
+                  </AppButton>
                 )}
-                <button
+                <AppButton
                   type="button"
                   className="file-open-link"
                   onClick={() => {
@@ -256,8 +257,8 @@ export function FilePanel({
                   }}
                 >
                   Open Files
-                </button>
-                <button
+                </AppButton>
+                <AppButton
                   type="button"
                   className="file-open-link"
                   onClick={() => {
@@ -266,7 +267,7 @@ export function FilePanel({
                   }}
                 >
                   Open Memory Recall
-                </button>
+                </AppButton>
               </div>
             </div>
           ) : selected.kind === "recall" ? (

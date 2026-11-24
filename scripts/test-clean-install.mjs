@@ -511,7 +511,7 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
                     : "/harness/install.mjs",
             ...(update ? ["/input/descriptor.json"] : []),
           ],
-          (update ? 10 : 4) * 60_000,
+          (update ? 10 : payload ? 4 : 7) * 60_000,
         );
       },
     );

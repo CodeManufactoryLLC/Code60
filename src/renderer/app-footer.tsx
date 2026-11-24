@@ -1,4 +1,5 @@
 import type { AppPagesProps } from "./app-page-props.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { newestMessage } from "./chat-presentation.js";
 import { PollingWidget } from "./polling.js";
 import { SidebarFooterActions } from "./sidebar-footer-actions.js";
@@ -19,6 +20,7 @@ type FooterProps = Pick<
   updates: ReturnType<typeof useUpdates>;
   openUpdates(): void;
   onReturn(): void;
+  closeWorkspace(): void;
 };
 export function AppFooter({
   api,
@@ -33,6 +35,7 @@ export function AppFooter({
   updates,
   openUpdates,
   onReturn,
+  closeWorkspace,
 }: FooterProps) {
   const snapshot = state?.snapshot;
   const database = snapshot?.database ?? null;
@@ -77,15 +80,24 @@ export function AppFooter({
           onReturn={onReturn}
         />
       </div>
-      <UpdateIndicator state={updates.state} onOpen={openUpdates} />
+      <UpdateIndicator
+        state={updates.state}
+        onOpen={() => {
+          closeWorkspace();
+          openUpdates();
+        }}
+      />
       {first && (
-        <button
+        <AppButton
           type="button"
           className="footer-note"
-          onClick={() => void navigation.open({ kind: "conversation", id: first.id })}
+          onClick={() => {
+            closeWorkspace();
+            void navigation.open({ kind: "conversation", id: first.id });
+          }}
         >
           {waiting.reduce((sum, run) => sum + (run?.pending.length ?? 0), 0)} approvals waiting
-        </button>
+        </AppButton>
       )}
       <div className="app-version" role="note" aria-label="Running Code60 version">
         Code60 {snapshot?.versions.code60 ?? "Version unavailable"}

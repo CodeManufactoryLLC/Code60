@@ -1,9 +1,9 @@
-import type { Rectangle } from "@glideapps/glide-data-grid";
 import { useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import type { ApplicationClient, RunConfiguration } from "../bridge/index.js";
 import type { OpenChat } from "./chats.js";
 import { ScopeLifetime } from "./scope-lifetime.js";
 import { SessionPanel } from "./session-panel.js";
+import type { Rectangle } from "./table-types.js";
 import { TranscriptCache } from "./transcripts.js";
 
 interface ProjectUi {

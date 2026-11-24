@@ -9,14 +9,14 @@ describe("Settings home", () => {
     (database) => {
       const html = renderToStaticMarkup(<SettingsHomePage database={database} onOpen={() => {}} />);
       expect(html).toContain('aria-labelledby="settings-home-title"');
-      expect(html).toContain('data-icon="app-cogwheel"');
+      expect(html).not.toContain('data-icon="app-cogwheel"');
       expect([...html.matchAll(/aria-label="Open ([^"]+)"/g)].map((match) => match[1])).toEqual([
         "About",
         "Advanced",
         "Table defaults",
         "Text",
       ]);
-      expect(html.match(/class="home-card"/g)).toHaveLength(4);
+      expect(html.match(/class="navigation-list-row"/g)).toHaveLength(4);
       expect(html).not.toContain("disabled");
       expect(html).not.toContain("home-card-description");
       expect(html).not.toContain('data-feature="rag"');
@@ -27,7 +27,7 @@ describe("Settings home", () => {
           new RegExp(`<button[^>]*data-feature="${id}"[\\s\\S]*?</button>`),
         )?.[0];
         expect(card).toContain(`aria-label="Open ${settingsLabels[id]}"`);
-        expect(card).toContain(`data-icon="${settingsIcons[id]}"`);
+        expect(card).not.toContain(`data-icon="${settingsIcons[id]}"`);
       }
     },
   );

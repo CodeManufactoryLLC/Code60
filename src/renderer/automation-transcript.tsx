@@ -1,6 +1,7 @@
+import { Button, InlineNotification } from "@carbon/react";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ApplicationClient, AutomationTranscript } from "../bridge/index.js";
-import { Modal } from "./modal.js";
+import { AutomationModal } from "./automation-modal.js";
 
 export function AutomationTranscriptModal({
   api,
@@ -62,7 +63,7 @@ export function AutomationTranscriptModal({
   const messages = value?.entries.filter((entry) => entry.type === "message") ?? [];
   const details = value?.entries.filter((entry) => entry.type !== "message") ?? [];
   return (
-    <Modal title="Execution transcript" busy={false} wide onClose={onClose}>
+    <AutomationModal title="Execution transcript" onClose={onClose}>
       {value ? (
         <>
           <p role="status">
@@ -73,7 +74,7 @@ export function AutomationTranscriptModal({
             {messages.map((entry) => (
               <pre
                 key={entry.key}
-                className="automation-evidence"
+                className="carbon-job-evidence"
                 data-transcript-type={entry.type}
               >
                 {entry.text}
@@ -86,7 +87,7 @@ export function AutomationTranscriptModal({
               {details.map((entry) => (
                 <pre
                   key={entry.key}
-                  className="automation-evidence"
+                  className="carbon-job-evidence"
                   data-transcript-type={entry.type}
                 >
                   {entry.text}
@@ -101,12 +102,17 @@ export function AutomationTranscriptModal({
       )}
       {error && (
         <div>
-          <p role="alert">{error}</p>
-          <button type="button" onClick={() => refreshLatest.current()}>
+          <InlineNotification
+            kind="error"
+            title="Transcript unavailable"
+            subtitle={error}
+            hideCloseButton
+          />
+          <Button type="button" kind="tertiary" onClick={() => refreshLatest.current()}>
             Retry transcript
-          </button>
+          </Button>
         </div>
       )}
-    </Modal>
+    </AutomationModal>
   );
 }

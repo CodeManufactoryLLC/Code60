@@ -1,4 +1,7 @@
+import { Slider } from "@carbon/react";
 import { useId, useState } from "react";
+import { Button as AppButton } from "./carbon/button.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { ControlDescription } from "./overlays.js";
 import {
   defaultTransitionTimes,
@@ -22,13 +25,13 @@ export function TransitionSettings() {
   return (
     <fieldset className="settings-group transition-settings">
       <legend className="settings-group-title">Transitions</legend>
-      <button
+      <AppButton
         type="button"
         className="settings-group-reset"
         onClick={() => update(defaultTransitionTimes)}
       >
         Reset transitions
-      </button>
+      </AppButton>
       {transitionTimeFields.map((field) => {
         const sliderId = `${id}-${field.id}`;
         const tipId = `${sliderId}-tip`;
@@ -37,7 +40,7 @@ export function TransitionSettings() {
           <div className="transition-setting" key={field.id}>
             <div className="transition-setting-heading">
               <span className="settings-label">
-                <label htmlFor={sliderId}>{field.label}</label>
+                <span>{field.label}</span>
                 <ControlDescription id={tipId}>
                   {`${field.tip} Range: 0 to 30 seconds. Zero is instant. System reduced motion overrides these settings. Changes apply immediately and are saved on this device.`}
                 </ControlDescription>
@@ -46,16 +49,29 @@ export function TransitionSettings() {
             </div>
             <div className="transition-time-controls">
               <div className="transition-range">
-                <input
+                <Slider
                   id={sliderId}
-                  type="range"
+                  labelText={field.label}
+                  hideLabel
+                  hideTextInput
                   min={0}
                   max={transitionSliderSteps}
+                  minLabel="Instant"
+                  maxLabel="30 s"
                   step={1}
                   value={transitionTimeToSlider(time)}
-                  aria-valuetext={transitionTimeLabel(time)}
+                  formatLabel={(_position, label) => label ?? transitionTimeLabel(time)}
                   aria-describedby={tipId}
-                  onKeyDown={(event) => {
+                  onKeyDownCapture={(event) => {
+                    if (event.key === "Home" || event.key === "End") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      update({
+                        ...times,
+                        [field.id]: event.key === "Home" ? 0 : maxTransitionTime,
+                      });
+                      return;
+                    }
                     const direction =
                       event.key === "ArrowRight" || event.key === "ArrowUp"
                         ? 1
@@ -64,22 +80,16 @@ export function TransitionSettings() {
                           : 0;
                     if (!direction) return;
                     event.preventDefault();
+                    event.stopPropagation();
                     update({ ...times, [field.id]: stepTransitionTime(time, direction) });
                   }}
-                  onChange={(event) =>
-                    update({
-                      ...times,
-                      [field.id]: transitionTimeFromSlider(event.target.valueAsNumber),
-                    })
+                  onChange={({ value }) =>
+                    update({ ...times, [field.id]: transitionTimeFromSlider(value) })
                   }
                 />
-                <div className="transition-range-limits" aria-hidden="true">
-                  <span>Instant</span>
-                  <span>30 s</span>
-                </div>
               </div>
               <span className="settings-unit">
-                <input
+                <CarbonTextInput
                   type="number"
                   min={0}
                   max={maxTransitionTime}

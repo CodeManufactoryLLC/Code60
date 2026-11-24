@@ -177,7 +177,7 @@ describe("DesktopKnowledge", () => {
       expect.objectContaining({ availability: expect.objectContaining({ status: "blocked" }) }),
     ]);
   });
-  it.each(["Icon contrast", "Scientifica", "icon animations"])(
+  it.each(["interface text size", "Legacy decorative preferences"])(
     "keeps %s settings discoverable and human-only without a database",
     async (query) => {
       const { knowledge } = setup({ database: null });
@@ -188,7 +188,7 @@ describe("DesktopKnowledge", () => {
         expect.objectContaining({
           id: "settings",
           agentAccess: "human-only",
-          access: expect.stringContaining("Appearance → Icons"),
+          access: expect.stringContaining("Workspace → Color theme"),
           availability: expect.objectContaining({ status: "available" }),
         }),
       ]);

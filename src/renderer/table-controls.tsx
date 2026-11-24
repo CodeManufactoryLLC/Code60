@@ -1,19 +1,11 @@
-import type { Rectangle } from "@glideapps/glide-data-grid";
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
+import { Button as AppButton } from "./carbon/button.js";
+import { Select as CarbonSelect, TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { Icon } from "./icons.js";
+import { Modal } from "./modal.js";
 import { operators as filterOperators } from "./saved-filters.js";
+import type { Rectangle } from "./table-types.js";
 import { type ColumnFilter, type FilterKind, filterLabels } from "./table-view.js";
-
-export function TableControlGroup({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="table-control-scroll">
-      {/* biome-ignore lint/a11y/useSemanticElements: these controls are page actions. */}
-      <div className="table-control-group" role="group" aria-label={label}>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 interface PagerStep {
   label: string;
@@ -39,7 +31,7 @@ export function TablePager({
     // biome-ignore lint/a11y/useSemanticElements: these controls are page actions.
     <div className="table-pager" role="group" aria-label={label}>
       <span className="table-pager-summary">{summary}</span>
-      <button
+      <AppButton
         type="button"
         className="icon-button"
         aria-label={previous.label}
@@ -47,9 +39,9 @@ export function TablePager({
         onClick={previous.onClick}
       >
         <Icon name="chevron--left" />
-      </button>
+      </AppButton>
       <span className="table-pager-page">Page {page}</span>
-      <button
+      <AppButton
         type="button"
         className="icon-button"
         aria-label={next.label}
@@ -57,7 +49,7 @@ export function TablePager({
         onClick={next.onClick}
       >
         <Icon name="chevron--right" />
-      </button>
+      </AppButton>
     </div>
   );
 }
@@ -67,7 +59,7 @@ export function ColumnMenu({
   kind,
   values,
   filter,
-  bounds,
+  bounds: _bounds,
   onClose,
   onSort,
   onFilter,
@@ -82,63 +74,28 @@ export function ColumnMenu({
   onFilter(filter: ColumnFilter | undefined): void;
 }) {
   const id = useId();
-  const ref = useRef<HTMLDivElement>(null);
-  const close = useRef(onClose);
-  close.current = onClose;
   const [op, setOp] = useState<ColumnFilter["op"]>(
     filter?.op ?? (kind === "text" ? "contains" : "eq"),
   );
   const [value, setValue] = useState(
     filter?.value ?? (kind === "category" ? (values[0] ?? "") : ""),
   );
-  const [position, setPosition] = useState({ left: bounds.x, top: bounds.y + bounds.height });
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    const box = element.getBoundingClientRect();
-    setPosition({
-      left: Math.max(8, Math.min(bounds.x, window.innerWidth - box.width - 8)),
-      top: Math.max(8, Math.min(bounds.y + bounds.height, window.innerHeight - box.height - 8)),
-    });
-    element.querySelector<HTMLElement>("button")?.focus();
-    const outside = (event: PointerEvent) => {
-      if (!element.contains(event.target as Node)) close.current();
-    };
-    const dismiss = () => close.current();
-    document.addEventListener("pointerdown", outside);
-    window.addEventListener("resize", dismiss);
-    window.addEventListener("blur", dismiss);
-    return () => {
-      document.removeEventListener("pointerdown", outside);
-      window.removeEventListener("resize", dismiss);
-      window.removeEventListener("blur", dismiss);
-    };
-  }, [bounds]);
   const operators = filterOperators(kind);
   const needsValue = op !== "empty" && op !== "present";
   return (
-    <div
-      className="column-menu"
-      role="dialog"
-      aria-labelledby={id}
-      ref={ref}
-      style={position}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          event.stopPropagation();
-          onClose();
-        }
-      }}
+    <Modal
+      title={`${title} filter and sort`}
+      busy={false}
+      onClose={onClose}
+      className="column-filter-dialog"
     >
-      <strong id={id}>{title}</strong>
       <div className="button-group">
-        <button type="button" onClick={() => onSort(false)}>
+        <AppButton type="button" onClick={() => onSort(false)}>
           Sort ascending
-        </button>
-        <button type="button" onClick={() => onSort(true)}>
+        </AppButton>
+        <AppButton type="button" onClick={() => onSort(true)}>
           Sort descending
-        </button>
+        </AppButton>
       </div>
       <form
         onSubmit={(event) => {
@@ -146,21 +103,24 @@ export function ColumnMenu({
           onFilter({ op, value });
         }}
       >
-        <label>
-          Condition
-          <select value={op} onChange={(event) => setOp(event.target.value as ColumnFilter["op"])}>
+        <div>
+          <CarbonSelect
+            labelText={<>Condition</>}
+            value={op}
+            onChange={(event) => setOp(event.target.value as ColumnFilter["op"])}
+          >
             {operators.map((candidate) => (
               <option key={candidate} value={candidate}>
                 {filterLabels[candidate]}
               </option>
             ))}
-          </select>
-        </label>
+          </CarbonSelect>
+        </div>
         {needsValue && (
           <label htmlFor={`${id}-value`}>
             Value
             {kind === "category" ? (
-              <select
+              <CarbonSelect
                 id={`${id}-value`}
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
@@ -170,9 +130,9 @@ export function ColumnMenu({
                     {candidate || "(empty)"}
                   </option>
                 ))}
-              </select>
+              </CarbonSelect>
             ) : (
-              <input
+              <CarbonTextInput
                 id={`${id}-value`}
                 required
                 type={
@@ -190,17 +150,17 @@ export function ColumnMenu({
           </label>
         )}
         <div className="button-group">
-          <button type="submit" className="primary" disabled={needsValue && !value.trim()}>
+          <AppButton type="submit" className="primary" disabled={needsValue && !value.trim()}>
             Apply filter
-          </button>
-          <button type="button" onClick={() => onFilter(undefined)}>
+          </AppButton>
+          <AppButton type="button" onClick={() => onFilter(undefined)}>
             Clear filter
-          </button>
-          <button type="button" onClick={onClose}>
+          </AppButton>
+          <AppButton type="button" onClick={onClose}>
             Close
-          </button>
+          </AppButton>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }

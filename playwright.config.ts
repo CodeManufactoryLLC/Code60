@@ -14,6 +14,7 @@ export default defineConfig({
     "file-browser.e2e.ts",
     "transmission-workflow.e2e.ts",
     "renderer-replay.e2e.ts",
+    "carbon-tables.e2e.ts",
     "navigation-icons.e2e.ts",
     "provider-login.e2e.ts",
     "all-provider-login.e2e.ts",

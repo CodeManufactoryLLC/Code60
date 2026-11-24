@@ -1,4 +1,5 @@
 import type { AppPagesProps } from "./app-page-props.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { Modal } from "./modal.js";
 import { ProjectConfirmation } from "./project-confirmation.js";
 import type { useProjectConnection } from "./project-connection.js";
@@ -75,10 +76,10 @@ export function AppDialogs({
           <p>Code60 {updateNotice.notice} is available.</p>
           <p>Download now, or keep working and download later from the footer or Settings.</p>
           <div className="button-group">
-            <button type="button" onClick={updateNotice.dismiss}>
+            <AppButton type="button" onClick={updateNotice.dismiss}>
               Later
-            </button>
-            <button
+            </AppButton>
+            <AppButton
               type="button"
               onClick={() => {
                 updateNotice.dismiss();
@@ -87,7 +88,7 @@ export function AppDialogs({
               }}
             >
               Download now
-            </button>
+            </AppButton>
           </div>
         </Modal>
       )}

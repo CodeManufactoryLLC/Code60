@@ -135,6 +135,10 @@ export function historyNavigation(recorder: NavigationRecorder, dependencies: Hi
     );
   };
   return {
+    current,
+    available,
+    restore,
+    settled: recorder.settled && !navigation.busy,
     canGoBack: !navigation.busy && recorder.canGo(-1, available),
     canGoForward: !navigation.busy && recorder.canGo(1, available),
     back: () => go(-1),

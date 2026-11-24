@@ -96,25 +96,20 @@
   align-items: baseline;
   margin-bottom: 8px;
 }
-.workflow-player,
 .workflow-player-left,
-.workflow-activity-box,
-.workflow-task-list details {
-  background: var(--surface);
-  border: 2px solid var(--border);
-  border-radius: 5px;
-  box-shadow: 4px 4px 0 var(--shadow-color);
+.workflow-activity-box {
   min-width: 0;
+  background: var(--cds-layer-01);
 }
 .workflow-player {
   display: grid;
-  gap: 20px;
-  padding: 10px 24px 20px;
+  gap: 1.5rem;
+  padding: 1rem 0;
   margin-bottom: 24px;
 }
 .workflow-player h2 {
   margin: 0;
-  text-align: center;
+  text-align: start;
   overflow-wrap: anywhere;
 }
 .workflow-player-panels {
@@ -140,39 +135,12 @@
   font-weight: 600;
 }
 .workflow-metric [role="timer"] {
-  font: 700 2.3em / 1.15 var(--mono);
+  font: 400 2rem / 1.25 var(--font);
   font-variant-numeric: tabular-nums;
 }
 .workflow-transport-row {
   display: flex;
   gap: 10px;
-}
-.workflow-player .workflow-transport {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 2px solid var(--border);
-  border-radius: 5px;
-  box-shadow: 3px 3px 0 var(--shadow-color);
-  background: var(--surface);
-}
-.workflow-transport svg {
-  width: 20px;
-  height: 20px;
-}
-.workflow-player .workflow-transport:is([data-icon="play"], [data-icon="pause"]):enabled {
-  background: var(--primary);
-  color: var(--primary-text);
-}
-.workflow-player .workflow-transport:disabled {
-  opacity: 0.5;
-  box-shadow: none;
-}
-.workflow-player .workflow-transport:hover:enabled {
-  transform: translate(2px, 2px);
-  box-shadow: none;
 }
 .workflow-donut {
   position: relative;
@@ -247,37 +215,14 @@
   margin: 0;
 }
 .workflow-task-list {
-  width: min(100%, 640px);
-  margin: 8px auto;
-}
-.workflow-task-list li {
-  position: relative;
-  margin-bottom: 32px;
-}
-.workflow-task-list li:last-child {
+  width: 100%;
   margin: 0;
-}
-.workflow-task-list li:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  height: 26px;
-  border-left: 2px solid var(--border);
-}
-.workflow-task-list li:not(:last-child)::before {
-  content: "";
-  position: absolute;
-  top: calc(100% + 18px);
-  left: calc(50% - 4px);
-  width: 8px;
-  height: 8px;
-  border: solid var(--border);
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
+  padding: 0;
+  list-style: none;
 }
 .workflow-task-list details {
   margin: 0;
+  border-block-start: 1px solid var(--cds-border-subtle-01);
 }
 .workflow-task-list summary {
   font-size: var(--text-size, 13px);
@@ -299,11 +244,10 @@
 }
 .workflow-task-list summary b {
   text-align: center;
-  border: 2px solid var(--border);
-  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
 }
 .workflow-task-list details[data-current="true"] summary {
-  background: var(--selection-bg, var(--accent-bg));
+  background: var(--cds-layer-selected-01);
 }
 .workflow-task-list details[data-current="true"] b {
   background: var(--primary);
@@ -354,7 +298,7 @@
 .workflow-control-modal footer {
   justify-content: flex-end;
 }
-@container (max-width: 620px) {
+@container (max-width: 42rem) {
   .workflow-player {
     padding: 8px 14px 16px;
   }

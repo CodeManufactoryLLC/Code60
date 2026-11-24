@@ -1,6 +1,9 @@
 import { useId, useRef, useState } from "react";
 import type { ApplicationClient, Command, Snapshot } from "../bridge/index.js";
 import { COMMAND_LIMIT } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { TextInput as CarbonTextInput } from "./carbon/fields.js";
+import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
 import {
   type CommandDraft,
   commandProblems,
@@ -8,7 +11,7 @@ import {
   editCommand,
   emptyCommand,
 } from "./commands-model.js";
-import { Icon } from "./icons.js";
+
 import { ControlDescription } from "./overlays.js";
 import { PageTitle } from "./page-title.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
@@ -27,6 +30,7 @@ export function CommandsPage({
   const [selected, setSelected] = useState<string>(commands[0]?.id ?? "new");
   const [drafts, setDrafts] = useState<Record<string, CommandDraft>>({});
   const [busy, setBusy] = useState(false);
+  const [visited, setVisited] = useState<Record<string, readonly string[]>>({});
   const pending = useRef(false);
   const [error, setError] = useState("");
   const saved = commands.find((entry) => entry.id === selected);
@@ -45,11 +49,12 @@ export function CommandsPage({
       : emptyCommand());
   const fields = draft.fields;
   const problems = commandProblems(fields, commands, saved?.id);
-  const dirty =
-    !saved ||
-    (["name", "title", "description", "prompt"] as const).some((key) => saved[key] !== fields[key]);
-  const valid = Object.keys(problems).length === 0;
+  const dirty = (["name", "title", "description", "prompt"] as const).some(
+    (key) => (saved?.[key] ?? "") !== fields[key],
+  );
+
   function discard() {
+    setVisited((current) => ({ ...current, [selected]: [] }));
     setDrafts((current) => {
       const next = { ...current };
       delete next[selected];
@@ -87,22 +92,7 @@ export function CommandsPage({
   return (
     <main className="prompt-editor commands-page" aria-labelledby={`${id}-heading`}>
       <header className="table-controls">
-        <PageTitle
-          page="commands"
-          className="table-title"
-          id={`${id}-heading`}
-          actions={[
-            {
-              id: "commands-page-0",
-              label: "New command",
-              run: () => {
-                setSelected("new");
-                setError("");
-              },
-              disabled: busy || commands.length >= COMMAND_LIMIT,
-            },
-          ]}
-        />
+        <PageTitle page="commands" className="table-title" id={`${id}-heading`} />
         <ControlDescription>
           Reusable prompts shared across projects in this database. Start an orchestrator message
           with $name to use one.
@@ -111,8 +101,20 @@ export function CommandsPage({
       <div className="commands-scroll">
         <div className="prompt-editor-body">
           <nav className="prompt-editor-list" aria-label="Commands">
+            <AppButton
+              variant="quiet"
+              disabled={busy || commands.length >= COMMAND_LIMIT}
+              onClick={() => {
+                setSelected("new");
+                setError("");
+                document.getElementById(`${id}-title`)?.focus();
+              }}
+            >
+              New command
+            </AppButton>
             {commands.map((entry) => (
-              <button
+              <AppButton
+                variant="quiet"
                 type="button"
                 key={entry.id}
                 disabled={busy}
@@ -125,12 +127,13 @@ export function CommandsPage({
                 <span className="prompt-editor-name">${entry.name}</span>
                 <span className="prompt-editor-source">{entry.title}</span>
                 {drafts[entry.id] && <span className="prompt-editor-source">Unsaved changes</span>}
-              </button>
+              </AppButton>
             ))}
-            {(selected === "new" || drafts.new) && (
-              <button
+            {drafts.new && Object.values(drafts.new.fields).some(Boolean) && (
+              <AppButton
                 type="button"
                 disabled={busy}
+                variant="quiet"
                 aria-current={selected === "new" ? "true" : undefined}
                 onClick={() => {
                   setSelected("new");
@@ -138,29 +141,46 @@ export function CommandsPage({
                 }}
               >
                 New command (unsaved)
-              </button>
+              </AppButton>
             )}
           </nav>
           <form
             className="prompt-editor-main command-form"
             onSubmit={(event) => {
               event.preventDefault();
-              if (valid && dirty) void perform(false);
+              const invalidFields = (["title", "name", "description", "prompt"] as const).filter(
+                (field) => problems[field],
+              );
+              if (invalidFields.length) {
+                setVisited((current) => ({ ...current, [selected]: invalidFields }));
+                document.getElementById(`${id}-${invalidFields[0]}`)?.focus();
+                return;
+              }
+              if (dirty) void perform(false);
             }}
           >
             {(["title", "name", "description", "prompt"] as const).map((field) => {
               const label = {
                 title: "Title",
                 name: "Name",
-                description: "Description",
+                description: "Description (optional)",
                 prompt: "Prompt",
               }[field];
+              const invalid = Boolean(problems[field] && visited[selected]?.includes(field));
               const control = {
+                labelText: label,
+                invalid,
+                invalidText: problems[field] ?? "",
+                "aria-required": field !== "description",
+                onBlur: () =>
+                  setVisited((current) =>
+                    current[selected]?.includes(field)
+                      ? current
+                      : { ...current, [selected]: [...(current[selected] ?? []), field] },
+                  ),
                 id: `${id}-${field}`,
                 value: fields[field],
                 disabled: busy,
-                "aria-invalid": !!problems[field],
-                "aria-describedby": `${id}-${field}-problem`,
                 onChange: (event: { target: { value: string } }) => {
                   setDrafts((current) => ({
                     ...current,
@@ -169,29 +189,23 @@ export function CommandsPage({
                   setError("");
                 },
               };
-              return (
-                <div className="command-field" key={field}>
-                  <label className="field-label" htmlFor={control.id}>
-                    {label}
-                  </label>
-                  {field === "prompt" ? (
-                    <div className="prompt-editor-input">
-                      <textarea {...control} spellCheck={false} maxLength={100_000} />
-                    </div>
-                  ) : (
-                    <div className={field === "name" ? "command-name-input" : undefined}>
-                      {field === "name" && <span aria-hidden="true">$</span>}
-                      <input
-                        {...control}
-                        maxLength={field === "title" ? 120 : field === "name" ? 64 : 500}
-                        autoCapitalize={field === "name" ? "none" : undefined}
-                      />
-                    </div>
-                  )}
-                  <p className="prompt-editor-problem" id={`${id}-${field}-problem`}>
-                    {problems[field] ?? ""}
-                  </p>
-                </div>
+              return field === "prompt" ? (
+                <CarbonTextArea
+                  key={field}
+                  {...control}
+                  hideLabel={false}
+                  rows={6}
+                  spellCheck={false}
+                  maxLength={100_000}
+                />
+              ) : (
+                <CarbonTextInput
+                  key={field}
+                  {...control}
+                  helperText={field === "name" ? "Use $name at the start of a message." : undefined}
+                  autoCapitalize={field === "name" ? "none" : undefined}
+                  maxLength={field === "title" ? 120 : field === "name" ? 64 : 500}
+                />
               );
             })}
             {error && (
@@ -199,16 +213,24 @@ export function CommandsPage({
                 {error}
               </p>
             )}
-            <div className="button-group">
-              <button type="submit" className="primary" disabled={busy || !dirty || !valid}>
-                <Icon name="checkmark" /> Save
-              </button>
-              <button type="button" disabled={busy || !dirty} onClick={discard}>
+            <div className="command-form-actions">
+              <AppButton type="submit" className="primary" disabled={busy || (!!saved && !dirty)}>
+                Save
+              </AppButton>
+              <AppButton type="button" disabled={busy || !dirty} onClick={discard}>
                 Discard changes
-              </button>
-              <button type="button" disabled={busy || !saved} onClick={() => void perform(true)}>
-                Delete
-              </button>
+              </AppButton>
+              {saved && (
+                <AppButton
+                  className="destructive"
+                  variant="quiet"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void perform(true)}
+                >
+                  Delete
+                </AppButton>
+              )}
             </div>
           </form>
         </div>

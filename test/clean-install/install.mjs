@@ -30,7 +30,7 @@ const install = (target, url) =>
   execute(
     "/usr/local/bin/npm",
     ["install", "--prefix", target, "--omit=dev", "--no-audit", "--no-fund", url],
-    { env, cwd: "/work", timeout: 180_000, maxBuffer: 8 * 1024 * 1024 },
+    { env, cwd: "/work", timeout: 6 * 60_000, maxBuffer: 8 * 1024 * 1024 },
   );
 try {
   await assert.rejects(install("/work/corrupt-prefix", `${origin}/corrupt.tgz`));

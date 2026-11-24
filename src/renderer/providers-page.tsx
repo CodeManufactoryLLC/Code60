@@ -1,7 +1,8 @@
 import type { ApplicationClient, ModelDefaultAction, Snapshot } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
+import { Button as AppButton } from "./carbon/button.js";
+import { PrimaryProviderMark } from "./carbon/provider-controls.js";
 import { NavigationCards } from "./navigation-cards.js";
-import { PrimaryProviderMark } from "./neobrutalism/provider-controls.js";
 import { PageTitle } from "./page-title.js";
 import type { ProviderManagement } from "./provider-management.js";
 import { providerActionReasons } from "./provider-management.js";
@@ -93,7 +94,7 @@ export function ProvidersPage({
                     {role === "orchestrator" ? "Orchestrator" : "Worker"}
                     <small>{values.map((value) => value.name).join(" · ")}</small>
                   </span>
-                  <button
+                  <AppButton
                     type="button"
                     disabled={management.pending || !api.modelDefault}
                     aria-label={`Clear ${provider.id} ${role} model default`}
@@ -106,7 +107,7 @@ export function ProvidersPage({
                     }
                   >
                     Clear
-                  </button>
+                  </AppButton>
                 </div>
               ) : null;
             })}

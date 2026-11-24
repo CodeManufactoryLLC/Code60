@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ActivitySnapshot, ActivityState } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { durationText } from "./chat-presentation.js";
 import { Icon, type IconName } from "./icons.js";
 import { useTicker } from "./ticker.js";
@@ -213,7 +214,7 @@ export function ActivityDisplay({
       </div>
     );
   return (
-    <button
+    <AppButton
       type="button"
       id={id}
       className="chat-progress activity-display"
@@ -248,6 +249,6 @@ export function ActivityDisplay({
           </>
         )}
       </span>
-    </button>
+    </AppButton>
   );
 }

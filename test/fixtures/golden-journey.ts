@@ -73,7 +73,7 @@ export async function goldenJourney(fixture: GoldenApplication, setupDatabase?: 
         .subarray(0, 16)
         .toString(),
     ).toBe("SQLite format 3\0");
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await openProject(page, fixture.directory, "project with spaces");
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const chat = page.locator(".orchestration-chat-page:visible");

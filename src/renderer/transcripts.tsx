@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
 import type { ApplicationClient, DesktopRun } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { ScopeLifetime } from "./scope-lifetime.js";
 
 export interface TranscriptState {
@@ -182,9 +183,9 @@ export function TranscriptNotice({ data }: { data: Transcripts }) {
               ))}
             </ul>
           </details>
-          <button type="button" onClick={data.retry}>
+          <AppButton type="button" onClick={data.retry}>
             Retry reads
-          </button>
+          </AppButton>
         </div>
       )}
     </>

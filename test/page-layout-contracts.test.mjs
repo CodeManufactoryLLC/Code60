@@ -256,13 +256,14 @@ it("moves the visible trail into the header without reserving the original title
   );
 });
 
-it("keeps the simplified header in the content track with a stable measured height", () => {
-  expect(rule("layout", ".workspace-header")).toContain("grid-column: 2");
-  expect(rule("layout", ".workspace-breadcrumbs")).toContain("min-height: 54px");
-  expect(rule("navigation", ".sidebar-history")).toContain("left: var(--header-side-padding)");
-  expect(rule("navigation", ".breadcrumb-appearance-controls")).toContain(
-    "right: var(--header-side-padding)",
+it("positions global history and utilities inside the Carbon product header", () => {
+  const css = readFileSync(
+    new URL("../src/renderer/carbon/application.scss", import.meta.url),
+    "utf8",
   );
+  expect(css).toContain(".carbon-app .product-header");
+  expect(css).toMatch(/\.sidebar-history\s*\{\s*position:\s*static/);
+  expect(css).toMatch(/\.product-utilities\s*\{[^}]*margin-inline-start:\s*auto/);
 });
 
 it("shares outlined card geometry with creation cards and a centered label", () => {
@@ -297,7 +298,6 @@ it("keeps sidebar backgrounds separate from sharp controls and outlined composer
 it("aligns page-title blocks at the shared workspace origin instead of page-specific top padding", () => {
   for (const [file, selector] of [
     ["search", ".search-page"],
-    ["automations", ".automations-page"],
     ["system-manager", ".system-manager-page"],
   ])
     expect(rule(file, selector)).toMatch(/padding: 0 var\(--page-padding\)/);
@@ -327,22 +327,17 @@ it("centers the Home welcome above its cards without clipping on short windows",
   expect(rule("home", ".home-content")).toContain("overflow: auto");
 });
 
-it("keeps the Polling fieldset wrapper in the same 640px reading grid as other settings", () => {
-  const prefix =
-    '.settings-page > [role="tabpanel"] > .database-dependent-controls > .settings-section';
-  expect(rule("settings", prefix)).toContain("minmax(0, 640px)");
-  expect(rule("settings", `${prefix} > *`)).toContain("grid-column: 2");
-  expect(rule("settings", `${prefix} > .settings-section-header:first-child`)).toContain(
-    "grid-column: 1 / -1",
-  );
+it("aligns wrapped and unwrapped settings in the shared reading column", () => {
+  expect(rule("settings", ".settings-section")).toContain("inline-size: min(100%, 46rem)");
+  expect(rule("settings", ".settings-page")).toContain("padding: 0");
+  const wrapper = rule("overlays", ".database-dependent-controls");
+  expect(wrapper).toContain("padding: 0");
+  expect(wrapper).toContain("min-width: 0");
   expect(rule("tables", ".sessions")).toContain("min-width: 0");
   expect(rule("tables", ".sessions")).toContain("max-width: 100%");
 });
 
-it("uses the existing card radius and independent Card Titles role for Automation tables", () => {
-  expect(rule("automations", ".automation-table-card")).toContain(
-    "border-radius: var(--card-radius)",
-  );
+it("retains independent Card Titles typography for the remaining shared grids", () => {
   expect(rule("tables", ".table-card-title")).toContain("var(--card-size, 22px)");
   expect(rule("tables", ".table-card-title")).not.toContain("--title-size");
 });

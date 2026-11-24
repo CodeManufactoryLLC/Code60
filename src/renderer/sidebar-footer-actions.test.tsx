@@ -14,13 +14,11 @@ function render(returnDisabled = false, databaseDisabled = false) {
 }
 
 describe("sidebar footer navigation", () => {
-  it("places a labelled back arrow immediately before the database icon", () => {
+  it("places workspace setup and database selection together", () => {
     const html = render();
     expect(html.match(/<button/g)).toHaveLength(2);
-    expect(html.match(/<svg/g)).toHaveLength(2);
-    expect(html).toContain('aria-label="return to splash page" title="return to splash page"');
+    expect(html).toContain('aria-label="Workspace setup" title="Workspace setup"');
     expect(html.indexOf("footer-splash")).toBeLessThan(html.indexOf("footer-database"));
-    expect(html).toContain("M6.7 12.3 2.9 8.5 15 8.5");
     expect(html).not.toContain("disabled");
   });
 

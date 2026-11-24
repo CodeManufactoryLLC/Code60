@@ -7,6 +7,7 @@ import type {
   ReviewSummary,
 } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { type ReviewPreview, type ReviewScope, reviewRequest } from "./review-actions.js";
 import { statusSpec } from "./session-presentation.js";
 
@@ -156,7 +157,7 @@ export function useConversationRevisions({
       key,
       content: (
         <div className="conversation-changes" key={key}>
-          <button
+          <AppButton
             type="button"
             className="conversation-changes-link"
             disabled={!first || !onPreview}
@@ -166,7 +167,7 @@ export function useConversationRevisions({
             }
           >
             {count} {count === 1 ? "file" : "files"} changed
-          </button>
+          </AppButton>
           {group.some((item) => item.revision.incomplete) && <span>Partial capture</span>}
         </div>
       ),
@@ -231,9 +232,9 @@ export function useConversationRevisions({
           </p>
         ))}
         {!!failures.length && (
-          <button type="button" disabled={retrying} onClick={() => void retryChanges()}>
+          <AppButton type="button" disabled={retrying} onClick={() => void retryChanges()}>
             Retry changes
-          </button>
+          </AppButton>
         )}
         {latestCaptures
           .filter((card) => card.revision.incomplete && !(card.revision.fileCount ?? 0))

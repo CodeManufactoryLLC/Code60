@@ -28,22 +28,22 @@ describe("shared project selector", () => {
     }
     for (const { path } of props.projects) expect(html).toContain(path);
     expect(html).not.toContain("Clear history");
-    expect(html.match(/class="icon-button project-remove"/g)).toHaveLength(2);
+    expect(html.match(/class="icon-button project-remove[^"]*"/g)).toHaveLength(2);
     for (const removal of html.matchAll(
-      /<button[^>]*class="icon-button project-remove"[^>]*>(.*?)<\/button>/g,
+      /<button[^>]*class="icon-button project-remove[^"]*"[^>]*>(.*?)<\/button>/g,
     )) {
       expect(removal[1]).toContain("<svg");
       expect(removal[1]).not.toContain("Remove");
     }
     expect(html).not.toContain(">Remove</button>");
-    expect(html).toMatch(/<\/button><button[^>]*class="icon-button project-remove"/);
+    expect(html).toMatch(/<\/button><button[^>]*class="icon-button project-remove[^"]*"/);
     expect(html).toContain("<span>Open Folder</span>");
-    expect(html).toContain('class="project-open-folder"');
-    expect(html.indexOf("</ul>")).toBeLessThan(html.indexOf('class="project-open-folder"'));
-    expect(html.indexOf('class="project-open-folder"')).toBeLessThan(
+    expect(html).toContain('class="project-open-folder');
+    expect(html.indexOf("</ul>")).toBeLessThan(html.indexOf('class="project-open-folder'));
+    expect(html.indexOf('class="project-open-folder')).toBeLessThan(
       html.indexOf('class="modal-footer"'),
     );
-    expect(html).not.toContain('class="primary project-open-folder"');
+    expect(html).not.toContain('class="primary project-open-folder');
     expect(html).not.toContain(">Yes<");
     expect(html).not.toContain(">No<");
   });
@@ -75,13 +75,15 @@ describe("shared project selector", () => {
     expect(html).toContain("Create database…");
     expect(html).not.toContain("Recent projects");
     expect(html).not.toContain("Clear history");
-    expect(html.match(/<button[^>]*class="project-open-folder"[^>]*>/)?.[0]).toContain("disabled");
+    expect(html.match(/<button[^>]*class="project-open-folder[^"]*"[^>]*>/)?.[0]).toContain(
+      "disabled",
+    );
   });
 
   it("keeps Open Folder available when the history is empty", () => {
     const html = renderToStaticMarkup(<ProjectSelector {...props} projects={[]} />);
     expect(html).toContain("No recent projects.");
-    expect(html.match(/<button[^>]*class="project-open-folder"[^>]*>/)?.[0]).not.toContain(
+    expect(html.match(/<button[^>]*class="project-open-folder[^"]*"[^>]*>/)?.[0]).not.toContain(
       "disabled",
     );
     expect(html).not.toContain("Clear history");

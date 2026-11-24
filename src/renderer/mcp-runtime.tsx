@@ -8,6 +8,7 @@ import type {
 } from "../bridge/index.js";
 import { mcpFailureGuidance } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
+import { Button } from "./carbon/button.js";
 import { Modal } from "./modal.js";
 
 /** Controls capture the displayed configuration; selection never retargets a pending decision. */
@@ -139,9 +140,9 @@ export function McpRuntimePanel({
       </p>
       {error && <p role="alert">{error}</p>}
       {retry && (
-        <button type="button" disabled={busy} onClick={() => void act(retry)}>
+        <Button type="button" disabled={busy} onClick={() => void act(retry)}>
           Retry same operation
-        </button>
+        </Button>
       )}
       {outcome && <p role="status">{outcome}</p>}
       {[...new Set(status?.failures?.map(mcpFailureGuidance))].map((guidance) => (
@@ -152,7 +153,7 @@ export function McpRuntimePanel({
       )}
       {definition && serverId && (
         <>
-          <button
+          <Button
             type="button"
             disabled={blocked || busy}
             onClick={() =>
@@ -166,8 +167,8 @@ export function McpRuntimePanel({
             }
           >
             {definition.enabled ? "Disable server" : "Enable server"}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             disabled={blocked || busy}
             onClick={() => {
@@ -177,23 +178,24 @@ export function McpRuntimePanel({
             }}
           >
             Test connection
-          </button>
+          </Button>
         </>
       )}
       {test && (
-        <button
+        <Button
+          variant="quiet"
           type="button"
           onClick={() => void api.mcpRuntime({ action: "cancel-test", requestId: test })}
         >
           Cancel connection test
-        </button>
+        </Button>
       )}
       {read.target.scope === "project" && (
         <>
           <span>
             Project approval: {status?.approved ? "Approved for this revision" : "Required"}.
           </span>
-          <button
+          <Button
             type="button"
             disabled={blocked || busy}
             onClick={() =>
@@ -217,7 +219,7 @@ export function McpRuntimePanel({
             }
           >
             {status?.approved ? "Revoke approval" : "Review project approval"}
-          </button>
+          </Button>
         </>
       )}
       {status?.sessions?.map((session) => (
@@ -245,7 +247,7 @@ export function McpRuntimePanel({
                 : ""}
             </p>
           ))}
-          <button
+          <Button
             type="button"
             disabled={
               busy ||
@@ -274,8 +276,8 @@ export function McpRuntimePanel({
             }}
           >
             Disconnect server
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             disabled={busy}
             onClick={() => {
@@ -297,7 +299,7 @@ export function McpRuntimePanel({
             }}
           >
             Reconnect session servers
-          </button>
+          </Button>
         </fieldset>
       ))}
       {decision && (
@@ -312,12 +314,17 @@ export function McpRuntimePanel({
                 ? "Calls are cancelled and this instance loses authority immediately. Configured enablement is unchanged."
                 : "Approval does not grant permission to invoke tools. Existing ACP permission decisions still apply."}
           </p>
-          <button type="button" disabled={busy} onClick={() => setDecision(undefined)}>
+          <Button
+            variant="quiet"
+            type="button"
+            disabled={busy}
+            onClick={() => setDecision(undefined)}
+          >
             Cancel
-          </button>
-          <button type="button" disabled={busy} onClick={() => void act(decision.request)}>
+          </Button>
+          <Button type="button" disabled={busy} onClick={() => void act(decision.request)}>
             Confirm {decision.title.toLowerCase()}
-          </button>
+          </Button>
         </Modal>
       )}
     </section>

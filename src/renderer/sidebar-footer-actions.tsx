@@ -1,4 +1,4 @@
-import { Icon } from "./icons.js";
+import { Button as AppButton } from "./carbon/button.js";
 
 export function SidebarFooterActions({
   returnDisabled,
@@ -13,27 +13,27 @@ export function SidebarFooterActions({
 }) {
   return (
     <>
-      <button
+      <AppButton
         type="button"
-        className="icon-button footer-splash"
-        aria-label="return to splash page"
-        title="return to splash page"
+        className="footer-splash"
+        aria-label="Workspace setup"
+        title="Workspace setup"
         disabled={returnDisabled}
         onClick={onReturn}
       >
-        <Icon name="arrow--left" />
-      </button>
-      <button
+        Workspace setup
+      </AppButton>
+      <AppButton
         type="button"
-        className="icon-button footer-database"
+        className="footer-database"
         aria-label="Select or create database"
         title="Select or create database"
         aria-haspopup="dialog"
         disabled={databaseDisabled}
         onClick={onDatabase}
       >
-        <Icon name="database" />
-      </button>
+        Select or create database
+      </AppButton>
     </>
   );
 }

@@ -30,7 +30,7 @@ describe("completed turn separators", () => {
           disclosure={{ id: "turn", controls: "details", expanded, toggle: () => {} }}
         />,
       );
-      expect(html).toContain('class="turn-timer activity-history-toggle"');
+      expect(html).toContain('class="turn-timer activity-history-toggle');
       expect(html).toContain(`aria-expanded="${expanded}"`);
       expect(html).toContain('aria-controls="details"');
       expect(html).toContain("Worked for 12s (finished)</span></button><hr");

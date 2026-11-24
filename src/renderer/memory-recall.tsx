@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { ApplicationClient } from "../bridge/index.js";
 import type { RunEvent } from "../core/index.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { type RecallTurn, recallHistory } from "./memory-recall-history.js";
 import { RECALL_PAGE_SIZE, type RecallRecord, RecallRecords } from "./memory-recall-model.js";
 
@@ -114,7 +115,7 @@ export function MemoryRecall({ api, source }: { api: ApplicationClient; source: 
       {(source.error || unavailable) && (
         <div role="alert">
           {unavailable && <p>Some recalled memories are unavailable.</p>}
-          <button
+          <AppButton
             type="button"
             onClick={() => {
               source.retry?.();
@@ -122,7 +123,7 @@ export function MemoryRecall({ api, source }: { api: ApplicationClient; source: 
             }}
           >
             Retry
-          </button>
+          </AppButton>
         </div>
       )}
       {!source.loading && !source.error && !turns.length && (
@@ -133,7 +134,7 @@ export function MemoryRecall({ api, source }: { api: ApplicationClient; source: 
       ))}
       <nav className="memory-recall-pager" aria-label="Recall turns">
         {start > 0 && (
-          <button
+          <AppButton
             type="button"
             onClick={() =>
               setBefore(
@@ -144,15 +145,15 @@ export function MemoryRecall({ api, source }: { api: ApplicationClient; source: 
             }
           >
             Newer turns
-          </button>
+          </AppButton>
         )}
         {start + RECALL_PAGE_SIZE < history.turns.length && (
-          <button
+          <AppButton
             type="button"
             onClick={() => setBefore(history.turns[start + RECALL_PAGE_SIZE]?.key ?? null)}
           >
             Older turns
-          </button>
+          </AppButton>
         )}
       </nav>
     </section>

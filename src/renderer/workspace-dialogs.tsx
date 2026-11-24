@@ -1,4 +1,5 @@
 import type { DatabaseMode } from "../bridge/index.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { Modal } from "./modal.js";
 import { ProjectSelector, type ProjectSelectorProps } from "./project-selector.js";
 export function DatabaseDialog({
@@ -27,22 +28,22 @@ export function DatabaseDialog({
         </div>
       )}
       <div className="modal-footer">
-        <button type="button" disabled={busy} onClick={onClose}>
+        <AppButton type="button" disabled={busy} onClick={onClose}>
           Cancel
-        </button>
+        </AppButton>
         {/* biome-ignore lint/a11y/useSemanticElements: a fieldset would add form semantics and its own frame to a row of buttons. */}
         <div className="button-group" role="group" aria-label="Database">
-          <button type="button" disabled={busy} onClick={() => onChoose("open")}>
+          <AppButton type="button" disabled={busy} onClick={() => onChoose("open")}>
             Open existing database…
-          </button>
-          <button
+          </AppButton>
+          <AppButton
             type="button"
             className="primary"
             disabled={busy}
             onClick={() => onChoose("create")}
           >
             Create database…
-          </button>
+          </AppButton>
         </div>
       </div>
     </Modal>
@@ -58,9 +59,9 @@ export function ProjectDialog({
       <ProjectSelector
         {...props}
         footerAction={
-          <button type="button" disabled={props.busy} onClick={onClose}>
+          <AppButton type="button" disabled={props.busy} onClick={onClose}>
             Cancel
-          </button>
+          </AppButton>
         }
       />
     </Modal>

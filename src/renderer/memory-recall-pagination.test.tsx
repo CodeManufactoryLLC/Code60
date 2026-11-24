@@ -60,7 +60,7 @@ function groups(tree: ReturnType<typeof render>) {
 function click(tree: ReactNode, label: string): boolean {
   for (const node of Children.toArray(tree)) {
     if (!isValidElement<{ children?: ReactNode; onClick?(): void }>(node)) continue;
-    if (node.type === "button" && node.props.children === label) {
+    if (typeof node.props.onClick === "function" && node.props.children === label) {
       node.props.onClick?.();
       return true;
     }

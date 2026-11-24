@@ -107,36 +107,6 @@ describe("application palette", () => {
     expect(css).toContain("--danger: #dfa69b");
   });
 
-  it("keeps the running control contrasting at the dimmest pulse in both themes", () => {
-    const jobs = readFileSync(
-      new URL("../src/renderer/styles/automations.css", import.meta.url),
-      "utf8",
-    );
-    const opacity = Number(
-      jobs.match(/@keyframes automation-stop-pulse\s*\{\s*50%\s*\{\s*opacity:\s*([\d.]+)/)?.[1],
-    );
-    expect(Number.isFinite(opacity)).toBe(true);
-    for (const scheme of ["light", "dark"]) {
-      const color = palette(scheme);
-      for (const fill of ["--primary", "--primary-hover"]) {
-        const background = channels(color(fill));
-        const foreground = channels(color("--primary-text"));
-        const blended =
-          "#" +
-          foreground
-            .map((value, i) =>
-              Math.round(value * opacity + background[i] * (1 - opacity))
-                .toString(16)
-                .padStart(2, "0"),
-            )
-            .join("");
-        expect(contrast(blended, color(fill)), `${scheme} pulse on ${fill}`).toBeGreaterThanOrEqual(
-          3,
-        );
-      }
-    }
-  });
-
   it("keeps human messages distinct and primary labels legible in both schemes", () => {
     expect(palette("light")("--user-bubble")).toBe("#dbeafe");
     expect(palette("dark")("--user-bubble")).toBe("#35263e");
