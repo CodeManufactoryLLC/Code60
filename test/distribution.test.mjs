@@ -490,6 +490,9 @@ it("packs only builtins bootstrap files with both exact descriptors and strict s
   const archive = await packageBootstrap(root, input);
   const result = await execute("tar", ["-tzf", archive]);
   expect(result.stdout).not.toMatch(/node_modules|dist\/|models\/|test\//);
+  expect(result.stdout).not.toMatch(/credential|network-policy|application\/|gateway\/|renderer\//);
+  expect(result.stdout).toContain("lib/runtime/platform/installation-removal.js");
+  expect(result.stdout).toContain("lib/runtime/management/removal-support.js");
   const unpack = join(f.parent, "unpack");
   await mkdir(unpack);
   await execute("tar", ["-xzf", archive, "-C", unpack]);

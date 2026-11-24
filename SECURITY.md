@@ -170,15 +170,25 @@ Local record storage does not mean that your task data stays on your machine:
   on that agent's tools, provider, and configuration, prompts, repository
   content, and tool output may be transmitted to external services. Review
   the provider's privacy, retention, and training policies separately.
-- Optional user-managed `mcpServers` definitions are also sent to the selected
-  provider through ACP, including any configured environment/header values.
-  The agent owns stdio processes and HTTP/SSE connections. Only configure
-  trusted providers and servers; Code60 does not sandbox MCP tools, implement
-  OAuth, or write credentials. Definitions are not added to run records,
-  transcripts, renderer snapshots or CLI results, but arbitrary agent/tool
-  output can still disclose sensitive content. Keep the config private.
-  User servers cannot replace or inherit the built-in `code60` gateway.
-  See [MCP configuration](MCP.md) for transport support and session lifecycle.
+- User/project `mcp.json` definitions remain backend-owned. Each owning ACP session
+  receives fixed local stdio adapters with ephemeral connector capabilities, never
+  upstream commands, endpoints or credentials. Application policy limits authority
+  to authorized owning turns; ACP permissions remain independent. Only tools are
+  exposed. Stdio runs without a shell in owned process groups with an allowlisted
+  environment; HTTP uses validated DNS/socket destinations, bounded requests and
+  no automatic business-call replay. MCP tools run with the user's permissions and
+  are not sandboxed. Only configure trusted servers/providers. Review project
+  approval against its exact canonical identity/revision. Credentials use a bounded
+  private-pipe Keychain/Secret Service helper or explicitly accepted temporary RAM;
+  OAuth remains backend-owned. No browser secret-read endpoint exists.
+  Recovery Complete/Roll back rechecks reviewed files/journal/owners; it cannot
+  override newer edits or restore session/credential authority. Journals/backups
+  retain exact user-entered bytes privately and must never be shared as reports.
+  Optional reports contain only counts, fixed codes and states; no definitions,
+  identifiers, paths, endpoints, references or raw errors. Cleanup verification
+  retries only retained revoked handles, never process-name searches or lock deletion.
+  See [MCP configuration](MCP.md) and the
+  [recovery runbook](docs/runbooks/mcp-configuration.md).
 - Desktop continuation may restore a provider session or send a handoff
   summary built from saved prompts, messages, and tool-call summaries.
   Search overviews and memory extraction also send selected evidence to
@@ -350,3 +360,19 @@ No generic terminal, shell, provider-server proxy, package selector or credentia
 is exposed. Providers own persistent credentials and container home retains them.
 Cancelling never logs out or removes credentials. Cleanup failures block further setup
 until owned processes stop. Custom launch overrides retain external setup.
+
+## MCP fingerprint and guarded-file review
+
+SHA-256 in MCP identity/review metadata binds configuration, public discovery,
+client identity and scope. Authentication and credential-write replay fingerprints
+that include secret inputs remain in backend memory only. They are never persisted
+as password verifiers; tokens, client secrets and credential values use the secure
+store or explicitly accepted temporary memory. This is separate from password
+storage and its password-derivation requirements.
+
+A guarded stage's pathname check is followed by O_NOFOLLOW open, full native
+identity/content checks on that same handle, another target revision and stage
+identity check before rename, and verification after publication. Replacement by a
+regular file, symlink or hard link between lstat and open must fail without changing
+the destination. Guarded writes do not claim atomic compare-and-swap against a
+non-cooperating editor; uncertain publication retains recovery evidence.

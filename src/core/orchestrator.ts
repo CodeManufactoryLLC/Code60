@@ -14,6 +14,7 @@ import { decide, type PolicyOverrides } from "./policy.js";
 import type { Processes } from "./processes.js";
 import type { RecordStore } from "./records.js";
 import { Run, type SessionSelection } from "./run.js";
+import type { SessionResourceFactory } from "./session-resources.js";
 import type {
   AgentConfig,
   FinalRunStatus,
@@ -68,6 +69,7 @@ export interface OrchestratorOptions {
   prompts?: Readonly<PromptTemplates>;
   /** Client-provided MCP servers for a scoped session such as the Code60 orchestrator. */
   mcpServers?: readonly AgentMcpServer[];
+  sessionResources?: SessionResourceFactory;
   /** Dynamic context prepended to each user turn without changing recorded user text. */
   promptContext?: () => string;
   /** Recorded on new runs so project history readers can exclude Relay-owned workers. */
@@ -187,6 +189,7 @@ export async function createOrchestrator(
     command: config.command,
     ...(options.env === undefined ? {} : { env: options.env }),
     ...(options.mcpServers === undefined ? {} : { mcpServers: options.mcpServers }),
+    ...(options.sessionResources ? { sessionResources: options.sessionResources } : {}),
     ...(options.promptContext === undefined ? {} : { promptContext: options.promptContext }),
     turnTimeoutMs: options.turnTimeoutMs,
     cancelGraceMs: options.cancelGraceMs ?? CANCEL_GRACE_MS,

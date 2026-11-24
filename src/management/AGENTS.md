@@ -63,3 +63,8 @@ old launchers cannot uninstall a later activation. Refuse active/uncertain work,
 then require service/application consent and separate profile approval. Publish
 and print durable recovery before deletion. Release the outer setup lock before
 calling cleanup, which owns its own setup/install/runtime/service locks.
+
+Installed update and uninstall ports select the packaged `dist/bootstrap` Node-only support
+closure, never the application platform directory. Preserve strict launcher
+receipt path/hash validation; do not admit bootstrap variants or credential
+runtime dependencies to work around a packaging failure.

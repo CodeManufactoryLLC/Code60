@@ -19,6 +19,12 @@ export {
   type KnowledgeReport,
   type KnowledgeTool,
   knowledgeReportSchema,
+  MCP_TEXT_LIMITS,
+  type McpConnectorConfigurationStatus,
+  type McpConnectorDefinition,
+  type McpConnectorDocument,
+  type McpConnectorSource,
+  type McpTextIssue,
   mcpToolsForRole,
   type PageDefinition,
   type ParentPageId,
@@ -26,7 +32,9 @@ export {
   parentPageIds,
   parseBrowserRequest,
   parseKnowledge,
+  parseMcpConnectorDocument,
   settingsSections,
+  validateMcpConnectorText,
 } from "../contracts/index.js";
 export * from "./automation.js";
 export type { ChatReference, ChatUndoResult } from "./chat-context.js";
@@ -379,6 +387,51 @@ export type RecoveryActionResult = { type: "restored" } | { type: "handoff-start
 export type ActionResult = string | RunEvent[] | RecoveryActionResult | undefined;
 
 export interface ApplicationClient {
+  mcpRecovery(
+    request: import("./index.js").McpRecoveryRequest,
+  ): Promise<import("./index.js").McpRecoveryResponse>;
+  mcpRuntime(
+    request: import("./index.js").McpRuntimeRequest,
+  ): Promise<import("./index.js").McpRuntimeResponse>;
+  mcpAuthentication(
+    request: import("./index.js").McpAuthenticationRequest,
+  ): Promise<import("./index.js").McpAuthenticationResponse>;
+  mcpReadText(
+    target: import("./index.js").McpTargetAddress,
+  ): Promise<import("./index.js").McpTextRead>;
+  mcpSaveText(
+    request: import("./index.js").McpSaveText,
+  ): Promise<import("./index.js").McpManagementResult>;
+  mcpBackups(
+    target: import("./index.js").McpTargetAddress,
+  ): Promise<import("./index.js").McpBackupEntry[]>;
+  mcpPreviewBackup(
+    request: import("./index.js").McpBackupRequest,
+  ): Promise<import("./index.js").McpBackupPreview>;
+  mcpRestore(
+    request: import("./index.js").McpRestore,
+  ): Promise<import("./index.js").McpManagementResult>;
+  mcpPreviewReset(
+    request: import("./index.js").McpResetSelection,
+  ): Promise<import("./index.js").McpResetPreview>;
+  mcpReset(
+    request: import("./index.js").McpResetRequest,
+  ): Promise<import("./index.js").McpManagementResult>;
+  mcpTargets(): Promise<import("./index.js").McpManagementTargets>;
+  mcpRead(
+    target: import("./index.js").McpTargetAddress,
+  ): Promise<import("./index.js").McpManagementRead>;
+  mcpSave(
+    request: import("./index.js").McpSaveRequest,
+  ): Promise<import("./index.js").McpManagementResult>;
+  mcpPreviewMove(
+    request: import("./index.js").McpMovePreviewRequest,
+  ): Promise<import("./index.js").McpMovePreview>;
+  mcpMove(
+    request: import("./index.js").McpMoveRequest,
+  ): Promise<import("./index.js").McpManagementResult>;
+  onMcpChanged(listener: () => void): () => void;
+
   webServerStatus?(): Promise<import("./web-server.js").WebServerStatus>;
   setWebServerEnabled?(request: {
     enabled: boolean;
@@ -1049,8 +1102,62 @@ export const parseSearchSummary = (value: unknown): SearchSummaryRequest =>
 export const parseSearchSummaryRequestId = (value: unknown): string =>
   parseValue(memoryRequestIdSchema, value);
 
+export type {
+  McpAuthenticationRequest,
+  McpAuthenticationResponse,
+  McpRuntimeRequest,
+  McpRuntimeResponse,
+} from "../contracts/index.js";
+export {
+  decodeMcpText,
+  encodeMcpText,
+  MCP_COMPLETION_SCHEMA,
+  MCP_CONNECTOR_TEMPLATES,
+  MCP_EMPTY_TEXT,
+  type McpBackupEntry,
+  type McpBackupPreview,
+  type McpBackupRequest,
+  type McpFailure,
+  type McpManagementRead,
+  type McpManagementResult,
+  type McpManagementTarget,
+  type McpManagementTargets,
+  type McpMovePreview,
+  type McpMovePreviewRequest,
+  type McpMoveRequest,
+  type McpRecoveryRequest,
+  type McpRecoveryResponse,
+  type McpRecoveryReview,
+  type McpResetPreview,
+  type McpResetRequest,
+  type McpResetSelection,
+  type McpRestore,
+  type McpSaveRequest,
+  type McpSaveText,
+  type McpTargetAddress,
+  type McpTextRead,
+  type McpTroubleshootingReport,
+  mcpAuthenticationRequestSchema,
+  mcpBackupSchema,
+  mcpFailure,
+  mcpFailureGuidance,
+  mcpMovePreviewSchema,
+  mcpMoveSchema,
+  mcpRecoveryRequestSchema,
+  mcpResetPreviewSchema,
+  mcpResetSchema,
+  mcpRestoreSchema,
+  mcpRuntimeRequestSchema,
+  mcpSaveSchema,
+  mcpSaveTextSchema,
+  mcpTargetSchema,
+  mcpTroubleshootingReportSchema,
+  parseMcpDefinitionText,
+  parseMcpManagement,
+} from "../contracts/index.js";
 export * from "./gateway.js";
 export * from "./reviews.js";
 export { parseTaskAction, type TaskAction, type TaskView } from "./tasks.js";
+
 export * from "./web-server.js";
 export * from "./workflows.js";

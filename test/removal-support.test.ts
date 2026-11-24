@@ -28,7 +28,11 @@ import {
   prepareManagedRemoval,
   readRemovalState,
 } from "../src/management/index.js";
-import { runUninstall, type UninstallPorts } from "../src/management/uninstall.js";
+import {
+  createUninstallPorts,
+  runUninstall,
+  type UninstallPorts,
+} from "../src/management/uninstall.js";
 import {
   captureRemovalServiceProof,
   privateDirectory,
@@ -163,6 +167,7 @@ async function retained(f: Awaited<ReturnType<typeof fixture>>) {
 
 function uninstallPorts(f: Awaited<ReturnType<typeof fixture>>) {
   return {
+    ...createUninstallPorts(f.env),
     interactive: false as boolean,
     write: vi.fn((_message: string) => {}),
     confirm: vi.fn(async (_message: string, _signal: AbortSignal) => false),

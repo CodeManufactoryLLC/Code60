@@ -68,7 +68,35 @@ import {
   isMcpControlTool,
   type KnowledgeOwner,
   MCP_PROTOCOL_VERSION,
+  type McpAuthenticationRequest,
+  type McpAuthenticationResponse,
+  type McpBackupRequest,
   type McpControlTool,
+  type McpMovePreviewRequest,
+  type McpMoveRequest,
+  type McpRecoveryRequest,
+  type McpResetRequest,
+  type McpResetSelection,
+  type McpRestore,
+  type McpRuntimeRequest,
+  type McpRuntimeResponse,
+  type McpSaveRequest,
+  type McpSaveText,
+  type McpTargetAddress,
+  type McpTroubleshootingReport,
+  mcpAuthenticationRequestSchema,
+  mcpBackupSchema,
+  mcpMovePreviewSchema,
+  mcpMoveSchema,
+  mcpRecoveryRequestSchema,
+  mcpResetPreviewSchema,
+  mcpResetSchema,
+  mcpRestoreSchema,
+  mcpRuntimeRequestSchema,
+  mcpSaveSchema,
+  mcpSaveTextSchema,
+  mcpTargetSchema,
+  mcpTroubleshootingReportSchema,
   type Plan,
   type PlanAction,
   type PlanRead,
@@ -85,6 +113,7 @@ import {
   parseGitSetupCommit,
   parseGitSetupFile,
   parseGitSetupIdentity,
+  parseMcpManagement,
   parseMemoryExtraction,
   parseMemoryRequestId,
   parseOrchestrationChatAction,
@@ -172,6 +201,7 @@ import {
   privateDirectory,
   samePath,
   setEnvironmentPath,
+  userHome,
 } from "../platform/index.js";
 import { probeAgent } from "./agent-connection.js";
 import { AgentSetup } from "./agent-setup.js";
@@ -200,13 +230,18 @@ import {
   type KnowledgeRuntime,
 } from "./knowledge.js";
 import { logProjectId } from "./log-store.js";
+import { McpAuthentication, type McpAuthenticationPorts } from "./mcp-authentication.js";
+import type { McpConnectorRole } from "./mcp-configuration.js";
 import {
   type ControlArgs,
   formatWorkerUpdate,
   parseControlArgs,
   workerTranscript,
 } from "./mcp-control.js";
+import { CredentialFailure } from "./mcp-credentials.js";
 import { createMcpGateway } from "./mcp-gateway.js";
+import { McpManagement } from "./mcp-management.js";
+import { McpRuntime, type McpRuntimePorts } from "./mcp-runtime.js";
 import { type McpTableRow, readMcpTool } from "./mcp-tables.js";
 import { MemoryService } from "./memory-service.js";
 import { ModelDefaults } from "./model-defaults.js";
@@ -240,6 +275,8 @@ export interface DesktopDialogs {
 }
 
 export interface DesktopStorage {
+  mcpRuntime?: McpRuntimePorts;
+  mcpAuthentication?: McpAuthenticationPorts;
   /** App-owned Relay runtime. Omit for consumers that host only project work. */
   relay?: boolean;
   ragModelRoot?: string;
@@ -325,6 +362,501 @@ interface Batch {
 
 /** Owns one workspace and independent batches. All history mutations are serialized. */
 export class ApplicationHost {
+  readonly mcp: McpManagement;
+  private readonly connectors: McpRuntime;
+  private readonly authentication: McpAuthentication | undefined;
+  mcpRecovery(value: McpRecoveryRequest) {
+    const request = parseMcpManagement(mcpRecoveryRequestSchema, value);
+    return this.mcpOperation(() => this.mcp.recovery(request)).finally(() =>
+      this.authentication?.recheckOwners(),
+    );
+  }
+  mcpReadText(value: McpTargetAddress) {
+    const request = parseMcpManagement(mcpTargetSchema, value);
+    return this.mcpOperation(() => this.mcp.readText(request));
+  }
+  mcpSaveText(value: McpSaveText) {
+    const request = parseMcpManagement(mcpSaveTextSchema, value);
+    return this.mcpOperation(() => this.mcp.saveText(request)).finally(() =>
+      this.authentication?.recheckOwners(),
+    );
+  }
+  mcpBackups(value: McpTargetAddress) {
+    const request = parseMcpManagement(mcpTargetSchema, value);
+    return this.mcpOperation(() => this.mcp.backups(request));
+  }
+  mcpPreviewBackup(value: McpBackupRequest) {
+    const request = parseMcpManagement(mcpBackupSchema, value);
+    return this.mcpOperation(() => this.mcp.previewBackup(request));
+  }
+  mcpRestore(value: McpRestore) {
+    const request = parseMcpManagement(mcpRestoreSchema, value);
+    return this.mcpOperation(() => this.mcp.restore(request)).finally(() =>
+      this.authentication?.recheckOwners(),
+    );
+  }
+  mcpPreviewReset(value: McpResetSelection) {
+    const request = parseMcpManagement(mcpResetPreviewSchema, value);
+    return this.mcpOperation(() => this.mcp.previewReset(request));
+  }
+  mcpReset(value: McpResetRequest) {
+    const request = parseMcpManagement(mcpResetSchema, value);
+    return this.mcpOperation(() => this.mcp.reset(request)).finally(() =>
+      this.authentication?.recheckOwners(),
+    );
+  }
+  mcpTargets() {
+    return this.mcpOperation(() => this.mcp.targets());
+  }
+  mcpRead(value: McpTargetAddress) {
+    const target = parseMcpManagement(mcpTargetSchema, value);
+    return this.mcpOperation(async () => {
+      const read = await this.mcp.read(target);
+      const approved =
+        target.scope === "project" &&
+        (await this.connectors.approval(target.targetId, read.revision).catch(() => false));
+      for (const row of read.rows) {
+        if (approved && row.source.scope === "project") {
+          row.approval = "approved";
+          row.eligibility = row.enabled ? "eligible" : "disabled";
+        }
+        const targetId =
+          row.source.scope === "project"
+            ? row.source.projectId
+            : (await this.mcp.targets()).targets.find((t) => t.address.scope === "user")!.address
+                .targetId;
+        const observed = this.connectors.observation(targetId, row.id, row.source.revision);
+        row.observation = {
+          authentication: this.connectors.authenticationObservation(
+            targetId,
+            row.id,
+            row.source.revision,
+          ),
+          connection: observed === "authentication-required" ? "failed" : observed,
+        };
+      }
+      return read;
+    });
+  }
+  mcpSave(value: McpSaveRequest) {
+    const request = parseMcpManagement(mcpSaveSchema, value);
+    return this.mcpOperation(() => this.mcp.save(request)).finally(() =>
+      this.authentication?.recheckOwners(),
+    );
+  }
+  mcpPreviewMove(value: McpMovePreviewRequest) {
+    const request = parseMcpManagement(mcpMovePreviewSchema, value);
+    return this.mcpOperation(() => this.mcp.preview(request));
+  }
+  mcpMove(value: McpMoveRequest) {
+    const request = parseMcpManagement(mcpMoveSchema, value);
+    return this.mcpOperation(() => this.mcp.move(request)).finally(() =>
+      this.authentication?.recheckOwners(),
+    );
+  }
+  private connectorResources(role: McpConnectorRole, root?: string) {
+    const owner = this.projectHost.current;
+    let projectPin: string | undefined;
+    return this.connectors.factory(
+      async () => {
+        this.projectHost.assertCurrent(owner);
+        const snapshot = await this.mcp.runtimeSnapshot(
+          role === "project-chat" && !root ? "relay" : role,
+          root,
+          projectPin,
+        );
+        this.projectHost.assertCurrent(owner);
+        projectPin ??= snapshot.project?.projectId;
+        return snapshot;
+      },
+      (warning) => {
+        owner.state.warnings.push(warning);
+        this.changed();
+      },
+    );
+  }
+  mcpDetach(page: string) {
+    this.connectors.detach(page);
+    this.authentication?.detach(page);
+  }
+  private readonly mcpAuthenticationRequests = new Map<
+    string,
+    { fingerprint: string; result: Promise<McpAuthenticationResponse> }
+  >();
+  async mcpAuthentication(value: unknown, page: string): Promise<McpAuthenticationResponse> {
+    const request = parseMcpManagement(mcpAuthenticationRequestSchema, value);
+    if (this.closing || !this.authentication)
+      throw new Error("Secure MCP authentication is unavailable");
+    if ("target" in request)
+      await this.mcpOperation(() => this.mcp.authorizeRuntimeAddress(request.target));
+    if (!("requestId" in request)) return this.performMcpAuthentication(request, page);
+    // RAM-only request replay fingerprint; never persisted or used to verify a password.
+    const fingerprint = createHash("sha256")
+      .update(JSON.stringify([request, page]))
+      .digest("hex");
+    const prior = this.mcpAuthenticationRequests.get(request.requestId);
+    if (prior) {
+      if (prior.fingerprint !== fingerprint)
+        throw new Error("Conflicting authentication request ID");
+      return prior.result;
+    }
+    if (this.mcpAuthenticationRequests.size >= 4096)
+      throw new Error(
+        "Authentication request limit reached; restart the backend before more requests",
+      );
+    const result = this.performMcpAuthentication(request, page);
+    this.mcpAuthenticationRequests.set(request.requestId, { fingerprint, result });
+    return result;
+  }
+  private async performMcpAuthentication(
+    request: McpAuthenticationRequest,
+    page: string,
+  ): Promise<McpAuthenticationResponse> {
+    const auth = this.authentication!;
+    if (request.action === "cancel") {
+      auth.cancel(page, request.attemptId);
+      return { completed: true };
+    }
+    if (request.action === "sign-out")
+      return auth.signOut({ targetId: request.target.targetId, serverId: request.serverId });
+    const current = await this.mcpOperation(() =>
+      this.mcp.runtimeTarget(request.target, request.expectedRevision),
+    );
+    const definition = Object.hasOwn(current.saved.document!.servers, request.serverId)
+      ? current.saved.document!.servers[request.serverId]
+      : undefined;
+    if (!definition) throw new Error("MCP server no longer exists; reload its configuration");
+    const validate = async () => {
+      if (this.closing) throw new Error("Authentication owner is stopping");
+      await this.mcpOperation(() =>
+        this.mcp.runtimeTarget(request.target, request.expectedRevision),
+      );
+      if (
+        request.target.scope === "project" &&
+        definition.type === "http" &&
+        definition.auth.type === "oauth" &&
+        !(await this.connectors.approval(request.target.targetId, request.expectedRevision))
+      )
+        throw new Error(
+          "Review and approve the project configuration before OAuth discovery or sign-in",
+        );
+    };
+    const capture = {
+      targetId: request.target.targetId,
+      serverId: request.serverId,
+      revision: request.expectedRevision,
+      definition,
+      validate,
+    };
+    if (
+      request.action !== "status" &&
+      request.target.scope === "project" &&
+      definition.type === "http" &&
+      definition.auth.type === "oauth" &&
+      !(await this.connectors
+        .approval(request.target.targetId, request.expectedRevision)
+        .catch(() => false))
+    )
+      throw new Error(
+        "Review and approve the project configuration before OAuth discovery or sign-in",
+      );
+    try {
+      if (request.action === "status") return await auth.status(capture, page);
+      if (request.action === "preview")
+        return await auth.preview(capture, page, request.issuer, request.allowPrivateIssuer);
+      if (request.action === "credential-write")
+        return await auth.write(
+          capture,
+          page,
+          request.previewId,
+          request.reference,
+          request.secret,
+          request.storage,
+          request.requestId,
+        );
+      if (request.action === "credential-forget")
+        return await auth.forget(capture, page, request.previewId, request.reference);
+      return await auth.start(capture, page, request.previewId, request.storage);
+    } catch (error) {
+      if (error instanceof CredentialFailure) throw error;
+      throw new Error(
+        "MCP authentication failed or is uncertain. Reload and review the configuration, issuer, scopes and registration before trying again. No tool call was replayed and no temporary fallback was used",
+      );
+    }
+  }
+  private readonly mcpRuntimeRequests = new Map<
+    string,
+    { fingerprint: string; result: Promise<McpRuntimeResponse> }
+  >();
+  async mcpRuntime(value: unknown, page: string): Promise<McpRuntimeResponse> {
+    const request = parseMcpManagement(mcpRuntimeRequestSchema, value);
+    if ("target" in request)
+      await this.mcpOperation(() => this.mcp.authorizeRuntimeAddress(request.target));
+    if (!("requestId" in request) || request.action === "cancel-test")
+      return this.performMcpRuntime(request, page);
+    // RAM-only request replay fingerprint; never persisted or used to verify a password.
+    const fingerprint = createHash("sha256")
+      .update(JSON.stringify([request, page]))
+      .digest("hex");
+    const previous = this.mcpRuntimeRequests.get(request.requestId);
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) throw new Error("Conflicting MCP request ID");
+      return previous.result;
+    }
+    if (this.mcpRuntimeRequests.size >= 4096)
+      throw new Error(
+        "MCP runtime request limit reached; restart the backend before more requests",
+      );
+    const result = this.performMcpRuntime(request, page);
+    this.mcpRuntimeRequests.set(request.requestId, { fingerprint, result });
+    return result;
+  }
+  private async performMcpRuntime(
+    request: McpRuntimeRequest,
+    page: string,
+  ): Promise<McpRuntimeResponse> {
+    if (request.action === "cancel-test") {
+      this.connectors.cancelTest(page, request.requestId);
+      return { completed: true };
+    }
+    if (request.action === "enable") {
+      const result = await this.mcpOperation(() => this.mcp.setEnabled(request)).finally(() =>
+        this.authentication?.recheckOwners(),
+      );
+      if (result.status === "recovery-required")
+        throw new Error("MCP configuration recovery is required; enablement outcome is uncertain");
+      return { completed: true };
+    }
+    if (request.action === "approve" || request.action === "revoke-approval") {
+      if (request.target.scope !== "project")
+        throw new Error("Only project configuration requires approval");
+      await this.mcpOperation(() =>
+        this.connectors.approve(
+          request.target.targetId,
+          request.expectedRevision,
+          request.requestId,
+          request.action === "approve",
+          () => this.mcp.runtimeTarget(request.target, request.expectedRevision),
+        ),
+      );
+      this.authentication?.recheckOwners();
+      return { completed: true };
+    }
+    if (request.action === "verify-cleanup") {
+      await this.mcpOperation(() => this.mcp.authorizeRuntimeAddress(request.target));
+      const unresolvedCleanup = await this.connectors.verifyCleanup(request.target.targetId);
+      return { completed: unresolvedCleanup === 0, unresolvedCleanup };
+    }
+    if (request.action === "report") {
+      return {
+        report: await this.mcpOperation(async () => {
+          await this.mcp.authorizeRuntimeAddress(request.target);
+          const captured = this.connectors
+            .status(request.target.targetId)
+            .flatMap((session) =>
+              session.connectors.filter(
+                (connector) => connector.targetId === request.target.targetId,
+              ),
+            );
+          const value: McpTroubleshootingReport = {
+            version: 1,
+            scope: request.target.scope,
+            configuration: "unavailable",
+            issues: 0,
+            pendingTransactions: 0,
+            definitions: 0,
+            enabled: 0,
+            projectApproval: request.target.scope === "user" ? "not-required" : "not-checked",
+            authentication: {
+              notChecked: 0,
+              notRequired: 0,
+              required: 0,
+              authenticated: 0,
+              failed: 0,
+            },
+            connections: {
+              notTested: 0,
+              connecting: 0,
+              connected: 0,
+              failed: 0,
+              disconnected: 0,
+              cleanupUnresolved: 0,
+              authenticationRequired: 0,
+            },
+            failures: this.connectors.failureStatus(request.target.targetId),
+            unresolvedCleanup: this.connectors.cleanupCount(request.target.targetId),
+            capturedInstances: captured.length,
+            connectedInstances: captured.filter((connector) => connector.connection === "connected")
+              .length,
+          };
+          const read = await this.mcp.read(request.target).catch(() => undefined);
+          if (read) {
+            value.configuration = !read.exists ? "missing" : read.document ? "valid" : "invalid";
+            value.issues = read.issues.length;
+            value.pendingTransactions = read.pendingRecovery.length;
+            value.definitions = Object.keys(read.document?.servers ?? {}).length;
+            value.enabled = Object.values(read.document?.servers ?? {}).filter(
+              (s) => s.enabled,
+            ).length;
+            if (request.target.scope === "project")
+              value.projectApproval = (await this.connectors
+                .approval(request.target.targetId, read.revision)
+                .catch(() => false))
+                ? "approved"
+                : "required";
+            for (const row of read.rows) {
+              const source =
+                row.source.scope === "project"
+                  ? row.source.projectId
+                  : (await this.mcp.targets()).targets.find((t) => t.address.scope === "user")!
+                      .address.targetId;
+              const auth = this.connectors.authenticationObservation(
+                source,
+                row.id,
+                row.source.revision,
+              );
+              const authKey = {
+                "not-checked": "notChecked",
+                "not-required": "notRequired",
+                required: "required",
+                authenticated: "authenticated",
+                failed: "failed",
+              } as const;
+              value.authentication[authKey[auth]]++;
+              const connection = this.connectors.observation(source, row.id, row.source.revision);
+              const healthKey = {
+                "not-tested": "notTested",
+                connecting: "connecting",
+                connected: "connected",
+                failed: "failed",
+                disconnected: "disconnected",
+                "cleanup-unresolved": "cleanupUnresolved",
+                "authentication-required": "authenticationRequired",
+              } as const;
+              value.connections[healthKey[connection]]++;
+            }
+          }
+          await this.mcp.authorizeRuntimeAddress(request.target);
+          return mcpTroubleshootingReportSchema.parse(value);
+        }),
+      };
+    }
+    if (request.action === "status") {
+      await this.mcpOperation(() => this.mcp.authorizeRuntimeAddress(request.target));
+      const current = await this.mcpOperation(() => this.mcp.runtimeTarget(request.target)).catch(
+        () => null,
+      );
+      return {
+        sessions: this.connectors.status(request.target.targetId),
+        failures: this.connectors.failureStatus(request.target.targetId),
+        unresolvedCleanup: this.connectors.cleanupCount(request.target.targetId),
+        approved:
+          request.target.scope === "user" ||
+          Boolean(
+            current &&
+              (await this.connectors
+                .approval(request.target.targetId, current.saved.revision)
+                .catch(() => false)),
+          ),
+      };
+    }
+    if (request.action === "preview-disconnect") {
+      await this.mcpOperation(() => this.mcp.authorizeRuntimeAddress(request.target));
+      return this.connectors.review(
+        request.target.targetId,
+        request.sessionGeneration,
+        "disconnect",
+        request.serverIds,
+        page,
+      );
+    }
+    if (request.action === "reconnect" || request.action === "disconnect") {
+      await this.connectors.connectionAction(
+        request.target.targetId,
+        request.sessionGeneration,
+        request.action,
+        request.serverIds,
+        request.requestId,
+        async () => {
+          await this.mcpOperation<unknown>(() =>
+            request.action === "disconnect"
+              ? this.mcp.authorizeRuntimeAddress(request.target)
+              : this.mcp.runtimeTarget(request.target, request.expectedRevision),
+          );
+          await this.connectors.validateReview(
+            request.previewId,
+            page,
+            request.target.targetId,
+            request.sessionGeneration,
+            request.action,
+            request.serverIds,
+          );
+        },
+      );
+      return { completed: true };
+    }
+    const captured = await this.mcpOperation(() =>
+      this.mcp.runtimeTarget(
+        request.target,
+        "expectedRevision" in request ? request.expectedRevision : undefined,
+      ),
+    );
+    if (request.action === "review-approval")
+      return {
+        approved:
+          request.target.scope === "user" ||
+          (await this.connectors.approval(request.target.targetId, captured.saved.revision)),
+      };
+    if (request.action === "test") {
+      const definition = captured.saved.document!.servers[request.serverId];
+      if (!definition) throw new Error("MCP server no longer exists");
+      if (
+        request.target.scope === "project" &&
+        !(await this.connectors.approval(request.target.targetId, request.expectedRevision))
+      )
+        throw new Error("Review and approve this project configuration before testing");
+      if (
+        definition.type === "stdio" &&
+        !(await this.dialogs.confirm(
+          "Test MCP server?",
+          "This launches the configured command with its arguments and bindings. Only initialization and tool discovery are performed.",
+        ))
+      )
+        return { connection: "cancelled", tools: 0 };
+      await this.mcpOperation(() =>
+        this.mcp.runtimeTarget(request.target, request.expectedRevision),
+      );
+      const result = await this.connectors.test({
+        targetId: request.target.targetId,
+        serverId: request.serverId,
+        revision: request.expectedRevision,
+        definition,
+        cwd: captured.cwd,
+        page,
+        requestId: request.requestId,
+      });
+      this.connectors.noteTest(
+        request.target.targetId,
+        request.serverId,
+        request.expectedRevision,
+        result.connection,
+      );
+      return result;
+    }
+    const action = request.action.endsWith("reconnect") ? "reconnect" : "disconnect";
+    return this.connectors.review(
+      request.target.targetId,
+      request.sessionGeneration,
+      action,
+      request.serverIds,
+      page,
+    );
+  }
+
+  private mcpOperation<T>(operation: () => Promise<T>) {
+    // Scope is explicit in requests, never captured from the selected sidebar owner.
+    return this.projectHost.run(this.projectHost.fallback, () => this.exclusive(operation));
+  }
   private readonly projectHost = new ProjectHost(() => this.makeProjectState());
   private makeProjectState() {
     return {
@@ -1903,6 +2435,53 @@ export class ApplicationHost {
     private readonly dialogs: DesktopDialogs,
     private readonly storage: DesktopStorage,
   ) {
+    this.mcp = new McpManagement(
+      join(stateHome(env), "code60", "mcp-configuration"),
+      join(env.XDG_CONFIG_HOME || join(userHome(env), ".config"), "code60"),
+      () =>
+        this.projectHost.all().flatMap((owner) =>
+          !owner.closed && owner.state.workspace
+            ? [
+                {
+                  projectId: owner.id,
+                  databaseEpoch: owner.epoch,
+                  root: owner.state.workspace.dir,
+                },
+              ]
+            : [],
+        ),
+    );
+    this.authentication = storage.mcpAuthentication
+      ? new McpAuthentication(
+          join(stateHome(env), "code60", "mcp-authentication"),
+          storage.mcpAuthentication,
+          () => this.mcp.notifyRuntime(),
+          (targetId, serverId) => this.connectors.revokeCredentials(targetId, serverId),
+        )
+      : undefined;
+    this.connectors = new McpRuntime(
+      join(stateHome(env), "code60", "mcp-runtime"),
+      storage.mcpRuntime,
+      () => this.mcp.notifyRuntime(),
+      Object.fromEntries(
+        Object.entries(env).filter(
+          (entry): entry is [string, string] =>
+            [
+              "PATH",
+              "HOME",
+              "USER",
+              "LOGNAME",
+              "TMPDIR",
+              "LANG",
+              "LC_ALL",
+              "SHELL",
+              "SYSTEMROOT",
+            ].includes(entry[0]) && entry[1] !== undefined,
+        ),
+      ),
+      this.authentication,
+    );
+
     const deps = { ...dependencies, agents: providerAgents(dependencies.agents, this.env) };
     this.deps = deps;
     this.modelDefaults = new ModelDefaults(storage.preferences, () => this.changed(null));
@@ -1938,6 +2517,14 @@ export class ApplicationHost {
           this.modelDefaults,
           this.orchestrationAutoApproval,
           this.reportPlanTimingFailure,
+          (role, root, warning) => {
+            let projectPin: string | undefined;
+            return this.connectors.factory(async () => {
+              const snapshot = await this.mcp.runtimeSnapshot(role, root, projectPin);
+              projectPin ??= snapshot.project?.projectId;
+              return snapshot;
+            }, warning);
+          },
         )
       : undefined;
     this.relay?.attachKnowledge(this.knowledge);
@@ -3241,6 +3828,7 @@ export class ApplicationHost {
         config,
         {
           mcpServers,
+          sessionResources: this.connectorResources("project-chat", this.workspace?.dir),
           orchestrationAutoApproval: this.orchestrationAutoApproval,
           initialSettings: this.modelDefaults.selections(provider, "orchestrator"),
           promptContext: () =>
@@ -3412,6 +4000,7 @@ export class ApplicationHost {
           orchestrationAutoApproval: this.orchestrationAutoApproval,
           initialSettings: this.modelDefaults.selections(saved.provider, "orchestrator"),
           mcpServers: await this.mcpAgentServer(session),
+          sessionResources: this.connectorResources("project-chat", this.workspace?.dir),
           promptContext: () =>
             `${assembleOperatingContract(
               effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
@@ -5093,36 +5682,38 @@ export class ApplicationHost {
   projectAction(value: ProjectAction): Promise<void> {
     const request = parseProjectAction(value);
     const owner = this.projectHost.byId(request.projectId);
-    return this.projectHost.run(owner, () =>
-      this.exclusive(async () => {
-        if (request.type === "select") return this.selectProject(owner.id);
-        if (!this.workspace) throw new Error("This project is no longer open");
-        const folder = this.workspace.dir;
-        if (
-          !(await this.dialogs.confirm(
-            request.type === "close" ? "Close project?" : "Stop folder?",
-            request.type === "close"
-              ? `Close ${folder} and stop its project-owned work? Relay workers in this folder will keep running.`
-              : `Stop project work and Relay workers in ${folder}? Other folders will keep running.`,
-          ))
-        )
-          return;
-        const stopped = await Promise.allSettled([
-          this.stopProject(),
-          request.type === "stop-folder" ? this.relay?.stopFolder(folder) : undefined,
-        ]);
-        if (stopped.some((result) => result.status === "rejected"))
-          throw new Error("Some project work could not be stopped. The project was kept open.");
-        if (request.type === "close") {
-          if (this.projectHost.selected === owner) this.relaySelected = true;
-          this.projectHost.remove(owner);
-          this.projectSessionPaths = this.projectSessionPaths.filter((path) => path !== folder);
-          await this.saveOpenProjects();
-        }
-        this.poller.invalidate(["history", "files", "worktrees"]);
-        this.changed();
-      }),
-    );
+    return this.projectHost
+      .run(owner, () =>
+        this.exclusive(async () => {
+          if (request.type === "select") return this.selectProject(owner.id);
+          if (!this.workspace) throw new Error("This project is no longer open");
+          const folder = this.workspace.dir;
+          if (
+            !(await this.dialogs.confirm(
+              request.type === "close" ? "Close project?" : "Stop folder?",
+              request.type === "close"
+                ? `Close ${folder} and stop its project-owned work? Relay workers in this folder will keep running.`
+                : `Stop project work and Relay workers in ${folder}? Other folders will keep running.`,
+            ))
+          )
+            return;
+          const stopped = await Promise.allSettled([
+            this.stopProject(),
+            request.type === "stop-folder" ? this.relay?.stopFolder(folder) : undefined,
+          ]);
+          if (stopped.some((result) => result.status === "rejected"))
+            throw new Error("Some project work could not be stopped. The project was kept open.");
+          if (request.type === "close") {
+            if (this.projectHost.selected === owner) this.relaySelected = true;
+            this.projectHost.remove(owner);
+            this.projectSessionPaths = this.projectSessionPaths.filter((path) => path !== folder);
+            await this.saveOpenProjects();
+          }
+          this.poller.invalidate(["history", "files", "worktrees"]);
+          this.changed();
+        }),
+      )
+      .finally(() => this.authentication?.recheckOwners());
   }
 
   private async stopProject(force = false): Promise<void> {
@@ -5219,7 +5810,7 @@ export class ApplicationHost {
       const result = await operation();
       this.assertDatabaseRequest(captured);
       return result;
-    });
+    }).finally(() => this.authentication?.recheckOwners());
   }
 
   saveConfiguration(request: SaveConfiguration, databaseEpoch?: number): Promise<void> {
@@ -5532,6 +6123,7 @@ export class ApplicationHost {
         this.workerOverrides(id),
         enabledConfig,
         this.modelDefaults.selections(run.record.agent, "worker"),
+        this.connectorResources("worker", workspace.dir),
       );
     } catch (error) {
       if (
@@ -5589,6 +6181,7 @@ export class ApplicationHost {
       this.workerOverrides(id),
       enabledConfig,
       this.modelDefaults.selections(run.record.agent, "worker"),
+      this.connectorResources("worker", workspace.dir),
     );
     const summary = buildHandoffPrompt(
       run.record,
@@ -5666,6 +6259,7 @@ export class ApplicationHost {
         env: this.env,
         mode: "interactive",
         requireIsolation: true,
+        sessionResources: this.connectorResources("worker", workspace.dir),
         ...(registerWorkers ? { orchestrationAutoApproval: this.orchestrationAutoApproval } : {}),
         initialSettings: (provider) => this.modelDefaults.selections(provider, "worker"),
       },
@@ -6444,7 +7038,13 @@ export class ApplicationHost {
     this.details.clear();
     this.shutdownStarted = true;
     this.closing = true;
+    this.authentication?.beginShutdown();
     const results = await Promise.allSettled([
+      this.connectors
+        .close()
+        .then(() => this.authentication?.close())
+        .then(() => this.queue)
+        .then(() => this.mcp.close()),
       this.memory.close(),
       this.clearSearch(),
       this.cancelRag(),

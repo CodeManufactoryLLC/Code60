@@ -24,6 +24,8 @@ export * from "./activity.js";
 export * from "./automation.js";
 export * from "./browser.js";
 export * from "./commands.js";
+export * from "./mcp-connector-text.js";
+export * from "./mcp-connectors.js";
 export * from "./mcp-tools.js";
 export * from "./product.js";
 export * from "./project-search.js";
@@ -62,4 +64,14 @@ export function boundedString(label: string, max: number) {
     .refine((value) => value.length <= max, `Invalid ${label}`);
 }
 
+export * from "./mcp-authentication.js";
+export * from "./mcp-editing.js";
+export * from "./mcp-management.js";
+export * from "./mcp-recovery.js";
+export type {
+  McpRuntimeRequest,
+  McpRuntimeResponse,
+} from "./mcp-runtime.js";
+export { mcpRuntimeRequestSchema } from "./mcp-runtime.js";
+export * from "./mcp-troubleshooting.js";
 export * from "./workflows.js";

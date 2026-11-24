@@ -7,7 +7,7 @@ const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "../src");
 
 const ALLOWED: Readonly<Record<string, readonly string[]>> = {
   application: ["core", "bridge", "platform", "automation"],
-  gateway: ["application", "automation", "bridge", "contracts", "core", "platform"],
+  gateway: ["application", "automation", "bridge", "contracts", "core", "platform", "agents"],
   management: ["gateway", "platform", "core", "contracts"],
   automation: ["core", "contracts", "platform"],
   renderer: ["bridge", "core"],
@@ -22,6 +22,8 @@ const ALLOWED: Readonly<Record<string, readonly string[]>> = {
 /** Packages only one module may import, so integrations stay in their module. */
 const PACKAGE_OWNERS: Readonly<Record<string, string>> = {
   "@agentclientprotocol/sdk": "agents",
+  "@modelcontextprotocol/sdk": "agents",
+  "@napi-rs/keyring": "platform",
   react: "renderer",
   "react-dom": "renderer",
   "react-markdown": "renderer",
@@ -113,6 +115,16 @@ function readSources(dir: string): SourceFile[] {
 }
 
 describe("module boundaries", () => {
+  it("allows gateway transport composition while keeping application and browser modules isolated from agents", () => {
+    const file = (module: string, spec: string) => ({
+      path: join(SRC, module, "connector.ts"),
+      text: `import { createAgents } from "${spec}";`,
+    });
+    expect(findViolations([file("gateway", "../agents/index.js")])).toEqual([]);
+    for (const module of ["application", "bridge", "renderer", "contracts"])
+      expect(findViolations([file(module, "../agents/index.js")])).not.toEqual([]);
+    expect(findViolations([file("gateway", "../agents/acp-client.js")])).not.toEqual([]);
+  });
   it("allows only the test runner in colocated schema tests while preserving production and Node boundaries", () => {
     const file = (name: string, text: string) => ({ path: join(SRC, "contracts", name), text });
     expect(findViolations([file("browser.test.ts", 'import { it } from "vitest";')])).toEqual([]);

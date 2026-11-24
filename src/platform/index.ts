@@ -1,6 +1,22 @@
 export { resolveCommand } from "./command.js";
+export type { CredentialStorePort } from "./credential-protocol.js";
+export { nativeCredentialStore } from "./credential-store.js";
 export { DiagnosticTail, diagnosticMessage, diagnosticText } from "./diagnostics.js";
 export { environmentValue, mergeSearchPath, setEnvironmentPath, userHome } from "./environment.js";
+export {
+  bindGuardedTarget,
+  captureGuardedRoot,
+  discardGuardedStage,
+  GuardedFileError,
+  type GuardedFileIo,
+  type GuardedSnapshot,
+  type GuardedTarget,
+  guardedFileRevision,
+  publishGuardedFile,
+  readGuardedFile,
+  stageGuardedFile,
+  syncGuardedDirectory,
+} from "./guarded-file.js";
 export {
   absoluteInstallationPath,
   createInstallationParents,
@@ -39,6 +55,11 @@ export {
   validateRemovalServiceProof,
 } from "./installation-removal-service.js";
 export { isPrivateIPv4, primaryPrivateIPv4 } from "./lan-address.js";
+export {
+  type GuardedNetworkOptions,
+  guardedFetch,
+  registerPrivateListener,
+} from "./network-policy.js";
 export { containedPath, samePath } from "./paths.js";
 export { acquirePayload, type PayloadTransport } from "./payload-acquire.mjs";
 export { extractArchive as extractPayloadArchive } from "./payload-archive.mjs";

@@ -1,36 +1,48 @@
 # MCP configuration
 
-Code60 passes configured [Model Context Protocol](https://modelcontextprotocol.io/)
-servers to your coding agent through ACP. Edit
-`$XDG_CONFIG_HOME/code60/config.json`, or `~/.config/code60/config.json` when
-`XDG_CONFIG_HOME` is unset. Code60 only reads this file; there is no MCP Settings
-editor. Merge the following optional field into your existing configuration:
+Use **Apps → MCP Servers** to manage User or open-project definitions. The dedicated
+files are `$XDG_CONFIG_HOME/code60/mcp.json` (default `~/.config/code60/mcp.json`)
+and `<canonical-project>/.code60/mcp.json`. Missing files mean empty defaults.
+`config.json.mcpServers` is no longer supported; no migration or fallback is provided.
 
 ```json
 {
-  "mcpServers": {
-    "local-tools": {
+  "version": 1,
+  "servers": {
+    "docs": {
+      "label": "Documentation",
+      "enabled": false,
       "type": "stdio",
       "command": "node",
       "args": ["/absolute/path/server.js"],
       "env": {}
-    },
-    "remote-tools": {
-      "type": "http",
-      "url": "https://example.com/mcp",
-      "headers": {}
-    },
-    "legacy-tools": {
-      "type": "sse",
-      "url": "https://example.com/sse"
     }
   }
 }
 ```
 
-These are placeholders. Install and configure your own servers before using them.
-On Windows use an installed executable and JSON-escaped absolute paths such as
-`C:\\tools\\server.js`. Code60 does not install MCP servers.
+Project IDs always shadow User IDs, even while disabled or unapproved. Project
+approval binds the canonical/native project identity and exact saved revision.
+Review commands, arguments and bindings before approval or a stdio connection test.
+A test launches code and discovers tools, but never calls a business tool.
+
+Enable/Disable and approval changes apply to future connections. Existing sessions
+retain their captured configuration. **Disconnect** revokes selected connections
+immediately without changing enablement. **Reconnect** previews all connectors
+in the owning ACP session, requires an idle turn and provider load/resume support,
+and obtains fresh capabilities without replaying work. Otherwise start a new session.
+Unavailable servers warn while the agent and other available tools remain usable.
+
+Configuration validity, enabled state, approval, authentication and connection
+health are separate. Untested means **Not tested**. Unresolved credential references
+and OAuth mean **Authentication required**. Use **Authentication** on a local
+definition for credential entry or reviewed OAuth sign-in. Configuration recovery,
+owned cleanup verification and safe troubleshooting reports are available below.
+Dedicated integrations, Code60-owned OAuth
+registrations/client IDs/secrets, hosted authentication and legacy SSE are excluded.
+See the [implementation plan](ad-hoc-plans/mcp-connectors-plan.md),
+[architecture](ARCHITECTURE.md#mcp-connector-foundation-and-target-runtime) and
+[recovery runbook](docs/runbooks/mcp-configuration.md).
 
 ## Browser modes in chat
 
@@ -81,54 +93,34 @@ Chromium to acknowledge closing; unverified cleanup is reported for retry.
 
 ## Bundled starter file
 
-[`mcp.default.json`](mcp.default.json) includes two **opt-in** stdio servers:
-
-- **Playwright MCP** (`@playwright/mcp@0.0.84`) for browser automation. It uses
-  `--isolated --headless`, so each session gets a separate in-memory profile
-  without opening browser windows. Profile isolation is not a security sandbox.
-- **Context7** (`@upstash/context7-mcp@4.5.1`) for current library documentation.
-  Queries go to an external service. Keyless use has rate limits; optionally
-  supply `CONTEXT7_API_KEY` through the server's environment or its supported
-  authentication workflow. Never put keys in command arguments.
-
-The file is in the source/CLI package root and the desktop installation's
-`resources` directory (`Code60.app/Contents/Resources` on macOS). Code60 does
-not load it automatically. To enable either server, open your user `config.json`
-at the path above and merge the desired entries into its `mcpServers` object.
-Keep other configuration and existing server entries; do not replace the whole
-file. Remove an entry to disable it for subsequent sessions.
-
-These commands require Node.js and npm (`npx`) on the provider's PATH. The pins
-above require Node.js 20.18.1 or newer; Code60's supported Node.js versions
-satisfy this. After opt-in, `npx -y` may download and execute the named packages
-when the agent launches them. No packages or browsers are installed by Code60.
-Playwright MCP uses Chrome by default; install Chrome separately or follow
-[Playwright MCP's browser setup](https://github.com/microsoft/playwright-mcp)
-to select/install a supported browser. Verify your provider forwards client MCP
-servers and any inherited environment variables it needs.
+[`mcp.default.json`](mcp.default.json) is a disabled version-one document containing
+optional pinned Playwright and Context7 templates. Guided Add offers the same
+reviewable definitions. Nothing is loaded or launched automatically. Explicitly
+adding and enabling a template allows a new approved session to run its configured
+command, including any downloads requested by npx. Install prerequisites yourself.
+These templates are distinct from dedicated integrations and the built-in browser.
 
 ## Fields and provider support
 
-- `mcpServers` defaults to `{}`. Server names must contain non-whitespace text.
-  `code60` is reserved for the built-in orchestration gateway.
-- Every server requires `type`: `stdio`, `http`, or `sse`.
-- Stdio requires a nonempty `command` string. Optional `args` is an array of
-  strings and `env` maps variable names to string values; they default to `[]`
-  and `{}`. Prefer absolute server paths: each agent runs in its session directory,
-  which may be a worktree or a private chat directory.
-- HTTP and SSE require an HTTP(S) `url`. Optional `headers` maps header names to
-  string values and defaults to `{}`. Use HTTPS outside trusted local development.
-- Unknown fields, fields belonging to another transport and malformed values
-  are configuration errors, reported through the existing usage-error path
-  (CLI exit code 2), without environment/header values.
+Require version 1, a servers object, label, enabled and the transport's fields.
+Server IDs use lowercase alphanumerics/hyphens, begin with an alphanumeric, and
+have at most 64 characters; code60 is reserved. Stdio uses command, args and env;
+Streamable HTTP uses url, headers and auth. Bindings explicitly use `{ "value":
+"non-secret literal" }` or `{ "credentialRef": "reference" }`; header references may
+have a non-secret prefix. OAuth metadata contains scopes and optional clientId and
+clientSecretRef, never tokens or discovered endpoints. Transport-owned HTTP headers
+cannot be overridden. Stdio processes use an allowlisted base environment, not the
+backend's private credential environment. Relative paths resolve from the actual
+owning session/worktree; configuration still comes from the canonical project.
 
-The provider's ACP adapter must support client-supplied MCP servers. Stdio is
-part of baseline ACP. HTTP requires advertised
-`agentCapabilities.mcpCapabilities.http: true`; SSE requires
-`agentCapabilities.mcpCapabilities.sse: true`. A missing/false capability fails
-session startup with an explicit transport error. Code60 never drops unsupported
-servers. Use another compatible provider or change the configuration.
-Server connection and authentication failures are handled by the agent.
+Files are strict JSON with bounded safe validation. Prototype record keys are rejected
+rather than silently dropped. Comments, duplicate decoded
+keys, unknown/transport-mismatched fields, SSE and URL user information are rejected.
+Both transports are exposed to ACP through fixed local stdio adapters, so optional
+ACP HTTP support is unnecessary. Tools only: no resources, prompts, sampling or
+elicitation. Existing ACP permission handling remains in place; annotations never
+grant authority. Calls require the owning active turn and are never automatically
+replayed after transport/authentication failure.
 
 ### Using a separately configured Playwright server in Chat
 
@@ -150,40 +142,24 @@ failure. Custom operating-contract overrides may need the same guidance.
 
 ## Which sessions receive servers?
 
-Headless CLI runs, desktop manual sessions and dispatched workers receive only
-your configured servers. Orchestration chats receive those servers **plus**
-their private built-in `code60` stdio server. That built-in server provides scoped
-Code60 table and worker-control tools; it is never given to workers or manual/CLI
-sessions. User servers do not receive its gateway token.
-
-Setup/connection probes, episodic-memory extraction and search-summary helpers
-receive no user MCP servers. A successful setup probe therefore does not establish
-HTTP/SSE capability or test your MCP connections.
-
-Changes apply to subsequent runs/workers, new or retried chats, and explicit
-recovery of ended runs. Existing active or idle sessions keep their original
-servers across follow-up turns and config reloads. Desktop config polling or
-manual refresh loads edits for new chats; CLI invocations read the file directly.
-Recovery sends the current definitions with ACP resume/load, or with the fresh
-session used for a handoff. No definitions are recovered from run records.
+Project chats/workers resolve their bound canonical project, independent of sidebar
+selection and copied worktree configuration. Relay/custom assistants use User;
+their project-targeted workers resolve the target project. Every ACP session has
+separate upstream instances and fresh capabilities, including load/resume, handoff
+and continuity replacement. Scheduler, provider verification, memory/search and
+other isolated helpers receive no managed connectors. Invalid/unsafe/recovery-blocked
+configuration blocks managed connections in that context and never falls back to a
+shadowed definition.
 
 ## Credentials and trust
 
-Only configure servers and providers you trust. Stdio commands run under your
-agent's permissions, not in a Code60 sandbox. The agent owns MCP processes and
-connections; ordinary Code60 agent cleanup and permission policies are unchanged.
-Orchestration chats and workers follow Providers → Permissions for each new ACP permission request.
-
-Environment and header values are literal strings, with no `${VARIABLE}`
-expansion. Code60 does not write credentials, manage OAuth or supply a credential
-store. Authenticate through the provider/server's supported workflow. If you
-manually add credentials to the file, keep it private and out of source control.
-Prefer provider-managed credentials where supported.
-
-Definitions are sent to your selected agent provider, but Code60 does not add
-them to run records, transcripts, renderer snapshots or CLI output. This does
-not redact arbitrary agent/tool output: providers or tools can print sensitive
-content, which ordinary transcripts may retain. Do not ask agents to print secrets.
+Literal bindings are explicitly non-secret. Credential references remain unverified
+in phase 5 and block connection until secure authentication is available. Moving a
+definition copies neither credentials nor approval. Providers receive ephemeral
+connector capabilities, never upstream commands, URLs or credentials. Browser detach
+cancels page-owned tests/decisions but preserves approved work; Stop/replacement and
+backend shutdown revoke capabilities and drain owned cleanup. Reconnect creates
+fresh authority. A failed or uncertain call must be reviewed, never silently replayed.
 
 ## MCP activity attribution
 
@@ -251,3 +227,156 @@ task or failed worker leaves tasks unchecked and requires **Resume plan** after 
 previous work. Resuming a plan may continue existing work, so inspect any delivery error
 before retrying. Project changes pause accepted plans. Restarting or replacing a conversation
 retains its documents on disk but never restores execution authority or resumes work.
+
+
+## Guided configuration management
+
+Open **Apps → MCP Servers**. Choose User, or an open project, then Add server.
+Start blank, choose the optional pinned Playwright/Context7 template, or paste one
+version-one server definition and review its fields. Choose a stable lowercase
+server ID and an editable label. New definitions are saved disabled. Edit preserves
+the existing enabled state. Enable/Disable controls apply to future connections.
+
+Use argument rows for stdio and explicit non-secret literals or credential
+references for environment/header bindings. References remain unverified; this
+page never stores or resolves credentials. OAuth fields are registration metadata,
+not a sign-in flow. Saving or viewing a template never launches its command or
+contacts its endpoint. A future approved npx launch may download its package.
+
+User configuration needs no database and writes to the dedicated configuration
+folder's mcp.json. Project configuration writes to .code60/mcp.json in the canonical
+open project. These files do not feed active agent sessions yet. The current
+config.json loader remains unchanged during this intermediate phase.
+
+Project entries shadow user IDs even while disabled or unapproved. Inherited
+entries link to their user configuration. Remove previews any inheritance revealed;
+Move previews source/destination, collisions and unverified references. It moves
+no credentials or approvals. Closed repositories are not scanned.
+
+Conflicts retain the draft; reload explicitly before saving against the new
+revision. Invalid files and pending recovery block guided changes. Preserve evidence
+and follow [configuration recovery](docs/runbooks/mcp-configuration.md). The direct
+JSON editor, backup restore, reset and reviewed transaction recovery are described below.
+
+
+## JSON editing, backups and reset
+
+In Apps → MCP Servers, choose **Servers** for immediate guided saves or **JSON**
+for the dedicated file. JSON Save preserves valid text exactly; **Format JSON**
+explicitly produces two-space indentation and a final newline. Invalid syntax,
+duplicate keys and schema issues disable Save, including its keyboard shortcut.
+Completion and validation run locally. Never paste secrets; use credential references.
+
+Before guided edits or scope changes, choose Save, Discard or Cancel for dirty JSON.
+Ordinary page navigation retains the draft and editor position in memory; browser
+reload/close can lose it and shows a warning. Project close/replacement disables
+submission until explicit reload/discard. External changes retain dirty text: use
+**Compare saved and draft** to inspect the latest file, then explicitly discard
+or revise your draft. Discard reads the latest file without writing or backing up.
+
+**Restore backup** lists private preimages. Preview a valid, unpinned configuration
+and confirm against both its reviewed identity and the current file revision. An
+absent-file backup removes the dedicated file, revealing inheritance where applicable.
+Malformed/pinned preimages remain recovery evidence. Failed operations retain drafts.
+
+**Reset this configuration** clears only this configuration; project scope also offers
+**Reset User and this project**. Review removed definitions, inherited User entries,
+open-project effects and unsaved-draft loss before confirmation. Clearing User affects
+other projects using User entries, without scanning closed repositories. Safe bounded
+malformed originals can be reset or repaired in JSON; their exact bytes are backed up.
+Unsafe/oversized originals remain blocked. Missing/empty targets are not rewritten.
+
+Reset preserves other project files, unrelated settings, built-ins, credentials and
+running agents/connections. Interrupted changes require reviewed Complete or
+Roll back through **Configuration recovery**; preserve evidence and follow the
+[recovery runbook](docs/runbooks/mcp-configuration.md). Runtime activation and
+sign-in are described in this document.
+
+
+## Credentials and sign-in
+
+Credential bindings contain references, never secret values. Authentication controls
+are human-only and never expose a credential-read API. Enter a value in the
+transient authentication dialog; it clears on submission or dismissal. Select
+**Persistent** for macOS Keychain or Linux Secret Service, or explicitly select
+**Temporary** to keep it only in backend memory until restart or sign-out.
+Locked/unavailable persistent storage blocks the operation; it never silently
+becomes temporary storage or Linux keyutils. Unlock/configure the operating-system
+store separately, or make a new explicit temporary choice.
+
+Credentials bind this installation, canonical configuration source, server ID,
+security-relevant definition, reference and account/grant. Label and enabled edits
+do not rebind them. Commands, arguments, endpoint, bindings, registration and scopes
+require review and new entry/authorization. Moving a definition transfers neither
+credentials nor approval. An interrupted credential operation may require fresh
+entry; an older stored version is never reactivated as a fallback.
+
+For OAuth, select an advertised issuer, then review issuer, resource, scopes,
+endpoints and registration before starting. Supply your own client ID and optional
+client-secret reference, or use advertised per-installation dynamic registration.
+A user-hosted HTTPS client-metadata URL requires **Metadata URL** client ID type
+and server support; ordinary client IDs remain opaque even when they look like URLs.
+Code60 does not host metadata or distribute a shared client registration. Discovery
+is anonymous; private issuer destinations require explicit approval. MCP endpoints
+may be explicitly configured local/LAN addresses, but credentials require HTTPS
+except loopback. Application-private listeners and metadata-service addresses are
+blocked. Transport-owned headers and OAuth/Authorization conflicts are rejected.
+
+Continue authorization in the browser. The single-use loopback callback is bound
+to the initiating page, configuration/revision and attempt, expires in five minutes,
+and uses S256 PKCE and issuer/resource checks. Cancel, page detach, owner replacement
+or shutdown invalidates pending attempts. Ordinary in-app navigation preserves
+pending sign-in and JSON drafts. Completed temporary credentials survive navigation
+and browser detach while the backend runs.
+
+Sign-out revokes affected connection capabilities immediately, clears temporary
+material, closes owned upstreams and attempts persistent removal and advertised
+remote revocation. Local deletion and remote revocation have separate outcomes;
+locked storage can leave **deletion uncertain**, with private tombstones preventing
+reuse after restart. Explicitly retry cleanup after unlocking. Forgetting one
+reference preserves other manual references but invalidates that server's OAuth
+grant and closes its connections. Enablement and configuration are unchanged.
+No business request is replayed after authentication failure. An uncertain refresh
+requires explicit reauthorization. Reconnect remains an idle, reviewed action.
+
+Native/package QA uses `npm run test:mcp:credentials` against the packaged tarball.
+Linux requires a disposable private D-Bus and Secret Service (`dbus-run-session`,
+`gnome-keyring-daemon`, `gdbus` for this QA harness); macOS uses only a unique
+synthetic service/account namespace. The production helper needs no QA commands.
+Never enumerate unrelated credentials or lock a shared service for a test.
+
+
+## Troubleshooting and interrupted configuration writes
+
+Use **Configuration recovery** in Apps → MCP Servers to inspect pending writes.
+Reopen all affected projects, review publication order and exact before/after
+states, then explicitly confirm **Complete transaction** or **Roll back transaction**.
+Moves complete destination first; combined resets publish User first; rollback
+reverses publication. A User change affects other inheriting projects. Unknown
+states, external edits, replaced project identities or corrupt evidence block
+recovery. No force/lock deletion or automatic startup replay exists. Rollback may
+restore a recorded malformed original; ordinary Restore backup still requires a
+valid unpinned backup. Configuration recovery restores neither credentials nor
+approval nor execution authority.
+
+Your unsaved draft stays in memory throughout recovery. After success, compare
+saved versus draft or explicitly reload. A failed/conflicting/uncertain result
+retains both draft and evidence. **Check same recovery request** reads its recorded
+outcome; a new reviewed decision uses a new request identity.
+
+Errors show fixed codes/stages and next actions. Missing commands/arguments require
+launch/prerequisite review; unsupported provider reconnect requires a new session;
+expired credentials/access require sign-in/scope review; network/TLS/timeout/protocol
+failures require server/network correction then explicit bounded **Test connection**.
+No business call is replayed. Other available tools and the agent session stay usable.
+**Verify cleanup** retries only retained revoked resources for the captured scope.
+It does not reconnect, search/kill unrelated processes or clear locks; uncertainty
+remains visible until verified.
+
+**Review troubleshooting report** shows optional local counts and safe fixed status
+metadata. **Copy safe report** copies only the reviewed allowlist; nothing is uploaded.
+Validity, approval, authentication and connection health remain independent facts.
+Definitions, labels/IDs, paths, endpoints, references, credentials, raw errors and
+server output are excluded. Never share private transaction journals or backups as
+diagnostic reports. See the [recovery runbook](docs/runbooks/mcp-configuration.md)
+for failure-specific actions and stop/escalation conditions.

@@ -26,6 +26,10 @@
     "scripts/devcontainer-session.mjs",
     ".devcontainer/init-volumes.mjs",
     "test/fixtures/fake-transmission.mjs",
+    "src/agents/mcp-adapter.ts",
+    "src/platform/credential-helper.ts",
+    "test/fixtures/mcp-upstream.mjs",
+    "test/fixtures/credential-helper.mjs",
     "test/clean-install/install.mjs",
     "test/clean-install/runtime.mjs",
     "test/clean-install/probe.mjs",
@@ -41,7 +45,8 @@
     "test/fixtures/update-command.mjs",
     "test/update.config.ts",
     "test/uninstall.config.ts",
-    "test/clean-install/uninstall.mjs"
+    "test/clean-install/uninstall.mjs",
+    "src/platform/index.bootstrap.ts"
   ],
   "project": [
     "src/**/*.{ts,tsx,cts,mjs,mts}",
@@ -51,5 +56,5 @@
     "*config*.ts"
   ],
   "ignoreDependencies": ["@wyw-in-js/shared"],
-  "ignoreBinaries": ["mkfifo"]
+  "ignoreBinaries": ["mkfifo", "gdbus", "gnome-keyring-daemon"]
 }

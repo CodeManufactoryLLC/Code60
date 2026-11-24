@@ -29,6 +29,25 @@ describe("browser capability catalog", () => {
     expect(capability?.limitations).toContain("absolute recovery launcher");
     expect(capability?.confirmation).toContain("--yes never approves profiles");
   });
+  it("describes bounded human-only JSON editing and recovery choices without runtime authority", () => {
+    const mcp = APPLICATION_CAPABILITIES.find((cap) => cap.id === "mcp-servers");
+    expect(mcp).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });
+    expect(PAGE_CAPABILITIES["mcp-servers"]).toBe("mcp-servers");
+    expect(pages.find((page) => page.id === "mcp-servers")?.database).toBe(false);
+    expect(mcp?.limitations).toContain("open project and captured runtime/database identity");
+    expect(mcp?.limitations).toContain("valid unpinned backup");
+    expect(mcp?.limitations).toContain("Pending recovery blocks affected writes");
+    expect(mcp?.limitations).toContain("User and this project");
+    expect(mcp?.confirmation).toContain("Save, Discard or Cancel");
+    expect(mcp?.purpose).toContain("enable, approve, test");
+    expect(mcp?.limitations).toContain("idle Reconnect");
+    expect(mcp?.limitations).toContain("Tests initialize/discover only");
+    expect(mcp?.confirmation).toContain("stdio tests");
+    expect(mcp?.purpose).toContain("safe troubleshooting report");
+    expect(mcp?.limitations).toContain("newer edits or corrupt evidence block recovery");
+    expect(mcp?.limitations).toContain("no force or lock deletion");
+    expect(mcp?.confirmation).toContain("Complete/Roll back");
+  });
   it("describes scheduler upgrade recovery without granting service authority", () => {
     const updates = APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates");
     expect(updates).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });

@@ -34,6 +34,7 @@ describe("page tabs", () => {
         "assistants",
         "providers",
         "provider",
+        "mcp-servers",
         "workflows",
         "web-server",
       ],

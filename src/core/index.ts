@@ -13,7 +13,7 @@ import {
 } from "../platform/index.js";
 import { type Clock, systemClock } from "./clock.js";
 import { type CommandDeps, markInterrupted } from "./commands.js";
-import { type ConfigFs, configuredMcpServers, loadConfig, parseDuration } from "./config.js";
+import { type ConfigFs, loadConfig, parseDuration } from "./config.js";
 import { withDirectoryHistory } from "./desktop-history.js";
 import { createOrchestrator, type Orchestrator } from "./orchestrator.js";
 import { type PolicyOverrides, parseToolKinds } from "./policy.js";
@@ -26,6 +26,7 @@ import {
   runsDir,
 } from "./records.js";
 import type { SessionSelection } from "./run.js";
+import type { SessionResourceFactory } from "./session-resources.js";
 import {
   ACTIVE_STATUSES,
   type Config,
@@ -61,6 +62,10 @@ export { recordedAgentAlive } from "./processes.js";
 export { buildHandoffPrompt } from "./recovery.js";
 export * from "./recurrence.js";
 export type { SessionSelection } from "./run.js";
+export type {
+  SessionResourceControls,
+  SessionResourceFactory,
+} from "./session-resources.js";
 export { TaskLoop, type TaskProposal, type TaskSource } from "./task-loop.js";
 export type * from "./types.js";
 export { ACTIVE_STATUSES, RefusedError, UsageError } from "./types.js";
@@ -109,6 +114,7 @@ export async function prepareOrchestrationChat(
   config: Config,
   options: {
     mcpServers?: readonly AgentMcpServer[];
+    sessionResources?: import("./session-resources.js").SessionResourceFactory;
     orchestrationAutoApproval?: () => boolean;
     promptContext?: () => string;
     recovery?: RunRecord;
@@ -134,7 +140,8 @@ export async function prepareOrchestrationChat(
       policy: config.permissions,
       overrides: { orchestrationAutoApproval: options.orchestrationAutoApproval ?? (() => true) },
       prompts: config.prompts,
-      mcpServers: [...configuredMcpServers(config), ...(options.mcpServers ?? [])],
+      mcpServers: [...(options.mcpServers ?? [])],
+      ...(options.sessionResources ? { sessionResources: options.sessionResources } : {}),
       ...(options.promptContext === undefined ? {} : { promptContext: options.promptContext }),
       ...(options.initialSettings?.length
         ? { initialSettings: () => options.initialSettings }
@@ -227,6 +234,7 @@ export function commandDeps(deps: CoreDeps, workspace: Workspace): CommandDeps {
 }
 
 export interface RunRequest {
+  sessionResources?: SessionResourceFactory;
   /** Explicit desktop execution policy. Omitted preserves internal workspace detection. */
   workspaceMode?: "direct" | "worktree";
   /** Desktop workers must never fall back to editing the shared directory. */
@@ -295,7 +303,6 @@ export async function prepareRuns(
   )
     throw new RefusedError("Direct execution cannot use isolation or a Git base.");
   const config = configuration ?? (await loadConfig(deps.fs, request.env));
-  const mcpServers = configuredMcpServers(config);
   let maxParallel = config.maxParallel;
   if (request.parallel !== undefined) {
     if (!/^[1-9]\d*$/.test(request.parallel)) {
@@ -376,11 +383,11 @@ export async function prepareRuns(
         ? { orchestrationAutoApproval: request.orchestrationAutoApproval }
         : { allow, allowAll: request.allowAll === true },
       prompts: config.prompts,
-      ...(mcpServers.length ? { mcpServers } : {}),
       ...(request.owner === undefined ? {} : { owner: request.owner }),
       ...(request.initialSettings === undefined
         ? {}
         : { initialSettings: request.initialSettings }),
+      ...(request.sessionResources ? { sessionResources: request.sessionResources } : {}),
     },
   );
   return {
@@ -410,6 +417,7 @@ export async function prepareRecovery(
   configuration?: Config,
   /** Desktop-only saved session-option defaults for a fresh handoff session. */
   initialSettings?: readonly SessionSelection[],
+  sessionResources?: SessionResourceFactory,
 ): Promise<PreparedRecovery> {
   if (ACTIVE_STATUSES.has(record.status)) {
     throw new RefusedError(
@@ -422,7 +430,6 @@ export async function prepareRecovery(
     );
   }
   const config = configuration ?? (await loadConfig(deps.fs, env));
-  const mcpServers = configuredMcpServers(config);
   const agent = config.agents[record.agent];
   if (!agent) throw new RefusedError(`the configured agent '${record.agent}' is unavailable`);
   const orchestrator = await createOrchestrator(
@@ -439,8 +446,8 @@ export async function prepareRecovery(
       policy: config.permissions,
       ...(overrides === undefined ? {} : { overrides }),
       prompts: { ...config.prompts, ...prompts },
-      ...(mcpServers.length ? { mcpServers } : {}),
       ...(initialSettings?.length ? { initialSettings: () => initialSettings } : {}),
+      ...(sessionResources ? { sessionResources } : {}),
     },
   );
   return { orchestrator, config };

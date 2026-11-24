@@ -145,3 +145,11 @@ Execution uses pinned Transmission staging.20 on macOS in dedicated saved-file
 worktrees and continues after closing the browser or stopping the backend. See the
 [workflow guide](docs/transmission-workflows.md) for prerequisites, approval defaults,
 background ownership and the known server recovery limitation.
+
+
+MCP servers can be configured under **Apps → MCP Servers** with guided forms or
+validated JSON, scoped to User or an open project. The page includes activation,
+project approval, connection tests, secure credentials/OAuth, backup/reset, reviewed
+transaction recovery and safe troubleshooting reports. Configuration validity,
+authentication and observed connection health are separate. See
+[MCP configuration](MCP.md) and the [recovery runbook](docs/runbooks/mcp-configuration.md).

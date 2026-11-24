@@ -46,8 +46,9 @@ export interface UninstallPorts {
   signal?: AbortSignal;
   checkpoint?(state: RemovalState): Promise<void>;
 }
-function portsFor(env: NodeJS.ProcessEnv): UninstallPorts {
+export function createUninstallPorts(env: NodeJS.ProcessEnv): UninstallPorts {
   return {
+    runtimeDirectory: fileURLToPath(new URL("../bootstrap/", import.meta.url)),
     interactive: !!process.stdin.isTTY && !!process.stdout.isTTY,
     confirm: async (message, signal) => {
       const input = createInterface({ input: process.stdin, output: process.stdout });
@@ -106,7 +107,7 @@ export async function runUninstall(
     if (installationFileCode(error) !== "ENOENT") throw error;
     return null;
   });
-  const ports = injected ?? portsFor(env);
+  const ports = injected ?? createUninstallPorts(env);
   if (!present) {
     ports.write("No managed Code60 installation was found. No files or services changed.\n");
     return;

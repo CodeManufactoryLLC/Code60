@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtemp, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -32,6 +32,55 @@ try {
   const root = join(prefix, "node_modules/code60");
   const installed = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
   assert.equal(installed.engines.node, ">=24 <25");
+  assert.equal(installed.dependencies["@modelcontextprotocol/sdk"], "1.32.2");
+  assert.equal(installed.dependencies["@napi-rs/keyring"], "2.1.2");
+  const { createUpdatePorts } = await import(
+    pathToFileURL(join(root, "dist/management/update.js")).href
+  );
+  const runtime = createUpdatePorts({ HOME: prefix, PATH: "/usr/bin:/bin" }).runtimeDirectory;
+  assert.equal(await realpath(runtime), await realpath(join(root, "dist/bootstrap")));
+  const { createUninstallPorts } = await import(
+    pathToFileURL(join(root, "dist/management/uninstall.js")).href
+  );
+  assert.equal(
+    await realpath(createUninstallPorts({ HOME: prefix, PATH: "/usr/bin:/bin" }).runtimeDirectory),
+    await realpath(runtime),
+  );
+  await stat(join(runtime, "management/removal-support.js"));
+  const support = await readdir(runtime, { recursive: true });
+  for (const name of support.filter((name) => /\.(?:js|mjs)$/.test(name)))
+    assert.match(name, /^(?:management|platform)\/[a-z0-9-]+\.(?:js|mjs)$/);
+  assert.equal(
+    support.some((name) => name.includes("credential")),
+    false,
+  );
+  assert.equal(
+    support.some((name) => name.includes("index.bootstrap")),
+    false,
+  );
+  const bootstrapPlatform = await import(pathToFileURL(join(runtime, "platform/index.js")).href);
+  assert.equal(typeof bootstrapPlatform.installationSnapshot, "function");
+  assert.equal(bootstrapPlatform.nativeCredentialStore, undefined);
+  const helper = join(root, "dist/platform/credential-helper.js");
+  await stat(helper);
+  const malformedCredential = spawnSync(process.execPath, [helper], {
+    env: {},
+    input: '{"action":"get","service":"invalid","account":"invalid"}',
+    encoding: "utf8",
+    timeout: 10_000,
+  });
+  assert.equal(malformedCredential.status, 0);
+  assert.deepEqual(JSON.parse(malformedCredential.stdout), { status: "uncertain" });
+  assert.equal(malformedCredential.stderr, "");
+  const adapter = join(root, "dist/agents/mcp-adapter.js");
+  await stat(adapter);
+  const denied = spawnSync(process.execPath, [adapter], {
+    env: {},
+    encoding: "utf8",
+    timeout: 10_000,
+  });
+  assert.equal(denied.status, 1);
+  assert.equal(denied.stdout, "");
   assert.equal(installed.dependencies.electron, undefined);
   assert.equal(installed.dependencies["electron-updater"], undefined);
   const help = execFileSync(process.execPath, [join(root, installed.bin.code60), "--help"], {
@@ -81,6 +130,13 @@ try {
     roots: [prefix],
   });
   assert.equal((await fetch(gateway.origin)).status, 200);
+  const assets = await readdir(join(root, "dist/renderer/assets"));
+  const jsonWorker = assets.find((asset) => /^json\.worker-.*\.js$/.test(asset));
+  assert.ok(jsonWorker, "Installed package includes its local Monaco JSON worker");
+  const worker = await fetch(`${gateway.origin}/assets/${jsonWorker}`);
+  assert.equal(worker.status, 200);
+  assert.match(worker.headers.get("content-type"), /javascript/);
+  assert.ok((await worker.text()).length > 1000);
   assert.equal(gateway.requirePairing, false);
   const connection = await fetch(`${gateway.origin}/api/connect`, {
     method: "POST",
@@ -103,7 +159,7 @@ try {
     globalThis.fetch = network;
   }
   process.stdout.write(
-    "Installed npm package: CLI, assets, backend and offline model passed. No service was installed.\n",
+    "Installed npm package: CLI, assets including local JSON worker, backend and offline model passed. No service was installed.\n",
   );
 } finally {
   await gateway?.stop();
