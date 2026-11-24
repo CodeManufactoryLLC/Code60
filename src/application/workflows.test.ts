@@ -477,6 +477,52 @@ it("inspects active and terminal saved workflows without connecting engines or c
   });
 });
 
+it("fences idle workflow requests, leaves approved active work alone and does not reopen after close", async () => {
+  const f = await fixture();
+  const release = await f.service.reserveIdleForUninstall();
+  await expect(f.service.request({ action: "list" })).rejects.toThrow("closing");
+  expect(f.call).not.toHaveBeenCalled();
+  await release();
+  const { id } = await f.start();
+  const before = f.call.mock.calls.length;
+  await expect(f.service.reserveIdleForUninstall()).rejects.toThrow("Workflows are active");
+  expect(f.call).toHaveBeenCalledTimes(before);
+  await f.service.request({ action: "cancel", id });
+  const pending = await f.service.reserveIdleForUninstall();
+  await f.service.close();
+  await pending();
+  await expect(f.service.request({ action: "list" })).rejects.toThrow("closing");
+});
+
+it("refuses an active draft without cancelling or applying it and releases a cancelled idle reservation", async () => {
+  const f = await fixture();
+  let resolve: (value: WorkflowDraftReply) => void = () => {};
+  f.generate.mockImplementationOnce(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  const draft = f.service.request({
+    action: "draft",
+    formId: f.formId,
+    revision: 0,
+    requestId: randomUUID(),
+    fields: { name: "", tasks: [] },
+    messages: [{ role: "user", text: "Plan the change" }],
+  });
+  await vi.waitFor(() => expect(f.generate).toHaveBeenCalled());
+  await expect(f.service.reserveIdleForUninstall()).rejects.toThrow("preparation is active");
+  resolve({ message: "Ready" });
+  expect(await draft).toEqual({ message: "Ready" });
+  await expect(
+    f.service.reserveIdleForUninstall(AbortSignal.abort(Error("cancelled"))),
+  ).rejects.toThrow("cancelled");
+  const release = await f.service.reserveIdleForUninstall();
+  await release();
+  expect(await f.service.request({ action: "list" })).toMatchObject({ entries: [] });
+});
+
 it("never mistakes uncertain or pending-stop terminal snapshots for uninstall readiness", async () => {
   const f = await fixture();
   const { id } = await f.start();

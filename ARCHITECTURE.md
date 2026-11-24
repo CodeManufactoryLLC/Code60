@@ -161,6 +161,9 @@ These internal primitives do not yet expose an application uninstall command.
 Private uninstall inspection adds bounded interactive/scheduled availability and
 strict saved workflow counts. It rejects a payload and browser Origin, never
 starts an engine or creates workflow storage, and cannot alone prove process exit.
+Temporary idle reservations fence application actions, workflow preparation and
+scheduler claims on their owning queues without changing saved schedules or pause
+state. Releasing a reservation never reopens an owner that has begun shutdown.
 
 ## Current exclusions
 

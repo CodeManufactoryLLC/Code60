@@ -17,3 +17,7 @@ through their public indexes. Never import application or gateway or expose a TC
   definition presence; installed:false markers never imply installation. Return
   typed native runtime state and optional live status. Unverifiable registration
   fails visibly without repairing/deleting metadata or starting a service.
+- An uninstall idle reservation shares the scheduler's claim queue. Refuse active,
+  unfinished or uncertain ownership without cancelling execution. Fence ticks and
+  mutations until release or shutdown; keep saved schedules and pause state intact.
+  Releasing an older reservation must never release a later one.

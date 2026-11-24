@@ -82,6 +82,90 @@ const flush = async () => {
 };
 
 describe("durable automation scheduler", () => {
+  it("reserves an idle scheduler without changing saved state and rejects new claims until release", async () => {
+    const s = setup();
+    const job = (await s.scheduler.request({ action: "create", draft })) as Automation;
+    const before = structuredClone(s.store.state);
+    const release = await s.scheduler.reserveIdleForUninstall();
+    expect(await s.scheduler.request({ action: "status" })).toMatchObject({
+      pausedAll: false,
+      activeExecutionId: null,
+    });
+    await expect(s.scheduler.request({ action: "runNow", id: job.id })).rejects.toThrow(
+      "preparing to uninstall",
+    );
+    await expect(s.scheduler.request({ action: "pauseAll", cancelActive: true })).rejects.toThrow(
+      "preparing to uninstall",
+    );
+    await s.advance(120);
+    expect(s.executor.execute).not.toHaveBeenCalled();
+    expect(s.store.state).toEqual(before);
+    await release();
+    await s.scheduler.request({ action: "runNow", id: job.id });
+    await flush();
+    expect(s.executor.execute).toHaveBeenCalledOnce();
+    await s.scheduler.stop();
+  });
+
+  it("waits behind a persisting claim and refuses without cancelling its active execution", async () => {
+    const s = setup();
+    const job = (await s.scheduler.request({ action: "create", draft })) as Automation;
+    const barrier = () => {
+      let resolve: () => void = () => {};
+      const promise = new Promise<void>((done) => {
+        resolve = done;
+      });
+      return { promise, resolve };
+    };
+    const entered = barrier();
+    const hold = barrier();
+    const save = vi.mocked(s.store.save).getMockImplementation();
+    if (!save) throw Error("Fixture save implementation missing");
+    vi.mocked(s.store.save).mockImplementationOnce(async (state) => {
+      entered.resolve();
+      await hold.promise;
+      await save(state);
+    });
+    const claim = s.scheduler.request({ action: "runNow", id: job.id });
+    await entered.promise;
+    const reservation = s.scheduler.reserveIdleForUninstall();
+    const rejected = expect(reservation).rejects.toThrow("active or its ownership is uncertain");
+    hold.resolve();
+    await claim;
+    await rejected;
+    await flush();
+    expect(s.executor.execute).toHaveBeenCalledOnce();
+    expect(vi.mocked(s.executor.execute).mock.calls[0]?.[2].aborted).toBe(false);
+    s.release();
+    await flush();
+    await s.scheduler.stop();
+  });
+
+  it("refuses uncertain scheduler ownership and never lets an old release clear a newer reservation", async () => {
+    const blocked = setup({
+      ...emptyState(),
+      block: { reason: "leftover_agent", executionId: null, runId: null },
+    });
+    await expect(blocked.scheduler.reserveIdleForUninstall()).rejects.toThrow(
+      "ownership is uncertain",
+    );
+    expect(blocked.executor.execute).not.toHaveBeenCalled();
+    expect(blocked.store.save).not.toHaveBeenCalled();
+    await blocked.scheduler.stop();
+    const s = setup();
+    const job = (await s.scheduler.request({ action: "create", draft })) as Automation;
+    const releaseOld = await s.scheduler.reserveIdleForUninstall();
+    await releaseOld();
+    const releaseNew = await s.scheduler.reserveIdleForUninstall();
+    await releaseOld();
+    await expect(s.scheduler.request({ action: "runNow", id: job.id })).rejects.toThrow(
+      "preparing to uninstall",
+    );
+    await releaseNew();
+    await s.scheduler.stop();
+    await expect(s.scheduler.reserveIdleForUninstall()).rejects.toThrow("ownership is uncertain");
+  });
+
   it("reports live job ownership independently of recurrence and history paging", async () => {
     const s = setup();
     const job = (await s.scheduler.request({

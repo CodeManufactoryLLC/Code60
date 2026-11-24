@@ -61,7 +61,9 @@ const ended = (record: WorkflowRecord) =>
 
 /** Saved-work inspection only: process ownership must be verified separately before removal. */
 export async function inspectWorkflowRecordsForUninstall(env: Readonly<NodeJS.ProcessEnv>) {
-  const root = join(stateHome(env), "code60", "workflows");
+  return inspectWorkflowRecordRoot(join(stateHome(env), "code60", "workflows"));
+}
+async function inspectWorkflowRecordRoot(root: string) {
   const counts = { completed: 0, active: 0, uncertain: 0 };
   const exists = await lstat(root).catch((error: unknown) => {
     if (fileCode(error) !== "ENOENT") throw error;
@@ -161,6 +163,8 @@ export class DesktopWorkflows {
   private queue: Promise<unknown> = Promise.resolve();
   private generation = 0;
   private closed = false;
+  private removalReservation: symbol | null = null;
+  private pendingDrafts = 0;
   private startup = new AbortController();
   private provider = "";
   constructor(
@@ -210,6 +214,48 @@ export class DesktopWorkflows {
     await this.loading?.catch(() => {});
     await this.release?.();
     this.release = undefined;
+  }
+  async reserveIdleForUninstall(signal?: AbortSignal): Promise<() => Promise<void>> {
+    signal?.throwIfAborted();
+    const run = this.queue.then(async () => {
+      signal?.throwIfAborted();
+      if (this.closed || this.removalReservation || this.pendingDrafts || this.drafts.size)
+        throw Error("Workflow preparation is active or closing; finish it before uninstalling.");
+      const token = Symbol("uninstall reservation");
+      this.removalReservation = token;
+      try {
+        await this.loading;
+        const writer = await lstat(join(this.root, ".writer")).catch((error: unknown) => {
+          if (fileCode(error) !== "ENOENT") throw error;
+          return null;
+        });
+        if (writer && !this.release)
+          throw Error("Workflow writer ownership is uncertain; inspect it before uninstalling.");
+        const counts = await inspectWorkflowRecordRoot(this.root);
+        signal?.throwIfAborted();
+        if (this.closed || counts.active || counts.uncertain)
+          throw Error(
+            "Workflows are active or their ownership is uncertain; resolve them before uninstalling.",
+          );
+        let released = false;
+        return () => {
+          const done = this.queue.then(async () => {
+            if (released) return;
+            if (this.removalReservation !== token)
+              throw Error("Workflow uninstall reservation changed.");
+            this.removalReservation = null;
+            released = true;
+          });
+          this.queue = done.catch(() => {});
+          return done;
+        };
+      } catch (error) {
+        if (this.removalReservation === token) this.removalReservation = null;
+        throw error;
+      }
+    });
+    this.queue = run.catch(() => {});
+    return run;
   }
   private async load() {
     this.loading ??= (async () => {
@@ -347,7 +393,7 @@ export class DesktopWorkflows {
   }
   async request(value: unknown): Promise<unknown> {
     const request = parseWorkflowRequest(value);
-    if (this.closed) throw new Error("Workflows is closing");
+    if (this.closed || this.removalReservation) throw new Error("Workflows is closing");
     if (request.action === "disposeForm") {
       const draft = this.drafts.get(request.formId);
       draft?.abort.abort();
@@ -375,7 +421,14 @@ export class DesktopWorkflows {
           this.approvals.delete(key);
       return null;
     }
-    if (request.action === "draft") return this.draft(request);
+    if (request.action === "draft") {
+      this.pendingDrafts++;
+      try {
+        return await this.draft(request);
+      } finally {
+        this.pendingDrafts--;
+      }
+    }
     if (request.action === "list") {
       await this.load();
       return {
@@ -386,7 +439,8 @@ export class DesktopWorkflows {
     }
     const generation = this.generation;
     const run = this.queue.then(async () => {
-      if (generation !== this.generation || this.closed) throw new Error("Workflow view changed");
+      if (generation !== this.generation || this.closed || this.removalReservation)
+        throw new Error("Workflow view changed");
       await this.load();
       return this.handle(request, generation);
     });

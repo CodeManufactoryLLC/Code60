@@ -296,6 +296,11 @@ Uninstall inspection reads strict saved workflow evidence without acquiring a
 writer, connecting an engine or creating storage. Pending stops, uncertain starts,
 inconsistent terminal snapshots and duplicate ownership cannot authorize removal.
 Saved terminal state does not establish process quiescence.
+Idle uninstall reservations share the application action queue and closing gate;
+refuse live work before reserving. Releasing a refused overall preparation may
+reopen an idle owner, but must never reopen one whose shutdown has begun.
+Workflow reservations also fence draft admission and queued starts; an active
+draft or another writer cannot be treated as idle.
 Pin CODEX_PATH to the verified cached native Codex for new engines; application
 provider overrides must not replace this runtime. Preserve healthy existing engines.
 
