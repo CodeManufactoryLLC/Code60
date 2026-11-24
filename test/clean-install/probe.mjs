@@ -65,7 +65,7 @@ if (mode === "ready" || mode === "assets") {
     assert.throws(() => require.resolve(name), { code: "MODULE_NOT_FOUND" });
   assert.match((await cli(["--help"], env)).stdout, /code60 service/);
   assert.equal(JSON.parse((await cli(["service", "status"], env)).stdout).installed, false);
-  await assert.rejects(cli(["open"], env), /Install the login backend/);
+  await assert.rejects(cli(["open"], env), /Install the Code60 Gateway/);
   assert.equal(JSON.parse((await cli(["pairing", "status"], env)).stdout).requirePairing, false);
   for (const [value, expected] of [
     ["on", true],
@@ -131,7 +131,7 @@ if (mode === "ready" || mode === "assets") {
     },
   );
   await evidence("process-cleanup", {
-    backendProviderAndHelperProcessesGone: true,
+    gatewayProviderAndHelperProcessesGone: true,
     remaining: [],
     infrastructure,
   });

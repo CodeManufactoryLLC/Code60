@@ -15,10 +15,22 @@ describe("per-user service supervisors", () => {
     args: ["/app/agent's entry.js"],
     env: { PATH: "/usr/bin:/path with spaces" },
   };
-  it("creates an exclusively owned backend definition and rejects changed contents during repair", async () => {
+  it("registers the Code60 Gateway under its platform-specific identity", () => {
+    const linux = userServiceDefinition("linux", "/home/test", "/state", runtime, "gateway");
+    expect(linux.path).toBe("/home/test/.config/systemd/user/code60-gateway.service");
+    expect(linux.contents).toContain("Description=Code60 Gateway");
+    const mac = userServiceDefinition("darwin", "/Users/test", "/state", runtime, "gateway");
+    expect(mac.path).toBe(
+      "/Users/test/Library/LaunchAgents/com.codemanufactory.code60.gateway.plist",
+    );
+    expect(mac.contents).toContain(
+      "<key>Label</key><string>com.codemanufactory.code60.gateway</string>",
+    );
+  });
+  it("creates an exclusively owned gateway definition and rejects changed contents during repair", async () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), "c60-owned-definition-")));
     try {
-      const definition = userServiceDefinition("linux", root, root, runtime, "backend");
+      const definition = userServiceDefinition("linux", root, root, runtime, "gateway");
       expect(await userServiceSnapshot(definition.path)).toBeNull();
       const command = vi.fn(async (_argv: readonly string[]) => true);
       await controlUserService(definition, "install", command, undefined, { expected: null });
@@ -234,7 +246,7 @@ describe("per-user service supervisors", () => {
 });
 
 it.each(["absent", "loaded", "unavailable"])(
-  "uninstalls an already stopped launchd backend only with positive absence (%s)",
+  "uninstalls an already stopped launchd Gateway only with positive absence (%s)",
   async (state) => {
     const root = await mkdtemp(join(tmpdir(), "c60-uninstall-stopped-"));
     try {
@@ -247,14 +259,14 @@ it.each(["absent", "loaded", "unavailable"])(
           args: ["/app/dist/gateway/main.js"],
           env: {},
         },
-        "backend",
+        "gateway",
       );
       await controlUserService(definition, "install", async () => true);
       const inspect = vi.fn(async (argv: readonly string[]) => ({
         ok: state !== "unavailable" && !argv[2]?.includes("/com."),
         stdout:
           state === "loaded"
-            ? "services = {\n  123 0 com.codemanufactory.code60.backend\n}\n"
+            ? "services = {\n  123 0 com.codemanufactory.code60.gateway\n}\n"
             : "services = {\n}\n",
       }));
       const result = controlUserService(definition, "uninstall", async () => false, inspect);
@@ -265,7 +277,7 @@ it.each(["absent", "loaded", "unavailable"])(
         await expect(result).rejects.toThrow("control failed");
         expect(await readFile(definition.path, "utf8")).toBe(definition.contents);
       }
-      expect(inspect.mock.calls[0]?.[0].at(-1)).toContain("code60.backend");
+      expect(inspect.mock.calls[0]?.[0].at(-1)).toContain("code60.gateway");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

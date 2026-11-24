@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { SchedulerStatus, ServiceStatus } from "../bridge/index.js";
-import { schedulingServiceState } from "./scheduling-service.js";
+import { gatewayServiceState } from "./gateway-service.js";
 
 const live = { pausedAll: false } as ServiceStatus;
 it.each([
@@ -17,12 +17,12 @@ it.each([
 ] as const)(
   "distinguishes registration=%s, native=%s and live health",
   (installed, nativeState, service, expected) => {
-    expect(
-      schedulingServiceState({ installed, nativeState, service } as SchedulerStatus, false),
-    ).toBe(expected);
+    expect(gatewayServiceState({ installed, nativeState, service } as SchedulerStatus, false)).toBe(
+      expected,
+    );
   },
 );
 it("does not guess installation while loading or after a failed read", () => {
-  expect(schedulingServiceState(undefined, false)).toBe("checking");
-  expect(schedulingServiceState(undefined, true)).toBe("unavailable");
+  expect(gatewayServiceState(undefined, false)).toBe("checking");
+  expect(gatewayServiceState(undefined, true)).toBe("unavailable");
 });

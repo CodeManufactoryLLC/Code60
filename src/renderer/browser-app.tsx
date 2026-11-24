@@ -191,7 +191,7 @@ export function BrowserApp() {
   if (!ready)
     return (
       <main className="browser-pairing">
-        <h1>{error ? "Backend unavailable" : "Connecting to Code60"}</h1>
+        <h1>{error ? "Code60 Gateway unavailable" : "Connecting to Code60"}</h1>
         {error && <p role="alert">{error}</p>}
         {error && (
           <AppButton type="button" disabled={busy} onClick={() => void bootstrap()}>
@@ -281,10 +281,10 @@ export function BrowserApp() {
           api={client.api}
           preferences={preferences}
           connected={connected}
-          backendControls={
-            <div className="backend-controls">
+          gatewayControls={
+            <div className="gateway-controls">
               <span role="status">
-                {connected ? "Backend connected" : "Reconnecting to backend…"}
+                {connected ? "Code60 Gateway connected" : "Reconnecting to Code60 Gateway…"}
               </span>
               {!connected && (
                 <AppButton
@@ -304,11 +304,11 @@ export function BrowserApp() {
                 onClick={() =>
                   void browserRequest("/api/operation", session, {
                     id: randomId(),
-                    operation: "backend-stop",
+                    operation: "gateway-stop",
                   }).catch((cause) => setError(String(cause)))
                 }
               >
-                Stop Code60 Backend
+                Stop Code60 Gateway
               </AppButton>
               {error && <span role="alert">{error}</span>}
             </div>

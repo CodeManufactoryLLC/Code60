@@ -75,7 +75,7 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
       XDG_CONFIG_HOME: join(home, "config"),
       XDG_STATE_HOME: join(home, "state"),
       CODEX_HOME: join(home, "workflow-codex"),
-      CODE60_TEST_BACKEND_SOCKET: "",
+      CODE60_TEST_GATEWAY_SOCKET: "",
       CODE60_TEST_FORBIDDEN_LOG: join(home, "forbidden.log"),
     };
     const engineRoot = join(env.XDG_STATE_HOME, `code60/workflows/transmission-${engineVersion}`);
@@ -128,7 +128,7 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
           await readFile(join(installed.root, "engines", `${version}.json`), "utf8"),
         );
       await cp(
-        join(root, "test/fixtures/backend-supervisor-command.mjs"),
+        join(root, "test/fixtures/gateway-supervisor-command.mjs"),
         join(bin, "supervisor.mjs"),
       );
       await chmod(join(bin, "supervisor.mjs"), 0o700);
@@ -159,10 +159,10 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
       );
       provider = await transmissionProvider();
       await writeFile(join(env.CODEX_HOME, "config.toml"), provider.toml, { mode: 0o600 });
-      const { backendSupervisor } = (await import(
-        pathToFileURL(join(root, "test/fixtures/backend-supervisor.mjs")).href
+      const { gatewaySupervisor } = (await import(
+        pathToFileURL(join(root, "test/fixtures/gateway-supervisor.mjs")).href
       )) as {
-        backendSupervisor(options: {
+        gatewaySupervisor(options: {
           directory: string;
           application: string;
           candidateApplication: string;
@@ -170,14 +170,14 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
           log: string;
         }): Promise<Supervisor>;
       };
-      supervisor = await backendSupervisor({
+      supervisor = await gatewaySupervisor({
         directory: join(directory, "supervisor"),
         application: installed.release,
         candidateApplication: join(installed.root, "releases", candidate.descriptor.archive.sha256),
         env,
-        log: info.outputPath("backend.log"),
+        log: info.outputPath("gateway.log"),
       });
-      env.CODE60_TEST_BACKEND_SOCKET = supervisor.socket;
+      env.CODE60_TEST_GATEWAY_SOCKET = supervisor.socket;
       await execute(installed.launcher, ["setup", "--yes", "--no-open"], {
         env,
         cwd: "/",
@@ -253,7 +253,7 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
           autoApprove: true,
         };
         // Historical starting state: an approved staging.18 start reached its
-        // engine but its original backend lost the acknowledgement. This fixture
+        // engine but its original gateway lost the acknowledgement. This fixture
         // is separate from the visible first-use approval journey above.
         retainedRunId = (
           (await engine("start_workflow", {
@@ -513,7 +513,7 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
             ? "historical approved start with lost acknowledgement"
             : "visible first-use approval",
           workerPids: workers,
-          backendChanged: true,
+          gatewayChanged: true,
           originalRuntimeBindingsPreserved: true,
           runId: after.entries[0]?.snapshot?.runId,
           customDatabasePreserved: true,
@@ -545,7 +545,7 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
           }
           owned.add(value.pid);
           if (nativeProcessAlive(value.pid))
-            errors.push(Error("Owned application provider survived backend shutdown"));
+            errors.push(Error("Owned application provider survived Gateway shutdown"));
         }
       } catch (error) {
         errors.push(error);
@@ -571,7 +571,7 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
         body: JSON.stringify({
           owned: [...owned],
           remaining,
-          backendExited: !supervisor || supervisor.pid() === null,
+          gatewayExited: !supervisor || supervisor.pid() === null,
           failures: errors.length,
         }),
       });

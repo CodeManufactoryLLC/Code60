@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { extname, join } from "node:path";
 import type { Browser } from "@playwright/test";
 
-/** Synthetic renderer fixtures only; never serves user paths or the product backend. */
+/** Synthetic renderer fixtures only; never serves user paths or the product gateway. */
 export async function fixturePage(browser: Browser, directory: string) {
   const assets = new Map<string, string>();
   for (const item of await readdir(directory, { recursive: true, withFileTypes: true })) {

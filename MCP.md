@@ -110,7 +110,7 @@ Streamable HTTP uses url, headers and auth. Bindings explicitly use `{ "value":
 have a non-secret prefix. OAuth metadata contains scopes and optional clientId and
 clientSecretRef, never tokens or discovered endpoints. Transport-owned HTTP headers
 cannot be overridden. Stdio processes use an allowlisted base environment, not the
-backend's private credential environment. Relative paths resolve from the actual
+Gateway's private credential environment. Relative paths resolve from the actual
 owning session/worktree; configuration still comes from the canonical project.
 
 Files are strict JSON with bounded safe validation. Prototype record keys are rejected
@@ -158,7 +158,7 @@ in phase 5 and block connection until secure authentication is available. Moving
 definition copies neither credentials nor approval. Providers receive ephemeral
 connector capabilities, never upstream commands, URLs or credentials. Browser detach
 cancels page-owned tests/decisions but preserves approved work; Stop/replacement and
-backend shutdown revoke capabilities and drain owned cleanup. Reconnect creates
+Gateway shutdown revoke capabilities and drain owned cleanup. Reconnect creates
 fresh authority. A failed or uncertain call must be reviewed, never silently replayed.
 
 ## MCP activity attribution
@@ -299,7 +299,7 @@ Credential bindings contain references, never secret values. Authentication cont
 are human-only and never expose a credential-read API. Enter a value in the
 transient authentication dialog; it clears on submission or dismissal. Select
 **Persistent** for macOS Keychain or Linux Secret Service, or explicitly select
-**Temporary** to keep it only in backend memory until restart or sign-out.
+**Temporary** to keep it only in Gateway memory until restart or sign-out.
 Locked/unavailable persistent storage blocks the operation; it never silently
 becomes temporary storage or Linux keyutils. Unlock/configure the operating-system
 store separately, or make a new explicit temporary choice.
@@ -327,7 +327,7 @@ to the initiating page, configuration/revision and attempt, expires in five minu
 and uses S256 PKCE and issuer/resource checks. Cancel, page detach, owner replacement
 or shutdown invalidates pending attempts. Ordinary in-app navigation preserves
 pending sign-in and JSON drafts. Completed temporary credentials survive navigation
-and browser detach while the backend runs.
+and browser detach while the Gateway runs.
 
 Sign-out revokes affected connection capabilities immediately, clears temporary
 material, closes owned upstreams and attempts persistent removal and advertised

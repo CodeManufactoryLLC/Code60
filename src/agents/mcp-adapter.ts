@@ -47,7 +47,7 @@ void (async () => {
   const reader = lease.body!.getReader();
   try {
     while (!(await reader.read()).done) {
-      /* Backend lease owns this adapter. */
+      /* Gateway lease owns this adapter. */
     }
   } catch {
     /* A closed lease revokes the capability. */

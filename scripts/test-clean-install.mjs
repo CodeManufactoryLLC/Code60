@@ -223,8 +223,8 @@ async function stage(
         join(harness, "scripts/distribution", name),
       );
     for (const name of [
-      "backend-supervisor.mjs",
-      "backend-supervisor-command.mjs",
+      "gateway-supervisor.mjs",
+      "gateway-supervisor-command.mjs",
       "update-command.mjs",
       "fake-agent.mjs",
       "fake-agent-app.mjs",
@@ -241,17 +241,17 @@ async function stage(
   for (const name of ["support.mjs", "install.mjs", "runtime.mjs", "probe.mjs", "supervisor.mjs"])
     await cp(join(repository, "test/clean-install", name), join(harness, name));
   if (setup) {
-    for (const name of ["backend-supervisor.mjs", "backend-supervisor-command.mjs"])
+    for (const name of ["gateway-supervisor.mjs", "gateway-supervisor-command.mjs"])
       await cp(join(repository, "test/fixtures", name), join(harness, name));
     await cp(
       join(repository, "test/clean-install/runtime-setup.mjs"),
       join(harness, "runtime-setup.mjs"),
     );
   }
-  await chmod(join(harness, setup ? "backend-supervisor-command.mjs" : "supervisor.mjs"), 0o755);
+  await chmod(join(harness, setup ? "gateway-supervisor-command.mjs" : "supervisor.mjs"), 0o755);
   for (const name of ["systemctl", "launchctl", "xdg-open"])
     await symlink(
-      setup ? "../backend-supervisor-command.mjs" : "../supervisor.mjs",
+      setup ? "../gateway-supervisor-command.mjs" : "../supervisor.mjs",
       join(harness, "bin", name),
     );
   for (const name of ["fake-agent.mjs", "fake-agent-app.mjs"])
@@ -650,7 +650,7 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
         190_000,
       );
     });
-    await checked("backend/provider/helper process shutdown", async () => {
+    await checked("gateway/provider/helper process shutdown", async () => {
       await probe(runtime, "request-stop");
       await probe(runtime, "stopped");
       await probe(runtime, "verify-cleanup");
@@ -665,7 +665,7 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
       );
       await rejected(
         "supervisor mutation",
-        /refuses (?:native|unexpected backend) supervisor(?:\/opener)? mutations/,
+        /refuses (?:native|unexpected Gateway) supervisor(?:\/opener)? mutations/,
         () =>
           docker([
             "exec",
@@ -674,7 +674,7 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
             "--user",
             "enable",
             "--now",
-            setup ? "unexpected.service" : "code60-backend.service",
+            setup ? "unexpected.service" : "code60-gateway.service",
           ]),
       );
     });

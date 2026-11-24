@@ -58,7 +58,7 @@ files remain in place. **Steer** queues guidance for a subsequent turn. Answer a
 pending question using its offered choices. A lost response leaves the outcome
 unconfirmed. If stop acknowledgement is pending, use Stop workflow again to confirm cleanup for the same run.
 
-Work continues after closing the browser or stopping the Code60 backend. Opening history or refreshing never starts
+Work continues after closing the browser or stopping the Code60 Gateway. Opening history or refreshing never starts
 an engine. On disconnection, the player retains the last verified state.
 The header menu offers **Reconnect engine** for that workflow and explains that
 unfinished approved work may continue. Global Pause polling pauses observations.

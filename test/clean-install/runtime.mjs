@@ -41,7 +41,7 @@ if (layout.setup && (process.env.ACCEPTANCE_CASE ?? "baseline") === "baseline") 
       },
     }),
   );
-  const log = await open("/evidence/backend.log", "a", 0o600);
+  const log = await open("/evidence/gateway.log", "a", 0o600);
   const child = spawn(process.execPath, [`${application}/dist/gateway/main.js`], {
     cwd: "/work",
     env,
@@ -67,18 +67,18 @@ if (layout.setup && (process.env.ACCEPTANCE_CASE ?? "baseline") === "baseline") 
         await Promise.race([
           exited,
           new Promise((_, reject) => {
-            timer = setTimeout(() => reject(new Error("Installed backend did not stop")), 25_000);
+            timer = setTimeout(() => reject(new Error("Installed Gateway did not stop")), 25_000);
           }),
         ]);
       } finally {
         clearTimeout(timer);
       }
-      assert.equal(exit.code, 0, "Installed backend shutdown failed");
+      assert.equal(exit.code, 0, "Installed Gateway shutdown failed");
       await writeFile(
         "/work/control/stopped.json",
         JSON.stringify({ stopped: true, runtime: process.pid }),
       );
-      await evidence("shutdown", { backendExited: true, code: exit.code });
+      await evidence("shutdown", { gatewayExited: true, code: exit.code });
     })();
     return stopping;
   }
@@ -103,7 +103,7 @@ if (layout.setup && (process.env.ACCEPTANCE_CASE ?? "baseline") === "baseline") 
     });
   try {
     const connection = await waitFor(async () => {
-      if (exit) throw new Error("Installed backend exited before readiness");
+      if (exit) throw new Error("Installed Gateway exited before readiness");
       return publicConnection().catch((error) => {
         if (error.code !== "ENOENT") throw error;
         return null;
@@ -119,7 +119,7 @@ if (layout.setup && (process.env.ACCEPTANCE_CASE ?? "baseline") === "baseline") 
       uid: process.getuid(),
       entrypoint: `${application}/dist/gateway/main.js`,
       origin: connection.origin,
-      backendPid: connection.pid,
+      gatewayPid: connection.pid,
       supervisorPid: process.pid,
       emptyHomeBeforeFixture: true,
       externalNetworking: "disabled",

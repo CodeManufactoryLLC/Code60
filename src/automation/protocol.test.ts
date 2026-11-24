@@ -58,7 +58,7 @@ describe("private scheduler protocol", () => {
         (operation) =>
           expect(operation).rejects.toMatchObject({
             code: "unavailable",
-            message: "Scheduler is not running. Check the Scheduling Service in System Manager.",
+            message: "Scheduler is not running. Check the Code60 Gateway in System Manager.",
           }),
       ),
     );

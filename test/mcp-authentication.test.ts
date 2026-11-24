@@ -422,7 +422,7 @@ it("forgets only the selected manual reference while revoking all owned instance
 });
 
 it.each(["new", "load", "resume"] as const)(
-  "resolves OAuth only in the backend for actual ACP %s; detach preserves work and sign-out revokes capabilities",
+  "resolves OAuth only in the Gateway for actual ACP %s; detach preserves work and sign-out revokes capabilities",
   async (method) => {
     await signedIn();
     const broker = await createMcpBroker(

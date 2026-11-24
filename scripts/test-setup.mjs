@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { backendSupervisor } from "../test/fixtures/backend-supervisor.mjs";
+import { gatewaySupervisor } from "../test/fixtures/gateway-supervisor.mjs";
 import { bootstrapAdapter } from "./distribution/bootstrap-adapter.mjs";
 import { writeBootstrapVerifier } from "./distribution/copy-verifier.mjs";
 import { descriptor } from "./distribution/descriptor.mjs";
@@ -54,7 +54,7 @@ try {
     join(cache, "platforms.json"),
     JSON.stringify({ [`${identity.os}-${identity.arch}`]: identity }),
   );
-  await cp("test/fixtures/backend-supervisor-command.mjs", join(bin, "supervisor.mjs"));
+  await cp("test/fixtures/gateway-supervisor-command.mjs", join(bin, "supervisor.mjs"));
   await chmod(join(bin, "supervisor.mjs"), 0o700);
   for (const name of ["systemctl", "launchctl", "xdg-open"])
     await symlink("supervisor.mjs", join(bin, name));
@@ -69,13 +69,13 @@ try {
   };
   await mkdir(env.CODEX_HOME, { mode: 0o700 });
   const application = join(env.XDG_DATA_HOME, "code60/releases", identity.archive.sha256);
-  supervisor = await backendSupervisor({
+  supervisor = await gatewaySupervisor({
     directory: join(temporary, "supervisor"),
     application,
     env,
-    log: join(output, "backend.log"),
+    log: join(output, "gateway.log"),
   });
-  env.CODE60_TEST_BACKEND_SOCKET = supervisor.socket;
+  env.CODE60_TEST_GATEWAY_SOCKET = supervisor.socket;
   const { bootstrapMain } = await import(pathToFileURL(join(cache, "bin/code60.mjs")).href);
   const options = {
     env,
@@ -113,13 +113,13 @@ try {
     "code60/releases",
     identity.archive.sha256,
   );
-  independent = await backendSupervisor({
+  independent = await gatewaySupervisor({
     directory: join(temporary, "independent-supervisor"),
     application: secondApplication,
     env: secondEnv,
-    log: join(output, "independent-backend.log"),
+    log: join(output, "independent-gateway.log"),
   });
-  secondEnv.CODE60_TEST_BACKEND_SOCKET = independent.socket;
+  secondEnv.CODE60_TEST_GATEWAY_SOCKET = independent.socket;
   const platform = await import(pathToFileURL(join(application, "dist/platform/index.js")).href);
   const metadata = JSON.parse(await readFile(join(application, "payload.json"), "utf8"));
   await platform.preserveTransmissionBundle(
@@ -189,7 +189,7 @@ try {
     (await execute(launcher, ["status"], { env, cwd: "/", timeout: 15000 })).stdout,
   );
   assert.equal(status.database.state, "ready");
-  assert.equal(status.backend.available, true);
+  assert.equal(status.gateway.available, true);
   assert.equal(status.installation.state, "ready");
   assert.ok(!JSON.stringify(status).includes("token"));
   await execute(launcher, ["setup", "--yes", "--no-open"], { env, cwd: "/", timeout: 45000 });
@@ -216,7 +216,7 @@ try {
       })
     ).stdout,
   );
-  assert.equal(secondStatus.backend.available, true);
+  assert.equal(secondStatus.gateway.available, true);
   await independent.close();
   independent = undefined;
   const { loadRagModel } = await import(
@@ -235,7 +235,7 @@ try {
         setup: true,
         declinedServiceInstalledOnly: true,
         bootstrapCacheRemoved: true,
-        repeatPreservesBackend: true,
+        repeatPreservesGateway: true,
         restart: true,
         pairing: true,
         database: true,
@@ -266,7 +266,7 @@ try {
   await writeFile(
     join(output, "cleanup.json"),
     JSON.stringify({
-      backendExited: failures.length === 0,
+      gatewayExited: failures.length === 0,
       temporaryRemoved: failures.length === 0,
       ...(failures.length ? { retainedState: temporary } : {}),
     }),

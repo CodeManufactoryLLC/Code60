@@ -24,7 +24,7 @@
 @import "./styles/utilities.css" layer(utilities);
 @import "./styles/accessibility.css" layer(accessibility);
 
-/* Browser bootstrap and backend controls are outside application-owned navigation. */
+/* Browser bootstrap and Gateway controls are outside application-owned navigation. */
 .browser-pairing {
   max-width: 40rem;
   margin: 8vh auto;
@@ -35,7 +35,7 @@
   display: block;
   margin: 1rem 0;
 }
-.app > .backend-controls {
+.app > .gateway-controls {
   position: fixed;
   right: 8px;
   bottom: 2px;

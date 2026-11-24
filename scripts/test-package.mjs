@@ -150,7 +150,7 @@ try {
     globalThis.fetch = network;
   }
   process.stdout.write(
-    "Installed npm package: CLI, assets including local JSON worker, backend and offline model passed. No service was installed.\n",
+    "Installed npm package: CLI, assets including local JSON worker, gateway and offline model passed. No service was installed.\n",
   );
 } finally {
   await gateway?.stop();

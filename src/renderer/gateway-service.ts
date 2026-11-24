@@ -1,6 +1,6 @@
 import type { SchedulerStatus } from "../bridge/index.js";
 
-export function schedulingServiceState(status: SchedulerStatus | undefined, failed: boolean) {
+export function gatewayServiceState(status: SchedulerStatus | undefined, failed: boolean) {
   if (!status) return failed ? "unavailable" : "checking";
   if (status.service) {
     if (status.installed && status.nativeState !== "running") return "unavailable";
@@ -11,7 +11,7 @@ export function schedulingServiceState(status: SchedulerStatus | undefined, fail
   return status.installed ? "stopped" : "not-installed";
 }
 
-export const schedulingServiceLabels = {
+export const gatewayServiceLabels = {
   checking: "Checking…",
   unavailable: "Status unavailable",
   running: "Running",

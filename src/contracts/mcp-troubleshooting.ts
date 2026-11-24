@@ -48,7 +48,7 @@ const guidance: Record<McpFailure["code"], string> = {
   cancelled:
     "The operation was cancelled. No retry is automatic; use Test connection for a fresh discovery-only attempt.",
   cleanup:
-    "Owned cleanup could not be verified. Keep the backend running and use Verify cleanup. Authority remains revoked; no work is replayed.",
+    "Owned cleanup could not be verified. Keep the Gateway running and use Verify cleanup. Authority remains revoked; no work is replayed.",
   provider:
     "This provider cannot restore the owning session. Start a new session or use a provider with ACP load/resume support to reconnect.",
 };

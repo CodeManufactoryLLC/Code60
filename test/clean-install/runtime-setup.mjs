@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
-const { backendSupervisor } = await import(
-  new URL("./backend-supervisor.mjs", import.meta.url).href
+const { gatewaySupervisor } = await import(
+  new URL("./gateway-supervisor.mjs", import.meta.url).href
 );
 
 import {
@@ -49,13 +49,13 @@ await writeFile(
     },
   }),
 );
-const supervisor = await backendSupervisor({
+const supervisor = await gatewaySupervisor({
   directory: "/work",
   application,
   env,
-  log: "/evidence/backend.log",
+  log: "/evidence/gateway.log",
 });
-env.CODE60_TEST_BACKEND_SOCKET = supervisor.socket;
+env.CODE60_TEST_GATEWAY_SOCKET = supervisor.socket;
 let stopping;
 async function stop() {
   stopping ??= (async () => {
@@ -64,7 +64,7 @@ async function stop() {
       "/work/control/stopped.json",
       JSON.stringify({ stopped: true, runtime: process.pid }),
     );
-    await evidence("shutdown", { backendExited: true, code: 0 });
+    await evidence("shutdown", { gatewayExited: true, code: 0 });
   })();
   return stopping;
 }
@@ -98,7 +98,7 @@ try {
     (await execute(launcher, ["status"], { env, cwd: "/", timeout: 15000 })).stdout,
   );
   assert.equal(status.database.state, "ready");
-  assert.equal(status.backend.available, true);
+  assert.equal(status.gateway.available, true);
   const before = await readFile(database);
   await execute(launcher, ["setup", "--yes", "--no-open"], { env, cwd: "/", timeout: 45000 });
   assert.equal(supervisor.pid(), connection.pid);
@@ -125,7 +125,7 @@ try {
     uid: process.getuid(),
     entrypoint: `${application}/dist/gateway/main.js`,
     origin: connection.origin,
-    backendPid: connection.pid,
+    gatewayPid: connection.pid,
     supervisorPid: process.pid,
     emptyStateBeforeSetup: !updated,
     preservedUpdateState: updated,

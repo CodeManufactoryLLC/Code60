@@ -60,7 +60,7 @@ function session(pendingCommand, env = {}) {
     };
     children.push(child);
     if (
-      (pendingCommand === "backend" && command.includes("scripts/dev-backend.mjs")) ||
+      (pendingCommand === "gateway" && command.includes("scripts/dev-gateway.mjs")) ||
       (pendingCommand === "compiler" && command.includes("--watch"))
     )
       await pending;
@@ -113,10 +113,10 @@ function session(pendingCommand, env = {}) {
       changed();
       scheduled();
     },
-    apps: () => children.filter((child) => child.command.includes("scripts/dev-backend.mjs")),
+    apps: () => children.filter((child) => child.command.includes("scripts/dev-gateway.mjs")),
   };
 }
-it("restarts only the backend for compiled changes and stops every development process", async () => {
+it("restarts only the Gateway for compiled changes and stops every development process", async () => {
   const dev = session();
   await dev.done;
   expect(dev.children.some((child) => child.command.includes("build"))).toBe(false);
@@ -169,7 +169,7 @@ it.each([
   await expect(dev.done).rejects.toThrow(/ports must differ|between 1 and 65535/);
   expect(dev.children).toEqual([]);
 });
-it("stops Vite and the compiler when the backend fails", async () => {
+it("stops Vite and the compiler when the Gateway fails", async () => {
   const dev = session();
   await dev.done;
   dev.apps()[0].exit(9);
@@ -183,11 +183,11 @@ it("cleans up after watcher failure", async () => {
   await vi.waitFor(() => expect(dev.process.exitCode).toBe(1));
   expect(dev.watcher.close).toHaveBeenCalled();
 });
-it.each(["backend", "compiler"])("does not orphan a %s launched during shutdown", async (kind) => {
+it.each(["gateway", "compiler"])("does not orphan a %s launched during shutdown", async (kind) => {
   const dev = session(kind);
   await vi.waitFor(() =>
     expect(
-      kind === "backend"
+      kind === "gateway"
         ? dev.apps().length
         : dev.children.filter((child) => child.command.includes("--watch")).length,
     ).toBe(1),

@@ -23,8 +23,8 @@ Managed installations use `code60 update`, with `code60 update status` and
 `code60 update recover` for inspection and explicit recovery. Follow the
 [update behavior](docs/distribution/updates.md).
 
-For a legacy npm tarball, stop the backend, install the replacement tarball,
-repair its service registration, start the backend and pair the browser again.
+For a legacy npm tarball, stop the Gateway, install the replacement tarball,
+repair its service registration, start the Gateway and pair the browser again.
 Preserve the old package for inspection. Never downgrade application data or
 erase locks/history to make an older package start.
 

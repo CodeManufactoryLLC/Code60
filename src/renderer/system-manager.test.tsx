@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import { SystemManagerPage } from "./system-manager.js";
 
-it("shows backend status and directs native lifecycle actions to the local CLI", () => {
+it("shows gateway status and directs native lifecycle actions to the local CLI", () => {
   const markup = renderToStaticMarkup(
     <SystemManagerPage
       api={{ automation: async () => null, onAutomationChanged: () => () => {} }}
@@ -10,7 +10,7 @@ it("shows backend status and directs native lifecycle actions to the local CLI",
     />,
   );
   expect(markup).toContain('<span class="page-title-text">System Manager</span>');
-  expect(markup).toContain("Backend Service");
+  expect(markup).toContain("Code60 Gateway");
   expect(markup).toContain("code60 service repair");
   expect(markup).toContain('aria-label="System Manager actions"');
   expect(markup).toContain('data-state="checking"');

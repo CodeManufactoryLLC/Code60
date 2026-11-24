@@ -4,6 +4,8 @@ Read the [security policy](SECURITY.md) for agent permissions, sensitive local
 data, and safeguards and limitations. Report suspected vulnerabilities privately
 to [support@code60.dev](mailto:support@code60.dev), not through public issues.
 
+Use the [official terminology](TERMINOLOGY.md) for component names.
+
 ## Issues and planning
 
 Use the [issue forms](https://github.com/CodeManufactoryLLC/code60/issues/new/choose)
@@ -64,8 +66,8 @@ npm run dev
 ```
 
 Development serves React through Vite Fast Refresh and an isolated foreground
-backend. It prints the loopback URL and, when enabled, a pairing code; no login service or native
-window is created. Backend changes restart that development backend; renderer
+Code60 Gateway. It prints the loopback URL and, when enabled, a pairing code; no login service or native
+window is created. Gateway changes restart that development Gateway; renderer
 changes preserve it.
 
 Run `npm run check` before every commit. It validates instructions, types, Biome,
@@ -74,10 +76,10 @@ bridge, fixture, configuration and packaging changes. Headless Chromium runs on
 the host without Electron or a display. Tests use isolated state and fake providers.
 They must never require live agents or credentials.
 
-`npm run build` compiles the backend/management CLI and bundled renderer.
+`npm run build` compiles the Gateway/management CLI and bundled renderer.
 `npm run package:app` creates the npm tarball after verifying prepared model assets.
 `npm run test:packaged` installs it in a temporary prefix and checks the CLI,
-assets, foreground backend and offline embedding model without service enrollment.
+assets, foreground Gateway and offline embedding model without service enrollment.
 `npm run test:rag:model` exercises the actual offline model and worker lifecycle.
 
 For Transmission development on native macOS arm64, run `npm run prepare:engines`
@@ -169,7 +171,7 @@ Use the [workflow QA skill](.factory/skills/qa/SKILL.md). The built-path golden
 journey is `test/browser-workflow.e2e.ts`: first use → plan → acceptance → automatic
 edits → diff → attachment → refresh → declined Undo → confirmed Undo. It checks
 independent files, index, HEAD and worker evidence. Supporting static renderer
-fixtures are labeled separately from complete backend journeys.
+fixtures are labeled separately from complete Gateway journeys.
 
 Run a focused journey with:
 
@@ -278,8 +280,8 @@ Record the failure rate before and after the fix in the pull request.
 ### Browser tests
 
 The registered headless Playwright suite runs the bundled React app against an
-isolated Node gateway. Install Chromium with `npx --no-install playwright install
-chromium` when needed. Browser close, explicit backend stop and backend restart
+isolated Code60 Gateway. Install Chromium with `npx --no-install playwright install
+chromium` when needed. Browser close, explicit Gateway stop and Gateway restart
 are different lifecycle events and need separate assertions. Keep provider/process
 and filesystem outcomes independent of browser snapshots.
 
@@ -441,7 +443,7 @@ No contributor check edits your profiles or installs your login service.
 
 See [candidate setup behavior](docs/distribution/setup.md) for consent, status,
 database defaults and failure recovery. After preparing a platform payload, run
-`npm run test:setup` for real CLI/backend integration through an isolated supervisor
+`npm run test:setup` for real CLI/gateway integration through an isolated supervisor
 fixture. On the Docker host, also run
 `npm run test:packaged:clean -- --setup release/payloads/linux-x64.json` for the full
 setup-created-database browser journey. Keep the manual database journey and all

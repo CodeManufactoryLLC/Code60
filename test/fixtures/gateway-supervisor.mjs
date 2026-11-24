@@ -1,4 +1,4 @@
-// Dedicated bounded backend fixture. Never contacts a native supervisor.
+// Dedicated bounded Gateway fixture. Never contacts a native supervisor.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { appendFile, lstat, mkdir, mkdtemp, open, readFile, realpath, rm } from "node:fs/promises";
@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export async function backendSupervisor({
+export async function gatewaySupervisor({
   directory,
   application,
   candidateApplication,
@@ -15,18 +15,18 @@ export async function backendSupervisor({
 }) {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const socketDirectory =
-    Buffer.byteLength(join(directory, "backend-supervisor.sock")) > 90
+    Buffer.byteLength(join(directory, "gateway-supervisor.sock")) > 90
       ? await mkdtemp("/tmp/code60-supervisor-")
       : directory;
-  const socket = join(socketDirectory, "backend-supervisor.sock");
+  const socket = join(socketDirectory, "gateway-supervisor.sock");
   let child, exited, stopping, closing;
   const calls = [];
   const stateRoot = join(env.XDG_STATE_HOME, "code60/gateway");
   const unit =
     process.platform === "darwin"
-      ? join(env.HOME, "Library/LaunchAgents/com.codemanufactory.code60.backend.plist")
-      : join(env.HOME, ".config/systemd/user/code60-backend.service");
-  const label = `gui/${process.getuid()}/com.codemanufactory.code60.backend`;
+      ? join(env.HOME, "Library/LaunchAgents/com.codemanufactory.code60.gateway.plist")
+      : join(env.HOME, ".config/systemd/user/code60-gateway.service");
+  const label = `gui/${process.getuid()}/com.codemanufactory.code60.gateway`;
   const alive = () => child && child.exitCode === null && child.signalCode === null;
   async function start() {
     if (alive()) return;
@@ -52,7 +52,7 @@ export async function backendSupervisor({
       env.HOME,
       stateRoot,
       saved.runtime,
-      "backend",
+      "gateway",
     );
     assert.equal(expected.path, unit);
     const definition = await installationSnapshot(unit, 65536, true);
@@ -61,7 +61,7 @@ export async function backendSupervisor({
     assert.equal(definition.text, expected.contents);
     const file = await open(log, "a", 0o600);
     child = spawn(saved.runtime.executable, saved.runtime.args, {
-      env: { ...env, ...saved.runtime.env, CODE60_TEST_BACKEND_SOCKET: socket },
+      env: { ...env, ...saved.runtime.env, CODE60_TEST_GATEWAY_SOCKET: socket },
       cwd: directory,
       detached: true,
       stdio: ["ignore", file.fd, file.fd],
@@ -85,7 +85,7 @@ export async function backendSupervisor({
           new Promise((_, reject) => {
             timer = setTimeout(() => {
               if (alive()) child.kill("SIGKILL");
-              reject(Error("Fixture backend shutdown timed out"));
+              reject(Error("Fixture Gateway shutdown timed out"));
             }, 25000);
           }),
         ]);
@@ -115,26 +115,29 @@ export async function backendSupervisor({
       if (name === "systemctl" && args[0] === "--user") {
         if (
           action === "show" &&
-          ["code60-backend.service", "code60-scheduler.service"].includes(args[2]) &&
+          ["code60-gateway.service", "code60-scheduler.service"].includes(args[2]) &&
           JSON.stringify(args.slice(3)) ===
             JSON.stringify(["--property=LoadState", "--property=ActiveState", "--property=MainPID"])
         ) {
           const present =
-            args[2] === "code60-backend.service" && !!(await lstat(unit).catch(() => null));
+            args[2] === "code60-gateway.service" && !!(await lstat(unit).catch(() => null));
           stdout = `LoadState=${present ? "loaded" : "not-found"}\nActiveState=${present && alive() ? "active" : "inactive"}\nMainPID=${present && alive() ? child.pid : 0}\n`;
         } else if (JSON.stringify(args) === '["--user","daemon-reload"]') {
         } else if (
-          JSON.stringify(args) === '["--user","enable","--now","code60-backend.service"]' ||
-          JSON.stringify(args) === '["--user","start","code60-backend.service"]'
+          JSON.stringify(args) === '["--user","enable","--now","code60-gateway.service"]' ||
+          JSON.stringify(args) === '["--user","start","code60-gateway.service"]'
         )
           await start();
-        else if (JSON.stringify(args) === '["--user","stop","code60-backend.service"]')
+        else if (
+          JSON.stringify(args) === '["--user","stop","code60-gateway.service"]' ||
+          JSON.stringify(args) === '["--user","disable","--now","code60-gateway.service"]'
+        )
           await stop();
-        else throw Error("Acceptance refuses unexpected backend supervisor mutations");
+        else throw Error("Acceptance refuses unexpected Gateway supervisor mutations");
       } else if (name === "launchctl") {
         if (args[0] === "print" && args.length === 2) {
           if (args[1] === `gui/${process.getuid()}`)
-            stdout = `services = {\n${alive() ? `com.codemanufactory.code60.backend = running\n` : ""}}\n`;
+            stdout = `services = {\n${alive() ? `com.codemanufactory.code60.gateway = running\n` : ""}}\n`;
           else if (
             [label, `gui/${process.getuid()}/com.codemanufactory.code60.scheduler`].includes(
               args[1],
@@ -150,8 +153,8 @@ export async function backendSupervisor({
           await start();
         else if (args[0] === "kickstart" && args[1] === label && args.length === 2) await start();
         else if (args[0] === "bootout" && args[1] === label && args.length === 2) await stop();
-        else throw Error("Acceptance refuses unexpected backend supervisor mutations");
-      } else throw Error("Acceptance refuses unexpected backend supervisor/opener mutations");
+        else throw Error("Acceptance refuses unexpected Gateway supervisor mutations");
+      } else throw Error("Acceptance refuses unexpected Gateway supervisor/opener mutations");
       res.end(JSON.stringify({ ok, stdout }));
     } catch (error) {
       res.statusCode = 400;

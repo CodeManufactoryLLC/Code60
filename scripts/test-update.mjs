@@ -24,7 +24,7 @@ import { DatabaseSync } from "node:sqlite";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { backendSupervisor } from "../test/fixtures/backend-supervisor.mjs";
+import { gatewaySupervisor } from "../test/fixtures/gateway-supervisor.mjs";
 import { acquirePayload, sha256 } from "./distribution/acquire.mjs";
 import { runCommand } from "./distribution/command.mjs";
 import { descriptor, platform } from "./distribution/descriptor.mjs";
@@ -96,7 +96,7 @@ await runCommand(async (cancel) => {
       CODEX_HOME: join(home, "isolated-codex"),
     };
     await mkdir(env.CODEX_HOME, { mode: 0o700 });
-    await cp("test/fixtures/backend-supervisor-command.mjs", join(bin, "supervisor.mjs"));
+    await cp("test/fixtures/gateway-supervisor-command.mjs", join(bin, "supervisor.mjs"));
     await chmod(join(bin, "supervisor.mjs"), 0o700);
     for (const name of ["systemctl", "launchctl", "xdg-open"])
       await symlink("supervisor.mjs", join(bin, name));
@@ -148,14 +148,14 @@ await runCommand(async (cancel) => {
       "Build the current update-capable payload before acceptance",
     );
     const candidateApplication = join(root, "releases", fixture.descriptor.archive.sha256);
-    supervisor = await backendSupervisor({
+    supervisor = await gatewaySupervisor({
       directory: join(temporary, "supervisor"),
       application: installed.release,
       candidateApplication,
       env,
-      log: join(output, "backend.log"),
+      log: join(output, "gateway.log"),
     });
-    env.CODE60_TEST_BACKEND_SOCKET = supervisor.socket;
+    env.CODE60_TEST_GATEWAY_SOCKET = supervisor.socket;
     const command = async (file, args, timeout = 120000) =>
       execute(file, args, { env, cwd: "/", signal, timeout, maxBuffer: 1024 ** 2 });
     const cli = async (args) => (await command(launcher, args)).stdout;
@@ -173,10 +173,10 @@ await runCommand(async (cancel) => {
     let beforeStatus;
     while (Date.now() < deadline) {
       beforeStatus = JSON.parse(await cli(["status"]));
-      if (beforeStatus.backend.available) break;
+      if (beforeStatus.gateway.available) break;
       await delay(100, undefined, { signal });
     }
-    assert.equal(beforeStatus.backend.available, true);
+    assert.equal(beforeStatus.gateway.available, true);
     assert.equal(beforeStatus.database.state, "ready");
     const prior = await readlink(join(root, "current"));
     const previousReceipt = await readFile(join(root, prior, "receipt.json"));
@@ -469,7 +469,7 @@ await runCommand(async (cancel) => {
     if (supervisor)
       try {
         await supervisor.close();
-        result.backendExited = supervisor.pid() === null;
+        result.gatewayExited = supervisor.pid() === null;
         const processes = [];
         for (const name of await readdir(processLog)) {
           const value = JSON.parse(await readFile(join(processLog, name), "utf8"));

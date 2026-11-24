@@ -25,7 +25,7 @@ async function freePort() {
   return address.port;
 }
 
-test("development: Fast Refresh preserves the backend and backend edits restart only the backend", async ({
+test("development: Fast Refresh preserves the Gateway and Gateway edits restart only the Gateway", async ({
   browser,
 }, info) => {
   test.setTimeout(120_000);
@@ -38,7 +38,7 @@ test("development: Fast Refresh preserves the backend and backend edits restart 
     for (const path of [
       "src",
       "scripts/dev.mjs",
-      "scripts/dev-backend.mjs",
+      "scripts/dev-gateway.mjs",
       "scripts/dev-ports.mjs",
       "package.json",
       "tsconfig.json",
@@ -95,7 +95,7 @@ test("development: Fast Refresh preserves the backend and backend edits restart 
     };
     await expect.poll(async () => (await connection())?.origin, { timeout: 45_000 }).toBe(origin);
     const initial = await connection();
-    if (!initial) throw new Error("Development backend never became ready");
+    if (!initial) throw new Error("Development Gateway never became ready");
     const page = await context.newPage();
     await page.goto(origin);
     await onboard(page);
@@ -128,10 +128,10 @@ test("development: Fast Refresh preserves the backend and backend edits restart 
       (await (await fetch(`http://127.0.0.1:${vitePort}/`)).text()).match(/nonce="([^"]+)"/)?.[1];
     const initialNonce = await viteNonce();
     expect(initialNonce).toBeTruthy();
-    const backendFile = join(directory, "src/gateway/server.ts");
+    const gatewayFile = join(directory, "src/gateway/server.ts");
     await writeFile(
-      backendFile,
-      `${await readFile(backendFile, "utf8")}\n// Development restart checkpoint.\n`,
+      gatewayFile,
+      `${await readFile(gatewayFile, "utf8")}\n// Development restart checkpoint.\n`,
     );
     await expect
       .poll(async () => (await connection())?.pid ?? initial.pid, { timeout: 30_000 })

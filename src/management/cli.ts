@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import {
-  type BackendControl,
-  backendControl,
+  type GatewayControl,
+  gatewayControl,
   managementRequest,
   pairingControl,
 } from "../gateway/index.js";
@@ -78,19 +78,19 @@ export async function runManagement(args: readonly string[], env: NodeJS.Process
     const consent =
       ["status", "start"].includes(action ?? "") ||
       (await confirmChange(
-        `Confirm ${action} Code60 Backend Service? Active work may stop; existing scheduler registration may be transferred.`,
+        `Confirm ${action} Code60 Gateway? Active work may stop; existing scheduler registration may be transferred.`,
         flags,
       ));
     if (!consent) return;
-    const result = await backendControl(env, action as BackendControl, consent);
+    const result = await gatewayControl(env, action as GatewayControl, consent);
     process.stdout.write(`${JSON.stringify(result)}\n`);
     return;
   }
   if (command !== "open" || action !== undefined)
     throw new Error("Use code60 --help for supported commands.");
-  const status = await backendControl(env, "status");
-  if (!status.installed) throw new Error("Install the login backend with code60 service install.");
-  if (!status.service) await backendControl(env, "start");
+  const status = await gatewayControl(env, "status");
+  if (!status.installed) throw new Error("Install the Code60 Gateway with code60 service install.");
+  if (!status.service) await gatewayControl(env, "start");
   let pairing: Record<string, unknown> | undefined;
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
@@ -107,7 +107,7 @@ export async function runManagement(args: readonly string[], env: NodeJS.Process
     typeof pairing.requirePairing !== "boolean" ||
     (pairing.requirePairing && typeof pairing.code !== "string")
   )
-    throw new Error("Backend did not become ready. Run code60 service status.");
+    throw new Error("Gateway did not become ready. Run code60 service status.");
   // Pairing is an intentional terminal result, never a diagnostic or subprocess argument.
   process.stdout.write(`Open ${pairing.origin}\n`);
   if (pairing.requirePairing)

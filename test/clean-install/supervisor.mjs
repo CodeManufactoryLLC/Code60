@@ -9,7 +9,7 @@ if (
   name === "systemctl" &&
   args[0] === "--user" &&
   args[1] === "show" &&
-  ["code60-backend.service", "code60-scheduler.service"].includes(args[2])
+  ["code60-gateway.service", "code60-scheduler.service"].includes(args[2])
 ) {
   process.stdout.write("LoadState=not-found\nActiveState=inactive\nMainPID=0\n");
 } else {

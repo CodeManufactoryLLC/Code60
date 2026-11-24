@@ -78,7 +78,7 @@ export class WebServerBeta {
     )();
   }
   private async activate() {
-    if (this.closed) throw new Error("Backend is stopping.");
+    if (this.closed) throw new Error("Gateway is stopping.");
     this.state = "starting";
     this.error = null;
     try {
@@ -155,7 +155,7 @@ export class WebServerBeta {
   }
   set(enabled: boolean): Promise<void> {
     return this.serial(async () => {
-      if (this.closed) throw new Error("Backend is stopping.");
+      if (this.closed) throw new Error("Gateway is stopping.");
       if (!enabled) {
         try {
           await this.options.save(false);

@@ -70,7 +70,7 @@ keyboard controls, drafts and domain ownership. Never put authentication in link
 
 # Renderer
 
-- System Manager labels Backend Service and reads typed installation/live scheduler
+- System Manager labels Code60 Gateway and reads typed installation/live scheduler
   status. Native lifecycle management stays in the local CLI. Keep live job pause,
   recovery and cancel controls, refresh after actions, and preserve hidden-read,
   coalescing and stale-response guards. Browser close preserves approved work.
@@ -408,7 +408,7 @@ keyboard controls, drafts and domain ownership. Never put authentication in link
 
 `src/renderer` is the React interface, built by Vite into `dist/renderer`.
 
-- Reach the backend only through the fixed browser ApplicationClient. Import only types from `core`, and nothing from Node.js or Electron.
+- Reach the Code60 Gateway only through the fixed browser ApplicationClient. Import only types from `core`, and nothing from Node.js or Electron.
 - Render prompts, activity, tool output, and diffs as text. Agent replies in both chats alone may use ChatMarkdown (react-markdown and remark-gfm) to render safe React elements, including semantic emphasis. Never use `dangerouslySetInnerHTML`, raw-HTML plugins, or remote images/embeds. Links allow only validated HTTP(S) destinations through openWebLink and explicit browser confirmation; preserve opener isolation. Copy retains exact source. Preserve the CSP.
 - Merge updates by revision with `applyUpdate`, so reloads and startup never lose or duplicate events.
   Subscribe before the initial snapshot. Bound the pending frame buffer; overflow
@@ -1133,7 +1133,7 @@ background opacity and introduces no setting or capability/catalog change.
 ## Apps-owned preferences and Update Manager
 
 Appearance, Memory, Polling controls and Update Manager are direct Apps children.
-Update Manager presents manual npm installation and backend repair instructions;
+Update Manager presents manual npm installation and Gateway repair instructions;
 it never downloads or replaces code. Preserve their navigation artwork and saved
 non-native preferences. Native window appearance controls are removed.
 
@@ -1317,7 +1317,7 @@ and payload-free notices only. Dedicated integrations and recovery GUI stay excl
 ## MCP secure authentication (phase 6)
 
 Phase 6 supersedes earlier deferred credential/OAuth text. Follow the MCP credential
-and authorization ownership section in ARCHITECTURE.md. Keep secrets in the backend
+and authorization ownership section in ARCHITECTURE.md. Keep secrets in the Gateway
 native store or explicitly selected temporary RAM, never configuration, diagnostics,
 records, browser storage or provider setup. Native keyring loading is platform-only,
 in a bounded private-pipe helper; Linux must explicitly use Secret Service. Gateway
@@ -1328,7 +1328,7 @@ OAuth uses reviewed registration, S256 and single-use five-minute callbacks. Kee
 SDK authentication/replay disabled; a grant has one refresh, and uncertain exchanges
 require explicit authorization. Revoke before cleanup/deletion, preserve tombstones
 and unresolved ownership, and never reactivate old credential heads. Temporary
-storage requires explicit consent and survives only until backend restart/sign-out.
+storage requires explicit consent and survives only until Gateway restart/sign-out.
 Credential writes/forget/sign-out are narrow human operations with safe metadata;
 there is no browser secret-read endpoint. Preserve existing JSON drafts/recovery.
 Dedicated integrations, Code60 registrations/hosted auth and recovery GUI stay out.

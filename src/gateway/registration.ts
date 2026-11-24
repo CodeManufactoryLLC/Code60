@@ -19,7 +19,7 @@ import {
 } from "../platform/index.js";
 import { gatewayRoot, managementRequest } from "./server.js";
 
-export type BackendControl = "install" | "repair" | "start" | "stop" | "uninstall" | "status";
+export type GatewayControl = "install" | "repair" | "start" | "stop" | "uninstall" | "status";
 type RegisteredRuntime = { runtime: ServiceRuntime; appVersion: string };
 type Registration = RegisteredRuntime & {
   version: 1;
@@ -53,7 +53,7 @@ async function registration(env: Readonly<NodeJS.ProcessEnv>) {
       !validRuntime(value) ||
       (value.previous !== undefined && !validRuntime(value.previous)))
   )
-    throw new Error("Backend registration is invalid. Existing state was preserved.");
+    throw new Error("Gateway registration is invalid. Existing state was preserved.");
   return value;
 }
 async function currentRuntime(env: Readonly<NodeJS.ProcessEnv>): Promise<ServiceRuntime> {
@@ -79,9 +79,9 @@ async function currentRuntime(env: Readonly<NodeJS.ProcessEnv>): Promise<Service
 }
 
 /** Service mutation requires local consent; browser code receives no command execution API. */
-export async function backendControl(
+export async function gatewayControl(
   env: Readonly<NodeJS.ProcessEnv>,
-  action: BackendControl,
+  action: GatewayControl,
   consent = false,
 ) {
   if (!["status", "start"].includes(action) && !consent)
@@ -89,25 +89,25 @@ export async function backendControl(
   const root = gatewayRoot(env);
   const saved = await registration(env);
   if (action === "install" && saved?.installed)
-    throw new Error("The backend is already installed. Use code60 service repair to update it.");
-  if (action === "stop" && !saved?.installed) throw new Error("The backend is not installed.");
+    throw new Error("The Gateway is already installed. Use code60 service repair to update it.");
+  if (action === "stop" && !saved?.installed) throw new Error("The Gateway is not installed.");
   const runtime =
     action === "install" || action === "repair" ? await currentRuntime(env) : saved?.runtime;
   if (!runtime) {
     if (action === "status") return { installed: false, nativeState: "stopped", service: null };
-    throw new Error("Install the backend first with code60 service install.");
+    throw new Error("Install the Gateway first with code60 service install.");
   }
   const definition = userServiceDefinition(
     process.platform,
     userHome(env),
     root,
     runtime,
-    "backend",
+    "gateway",
   );
   const definitionFile = await userServiceSnapshot(definition.path);
   const savedDefinitions = saved
     ? [saved, ...(saved.previous ? [saved.previous] : [])].map((value) =>
-        userServiceDefinition(process.platform, userHome(env), root, value.runtime, "backend"),
+        userServiceDefinition(process.platform, userHome(env), root, value.runtime, "gateway"),
       )
     : [];
   const existing =
@@ -116,7 +116,7 @@ export async function backendControl(
     definition;
   if (definitionFile && !savedDefinitions.some((item) => item.contents === definitionFile.text))
     throw Error(
-      "Backend definition ownership changed; existing registration and outside edits were preserved",
+      "Gateway definition ownership changed; existing registration and outside edits were preserved",
     );
   const ownership = { expected: definitionFile?.identity ?? null };
   if (action === "status") {
@@ -142,23 +142,23 @@ export async function backendControl(
   const release = await lockPrivateState(join(root, "registration-operation"));
   try {
     if (JSON.stringify(await registration(env)) !== JSON.stringify(saved))
-      throw new Error("Backend registration changed. Check status before retrying.");
+      throw new Error("Gateway registration changed. Check status before retrying.");
     if (action === "start") {
-      if (!saved?.installed) throw new Error("The backend is not installed.");
+      if (!saved?.installed) throw new Error("The Gateway is not installed.");
       await realpath(runtime.executable).catch(() => {
         throw new Error("The registered Node runtime moved. Run code60 service repair.");
       });
       if (saved.previous)
-        throw Error("Backend registration is partial; use explicit service repair before starting");
+        throw Error("Gateway registration is partial; use explicit service repair before starting");
       await controlUserService(existing, action, undefined, undefined, ownership);
       return { installed: true };
     }
     if (action === "install" || action === "repair") {
       const native = await inspectUserService(definition);
       if (native.state === "unavailable" || (native.state === "running" && !saved?.installed))
-        throw new Error("Backend ownership is unavailable. Existing registration was preserved.");
+        throw new Error("Gateway ownership is unavailable. Existing registration was preserved.");
       if (action === "install" && native.definitionPresent)
-        throw new Error("A backend definition already exists. Use code60 service repair.");
+        throw new Error("A Gateway definition already exists. Use code60 service repair.");
       // Preserve the legacy scheduler pause setting before its confirmed shutdown.
       const legacy = await schedulerControl(env, "status").catch((error) => {
         if (fileCode(error) === "ENOENT") return null;
@@ -167,7 +167,7 @@ export async function backendControl(
       if (legacy && "installed" in legacy && (legacy.installed || legacy.service)) {
         if (!legacy.installed || legacy.nativeState === "unavailable")
           throw new Error(
-            "Legacy scheduler ownership is unavailable. Resolve it before installing the backend.",
+            "Legacy scheduler ownership is unavailable. Resolve it before installing the Gateway.",
           );
         const status = (await automationClient(env)({ action: "status" }).catch(() => null)) as {
           pausedAll?: boolean;
@@ -194,11 +194,11 @@ export async function backendControl(
     if (saved?.installed && ["stop", "uninstall", "repair"].includes(action)) {
       const native = await inspectUserService(existing);
       if (native.state === "unavailable")
-        throw new Error("Backend ownership could not be verified. Registration was preserved.");
+        throw new Error("Gateway ownership could not be verified. Registration was preserved.");
       if (native.state === "running") {
         const live = await managementRequest(env, "status");
         if (!native.pid || live.pid !== native.pid)
-          throw new Error("Backend process ownership could not be verified.");
+          throw new Error("Gateway process ownership could not be verified.");
         await managementRequest(env, "shutdown");
         await controlUserService(existing, "stop", undefined, undefined, ownership);
       }

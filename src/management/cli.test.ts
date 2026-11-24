@@ -52,7 +52,7 @@ it("rejects execution commands and unknown flags; open requires existing enrollm
     ["workflows", "login", "--yes"],
   ])
     await expect(runManagement(args, env)).rejects.toThrow("Use code60");
-  await expect(runManagement(["open"], env)).rejects.toThrow("Install the login backend");
+  await expect(runManagement(["open"], env)).rejects.toThrow("Install the Code60 Gateway");
   const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
   await runManagement(["--help"], env);
   expect(String(output.mock.calls[0]?.[0])).toContain("code60 service");
@@ -95,7 +95,8 @@ it("combined status is read-only on fresh state and accepts no mutation flags", 
   await runManagement(["status"], env);
   const value = JSON.parse(String(output.mock.calls[0]?.[0]));
   expect(value.installation.state).toBe("not-installed");
-  expect(value.backend.installed).toBe(false);
+  expect(value.gateway).toEqual({ installed: false, nativeState: "stopped", available: false });
+  expect(value).not.toHaveProperty("backend");
   expect(value.database.state).toBe("unavailable");
   expect(await readdir(directory)).toEqual([]);
   await expect(runManagement(["status", "--yes"], env)).rejects.toThrow("Use code60 status");

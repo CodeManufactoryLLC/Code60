@@ -14,20 +14,22 @@ code is never executed. The registry protocol uses npm's
 [version metadata and dist fields](https://github.com/npm/registry/blob/main/docs/REGISTRY-API.md).
 There is no public alternate-registry or download URL option.
 
-The old backend remains usable while the replacement is prepared. The terminal
+For the service rename, follow the [one-time manual cutover](../../README.md#one-time-cutover-from-backend-service) before using the normal update flow.
+
+The old Gateway remains usable while the replacement is prepared. The terminal
 summarizes interactive and scheduled activity and asks before interruption.
-Without a TTY, use Code60's trailing `--yes` to authorize backend changes:
+Without a TTY, use Code60's trailing `--yes` to authorize Gateway changes:
 
 ```sh
 code60 update --yes
 ```
 
-Decline leaves the old activation and backend running. A matching stable release
+Decline leaves the old activation and Gateway running. A matching stable release
 is a no-op; an older stable release never causes a downgrade. A different digest
 for the installed version is a conflict. Failed registry or payload verification
-does not stop the backend.
+does not stop the Gateway.
 
-After consent, update drains owned work, stops the native backend and independently
+After consent, update drains owned work, stops the native Gateway and independently
 waits for its PID to exit. It publishes one immutable activation, repairs the
 registration through that generation's verified launcher and waits for matching
 authenticated readiness. Reconnect with `code60 open`. User databases, preferences,
@@ -43,13 +45,13 @@ code60 update recover
 ```
 
 Status reads the current installed version, activation and private progress
-without checking the registry, locking, repairing or starting a backend.
+without checking the registry, locking, repairing or starting the Gateway.
 Recovery requires separate terminal consent (`--yes` without a TTY). It repairs
 the current activation's registration and checks readiness. It downloads no new
 release and never changes the current generation to an older version. Before
 publication, recovery keeps the original generation; after publication, it keeps
 the new one. Prior releases and their immutable receipts remain available for
-inspection. Automatic rollback is unsafe once a newer backend has opened data.
+inspection. Automatic rollback is unsafe once a newer Gateway has opened data.
 If an outside change restores the old pointer after recorded publication,
 recovery refuses service changes and preserves the conflicting evidence for
 inspection; it cannot repair the old release as though publication never happened.
@@ -72,7 +74,7 @@ does not edit shell profiles or change provider verification.
 
 After building the current target payload, run `npm run test:update` (or supply
 its descriptor with `npm run test:update -- /absolute/path/platform.json`). It
-uses a fresh isolated managed installation and real installed backends, replacing
+uses a fresh isolated managed installation and installed Gateway processes, replacing
 only native supervisor and artifact transport boundaries. A scratch copy supplies
 a controlled newer version; its descriptors are test fixtures, not release or
 unexecuted-platform evidence. The original payload stays unchanged. Evidence under
@@ -101,7 +103,7 @@ a valid custom database, replaces the application through the installed update
 transaction, then completes its original workflow. It compares engine/worker PIDs,
 original runtime bindings, run/start identity, selected database and source Git
 state. Only the remote model and service supervisor are fixtures; this is separate
-from a backend restart without application replacement.
+from a Gateway restart without application replacement.
 The manual native workflow separates the original regressions and two complete
 update journeys into sequential single-worker batches with distinct evidence
 directories. It keeps the existing journey and suite deadlines; no journey is

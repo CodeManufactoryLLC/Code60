@@ -2,7 +2,7 @@
 import { request } from "node:http";
 import { basename } from "node:path";
 
-const socket = process.env.CODE60_TEST_BACKEND_SOCKET;
+const socket = process.env.CODE60_TEST_GATEWAY_SOCKET;
 if (!socket) throw Error("Acceptance refuses native supervisor/opener mutations");
 const result = await new Promise((resolve, reject) => {
   const req = request({ socketPath: socket, path: "/", method: "POST" }, (res) => {

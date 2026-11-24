@@ -15,9 +15,9 @@ const repository = fileURLToPath(new URL("..", import.meta.url));
 const id = `${Date.now()}-${process.pid}`;
 const output = join(repository, "test-results/payload", id);
 let temporary;
-let backend;
+let gateway;
 let exited;
-let backendResult;
+let gatewayResult;
 let stopSignal;
 const controller = new AbortController();
 const interrupt = () => {
@@ -89,20 +89,20 @@ try {
   assert.equal(JSON.parse((await cli("pairing", "status")).stdout).requirePairing, false);
   assert.equal(JSON.parse((await cli("pairing", "on", "--yes")).stdout).requirePairing, true);
   assert.equal(JSON.parse((await cli("pairing", "off", "--yes")).stdout).requirePairing, false);
-  backend = spawn(process.execPath, [join(candidate.root, "dist/gateway/main.js")], {
+  gateway = spawn(process.execPath, [join(candidate.root, "dist/gateway/main.js")], {
     cwd: temporary,
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });
   let log = "";
-  for (const stream of [backend.stdout, backend.stderr])
+  for (const stream of [gateway.stdout, gateway.stderr])
     stream.on("data", (bytes) => {
       log = `${log}${bytes}`.slice(-(1024 ** 2));
     });
   exited = new Promise((ready, reject) => {
-    backend.once("error", reject);
-    backend.once("exit", (code, signal) => {
-      backendResult = { code, signal };
+    gateway.once("error", reject);
+    gateway.once("exit", (code, signal) => {
+      gatewayResult = { code, signal };
       ready();
     });
   });
@@ -111,7 +111,7 @@ try {
   const deadline = Date.now() + 45_000;
   while (!connection) {
     controller.signal.throwIfAborted();
-    if (backendResult || Date.now() > deadline) throw new Error("Payload backend readiness failed");
+    if (gatewayResult || Date.now() > deadline) throw new Error("Payload Gateway readiness failed");
     connection = await readFile(join(env.XDG_STATE_HOME, "code60/gateway/connection.json"), "utf8")
       .then(JSON.parse)
       .catch((error) => {
@@ -136,10 +136,10 @@ try {
     [join(repository, "scripts/distribution/probe-native.mjs"), candidate.root],
     { env, cwd: temporary, timeout: 120_000, signal: controller.signal, maxBuffer: 1024 ** 2 },
   );
-  if (backendResult) throw new Error("Payload backend exited during acceptance");
+  if (gatewayResult) throw new Error("Payload Gateway exited during acceptance");
   await writeFile(join(output, "model.log"), model.stdout, { mode: 0o600 });
-  await writeFile(join(output, "backend.log"), log, { mode: 0o600 });
-  await chmod(join(output, "backend.log"), 0o600);
+  await writeFile(join(output, "gateway.log"), log, { mode: 0o600 });
+  await chmod(join(output, "gateway.log"), 0o600);
   await writeFile(
     join(output, "result.json"),
     JSON.stringify(
@@ -151,7 +151,7 @@ try {
         browserAssets: assets.length,
         dimensions: 768,
         javascriptFetch: "forbidden",
-        foregroundBackend: true,
+        foregroundGateway: true,
         nativeService: "not installed",
       },
       null,
@@ -164,15 +164,15 @@ try {
   process.exitCode = stopSignal ?? 1;
 } finally {
   try {
-    if (backend && !backendResult) {
-      backend.kill("SIGTERM");
+    if (gateway && !gatewayResult) {
+      gateway.kill("SIGTERM");
       let timer;
       try {
         await Promise.race([
           exited,
           new Promise((_, reject) => {
             timer = setTimeout(
-              () => reject(new Error("Payload backend shutdown timed out")),
+              () => reject(new Error("Payload Gateway shutdown timed out")),
               25_000,
             );
           }),
@@ -180,7 +180,7 @@ try {
       } finally {
         clearTimeout(timer);
       }
-      assert.equal(backendResult.code, 0);
+      assert.equal(gatewayResult.code, 0);
     }
     if (temporary) {
       await rm(temporary, { recursive: true, force: true });
@@ -190,7 +190,7 @@ try {
       await writeFile(
         join(output, "cleanup.json"),
         JSON.stringify({
-          backendExited: !backend || Boolean(backendResult),
+          gatewayExited: !gateway || Boolean(gatewayResult),
           temporaryRemoved: true,
         }),
       );

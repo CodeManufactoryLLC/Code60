@@ -323,7 +323,7 @@ export class DesktopKnowledge {
       action = "Open Apps → Workflows.";
     } else if (cap.id === "system-manager") {
       reason =
-        "The browser shows scheduler health. Local code60 service commands manage the unified macOS/Linux login backend; awareness never probes or controls the service.";
+        "The browser shows scheduler health. Local code60 service commands manage the Code60 Gateway on macOS and Linux; awareness never probes or controls the service.";
       action = "Apps → System Manager.";
     } else if (cap.id === "updates") {
       reason =

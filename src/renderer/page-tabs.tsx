@@ -157,7 +157,7 @@ export function PageTabBar({
         <div className="product-utilities">
           {connected !== undefined && (
             <span role="status">
-              {connected ? "Backend connected" : "Reconnecting to backend…"}
+              {connected ? "Code60 Gateway connected" : "Reconnecting to Code60 Gateway…"}
             </span>
           )}
           <Button size="md" kind="ghost" onClick={commands}>

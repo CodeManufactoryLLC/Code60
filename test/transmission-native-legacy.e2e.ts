@@ -175,7 +175,7 @@ for (const saved of [undefined, "0.1.0-staging.18", "0.1.0-staging.20"] as const
         autoApprove: true,
       };
       // Historical starting state: the engine accepted the approved start, but
-      // the old backend did not retain its acknowledgement. No provider or
+      // the old Gateway did not retain its acknowledgement. No provider or
       // execution authority is seeded into a fresh product/setup journey.
       const original = (await client.call("start_workflow", {
         repository: worktree,

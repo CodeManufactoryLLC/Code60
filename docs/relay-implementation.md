@@ -165,7 +165,7 @@ This branch implements Relay and retained project runtimes as described in
   available. The live transcript uses a 1,000,000-serialized-UTF-16-code-unit
   character budget with no event-count cap; oldest events are evicted only when
   that budget is exceeded. Stored history continues to supply bounded first-Send context.
-  The backend retains bounded original-source reads for compatibility.
+  The Gateway retains bounded original-source reads for compatibility.
   Original-source reads use pinned, expiring opaque cursors outside lifecycle
   queues, with at most two concurrent bounded reads. Source requests never send
   a prompt or grant task authority, and full-message reads do not enlarge history windows.

@@ -174,7 +174,7 @@ it("verifies and prepares before consent, stops before publication and waits for
   expect(f.ports.confirm).not.toHaveBeenCalled();
 });
 it.each(["non-tty", "interactive-decline"])(
-  "preserves the live backend and activation on denied consent (%s)",
+  "preserves the live gateway and activation on denied consent (%s)",
   async (mode) => {
     const f = await fixture();
     f.ports.interactive = mode !== "non-tty";
@@ -202,7 +202,7 @@ it.each(["same", "older", "same-version-conflict"])(
   },
 );
 it.each(["registry", "payload"])(
-  "preserves the live backend on acquisition failure (%s)",
+  "preserves the live gateway on acquisition failure (%s)",
   async (mode) => {
     const f = await fixture();
     if (mode === "registry")

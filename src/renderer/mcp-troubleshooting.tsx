@@ -60,13 +60,13 @@ export function McpTroubleshooting({
         setNotice(
           result.completed
             ? "Owned cleanup verified. No connections were started and no work was replayed."
-            : "MCP_CLEANUP: Owned cleanup remains unresolved. Retain the backend and evidence; review the recovery runbook before trying again. Other tools remain available.",
+            : "MCP_CLEANUP: Owned cleanup remains unresolved. Retain the Gateway and evidence; review the recovery runbook before trying again. Other tools remain available.",
         );
       }
     } catch {
       if (token === epoch.current)
         setNotice(
-          "MCP_TROUBLESHOOTING_UNAVAILABLE: This configuration owner or backend is unavailable. Preserve your draft and evidence, then reload. Other application features remain usable.",
+          "MCP_TROUBLESHOOTING_UNAVAILABLE: This configuration owner or Gateway is unavailable. Preserve your draft and evidence, then reload. Other application features remain usable.",
         );
     } finally {
       if (token === epoch.current) setBusy(false);
@@ -84,7 +84,7 @@ export function McpTroubleshooting({
       {cleanup && (
         <Modal title="Verify owned MCP cleanup?" busy={busy} onClose={() => setCleanup(false)}>
           <p>
-            Retry only cleanup handles retained by this backend for this configuration. Authority
+            Retry only cleanup handles retained by this Gateway for this configuration. Authority
             stays revoked. This does not reconnect, replay calls, delete locks or stop unrelated
             processes. Remote cleanup may still be unverifiable.
           </p>

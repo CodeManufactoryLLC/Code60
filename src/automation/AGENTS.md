@@ -1,6 +1,6 @@
 # Automation
 
-Backend-owned scheduler runtime. Depend only on core, contracts and platform,
+The Code60 Gateway hosts the scheduler runtime. Depend only on core, contracts and platform,
 through their public indexes. Never import application or gateway or expose a TCP listener.
 
 - Serialize mutations and persist occurrence claims before any agent launch.
@@ -12,7 +12,7 @@ through their public indexes. Never import application or gateway or expose a TC
 - Bound storage reads, protocol frames, clients and notices. Keep diagnostics
   fixed and free of paths, prompts, tokens and provider output.
 - Service installation requires explicit consent. Browser closure and interactive Stop all must not
-  terminate scheduler-owned work; backend shutdown must stop it. Tests use fake agents and injected clocks.
+  terminate scheduler-owned work; Gateway shutdown must stop it. Tests use fake agents and injected clocks.
 - Scheduler registration status is read-only: validate installed flags and native
   definition presence; installed:false markers never imply installation. Return
   typed native runtime state and optional live status. Unverifiable registration

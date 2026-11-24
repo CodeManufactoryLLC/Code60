@@ -5,7 +5,7 @@ import { createInterface } from "node:readline/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { backendControl, managementRequest } from "../gateway/index.js";
+import { gatewayControl, managementRequest } from "../gateway/index.js";
 import {
   acquirePayload,
   createInstallationParents,
@@ -88,7 +88,7 @@ export function createUpdatePorts(env: NodeJS.ProcessEnv): UpdatePorts {
     },
     bootstrap: (parent, signal) => readStableBootstrap({ parent, signal }),
     acquire: (descriptor, parent, signal) => acquirePayload(descriptor, { parent, signal }),
-    service: (action, consent) => backendControl(env, action, consent),
+    service: (action, consent) => gatewayControl(env, action, consent),
     summary: () => managementRequest(env, "update-summary"),
     alive: (pid) => {
       try {
@@ -136,7 +136,7 @@ function requireService(status: ServiceStatus, currentRuntime = true) {
     (status.nativeState === "stopped" && status.service)
   )
     throw Error(
-      "Backend registration or process ownership is unavailable or conflicting; preserve state and inspect code60 service status",
+      "Gateway registration or process ownership is unavailable or conflicting; preserve state and inspect code60 service status",
     );
 }
 async function consent(ports: UpdatePorts, yes: boolean, message: string, signal: AbortSignal) {
@@ -145,11 +145,11 @@ async function consent(ports: UpdatePorts, yes: boolean, message: string, signal
   if (yes) return true;
   if (!ports.interactive) {
     ports.write(
-      "No backend change was authorized. Rerun with Code60's trailing --yes or use an interactive terminal.\n",
+      "No Gateway change was authorized. Rerun with Code60's trailing --yes or use an interactive terminal.\n",
     );
     return false;
   }
-  const approved = await ports.confirm("Proceed with this backend interruption?", signal);
+  const approved = await ports.confirm("Proceed with this Gateway interruption?", signal);
   signal.throwIfAborted();
   return approved;
 }
@@ -168,7 +168,7 @@ async function quiescent(ports: UpdatePorts, pid: number | null, signal: AbortSi
     await delay(100, undefined, { signal });
   }
   throw Error(
-    "Backend quiescence and process exit could not be verified; activation was not changed",
+    "Gateway quiescence and process exit could not be verified; activation was not changed",
   );
 }
 async function ready(ports: UpdatePorts, launcher: string, version: string, signal: AbortSignal) {
@@ -187,7 +187,7 @@ async function ready(ports: UpdatePorts, launcher: string, version: string, sign
     await delay(100, undefined, { signal });
   }
   throw Error(
-    "Activated backend did not reach authenticated readiness; use explicit update recovery",
+    "Activated Gateway did not reach authenticated readiness; use explicit update recovery",
   );
 }
 const identityOf = (receipt: ActivationRecord) => ({
@@ -235,7 +235,7 @@ export async function runUpdate(
   let release: (() => Promise<void>) | undefined;
   let progress: UpdateSnapshot | null = null;
   let ownsProgress = false;
-  let changedBackend = false;
+  let changedGateway = false;
   const save = async (value: UpdateRecord) => {
     progress = await writeUpdateProgress(record, value, progress);
     ownsProgress = true;
@@ -297,7 +297,7 @@ export async function runUpdate(
         if (observed?.receipt.generation !== receipt.generation)
           throw Error("Activation changed before recovery; preserve the update record");
         ownsProgress = true;
-        changedBackend = true;
+        changedGateway = true;
         const launcher = join(record.root, "activations", receipt.generation, "code60");
         await ports.repair(launcher, signal);
         await ready(ports, launcher, receipt.release.version, signal);
@@ -369,7 +369,7 @@ export async function runUpdate(
             const before = await ports.service("status");
             requireService(before);
             const pid = validPid(before.service?.pid) ? before.service.pid : null;
-            let summary = "Backend is stopped.";
+            let summary = "Gateway is stopped.";
             if (pid) {
               const active = await ports.summary();
               if (
@@ -378,7 +378,7 @@ export async function runUpdate(
                 ![true, false, null].includes(active.scheduledActive as boolean | null) ||
                 typeof active.schedulerAvailable !== "boolean"
               )
-                throw Error("Backend interruption summary could not be authenticated");
+                throw Error("Gateway interruption summary could not be authenticated");
               summary = `Interactive work: ${active.interactiveActive ? "active" : "idle"}. Scheduled work: ${active.scheduledActive === null || !active.schedulerAvailable ? "unavailable" : active.scheduledActive ? "active" : "idle"}.`;
             }
             if (
@@ -392,7 +392,7 @@ export async function runUpdate(
               throw new DeclinedUpdate();
             await phase("stopping");
             signal.throwIfAborted();
-            changedBackend = true;
+            changedGateway = true;
             await ports.service("stop", true);
             await quiescent(ports, pid, signal);
             await phase("stopped");
@@ -417,7 +417,7 @@ export async function runUpdate(
     } catch (error) {
       if (!(error instanceof DeclinedUpdate)) throw error;
       await phase("aborted");
-      ports.write("Update declined. The previous activation and backend were preserved.\n");
+      ports.write("Update declined. The previous activation and Gateway were preserved.\n");
       return;
     }
     ports.write(
@@ -429,12 +429,12 @@ export async function runUpdate(
       try {
         await save({
           ...progress.value,
-          phase: changedBackend
+          phase: changedGateway
             ? progress.value.phase === "ready" || progress.value.phase === "aborted"
               ? "repairing"
               : progress.value.phase
             : "aborted",
-          outcome: changedBackend ? (signal.aborted ? "interrupted" : "failed") : "complete",
+          outcome: changedGateway ? (signal.aborted ? "interrupted" : "failed") : "complete",
         });
       } catch (journal) {
         failure = new AggregateError(

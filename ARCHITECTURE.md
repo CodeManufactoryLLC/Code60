@@ -29,12 +29,12 @@ confirmations, revisions, visibility/stale guards and backend authority are unch
 
 ## Browser runtime
 
-One per-user login backend owns ApplicationHost and a scheduler runtime. React connects
+The [Code60 Gateway](TERMINOLOGY.md) is the per-user process that hosts ApplicationHost and the scheduler runtime. React connects
 through authenticated loopback HTTP operations and a bounded event stream. Closing,
 refreshing or crashing a browser releases only client views, pending confirmations,
 setup transactions and subscriptions. Approved agents, memory extraction and schedules
-continue. Interactive Stop all does not stop scheduled work. Stop Code60 Backend stops both.
-Backend restart restores evidence and future scheduling, never uncertain effects or live authority.
+continue. Interactive Stop all does not stop scheduled work. Stop Code60 Gateway stops both.
+Gateway restart restores evidence and future scheduling, never uncertain effects or live authority.
 A scheduler storage/startup failure is reported independently of healthy interactive work.
 
 ```mermaid
@@ -58,16 +58,16 @@ prints a short-lived single-use code. Browser tokens are held in per-tab session
 storage and sent only to the exact origin in explicit headers. Changing the policy
 persists private gateway/settings.json, revokes old browser sessions and pending
 page interactions, and leaves approved execution running. The setting is unavailable
-to browser/agent APIs. Offline changes require exclusive backend ownership.
+to browser/agent APIs. Offline changes require exclusive Gateway ownership.
 One browser controls execution; taking control is explicit. Page identities invalidate
-stale requests and confirmations. Backend restart invalidates browser sessions. Origin,
+stale requests and confirmations. Gateway restart invalidates browser sessions. Origin,
 Host, strict schemas, quotas, CSP and an asset manifest constrain the web boundary.
 Management routes require a separate private token and reject browser origins.
 
 Browser choosers accept only backend-owned selection tokens, never arbitrary paths.
 Workspace roots default to the user's home and can be changed only in private local
 settings. Directory/file identity and containment are rechecked. Existing files cannot
-be replaced by Create database. Confirmations use expiring, single-use backend interaction
+be replaced by Create database. Confirmations use expiring, single-use gateway interaction
 IDs bound to the controlling page. Agent gateways never receive this human API.
 
 ## Browser security
@@ -113,8 +113,8 @@ pause settings, and never replays uncertain work. Status reads never repair or i
 
 ## Development and delivery
 
-npm run dev uses isolated config/state, a foreground Node backend and Vite Fast Refresh.
-Renderer changes preserve active backend work; backend changes restart gracefully.
+npm run dev uses isolated config/state, a foreground Node.js Gateway and Vite Fast Refresh.
+Renderer changes preserve active Gateway work; Gateway changes restart gracefully.
 The optional Linux x64 development container isolates dependencies and caches,
 including for linked worktrees. Development-only port overrides support editor
 and standalone browser
@@ -136,7 +136,7 @@ production still uses an allocated loopback port. See the
 Production is an npm tarball requiring Node 24 and npm, with compiled assets, notices and
 explicitly prepared pinned models. Managed installations additionally support the
 explicit code60 update flow described below; the legacy tarball remains available. Release preparation and protected-branch/version/tag rules remain in RELEASING.md.
-Headless Playwright exercises the built browser/backend path on host or CI; native service
+Headless Playwright exercises the built browser/gateway path on host or CI; native service
 changes use fake supervisors unless separately authorized. Old Electron tests and native
 installer gates are replaced by browser journeys and clean-prefix tarball checks.
 
@@ -173,7 +173,7 @@ platform descriptors. The installed updater never executes downloaded bootstrap
 code. The bootstrap and installed application share the Node-only payload verifier
 in platform; host acceptance scripts use that same source without importing dist.
 
-Candidates are verified before consent, backend shutdown or activation. Update
+Candidates are verified before consent, Gateway shutdown or activation. Update
 progress and immutable activation receipts retain the prior release for explicit
 recovery. Existing database selections, scheduler evidence and independently pinned
 engine bindings remain outside application replacement. Setup does not update.
@@ -627,13 +627,13 @@ locked, bounded registry; uncertain starts never become replacement workflows.
 
 Transmission owns background execution, verification, repairs and recovery. These
 are explicit exceptions to the retry/recovery non-goals, not new Relay authority.
-Closing the browser, stopping the backend or closing a project does not cancel these workflows. Stop all retains its
+Closing the browser, stopping the Gateway or closing a project does not cancel these workflows. Stop all retains its
 interactive application scope. Explicit workflow cancellation retains partial files/evidence.
 A versioned TRANSMISSION_STATE_DIR suppresses login registration. Read-only UI
 operations never start/restart the engine; explicit reconnect can resume approved
 work. The player routes pause, resume, guidance and stop by saved run and engine identity.
 Unversioned records retain their staging.18 engine, state directory and original start key.
-Execution time is reconstructed from server events, including across backend restarts.
+Execution time is reconstructed from server events, including across Gateway restarts.
 The staging.18 engine can exceed its fresh-session retry allowance across
 restarts; server fixes are outside this prototype and no exactly-once claim is made.
 
@@ -671,19 +671,13 @@ base branch resolved at launch, explicit deny-by-default permissions and no MCP 
 implicit memory. Pin repository and provider identities; changes require review.
 Worktrees are not sandboxes. Never automatically merge, apply, commit or push.
 
-Installation requires consent. Use per-user launchd or systemd
-without linger. No TCP or hosted service. Desktop controls use the automation public
-API; the renderer uses narrow validated preload methods and opaque repository IDs.
-Desktop shutdown and Stop all do not stop service-owned work.
-The database-independent Scheduled Jobs page is nested under Apps, alphabetically
-before Command Builder in both display and keyboard order. Its Apps home card opens
-the same page and remains enabled without a database. The quit dialog explains that
-background automations continue. Apps → System Manager owns the Scheduling Service
-status, install/repair/start/stop/uninstall, resume and recovery controls,
-separate from the schedule list and execution-history tab in Scheduled Jobs. System Manager
-has its own Apps card, sits alphabetically after Prompt Builder, and remains
-available without a database. Both pages defer hidden reads, refresh from pushed
-service notices and preserve native consent for service changes.
+The scheduler runs inside the Code60 Gateway. Enrollment requires consent and uses per-user
+launchd or systemd without linger. Closing the browser or choosing Stop all in Chat
+leaves scheduled work running. Stopping the Gateway shuts down the scheduler as well.
+Apps → Scheduled Jobs owns schedules and execution history. Apps → System Manager
+shows Gateway and scheduler health, with actions to refresh, resume jobs and recheck
+blocked work. Both pages are available without a project database. The local
+`code60 service` command manages installation, start, stop, repair and uninstall.
 System Manager also checks status two seconds after each completed read while the
 page and document are visible, respecting global Pause polling. Failed or
 unavailable checks back off to at most sixty seconds and reset after recovery.
@@ -697,22 +691,11 @@ Validate the registration's installed flag against its native definition; false
 uninstall markers are not installed. Invalid/inconsistent metadata and failed native
 inspection show Status unavailable. Bounded launchd/systemd reads distinguish an
 inactive job from an unavailable supervisor. The live scheduler protocol is unchanged.
-System Manager shows Not installed (dashed neutral badge, Install), Stopped (solid
-neutral badge, Start), and verified Running (compact blue badge, Stop). A running
-standalone scheduler is also labelled Not installed and offers Install instead of
-native Stop. Jobs paused and active execution remain separate annotations. Checking
-and unavailable states never guess a main lifecycle action; explicit Repair remains
-under Service options for recovery, with Uninstall only for verified installation.
-Keep pending action feedback beside the last verified state, suppress competing
-actions and refresh afterward, including failures and declined confirmations.
-Stop is the sole main action for an installed running service, pausing jobs and
-cancelling active work before stopping the process. Do not show a separate
-pause-and-cancel button. Resume jobs remains secondary for existing paused state,
-including after Start; starting the process never resumes jobs automatically.
-Preserve single-flight reads, hidden-view disposal,
-stale-response rejection and native consent. Use the shared neo-brutalist tokens,
-saved typography and forced-color system edges without bright dark-mode panels.
-No new preload method, setting, persisted schema or migration is introduced.
+System Manager distinguishes Checking, Status unavailable, Not installed, Stopped and
+Running. A live foreground Gateway can be running without a service registration.
+Jobs paused and active execution are separate annotations. Explicit refresh,
+single-flight reads and stale-response rejection keep the status tied to the current
+view. Resume jobs enables future occurrences.
 Open execution transcripts subscribe before reading, coalesce saved-chunk notices,
 assemble adjacent text chunks and show the saved execution outcome. Closing, hiding
 or replacing the modal releases its subscription and rejects late reads. Evidence
@@ -1255,7 +1238,7 @@ refresh active views; inactive/hidden views defer reads and reject stale replies
 
 Guided forms support stdio arguments/environment bindings and Streamable HTTP
 headers/OAuth registration metadata. Literals are explicitly non-secret; credential
-references are resolved only by backend authentication and are never copied by
+references are resolved only by gateway authentication and are never copied by
 configuration operations. Add accepts blank,
 optional pinned Playwright/Context7 templates or one strictly parsed pasted server
 object for review. Add defaults disabled, Edit preserves enabled state and IDs.
@@ -1346,7 +1329,7 @@ primitives. Phase 5 adds production tools-only stdio/Streamable HTTP connections
 per-session adapters and private exact-revision project approval. The dedicated
 files now feed desktop sessions; legacy config.json.mcpServers is rejected with no
 migration or fallback. Phase 6 resolves credentials through a bounded OS helper or
-explicit temporary backend RAM and owns reviewed OAuth separately from transport
+explicit temporary Gateway RAM and owns reviewed OAuth separately from transport
 retry logic. See the credential/authorization ownership section below.
 See [the implementation plan](ad-hoc-plans/mcp-connectors-plan.md) and
 [the architectural view](docs/architectural-views/mcp-connector-ownership.md).
@@ -1387,7 +1370,7 @@ entries; no fallback occurs. Resolution reports source, revision, shadowed sourc
 enabled/approval state and eligibility separately. Status metadata contains no
 definitions, paths or credentials. Configuration eligibility is not connection
 health, authentication or authority to call a tool; observations are separate.
-Resolution returns detached definitions in backend memory only.
+Resolution returns detached definitions in Gateway memory only.
 
 Project chats and workers resolve the captured canonical execution target, never
 the selected sidebar project or a generated worktree's copied config. Relay and
@@ -1429,7 +1412,7 @@ resources, prompts, sampling and elicitation are unsupported. Preserve tool cont
 and errors; forward cancellation with bounded teardown and no automatic replay.
 
 Browser detach preserves approved session work; it cancels page-owned tests and
-pending decisions. Stop, session replacement and backend shutdown revoke owned
+pending decisions. Stop, session replacement and Gateway shutdown revoke owned
 capabilities and settle transport/process cleanup. Retain ownership if cleanup
 cannot be verified. Reconnect/explicit ACP restoration obtains fresh capabilities;
 records never restore authority and uncertain tool calls are never replayed.
@@ -1481,7 +1464,7 @@ Application owns resolution, exact-revision approvals and turn-scoped authority.
 Gateway injects agents-owned transports and owns a capability-only private loopback
 broker. Both upstream transports use a fixed local stdio adapter; ACP setup sees
 only ephemeral per-session/per-connector capabilities, never upstream definitions.
-Adapters exit on stdin or backend lease closure. Tools are the only advertised
+Adapters exit on stdin or Gateway lease closure. Tools are the only advertised
 surface; unsupported resources, prompts, sampling and elicitation are rejected.
 
 The pinned MCP SDK 1.32.2 is agents-owned. Stdio uses platform process groups and an
@@ -2450,7 +2433,7 @@ The Prompt Builder groups its four system templates beneath an initially expande
 ### Desktop distribution
 
 Distribution uses a Node 24 npm tarball, manual updates and an explicit per-user
-login backend on macOS Apple Silicon and Linux x64. See [RELEASING.md](RELEASING.md).
+Code60 Gateway on macOS Apple Silicon and Linux x64. See [RELEASING.md](RELEASING.md).
 Native installers, signing, bundled Node and the automatic updater are removed.
 
 ### Guided initial Git setup
@@ -3311,12 +3294,12 @@ changes; application still receives agents transports through gateway compositio
 Private operation metadata contains installation identity, namespace/version heads,
 receipts, pending/revoked states and non-secret review hashes. Secrets and sensitive
 registration/token bundles live only in secure OS storage or explicitly selected
-backend RAM. Namespaces bind installation, canonical configuration source, server
+Gateway RAM. Namespaces bind installation, canonical configuration source, server
 ID, command/arguments/bindings/endpoint/registration/scopes and reference/account or
 grant identity. Labels, enablement and generated worker directory names do not
 rebind credentials. Moves transfer neither credentials nor approval. Native writes
 are fenced before and after activation; uncertainty never selects an older version.
-A dirty previous backend epoch requires fresh entry/authorization, preventing
+A dirty previous Gateway epoch requires fresh entry/authorization, preventing
 resurrection after an unrecorded revocation. Temporary heads persist only non-secret
 metadata and never fall back to older persistent entries after restart.
 
@@ -3346,7 +3329,7 @@ and attempts, while authenticated approved session work continues.
 Human authentication controls preserve configuration/editor drafts. Secret fields
 are transient and cleared on submission/dismissal/navigation; only metadata returns
 to the renderer. Temporary storage requires explicit selection and lasts until
-backend restart or Sign out. OS failures never become temporary storage implicitly.
+Gateway restart or Sign out. OS failures never become temporary storage implicitly.
 Native/package checks use a disposable Linux Secret Service and unique synthetic
 macOS namespaces. Phase 7's transaction-recovery GUI and troubleshooting report,
 dedicated integrations, hosted authentication, shared Code60 client IDs/secrets,
@@ -3392,12 +3375,12 @@ threads or prompts. ACP still verifies the final connection. Login challenges ar
 ephemeral and readable only by their initiating controlling page, never shared
 snapshots, transcripts or diagnostics. Closing/reloading/taking control cancels
 pending attempts and stops owned processes; already-issued credentials are retained.
-The existing v1 verified-membership record remains unchanged. Native backends use
+The existing v1 verified-membership record remains unchanged. Native gateways use
 their user home; containers retain provider state in their private home volume.
 
 The application and gateway-owned scheduler select the discovered Codex executable
 for the standard ACP adapter through its documented `CODEX_PATH` override, so probes
-and normal work use the same managed or installed CLI as login. Explicit backend
+and normal work use the same managed or installed CLI as login. Explicit gateway
 `CODEX_PATH` and custom launch commands remain authoritative and use manual setup.
 
 
@@ -3429,11 +3412,11 @@ owns a host LAN forward to a separate private gateway ingress inside the contain
 A private Unix socket plus bounded stdio control channel accepts only address, publish,
 withdraw and heartbeat operations. Development logs use stderr, not protocol stdout.
 The host derives its address and port; browser inputs contain neither. Requests have
-ten-second deadlines and the host withdraws forwarding on backend/launcher loss or
+ten-second deadlines and the host withdraws forwarding on Gateway/launcher loss or
 a fifteen-second unrenewed lease. Ordinary container execution without this controller
 reports LAN unavailable. Cleanup preserves provider state and existing local forwarding.
 
-After an abrupt launcher/backend loss, gateway startup first acquires the exclusive
+After an abrupt launcher/Gateway loss, gateway startup first acquires the exclusive
 private writer lock. It replaces previous connection metadata only after validating
 its shape/privacy and confirming its PID no longer exists, using private-storage
 compare-and-swap. Live, reused or unverifiable identities and outside changes remain
@@ -3480,7 +3463,7 @@ API and password are never exposed to browsers. No model prompts are sent during
 Provider progress and code submission use strict owner/session/provider/attempt/challenge
 identities; progress responses are not retained in gateway request receipts. Challenges
 and pasted values never enter snapshots, diagnostics, transcripts or browser storage.
-Provider-native credentials stay in backend-user storage, including persistent container
+Provider-native credentials stay in Gateway user storage, including persistent container
 home. Login cleanup precedes ACP verification and automatic v1 membership save.
 Cancellation, page loss/reload/takeover, config replacement and shutdown revoke attempts,
 without logout or deleting issued credentials. Finite installation/login deadlines are

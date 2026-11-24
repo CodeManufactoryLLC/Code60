@@ -15,7 +15,7 @@ export async function pairingControl(env: Readonly<NodeJS.ProcessEnv>, requirePa
     );
   } catch (error) {
     // Missing connection metadata is the only offline fallback. Unknown/live
-    // ownership or a failed request never authorizes overwriting backend state.
+    // ownership or a failed request never authorizes overwriting gateway state.
     if (fileCode(error) !== "ENOENT") throw error;
   }
   const root = gatewayRoot(env);

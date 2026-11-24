@@ -16,11 +16,11 @@ registration. Agents implement MCP and owning-call HTTP cancellation, with no SD
 auth helper or business replay. Contracts and renderer expose only narrow human
 writes and metadata; transient secret inputs never enter configuration drafts.
 
-Secure OS storage and explicitly accepted backend RAM are distinct choices.
+Secure OS storage and explicitly accepted Gateway RAM are distinct choices.
 Namespace heads bind canonical source/server/security definition/reference/grant;
 label or enablement edits do not rebind them. Revocation precedes deletion, and
 uncertain or interrupted operations cannot select an older credential version.
-A dirty prior backend epoch requires fresh entry/authorization. OAuth discovery is
+A dirty prior Gateway epoch requires fresh entry/authorization. OAuth discovery is
 anonymous and destination-checked; issuer/scopes/registration are reviewed before
 S256 authorization. No Code60 registration, hosted metadata or shared client ID is
 provided. Phase 7 recovery presentation remains separate.

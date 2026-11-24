@@ -3,15 +3,14 @@
 ## Symptoms
 
 Scheduled Jobs reports unavailable, the service does not restart after an update,
-future runs are paused, or unfinished work blocks launches. Desktop quit and
-Stop all do not stop service-owned automations.
+future runs are paused, or unfinished work blocks launches. Closing the browser or choosing Stop all in Chat leaves scheduled work running.
 
 ## Read-only diagnosis
 
-Open Apps → System Manager; service status updates automatically while visible.
+Open Apps → System Manager to inspect Code60 Gateway status. It updates automatically while visible.
 Checks normally run two seconds after the preceding read and back off to at most
 sixty seconds when unavailable. The footer's Pause polling also pauses these checks;
-Resume polling or use the optional Refresh Scheduling Service icon to check again.
+Resume polling or choose **Refresh Code60 Gateway** from the System Manager actions menu.
 Inspect installation,
 connectivity, pause state, active execution and block independently. Open
 Scheduled Jobs to review saved schedules and execution history. An unreachable
@@ -23,38 +22,17 @@ Inspect it read-only if necessary. Never start a competing standalone scheduler.
 
 ## Supported recovery, only after consent
 
-1. For an installed Scheduling Service, use System Manager → Stop to pause future
-   work, cancel active work and stop the service, only after explaining the
-   interruption. There is no separate pause-and-cancel button. Wait for cleanup
-   to settle and review Scheduled Jobs history. To cancel just one job (including
-   on a standalone scheduler), use the job header's Stop control (the pulsing pause
-   icon). Its separate disclosure chevron opens details; recurrence pause is independent.
-2. Check Scheduling Service status in System Manager: Not installed offers Install,
-   Stopped offers Start, and Running offers Stop. Jobs paused still means the
-   service is running. Checking or Status unavailable is not proof of installation
-   or stoppage; allow automatic checks to retry or use Refresh Scheduling Service.
-   Use Service options → Repair for a stale runtime,
-   accepting the native Scheduling Service confirmation only with explicit approval.
-   Repair can refuse blocked ownership or cleanup; do not bypass the refusal.
+1. To stop one job, use its Stop control in Scheduled Jobs. To stop all interactive and scheduled work, use **Stop Code60 Gateway** in the Workspace menu or run `code60 service stop` locally. Wait for cleanup and review the execution history.
+2. Inspect `code60 service status`. With explicit consent, use `code60 service install` for a fresh enrollment, `code60 service start` for a stopped Gateway, or `code60 service repair` for a stale runtime. **Jobs paused** describes the scheduler inside a running Gateway. Preserve uncertain ownership and failed cleanup for inspection.
 3. For an unfinished-agent block, establish that recorded owned processes are gone,
    then use Recheck. Live or unverifiable ownership must remain blocked.
-4. Fix underlying storage before stopping and starting the service through Service
-   options to clear a persistence-failure latch. If cleanup refuses, escalate.
+4. Fix underlying storage before using the local CLI to stop and restart the Gateway to clear a persistence-failure latch. If cleanup refuses, escalate.
 5. Review history and repository/provider identities before resuming schedules.
    Resume enables future occurrences only; never use Run now to replay uncertain work.
 
 ## Verify
 
-After an app installation, launch the installed Code60 once. Pending update
-recovery upgrades the existing registration, checks the scheduler's `appVersion`
-against the running main app and restores its previous global pause state.
-Packaged startup also reconciles an active older scheduler after manual
-installation; it does not activate a previously stopped or uninstalled service.
-Automatic recovery requires the socket responder PID to match the native manager’s service PID. Standalone or unverified processes are left untouched, as are newer or unknown versions. Concurrent recovery has one exclusive owner. AppImage registration requires the executable and every canonical parent to be owned by the user or root and not writable by group/others; move an unsafe AppImage to a protected location before retrying. A failed launchd stop requires a successful domain inventory showing that the job is absent before registration replacement.
-
-A version mismatch, recovery block or failed restart keeps the pending restart
-metadata and displays an error. Preserve that evidence and use the consented
-System Manager repair path; never erase the marker to report success.
+After installation or repair, run `code60 status` and check `gateway.installed` and `gateway.available`. For installations under the old service name, follow the [one-time cutover](../../README.md#one-time-cutover-from-backend-service). Keep the registration and scheduler handoff evidence if process ownership or restart cannot be verified.
 
 Observe updated System Manager status and refresh Scheduled Jobs if needed.
 Confirm connectivity, expected pause state,

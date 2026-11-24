@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApplicationClient, AutomationUiRequest, SchedulerStatus } from "../bridge/index.js";
 import { Button as AppButton } from "./carbon/button.js";
+import { gatewayServiceLabels, gatewayServiceState } from "./gateway-service.js";
 import { Icon } from "./icons.js";
 import { PageTitle } from "./page-title.js";
-import { schedulingServiceLabels, schedulingServiceState } from "./scheduling-service.js";
 import { observeServiceStatusPolling } from "./service-status-polling.js";
 
 type ServiceAction = Extract<
@@ -88,7 +88,7 @@ export function SystemManagerPage({
               retry(true);
               setStatus(undefined);
               setError(
-                "Backend Service status is unavailable. Existing schedules and evidence are kept.",
+                "Code60 Gateway status is unavailable. Existing schedules and evidence are kept.",
               );
             }
           } while (dirty && !disposed && !pending.current);
@@ -146,13 +146,13 @@ export function SystemManagerPage({
       pending.current = false;
       await refresh.current();
       if (owner === generation.current)
-        setActionError(cause instanceof Error ? cause.message : "Backend Service action failed.");
+        setActionError(cause instanceof Error ? cause.message : "Code60 Gateway action failed.");
     } finally {
       pending.current = false;
       setProgress("");
     }
   };
-  const state = schedulingServiceState(status, !!error);
+  const state = gatewayServiceState(status, !!error);
   const live = status?.service;
   const statusHint = pollingPaused
     ? "Status polling is paused. Resume polling or refresh to check again."
@@ -176,7 +176,7 @@ export function SystemManagerPage({
           actions={[
             {
               id: "system-manager-0",
-              label: "Refresh Backend Service",
+              label: "Refresh Code60 Gateway",
               run: () => void refresh.current(),
               disabled: busy || reading,
             },
@@ -191,11 +191,11 @@ export function SystemManagerPage({
       >
         <div className="automation-service-summary">
           <div className="automation-service-copy">
-            <h2 id="automation-service-title">Backend Service</h2>
+            <h2 id="automation-service-title">Code60 Gateway</h2>
             <p className="automation-service-state" role="status">
               <span className="automation-service-badge" data-state={state}>
                 <Icon name={stateIcon} />
-                {schedulingServiceLabels[state]}
+                {gatewayServiceLabels[state]}
               </span>
               {state === "running" && !status?.installed && <span>· Not installed</span>}
               {live?.pausedAll && <span>· Jobs paused</span>}
@@ -216,9 +216,7 @@ export function SystemManagerPage({
           </div>
         </div>
         {state === "unavailable" && !error && (
-          <p className="automation-service-note">
-            The Backend Service could not be verified. {statusHint}
-          </p>
+          <p className="automation-service-note">The Gateway could not be verified. {statusHint}</p>
         )}
         {live?.block && (
           <div className="automation-block" role="alert">
@@ -238,7 +236,7 @@ export function SystemManagerPage({
           </div>
         )}
         <p>
-          Manage the login backend locally with <code>code60 service status</code>,{" "}
+          Manage the Gateway locally with <code>code60 service status</code>,{" "}
           <code>code60 service repair</code> or <code>code60 service uninstall</code>. Closing this
           browser keeps approved work running.
         </p>

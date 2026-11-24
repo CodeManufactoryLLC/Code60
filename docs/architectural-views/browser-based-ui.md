@@ -17,17 +17,17 @@ Removing that shell reduces the infrastructure maintained alongside features.
 
 ## Description
 
-### UI and backend
+### UI and Gateway
 
 Use a browser as Code60's only UI, backed by one local Node process that owns
-application state, agents and scheduled jobs. React talks to the backend through
+application state, agents and scheduled jobs. React talks to the Gateway through
 a narrow, authenticated loopback API. The application runs locally.
 
 ### Execution lifetime
 
 Closing or refreshing the browser leaves approved work running. Stopping the
-backend is a separate, explicit action. Approved Transmission workflows retain
-their independent engine ownership and can continue after backend shutdown.
+Gateway is a separate, explicit action. Approved Transmission workflows retain
+their independent engine ownership and can continue after Gateway shutdown.
 
 ### Development and distribution
 
@@ -47,11 +47,11 @@ Distribute an npm package with manual updates.
 
 ### Cons
 
-- **More user setup:** Node and npm are prerequisites. Backend lifecycle and
+- **More user setup:** Node and npm are prerequisites. Gateway lifecycle and
   manual updates need clear instructions.
 - **Less native integration:** native window effects, desktop installers and
   automatic updates are given up.
 - **A local API to maintain:** sessions, origin checks, scoped file access and
   page-bound confirmations remain necessary.
-- **More lifecycle concepts:** the UI must explain backend availability, control
+- **More lifecycle concepts:** the UI must explain Gateway availability, control
   ownership and the different ways to stop work.

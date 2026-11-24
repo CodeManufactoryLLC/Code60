@@ -431,8 +431,8 @@ test("workflow: Transmission prompt creation, isolated execution, status, cancel
       }
     }
     await page.getByRole("button", { name: "Workspace", exact: true }).click();
-    await page.getByRole("button", { name: "Stop Code60 Backend", exact: true }).click();
-    const shutdown = page.getByRole("dialog", { name: "Stop Code60 Backend?", exact: true });
+    await page.getByRole("button", { name: "Stop Code60 Gateway", exact: true }).click();
+    const shutdown = page.getByRole("dialog", { name: "Stop Code60 Gateway?", exact: true });
     await expect(shutdown).toContainText("Approved Transmission workflows keep running");
     await shutdown.getByRole("button", { name: "Confirm", exact: true }).click();
     const previousOrigin = application.origin;

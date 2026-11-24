@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { backendControl, managementRequest } from "../gateway/index.js";
+import { gatewayControl, managementRequest } from "../gateway/index.js";
 import { lockInstallation } from "../platform/index.js";
 import { managedInstallation, shellQuote } from "./install-state.js";
 import { checkSetup, setupFlags } from "./setup-input.js";
@@ -39,7 +39,7 @@ function portsFor(env: NodeJS.ProcessEnv): SetupPorts {
     write: (text) => {
       process.stdout.write(text);
     },
-    service: (action, consent) => backendControl(env, action, consent),
+    service: (action, consent) => gatewayControl(env, action, consent),
     request: (action) => managementRequest(env, action),
     open: (origin) =>
       new Promise<void>((resolve) => {
@@ -64,16 +64,16 @@ export async function combinedStatus(env: NodeJS.ProcessEnv) {
         : { state: "not-installed" },
     )
     .catch(() => ({ state: "unavailable" }));
-  const backend = await backendControl(env, "status").catch(() => ({
+  const gateway = await gatewayControl(env, "status").catch(() => ({
     installed: false,
     nativeState: "unavailable",
     service: null,
   }));
-  const live = backend.service;
+  const live = gateway.service;
   return {
     installation,
     runtime: { node: process.versions.node, platform: `${process.platform}-${process.arch}` },
-    backend: { installed: backend.installed, nativeState: backend.nativeState, available: !!live },
+    gateway: { installed: gateway.installed, nativeState: gateway.nativeState, available: !!live },
     database: live?.database ?? { state: "unavailable" },
     engines: live?.engines ?? { bundled: false, state: "unavailable" },
   };
@@ -137,7 +137,7 @@ export async function runSetup(
       const approved =
         flags.yes ||
         (ports.interactive &&
-          (await ports.confirm("Install the per-user Code60 background service?", signal)));
+          (await ports.confirm("Install the Code60 Gateway as a per-user service?", signal)));
       if (!approved) {
         ports.write(
           `Code60 files are installed. Setup is incomplete; no service or database was prepared.\nContinue: ${continuation}\n`,
@@ -149,7 +149,7 @@ export async function runSetup(
     } else {
       if (status.runtimeCurrent !== true || status.nativeState === "unavailable")
         throw Error(
-          "Backend registration is conflicting or unavailable. Inspect code60 service status; explicitly reconcile with code60 service repair --yes.",
+          "Gateway registration is conflicting or unavailable. Inspect code60 service status; explicitly reconcile with code60 service repair --yes.",
         );
       if (!status.service) await ports.service("start");
     }
@@ -172,7 +172,7 @@ export async function runSetup(
     }
     if (!live)
       throw Error(
-        "Backend readiness timed out. Installed files and service were preserved; run code60 service status.",
+        "Gateway readiness timed out. Installed files and service were preserved; run code60 service status.",
       );
     signal.throwIfAborted();
     await ports.request("prepare-database");
@@ -184,7 +184,7 @@ export async function runSetup(
       typeof pairing.requirePairing !== "boolean" ||
       (pairing.requirePairing && typeof pairing.code !== "string")
     )
-      throw Error("Backend returned invalid browser readiness metadata");
+      throw Error("Gateway returned invalid browser readiness metadata");
     ports.write(`Code60 is ready.\nOpen ${pairing.origin}\n`);
     if (pairing.requirePairing)
       ports.write(`Pairing code (valid for 60 seconds): ${pairing.code}\n`);

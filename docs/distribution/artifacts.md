@@ -23,7 +23,7 @@ npm run devcontainer -- down
 ```
 
 For native macOS, run `npm run package:payload` followed by `npm run test:payload`
-on the host. Native smoke uses isolated state and a foreground backend; it does
+on the host. Native smoke uses isolated state and a foreground Gateway; it does
 not install or inspect the user's login service. The required CPU/image libraries
 are tested with an image decode and a real offline 768-dimensional embedding.
 Linux requires glibc and libgomp1; Alpine/musl and Linux arm64 are unsupported.

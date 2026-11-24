@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CODE60_VERSION } from "../core/index.js";
 import { privateDirectory, userServiceDefinition, writePrivateJson } from "../platform/index.js";
-import { backendControl, restoreSchedulerHandoff } from "./registration.js";
+import { gatewayControl, restoreSchedulerHandoff } from "./registration.js";
 import { gatewayRoot } from "./server.js";
 
 const fake = vi.hoisted(() => ({
@@ -74,7 +74,7 @@ async function fixture(installed = false) {
       env.HOME,
       gatewayRoot(env),
       saved.runtime,
-      "backend",
+      "gateway",
     );
     await mkdir(dirname(definition.path), { recursive: true, mode: 0o700 });
     await writeFile(definition.path, definition.contents, { mode: 0o600 });
@@ -83,26 +83,26 @@ async function fixture(installed = false) {
 }
 it("keeps uninstalled status read-only and requires explicit consent before installation", async () => {
   const { env, root } = await fixture();
-  expect(await backendControl(env, "status")).toMatchObject({ installed: false, service: null });
-  await expect(backendControl(env, "install")).rejects.toThrow("consent");
+  expect(await gatewayControl(env, "status")).toMatchObject({ installed: false, service: null });
+  await expect(gatewayControl(env, "install")).rejects.toThrow("consent");
   await expect(readFile(join(root, "registration.json"))).rejects.toMatchObject({ code: "ENOENT" });
   expect(fake.control).not.toHaveBeenCalled();
 });
-it("pins plain Node and the backend entrypoint, ignoring Electron/AppImage environment", async () => {
+it("pins plain Node and the Gateway entrypoint, ignoring Electron/AppImage environment", async () => {
   const { env, root } = await fixture();
-  await backendControl(env, "install", true);
+  await gatewayControl(env, "install", true);
   const saved = JSON.parse(await readFile(join(root, "registration.json"), "utf8"));
   expect(saved.runtime.executable).toBe(await realpath(process.execPath));
   expect(saved.runtime.args[0]).toMatch(/gateway\/main\.js$/);
   expect(saved.runtime.env).not.toHaveProperty("ELECTRON_RUN_AS_NODE");
   expect(fake.control.mock.calls[0]?.[0].path).toContain(
-    process.platform === "darwin" ? "code60.backend" : "code60-backend",
+    process.platform === "darwin" ? "code60.gateway" : "code60-gateway",
   );
-  await expect(backendControl(env, "install", true)).rejects.toThrow("already installed");
+  await expect(gatewayControl(env, "install", true)).rejects.toThrow("already installed");
 });
 it("preserves the explicit Codex home path without persisting provider credentials or config payloads", async () => {
   const { env, root } = await fixture();
-  await backendControl(
+  await gatewayControl(
     {
       ...env,
       CODEX_HOME: join(env.HOME, "workflow's Codex home"),
@@ -119,7 +119,7 @@ it("preserves the explicit Codex home path without persisting provider credentia
 });
 it("rejects relative workflow provider homes before changing service registration", async () => {
   const { env, root } = await fixture();
-  await expect(backendControl({ ...env, CODEX_HOME: "relative" }, "install", true)).rejects.toThrow(
+  await expect(gatewayControl({ ...env, CODEX_HOME: "relative" }, "install", true)).rejects.toThrow(
     "absolute",
   );
   expect(fake.control).not.toHaveBeenCalled();
@@ -129,17 +129,17 @@ it("refuses an unverified responder before stopping or replacing registration", 
   const { env, root } = await fixture(true);
   const before = await readFile(join(root, "registration.json"));
   fake.management.mockResolvedValue({ pid: 99 });
-  expect(await backendControl(env, "status")).toMatchObject({
+  expect(await gatewayControl(env, "status")).toMatchObject({
     nativeState: "unavailable",
     service: null,
   });
-  await expect(backendControl(env, "repair", true)).rejects.toThrow("ownership");
+  await expect(gatewayControl(env, "repair", true)).rejects.toThrow("ownership");
   expect(fake.control).not.toHaveBeenCalled();
   expect(await readFile(join(root, "registration.json"))).toEqual(before);
 });
 it("drains owned work before a supervisor stop and keeps its installation metadata", async () => {
   const { env, root } = await fixture(true);
-  await backendControl(env, "stop", true);
+  await gatewayControl(env, "stop", true);
   expect(fake.management.mock.calls.map((call) => call[1])).toEqual(["status", "shutdown"]);
   expect(fake.control.mock.calls.map((call) => call[1])).toEqual(["stop"]);
   expect(JSON.parse(await readFile(join(root, "registration.json"), "utf8")).installed).toBe(true);
@@ -149,9 +149,9 @@ it("preserves the original scheduler pause setting across a failed handoff retry
   fake.legacy.mockResolvedValue({ installed: true, nativeState: "running", service: { pid: 12 } });
   fake.legacyRequest.mockResolvedValue({ pausedAll: false });
   fake.control.mockRejectedValueOnce(new Error("supervisor unavailable"));
-  await expect(backendControl(env, "install", true)).rejects.toThrow("supervisor");
+  await expect(gatewayControl(env, "install", true)).rejects.toThrow("supervisor");
   fake.legacyRequest.mockResolvedValue({ pausedAll: true });
-  await backendControl(env, "install", true);
+  await gatewayControl(env, "install", true);
   const path = join(root, "scheduler-handoff.json");
   expect(JSON.parse(await readFile(path, "utf8")).pausedAll).toBe(false);
   const request = vi
@@ -168,19 +168,19 @@ it("preserves the original scheduler pause setting across a failed handoff retry
 it("retains a pinned runtime after partial enrollment and refuses an unowned live definition", async () => {
   const { env, root } = await fixture();
   fake.control.mockRejectedValueOnce(new Error("supervisor unavailable"));
-  await expect(backendControl(env, "install", true)).rejects.toThrow("supervisor");
+  await expect(gatewayControl(env, "install", true)).rejects.toThrow("supervisor");
   const saved = JSON.parse(await readFile(join(root, "registration.json"), "utf8"));
   expect(saved.installed).toBe(false);
   expect(saved.runtime.executable).toBe(await realpath(process.execPath));
   fake.inspect.mockResolvedValue({ definitionPresent: true, state: "running", pid: 123 });
   fake.control.mockClear();
-  await expect(backendControl(env, "repair", true)).rejects.toThrow("ownership");
+  await expect(gatewayControl(env, "repair", true)).rejects.toThrow("ownership");
   expect(fake.control).not.toHaveBeenCalled();
 });
 
 it("reports a same-version registration pointing to another runtime as conflicting without repair", async () => {
   const { env } = await fixture(true);
-  expect(await backendControl(env, "status")).toMatchObject({ runtimeCurrent: false });
+  expect(await gatewayControl(env, "status")).toMatchObject({ runtimeCurrent: false });
   expect(fake.control).not.toHaveBeenCalled();
 });
 it("preserves outside service-definition edits before any shutdown or replacement", async () => {
@@ -191,11 +191,11 @@ it("preserves outside service-definition edits before any shutdown or replacemen
     env.HOME,
     root,
     JSON.parse(saved).runtime,
-    "backend",
+    "gateway",
   );
   await writeFile(definition.path, "unrelated outside edit", { mode: 0o600 });
-  await expect(backendControl(env, "repair", true)).rejects.toThrow("definition ownership changed");
-  await expect(backendControl(env, "status")).rejects.toThrow("definition ownership changed");
+  await expect(gatewayControl(env, "repair", true)).rejects.toThrow("definition ownership changed");
+  await expect(gatewayControl(env, "status")).rejects.toThrow("definition ownership changed");
   expect(fake.control).not.toHaveBeenCalled();
   expect(fake.management).not.toHaveBeenCalled();
   expect(await readFile(definition.path, "utf8")).toBe("unrelated outside edit");
@@ -206,19 +206,19 @@ it("retains the original definition identity across failed replacement and expli
   const saved = JSON.parse(await readFile(join(root, "registration.json"), "utf8"));
   fake.inspect.mockResolvedValue({ definitionPresent: true, state: "stopped" });
   fake.control.mockRejectedValueOnce(Error("enrollment failed"));
-  await expect(backendControl(env, "repair", true)).rejects.toThrow("enrollment failed");
+  await expect(gatewayControl(env, "repair", true)).rejects.toThrow("enrollment failed");
   const partial = JSON.parse(await readFile(join(root, "registration.json"), "utf8"));
   expect(partial.previous).toEqual({ runtime: saved.runtime, appVersion: saved.appVersion });
   expect(partial.runtime.args[0]).toMatch(/gateway\/main\.js$/);
-  expect(await backendControl(env, "status")).toMatchObject({ runtimeCurrent: false });
-  await expect(backendControl(env, "start")).rejects.toThrow("partial");
+  expect(await gatewayControl(env, "status")).toMatchObject({ runtimeCurrent: false });
+  await expect(gatewayControl(env, "start")).rejects.toThrow("partial");
   fake.control.mockImplementation(async (definition, action) => {
     expect(action).toBe("repair");
     await writeFile(definition.path, definition.contents, { mode: 0o600 });
     return { available: true };
   });
-  await backendControl(env, "repair", true);
+  await gatewayControl(env, "repair", true);
   const repaired = JSON.parse(await readFile(join(root, "registration.json"), "utf8"));
   expect(repaired.previous).toBeUndefined();
-  expect(await backendControl(env, "status")).toMatchObject({ runtimeCurrent: true });
+  expect(await gatewayControl(env, "status")).toMatchObject({ runtimeCurrent: true });
 });

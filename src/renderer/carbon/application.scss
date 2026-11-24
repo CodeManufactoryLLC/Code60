@@ -369,7 +369,7 @@
     :is([role=tab][aria-selected=true], [aria-current=page], [aria-current=true]) {background:var(--cds-layer-selected-01);border-inline-start:3px solid var(--cds-border-interactive);color:var(--cds-text-primary);}
   }
   .product-workspace-actions {display:grid;gap:1.5rem;}
-  .product-workspace-actions :is(.app-footer,.backend-controls,.footer-sidebar) {position:static;display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;height:auto;width:auto;inset:auto;}
+  .product-workspace-actions :is(.app-footer,.gateway-controls,.footer-sidebar) {position:static;display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;height:auto;width:auto;inset:auto;}
   @media(min-width:66rem) {
     .app[data-product-screen] > :is(.app-workspace,.database-notice) {margin-inline-start:16rem;}
   }

@@ -12,7 +12,7 @@ browser UI, with initial database setup handled automatically.
 ### Setup
 
 Use npm as the primary distribution channel, with a proposed entry point such as
-`npx --yes code60@latest setup`. Handle installation and backend setup together,
+`npx --yes code60@latest setup`. Handle installation and Gateway setup together,
 then open the browser for provider onboarding and project selection.
 
 ### Distribution

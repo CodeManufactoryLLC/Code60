@@ -135,7 +135,7 @@ export function AutomationsPage({
     } catch {
       if (owner === generation.current) {
         setError(
-          "Scheduler unavailable. Open Apps → System Manager to check the Scheduling Service, then refresh. Existing schedules and evidence are kept.",
+          "Scheduler unavailable. Open Apps → System Manager to check the Code60 Gateway, then refresh. Existing schedules and evidence are kept.",
         );
       }
     } finally {

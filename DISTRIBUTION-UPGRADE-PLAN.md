@@ -82,13 +82,13 @@ service/shell changes still require clear instructions or consent.
 ### Public command behavior
 
 - `setup`: install/reconcile Code60, obtain consent, prepare the database, start
-  the backend and open the browser. Code60's trailing `--yes` is distinct from
+  the Code60 Gateway and open the browser. Code60's trailing `--yes` is distinct from
   npm's leading `--yes`.
-- `open`: start the installed backend if necessary and open its token-free URL;
+- `open`: start the installed Gateway if necessary and open its token-free URL;
   honor existing pairing policy.
-- `status`: read-only installation, runtime, backend and engine health.
+- `status`: read-only installation, runtime, Gateway and engine health.
 - `update`: explicitly acquire and activate a newer compatible stable release.
-  Display the consequences and require consent before stopping active backend work.
+  Display the consequences and require consent before stopping active Gateway work.
 - `uninstall`: explicitly stop/remove owned application components and services;
   preserve user data and refuse uncertain or active workflow ownership.
 - Preserve existing `service` and `pairing` interfaces. No prompt-submission or
@@ -359,7 +359,7 @@ Code60 installation without a separate runtime npm download.
   directories, start keys and run identities. Cache/preserve the required legacy
   executable before claiming that those records survive updates.
 - Keep status/read operations inert. Only explicit workflow start/reconnect may
-  launch an engine; browser close/backend stop must not cancel its approved work.
+  launch an engine; browser close/Gateway stop must not cancel its approved work.
 - Preserve provider authentication boundaries. Workflow-specific configuration is
   requested when enabling workflows, without assuming application provider login
   supplies Transmission credentials.
@@ -391,9 +391,9 @@ bootstrap verification remain delivery gates before merge.
 
 - Resolve the newer stable bootstrap through npm, verify its registry integrity,
   and consume its exact platform descriptors. Do not treat setup as an update.
-- Download and validate the candidate before affecting the live backend. Summarize
+- Download and validate the candidate before affecting the live Gateway. Summarize
   interactive/scheduled interruption and request consent before shutdown.
-- Verify backend quiescence, activate the candidate atomically, repair pinned
+- Verify Gateway quiescence, activate the candidate atomically, repair pinned
   registration paths and wait for authenticated readiness.
 - Keep loaded engines and unfinished workflows on their exact versions. Retain
   previous application files and explicit recovery instructions.
@@ -419,7 +419,7 @@ Verify the prior release remains available and recovery never replays work.
 
 - Inspect application and engine ownership first. Refuse uninstall while a workflow
   is active or its state/process ownership is uncertain; explain how to resolve it.
-- Request explicit service-stop/removal consent, quiesce the backend, unregister
+- Request explicit service-stop/removal consent, quiesce the Gateway, unregister
   owned services and remove only owned releases, launchers and shell additions.
 - Preserve databases, configuration, run records, engine evidence and worktrees.
   Do not add a data-purge option in this increment.
@@ -448,7 +448,7 @@ and verify exact service/process removal independently.
   disposable accounts/VMs. Ordinary development containers remain unprivileged.
 - Extend the manually requested macOS workflow to produce and test its exact arm64
   payload and bundled engines. Validate the actual documented minimum OS.
-- Add native scenarios for login startup, terminal/browser close, backend shutdown,
+- Add native scenarios for login startup, terminal/browser close, Gateway shutdown,
   Node relocation, registration repair, update and uninstall.
 - Retain exact artifact hashes, runner/OS/runtime identity, QA reports and cleanup
   evidence. A Linux container or fake supervisor cannot satisfy a native gate.
@@ -545,7 +545,7 @@ deployment follows stable promotion and requires explicit deployment authorizati
       provides correct shell integration and current-session instructions.
 - [ ] Default database initialization and existing/custom database recovery pass.
 - [ ] Native background-service consent and lifecycle are validated.
-- [ ] macOS workflows use installed compatible engines and survive backend updates.
+- [ ] macOS workflows use installed compatible engines and survive Gateway updates.
 - [ ] Update and uninstall preserve user data and refuse uncertain ownership.
 - [ ] Exact release artifacts pass native and browser acceptance.
 - [ ] npm ownership, publishing setup and immutable payload availability are verified.

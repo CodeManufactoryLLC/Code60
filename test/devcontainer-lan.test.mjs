@@ -63,7 +63,7 @@ it("expires an unrenewed lease", async () => {
     await controller.close();
   }
 });
-it("withdraws a publication that finishes after its backend disconnects", async () => {
+it("withdraws a publication that finishes after its Gateway disconnects", async () => {
   let finish;
   const close = vi.fn(async () => {});
   const forwardLan = vi.fn(
