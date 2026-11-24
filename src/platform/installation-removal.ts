@@ -6,6 +6,7 @@ import {
   absoluteInstallationPath,
   installationDirectory,
   installationFileCode,
+  installationLink,
   syncInstallationDirectory,
 } from "./installation-files.js";
 
@@ -31,6 +32,78 @@ const fail = () =>
   new Error(
     "Removal ownership changed; preserve remaining files and inspect the uninstall receipt",
   );
+
+export interface InstallationRemovalLink {
+  path: string;
+  dev: string;
+  ino: string;
+  ctimeNs: string;
+  target: string;
+  parent: { dev: string; ino: string };
+}
+/** Capture identity only; callers must establish the exact receipted target before claiming ownership. */
+export async function snapshotRemovalLink(path: string): Promise<InstallationRemovalLink | null> {
+  path = absoluteInstallationPath(path);
+  const target = await installationLink(path);
+  if (target === null) return null;
+  const before = await lstat(path, { bigint: true });
+  const parent = await lstat(dirname(path), { bigint: true });
+  if (
+    parent.uid !== BigInt(process.getuid?.() ?? -1) ||
+    !before.isSymbolicLink() ||
+    before.nlink !== 1n ||
+    before.uid !== BigInt(process.getuid?.() ?? -1) ||
+    (await readlink(path)) !== target
+  )
+    throw fail();
+  const after = await lstat(path, { bigint: true });
+  const parentAfter = await lstat(dirname(path), { bigint: true });
+  if (
+    before.dev !== after.dev ||
+    before.ino !== after.ino ||
+    before.ctimeNs !== after.ctimeNs ||
+    after.nlink !== 1n ||
+    parent.dev !== parentAfter.dev ||
+    parent.ino !== parentAfter.ino
+  )
+    throw fail();
+  return {
+    path,
+    dev: String(before.dev),
+    ino: String(before.ino),
+    ctimeNs: String(before.ctimeNs),
+    target,
+    parent: { dev: String(parent.dev), ino: String(parent.ino) },
+  };
+}
+
+export async function removeRecordedInstallationLink(
+  path: string,
+  expected: InstallationRemovalLink,
+) {
+  if (
+    absoluteInstallationPath(path) !== path ||
+    expected.path !== path ||
+    typeof expected.target !== "string" ||
+    [expected.dev, expected.ino, expected.ctimeNs, expected.parent?.dev, expected.parent?.ino].some(
+      (value) => typeof value !== "string" || !/^\d+$/.test(value),
+    )
+  )
+    throw fail();
+  const current = await snapshotRemovalLink(path);
+  if (!current) return;
+  if (
+    current.dev !== expected.dev ||
+    current.ino !== expected.ino ||
+    current.ctimeNs !== expected.ctimeNs ||
+    current.target !== expected.target ||
+    current.parent.dev !== expected.parent.dev ||
+    current.parent.ino !== expected.parent.ino
+  )
+    throw fail();
+  await unlink(path);
+  await syncInstallationDirectory(dirname(path));
+}
 
 function containedLink(root: string, path: string, target: string) {
   return (
@@ -114,9 +187,15 @@ async function inspect(
     mode: Number(before.mode & 0o777n),
   };
   if (before.isSymbolicLink()) {
+    if (before.nlink !== 1n) throw fail();
     const target = await readlink(full);
     const after = await lstat(full, { bigint: true });
-    if (after.dev !== before.dev || after.ino !== before.ino || !containedLink(root, path, target))
+    if (
+      after.dev !== before.dev ||
+      after.ino !== before.ino ||
+      after.nlink !== 1n ||
+      !containedLink(root, path, target)
+    )
       throw fail();
     // Normalize link mode: symlink permissions are ignored and commonly 0777.
     return { ...identity, mode: 0, path, type: "link", target };

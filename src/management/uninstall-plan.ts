@@ -2,11 +2,12 @@ import { lstat, readdir } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import {
   type InstallationRemovalInventory,
+  type InstallationRemovalLink,
   installationDirectory,
   installationFileCode,
-  installationLink,
   installationSnapshot,
   inventoryInstallationRemoval,
+  snapshotRemovalLink,
 } from "../platform/index.js";
 import {
   type ActivationRecord,
@@ -177,17 +178,18 @@ export async function planManagedRemoval(
     const path = join(record.root, "releases", name);
     if (!releases.has(path)) residuals.push(path);
   }
-  let launcherOwned = false;
+  let launcherLink: InstallationRemovalLink | null = null;
   try {
-    launcherOwned =
-      (await installationLink(record.launcher)) === join(record.root, "current/code60");
-    if (!launcherOwned && (await lstat(record.launcher))) residuals.push(record.launcher);
+    const captured = await snapshotRemovalLink(record.launcher);
+    if (captured?.target === join(record.root, "current/code60")) launcherLink = captured;
+    else if (await lstat(record.launcher)) residuals.push(record.launcher);
   } catch (error) {
     if (installationFileCode(error) !== "ENOENT") residuals.push(record.launcher);
   }
   // Recheck the publication and root receipt after the potentially large inventory scan.
+  const currentLink = await snapshotRemovalLink(join(record.root, "current"));
   if (
-    (await installationLink(join(record.root, "current"))) !== current.target ||
+    currentLink?.target !== current.target ||
     JSON.stringify(await readInstallation(paths)) !== JSON.stringify(record)
   )
     throw Error("Installation changed while planning removal; preserve files and retry");
@@ -196,7 +198,9 @@ export async function planManagedRemoval(
     current,
     releases: [...releases.values()],
     activations,
-    launcherOwned,
+    launcherOwned: launcherLink !== null,
+    launcherLink,
+    currentLink,
     residuals,
   };
 }

@@ -24,8 +24,11 @@ export { installationPrerequisite, runInstallationCommand } from "./installation
 export {
   type InstallationRemovalEntry,
   type InstallationRemovalInventory,
+  type InstallationRemovalLink,
   inventoryInstallationRemoval,
   removeInstallationInventory,
+  removeRecordedInstallationLink,
+  snapshotRemovalLink,
 } from "./installation-removal.js";
 export { isPrivateIPv4, primaryPrivateIPv4 } from "./lan-address.js";
 export { containedPath, samePath } from "./paths.js";

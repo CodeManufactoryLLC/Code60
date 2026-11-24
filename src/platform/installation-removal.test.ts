@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import {
   link,
   lstat,
@@ -14,6 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
+import { removeRecordedInstallationLink, snapshotRemovalLink } from "./index.js";
 import {
   inventoryInstallationRemoval,
   removeInstallationInventory,
@@ -148,4 +150,80 @@ it("rechecks ownership at each deletion checkpoint", async () => {
     }),
   ).rejects.toThrow("ownership");
   expect(await readFile(join(f.root, "nested/binary"), "utf8")).toBe("outside concurrent change");
+});
+
+it("removes a captured link once and leaves its target intact", async () => {
+  const f = await fixture();
+  const path = join(f.root, "binary-link");
+  const captured = await snapshotRemovalLink(path);
+  if (!captured) throw Error("Fixture link missing");
+  await removeRecordedInstallationLink(path, JSON.parse(JSON.stringify(captured)));
+  await removeRecordedInstallationLink(path, captured);
+  expect(await snapshotRemovalLink(path)).toBe(null);
+  expect(await readFile(join(f.root, "nested/binary"))).toEqual(Buffer.from([0, 255, 195, 40]));
+});
+
+it("refuses a replaced parent even when the same owned file was moved into it", async () => {
+  const f = await fixture();
+  const inventory = await inventoryInstallationRemoval(f.root);
+  await expect(
+    removeInstallationInventory(f.root, inventory, {
+      checkpoint: async (path) => {
+        if (path === "nested/binary") {
+          await rename(join(f.root, "nested"), join(f.home, "original-parent"));
+          await mkdir(join(f.root, "nested"), { mode: 0o700 });
+          await rename(join(f.home, "original-parent/binary"), join(f.root, "nested/binary"));
+        }
+      },
+    }),
+  ).rejects.toThrow("ownership");
+  expect(await readFile(join(f.root, "nested/binary"))).toEqual(Buffer.from([0, 255, 195, 40]));
+});
+
+it.each([
+  "same-target replacement",
+  "different-target replacement",
+  "foreign file",
+  "parent replacement",
+])("preserves changed launcher identity: %s", async (change) => {
+  const f = await fixture();
+  const path = join(f.root, "binary-link");
+  const captured = await snapshotRemovalLink(path);
+  if (!captured) throw Error("Fixture link missing");
+  if (change === "parent replacement") {
+    await rename(f.root, join(f.home, "original"));
+    await mkdir(f.root, { mode: 0o700 });
+    await rename(join(f.home, "original/binary-link"), path);
+  } else {
+    // Keep the old inode allocated, including when the new target text matches.
+    await rename(path, join(f.home, "original-link"));
+    if (change === "foreign file") await writeFile(path, "foreign command", { mode: 0o700 });
+    else
+      await symlink(
+        change === "same-target replacement" ? "nested/binary" : "keep-until-owned",
+        path,
+      );
+  }
+  await expect(removeRecordedInstallationLink(path, captured)).rejects.toThrow();
+  expect(await lstat(path)).toBeDefined();
+});
+
+it("does not apply a captured link identity to a different path", async () => {
+  const f = await fixture();
+  const captured = await snapshotRemovalLink(join(f.root, "binary-link"));
+  if (!captured) throw Error("Fixture link missing");
+  await expect(
+    removeRecordedInstallationLink(join(f.home, "database.sqlite"), captured),
+  ).rejects.toThrow("ownership");
+  expect(await readFile(join(f.home, "database.sqlite"), "utf8")).toBe("customer bytes");
+});
+
+it("refuses hard-linked symlinks rather than claiming exclusive launcher ownership", async () => {
+  const f = await fixture();
+  const path = join(f.root, "binary-link");
+  execFileSync("/bin/ln", ["-P", path, join(f.home, "outside-link")], { timeout: 5000 });
+  expect((await lstat(path)).nlink).toBe(2);
+  await expect(snapshotRemovalLink(path)).rejects.toThrow("ownership");
+  await expect(inventoryInstallationRemoval(f.root)).rejects.toThrow("ownership");
+  expect((await lstat(path)).isSymbolicLink()).toBe(true);
 });
