@@ -30,7 +30,7 @@ No. Code60 never deletes Git worktrees automatically.
 
 ### How does Code60 Auto-Approval work?
 
-**Code60 auto-approval** controls one application-wide permission policy for **Relay**, **Custom Assistants**, project chats, and their workers. The toggle sits beside **Harness mode** in the chat or worker composer. It starts on and persists across restarts.
+**Code60 auto-approval** sets one application-wide permission policy across both layers of Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture). It covers orchestrators (**Relay**, **Custom Assistants**, and project chats) and their workers. The toggle sits beside **Harness mode** in the composer, starts on, and persists across restarts.
 
 - **When on:** Code60 answers each new Agent Client Protocol (ACP) permission request with a once-only allow option and never grants an always-allow rule. If the agent offers no matching once-only option, Code60 cancels the request.
 - **When off:** Each new ACP request waits in the requesting conversation for a human to choose **Allow once** or **Deny**. The **Workspace** approval count opens a waiting conversation, including a project chat in the archive.
@@ -40,7 +40,7 @@ No. Code60 never deletes Git worktrees automatically.
 
 ## Provider Support
 
-Code60 orchestrates coding agents through ACP. It never asks for provider passwords and never stores application programming interface (API) keys. Each provider keeps its own credentials in the backend user's storage.
+Code60 connects both layers of its [Two-Layer Architecture](terminology-draft.md#two-layer-architecture) to coding-agent providers through ACP. It never asks for provider passwords and never stores application programming interface (API) keys. Each provider keeps its own credentials in the backend user's storage.
 
 The standard provider catalog covers **Antigravity, Claude, Codex, Copilot, Droid, Kiro, and OpenCode**. Under **Connect → Providers**, a user can verify a command-line interface (CLI) that already holds an active login. A user can also run Code60's in-app installation and browser sign-in flow.
 
