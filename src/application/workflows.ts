@@ -22,10 +22,17 @@ import { type CoreDeps, stateHome } from "../core/index.js";
 import {
   fileCode,
   installationDirectory,
+  installedEngineVersions,
   lockPrivateState,
   readPrivateJson,
+  workflowHostSupported,
   writePrivateJson,
 } from "../platform/index.js";
+import {
+  inspectDefaultTransmissionRuntime,
+  type TransmissionHealthInspection,
+  type TransmissionHealthSlot,
+} from "./health-check.js";
 import { LocalTransmission, type TransmissionClient } from "./transmission.js";
 import {
   prepareTransmissionRemoval,
@@ -808,5 +815,63 @@ export class DesktopWorkflows {
     });
     this.drafts.set(request.formId, task);
     return task.done;
+  }
+
+  /** Read-only Transmission health inspection; never launches or mutates engines. */
+  async inspectTransmissionHealth(signal: AbortSignal): Promise<TransmissionHealthInspection> {
+    const hostSupported = workflowHostSupported();
+    const bundledVersions = hostSupported ? installedEngineVersions() : [];
+    const probeSlot = async (
+      slot: "current" | "legacy",
+      version: "0.1.0-staging.18" | "0.1.0-staging.20" | "0.1.1",
+      client: TransmissionClient,
+    ): Promise<TransmissionHealthSlot> => {
+      let running = false;
+      let pid: number | null = null;
+      let error: string | undefined;
+      if (client.supported) {
+        try {
+          const result = (await client.call("health", {}, signal)) as {
+            ready?: unknown;
+            pid?: unknown;
+          };
+          if (result && typeof result === "object" && result.ready === true) {
+            running = true;
+            if (typeof result.pid === "number" && Number.isInteger(result.pid) && result.pid > 0) {
+              pid = result.pid;
+            }
+          }
+        } catch {
+          /* Idle or unavailable; never start the engine during a health check. */
+        }
+      }
+      const runtimeAvailable = hostSupported
+        ? await inspectDefaultTransmissionRuntime(this.environment, version, signal)
+        : false;
+      return {
+        slot,
+        version,
+        supported: client.supported,
+        running,
+        pid,
+        runtimeAvailable,
+        ...(error ? { error } : {}),
+      };
+    };
+    const slots: TransmissionHealthSlot[] = hostSupported
+      ? await Promise.all([
+          probeSlot("current", this.newVersion, this.client),
+          ...(process.platform === "darwin"
+            ? [probeSlot("legacy", LEGACY_TRANSMISSION_VERSION, this.legacyClient)]
+            : []),
+        ])
+      : [];
+    return {
+      hostSupported,
+      defaultVersion: this.newVersion,
+      legacyVersion: LEGACY_TRANSMISSION_VERSION,
+      bundledVersions,
+      slots,
+    };
   }
 }

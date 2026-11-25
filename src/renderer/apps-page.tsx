@@ -12,6 +12,7 @@ const tasks: Record<string, string> = {
   memory: "Manage memory capture and retention",
   appearance: "Choose a color theme and focus settings",
   "system-manager": "Check service health and recover jobs",
+  "health-check": "Inspect backend, providers, services and disk health",
   "polling-settings": "Configure background polling",
   updates: "Check the installed version and update instructions",
 };

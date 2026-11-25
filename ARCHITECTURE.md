@@ -747,6 +747,20 @@ separate from the schedule list and execution-history tab in Scheduled Jobs. Sys
 has its own Apps card, sits alphabetically after Prompt Builder, and remains
 available without a database. Both pages defer hidden reads, refresh from pushed
 service notices and preserve native consent for service changes.
+Apps → Health Check (also listed in the Manage sidebar group) provides a
+database-independent, human-only diagnostic view covering Backend/Gateway
+connectivity and version compatibility, Scheduler status/version/registration,
+read-only Transmission engine status and bundled version checks, installed and
+actively probed provider authentication, Git readiness, Relay/database/private
+storage safety, Memory/embeddings/RAG, MCP connector health, machine disk space
+and quotas, and local OS/IP environment context. Passive local checks run on
+page open; active provider authentication probes, checksum verification and
+optional registry checks run only on explicit human request with granular
+per-item, per-section and full cancellation. Health Check never starts engines,
+repairs services, clears locks or mutates state. Copy health report omits
+host-identifying fields (IP addresses, hostname, proxy hosts and paths) by
+default unless explicitly opted in. Relay and awareness cannot invoke health
+probes or read host-identifying details.
 System Manager also checks status two seconds after each completed read while the
 page and document are visible, respecting global Pause polling. Failed or
 unavailable checks back off to at most sixty seconds and reset after recovery.

@@ -15,6 +15,7 @@ import { ContentHeaderSlot } from "./content-page-header.js";
 import { CustomAgentsPage } from "./custom-agents.js";
 import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
+import { HealthCheckPage } from "./health-check.js";
 import { HomePage } from "./home-page.js";
 import { LogsPage } from "./logs.js";
 import { McpWorkspace } from "./mcp-workspace.js";
@@ -264,6 +265,23 @@ export function AppPages(props: AppPagesProps) {
         api={api}
         active={!splash && tabs.active === "system-manager"}
         pollingPaused={snapshot?.polling.paused ?? false}
+      />
+    ),
+    "health-check": (
+      <HealthCheckPage
+        api={api}
+        active={!splash && tabs.active === "health-check"}
+        {...(snapshot?.versions?.code60 ? { clientVersion: snapshot.versions.code60 } : {})}
+        onNotify={notify}
+        onNavigate={(link) => {
+          if (link.kind === "relay") {
+            props.openRelay();
+          } else if (link.kind === "settings" && isSettingsSection(link.id)) {
+            void navigation.open({ kind: "settings", id: link.id });
+          } else if (link.kind === "page") {
+            void navigation.open({ kind: "page", id: link.id as RenderedPageId });
+          }
+        }}
       />
     ),
     automations: (

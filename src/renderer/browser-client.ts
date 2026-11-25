@@ -120,6 +120,8 @@ export function createBrowserClient(
     onAutomationChanged: (listener: () => void) => {
       return events.on("automation-changed", listener);
     },
+    healthCheck: (request) => rpc("health-check", request),
+    onHealthChanged: (listener) => events.on("health-changed", listener),
     memorySnapshot: () => rpc("memory-snapshot"),
     browseMemories: (request: unknown) => rpc("memory-browse", request),
     memoryDetail: (request: unknown) => rpc("memory-detail", request),
