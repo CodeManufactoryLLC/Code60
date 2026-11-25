@@ -9,9 +9,10 @@ remains an explicit release action. See [update behavior](docs/distribution/upda
 
 1. Create a release-preparation branch from current main.
 2. Run `npm version <major|minor|patch> --no-git-tag-version`. Commit package.json and package-lock.json together. This browser/runtime migration is a breaking supported-interface change; its first release requires a major bump.
-3. Run `npm run check`, `npm run prepare:models`, `npm run test:browser`, `npm run package:app` and `npm run test:packaged`. Run `npm run test:packaged:clean` on a host with a Linux Docker engine; this also gates CI using the package job's exact artifact.
-4. Validate the installed tarball and Node sidecars on macOS Apple Silicon and Linux x64. Test login-service behavior only in isolated, authorized environments. Container checks do not prove native macOS compatibility.
-5. Merge the release PR only after CI passed. Protected main/dev branches must never be bypassed.
+3. Audit [FAQ.md](FAQ.md) and [TERMINOLOGY.md](TERMINOLOGY.md) against all user-visible changes since the previous release (including supported platforms, built-in providers, CLI commands, limits, disk-space measurements, and beta/prototype notes) using the `refreshingly-simple-english` skill, and update their `Applies to:` version and `Last update:` date to match `package.json`.
+4. Run `npm run check`, `npm run prepare:models`, `npm run test:browser`, `npm run package:app` and `npm run test:packaged`. Run `npm run test:packaged:clean` on a host with a Linux Docker engine; this also gates CI using the package job's exact artifact.
+5. Validate the installed tarball and Node sidecars on macOS Apple Silicon and Linux x64. Test login-service behavior only in isolated, authorized environments. Container checks do not prove native macOS compatibility.
+6. Merge the release PR only after CI passed. Protected main/dev branches must never be bypassed.
 
 ## Tag and publish
 

@@ -1,12 +1,32 @@
-# Code60 FAQ (Draft)
+# Code60 FAQ
+
+> **Applies to:** Code60 `v0.4.1` · **Last update:** `2026-11-25`
+> Open **Manage → About** or run `code60 status` to check the local Code60 version. See [Code60 Terminology](TERMINOLOGY.md) for key terms.
+
+## Contents
+
+- [Overview](#overview)
+- [Requirements and Setup](#requirements-and-setup)
+- [Workspaces and Worktrees](#workspaces-and-worktrees)
+- [Data and Storage](#data-and-storage)
+- [Security and Permissions](#security-and-permissions)
+- [Licensing and Pricing](#licensing-and-pricing)
+- [Orchestration and Workers](#orchestration-and-workers)
+- [Context and History](#context-and-history)
+- [Plans and Workflows](#plans-and-workflows)
+- [Scheduled Jobs](#scheduled-jobs)
+- [Accessibility](#accessibility)
+- [Architecture and Development](#architecture-and-development)
+- [Support and Feedback](#support-and-feedback)
+- [Provider Support](#provider-support)
 
 ## Overview
 
 ### Is Code60 an agent?
 
-No. Code60 is a local [orchestration](terminology-draft.md#orchestration) application for coding agents. External [Agent Providers](terminology-draft.md#agent-provider) supply the underlying models and coding agents.
+No. Code60 is a local [orchestration](TERMINOLOGY.md#orchestration) application for coding agents. External [Agent Providers](TERMINOLOGY.md#agent-provider) supply the underlying models and coding agents.
 
-Code60 connects to those providers through [Agent Client Protocol (ACP)](terminology-draft.md#acp) and coordinates them using its [Two-Layer Architecture](terminology-draft.md#two-layer-architecture). Code60 provides the browser interface, [Code60 Gateway](terminology-draft.md#gateway), separate Git worktrees, plans, reviews, **Scheduled Jobs**, **Workflows**, and Model Context Protocol (MCP) management.
+Code60 connects to those providers through [Agent Client Protocol (ACP)](TERMINOLOGY.md#acp) and coordinates them using its [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture). Code60 provides the browser interface, [Code60 Gateway](TERMINOLOGY.md#gateway), separate Git worktrees, plans, reviews, **Scheduled Jobs**, **Workflows**, and Model Context Protocol (MCP) management.
 
 ## Requirements and Setup
 
@@ -35,7 +55,7 @@ A Windows device can still open Code60's browser interface over a private local 
 ### What software do I need to run Code60?
 
 - **Core software:** Node.js 24 (`>=24.22.0 <25` for setup, updates, uninstall, and **Transmission Workflows**), `npm`, Git, and a modern web browser.
-- **Agent Provider:** At least one [Agent Provider](terminology-draft.md#agent-provider). A user can connect an existing command-line interface (CLI) or install a private copy for catalog providers from **Connect → Providers**.
+- **Agent Provider:** At least one [Agent Provider](TERMINOLOGY.md#agent-provider). A user can connect an existing command-line interface (CLI) or install a private copy for catalog providers from **Connect → Providers**.
 - **Optional software:** Chrome on the host machine for `code60_browser` web automation (plus Microsoft's Playwright Chrome extension for existing-browser mode). Docker with Compose v2 is only for optional contributor container workflows.
 
 See [What are the system requirements for running Code60?](#what-are-the-system-requirements-for-running-code60) for operating-system and hardware details.
@@ -44,11 +64,11 @@ See [What are the system requirements for running Code60?](#what-are-the-system-
 
 No. Code60 installs, runs, and supports local development without Docker.
 
-Code60 runs natively on macOS Apple Silicon and Linux x64. It uses [Code60 Gateway](terminology-draft.md#gateway) (a local Node.js 24 backend), a browser interface, and separate Git worktrees for coding agents.
+Code60 runs natively on macOS Apple Silicon and Linux x64. It uses [Code60 Gateway](TERMINOLOGY.md#gateway) (a local Node.js 24 backend), a browser interface, and separate Git worktrees for coding agents.
 
 Only optional contributor workflows require a local Linux Docker engine with Compose v2. Docker Desktop remains optional.
 
-- **Linux development container:** Contributors run `npm run devcontainer -- start` for the optional [Linux development container](../.devcontainer/README.md).
+- **Linux development container:** Contributors run `npm run devcontainer -- start` for the optional [Linux development container](.devcontainer/README.md).
 - **Clean-install acceptance tests:** Contributors run `npm run test:packaged:clean` for the container acceptance test suite.
 
 Optional Docker agent workers for stricter filesystem and network boundaries appear on the future roadmap. Code60 runs without them.
@@ -63,7 +83,7 @@ Yes, for local lifecycle management only. The `code60` CLI cannot submit prompts
 
 ### Does Code60 have a native desktop app?
 
-No. Code60 runs [Code60 Gateway](terminology-draft.md#gateway) (a local Node.js 24 backend) with a React browser interface.
+No. Code60 runs [Code60 Gateway](TERMINOLOGY.md#gateway) (a local Node.js 24 backend) with a React browser interface.
 
 There is no Electron wrapper, native window application, or DMG, DEB, or AppImage installer. Closing or refreshing the browser keeps active agents, **Scheduled Jobs**, and **Transmission Workflows** running in the background.
 
@@ -119,13 +139,13 @@ A base installation typically uses about **400 MB to 1 GB**, depending on platfo
 | Diagnostic logs | Up to 20 MiB | Automatically expires after 7 days or 20 MiB. |
 | **Scheduled Jobs** free-space guard | At least 2 GiB free | **Scheduled Jobs** refuse to start below 2 GiB free. |
 
-See [Low disk space](runbooks/low-disk.md) for storage recovery guidance.
+Size figures reflect macOS Apple Silicon measurements for Code60 `v0.4.1` on `2026-11-25`. See [Low disk space](docs/runbooks/low-disk.md) for storage recovery guidance.
 
 ## Security and Permissions
 
 ### How does Code60 Auto-Approval work?
 
-**Code60 auto-approval** sets one application-wide permission policy across both layers of Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture). It covers orchestrators (**Relay**, **Custom Assistants**, and project chats) and their workers. The toggle sits beside **Harness mode** in the composer, starts on, and persists across restarts.
+**Code60 auto-approval** sets one application-wide permission policy across both layers of Code60's [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture). It covers orchestrators (**Relay**, **Custom Assistants**, and project chats) and their workers. The toggle sits beside **Harness mode** in the composer, starts on, and persists across restarts.
 
 - **When on:** Code60 answers each new ACP permission request with a once-only allow option and never grants an always-allow rule. If the agent offers no matching once-only option, Code60 cancels the request.
 - **When off:** Each new ACP request waits in the requesting conversation for a human to choose **Allow once** or **Deny**. The **Workspace** approval count opens a waiting conversation, including a project chat in the archive.
@@ -137,21 +157,21 @@ See [Low disk space](runbooks/low-disk.md) for storage recovery guidance.
 
 No. Code60 does not provide an operating-system, filesystem, or network sandbox for coding agents or MCP servers. Every agent runs with the backend user's operating-system permissions.
 
-- **Code60 safeguards:** Browser and gateway checks protect the web interface and local application programming interface (API). Git worktrees separate Git working files, and the [Operating Contract](terminology-draft.md#operating-contract) and ACP permissions guide behavior and approval prompts.
-- **Security limits:** None of those controls creates an operating-system security boundary or blocks actions an agent takes without requesting ACP approval. See the [Security Policy](../SECURITY.md) for full details.
-- **Roadmap:** Optional Docker workers with filesystem, network, and resource boundaries appear in the [Code60 roadmap](../ROADMAP.md).
+- **Code60 safeguards:** Browser and gateway checks protect the web interface and local application programming interface (API). Git worktrees separate Git working files, and the [Operating Contract](TERMINOLOGY.md#operating-contract) and ACP permissions guide behavior and approval prompts.
+- **Security limits:** None of those controls creates an operating-system security boundary or blocks actions an agent takes without requesting ACP approval. See the [Security Policy](SECURITY.md) for full details.
+- **Roadmap:** Optional Docker workers with filesystem, network, and resource boundaries appear in the [Code60 roadmap](ROADMAP.md).
 
 ### How do I provide a sandbox for my agents with Code60?
 
-Apply sandboxing outside Code60 or through each [Agent Provider](terminology-draft.md#agent-provider).
+Apply sandboxing outside Code60 or through each [Agent Provider](TERMINOLOGY.md#agent-provider).
 
 - **Provider sandbox:** Enable the sandbox settings and **Harness mode** options that each **Agent Provider** supports in its own CLI or configuration.
-- **Container or virtual machine:** Run Code60 inside a container (such as the optional [Linux development container](../.devcontainer/README.md)) or a virtual machine. A separate operating-system user account with narrow filesystem and network access also limits what agents can touch.
+- **Container or virtual machine:** Run Code60 inside a container (such as the optional [Linux development container](.devcontainer/README.md)) or a virtual machine. A separate operating-system user account with narrow filesystem and network access also limits what agents can touch.
 - **Manual approval review:** Turn off **Code60 auto-approval** in the composer to review each ACP permission request. Manual review helps inspect prompts, while operating-system boundaries still come from the provider sandbox, container, virtual machine, or user account.
 
 ### How does Code60 interact with my Agent Provider's sandbox?
 
-Code60 leaves sandbox rules and enforcement to each [Agent Provider](terminology-draft.md#agent-provider) and its own configuration.
+Code60 leaves sandbox rules and enforcement to each [Agent Provider](TERMINOLOGY.md#agent-provider) and its own configuration.
 
 - **Harness mode forwarding:** Code60 shows any **Harness mode** options an **Agent Provider** offers over ACP and forwards the user's choice. The harness determines what each mode does, including any sandbox behavior.
 - **Separate from Code60 auto-approval:** **Code60 auto-approval** only answers ACP permission requests. Switching it on or off does not change a provider's operating-system sandbox. Choosing an Ask mode on the harness also leaves **Code60 auto-approval** on.
@@ -159,7 +179,7 @@ Code60 leaves sandbox rules and enforcement to each [Agent Provider](terminology
 
 ### What security measures does Code60 take?
 
-Code60 protects the browser interface, local API, orchestration gateway, files, processes, and credentials, while agents still run with the user's operating-system permissions. See the [Security Policy](../SECURITY.md) for full details.
+Code60 protects the browser interface, local API, orchestration gateway, files, processes, and credentials, while agents still run with the user's operating-system permissions. See the [Security Policy](SECURITY.md) for full details.
 
 #### Browser, local network, and API boundaries
 
@@ -198,21 +218,21 @@ Code60 keeps secrets out of configuration files, browser storage, diagnostic log
 
 ### Can I use Code60 for commercial purposes?
 
-Yes. Code60 ships under the [Apache License, Version 2.0](../LICENSE), which permits commercial use, modification, and distribution under its terms.
+Yes. Code60 ships under the [Apache License, Version 2.0](LICENSE), which permits commercial use, modification, and distribution under its terms.
 
-- **Notices:** Redistributions must keep the license and attribution notices in [LICENSE](../LICENSE) and [NOTICE](../NOTICE).
-- **Trademarks:** "Code60" and the Code60 logo belong to Code Manufactory LLC. The Apache License grants no trademark rights, so forks and commercial offerings must follow the [Trademark Policy](../TRADEMARKS.md).
+- **Notices:** Redistributions must keep the license and attribution notices in [LICENSE](LICENSE) and [NOTICE](NOTICE).
+- **Trademarks:** "Code60" and the Code60 logo belong to Code Manufactory LLC. The Apache License grants no trademark rights, so forks and commercial offerings must follow the [Trademark Policy](TRADEMARKS.md).
 - **Provider terms:** Commercial use of external coding-agent providers also depends on each provider's own terms of service.
 
 ### How much does Code60 cost to use?
 
-Code60 is free and open-source under the [Apache License, Version 2.0](../LICENSE). Code60 uses your existing third-party coding agents and tools and is subject to their cost structure.
+Code60 is free and open-source under the [Apache License, Version 2.0](LICENSE). Code60 uses your existing third-party coding agents and tools and is subject to their cost structure.
 
 ### How does Code60 affect token usage?
 
 Code60 does not bill for tokens, and actual usage depends on the active **Agent Provider** and models. Total token usage balances extra upfront coordination against potential net savings on complex, multi-step tasks.
 
-- **Upfront cost versus net savings:** Running an orchestrator alongside workers in Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture) adds upfront tokens for instructions, tools, and updates. On complex, long-trajectory tasks, narrow worker contexts, plan review, and independent verification can reduce drift and rework. That higher reliability may reduce net token usage across the full task.
+- **Upfront cost versus net savings:** Running an orchestrator alongside workers in Code60's [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture) adds upfront tokens for instructions, tools, and updates. On complex, long-trajectory tasks, narrow worker contexts, plan review, and independent verification can reduce drift and rework. That higher reliability may reduce net token usage across the full task.
 - **Parallel runs and workflows:** Running multiple workers in parallel increases immediate token usage. **Transmission Workflows** also spend tokens on independent verification, repair passes, and fresh-session retries.
 - **Optional helper features:** Active **Memory** extraction, **Search** overviews, **Create with prompt** drafting, and automatic context handoffs send relevant context to the active provider. Turning **Memory** off stops memory extraction and recall.
 - **Cost control and visibility:** The composer footer shows live context usage whenever the provider reports it. The **Model** picker lets a user set separate model and reasoning defaults for orchestrators and workers.
@@ -221,7 +241,7 @@ Code60 does not bill for tokens, and actual usage depends on the active **Agent 
 
 ### How are Code60 subagents different than my Agent Provider's subagents?
 
-In Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture), Code60 subagents (workers) are full Code60 sessions that run in separate Git worktrees. An [Agent Provider's](terminology-draft.md#agent-provider) internal subagents run inside that single provider's process and stay outside Code60's orchestration controls.
+In Code60's [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture), Code60 subagents (workers) are full Code60 sessions that run in separate Git worktrees. An [Agent Provider's](TERMINOLOGY.md#agent-provider) internal subagents run inside that single provider's process and stay outside Code60's orchestration controls.
 
 - **Separate Git worktrees:** Each Code60 project worker edits files in its own Git worktree and run branch. Code60 integrates those edits safely and supports message-level **Undo**, whereas a provider's internal subagents typically share one working directory.
 - **Cross-provider flexibility:** Code60 can dispatch workers using any active **Agent Provider** and apply separate model defaults for orchestrators and workers. A provider's internal subagents stay within that single provider's harness.
@@ -231,15 +251,15 @@ In Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture
 
 ### Does Code60 use my Agent Provider's subagents?
 
-No. Code60 does not call or manage an [Agent Provider's](terminology-draft.md#agent-provider) internal subagents directly.
+No. Code60 does not call or manage an [Agent Provider's](TERMINOLOGY.md#agent-provider) internal subagents directly.
 
-In Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture), orchestrators delegate coding tasks by starting Code60 worker sessions through ACP. Each project worker runs in its own Git worktree with its own transcript and lifecycle controls.
+In Code60's [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture), orchestrators delegate coding tasks by starting Code60 worker sessions through ACP. Each project worker runs in its own Git worktree with its own transcript and lifecycle controls.
 
 Code60 does not block a provider's internal subagents. If a harness spawns its own subagents during a turn, they run inside that session's directory or worktree under that provider's control.
 
 ### Does Code60 have Computer Use capabilities?
 
-No. Code60 has no native desktop [Computer Use](terminology-draft.md#computer-use) control.
+No. Code60 has no native desktop [Computer Use](TERMINOLOGY.md#computer-use) control.
 
 - **Web browser automation:** **Relay**, **Custom Assistants**, and project chats include the `code60_browser` tool using Playwright. It controls web pages in **Headless**, **Visible**, or **Existing Browser** mode and cannot control native desktop applications.
 - **Scope and limits:** Workers, helpers, and **Scheduled Jobs** do not receive `code60_browser`. Message **Undo** does not undo external website changes.
@@ -247,9 +267,9 @@ No. Code60 has no native desktop [Computer Use](terminology-draft.md#computer-us
 
 ### Does Code60 support MCP?
 
-Yes. Code60 supports [MCP](terminology-draft.md#mcp) for both its own orchestration tools and external tool servers. See [MCP Configuration](../MCP.md) for full details.
+Yes. Code60 supports [MCP](TERMINOLOGY.md#mcp) for both its own orchestration tools and external tool servers. See [MCP Configuration](MCP.md) for full details.
 
-- **Orchestration tools:** In Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture), orchestrators receive Code60's MCP tools for worker control, planning, reviews, and browser automation. Workers never receive those tools.
+- **Orchestration tools:** In Code60's [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture), orchestrators receive Code60's MCP tools for worker control, planning, reviews, and browser automation. Workers never receive those tools.
 - **External MCP servers:** Under **Connect → MCP Servers**, a user can manage User and open-project servers with visual forms or strict JSON. Project server IDs override User IDs, new servers start off, and project servers require human approval for their exact revision.
 - **Transports and scope:** Code60 supports `stdio` and Streamable HTTP transports for tools only. It omits legacy Server-Sent Events (SSE), resources, prompts, sampling, and elicitation.
 - **Secrets and limits:** MCP secrets stay in macOS Keychain, Linux Secret Service, or explicit temporary memory, with S256 PKCE OAuth support. **Scheduled Jobs**, setup probes, and internal helpers receive no external MCP servers.
@@ -298,7 +318,7 @@ Code60 keeps complete transcripts on disk, bounds what the browser loads into me
 
 ### How does Code60 interact with an Agent Provider's context compaction?
 
-Code60 neither triggers nor blocks an [Agent Provider's](terminology-draft.md#agent-provider) internal context compaction. If a harness compacts its own context during a turn, Code60 lets it run normally.
+Code60 neither triggers nor blocks an [Agent Provider's](TERMINOLOGY.md#agent-provider) internal context compaction. If a harness compacts its own context during a turn, Code60 lets it run normally.
 
 - **Live context gauge:** The composer footer shows the token count and capacity that the provider reports over ACP and never guesses from transcript length. When a provider compacts context, the gauge can drop to match the new report.
 - **Interaction with Code60 context handoff:** Between turns, Code60 starts automatic context handoff at 70% of context capacity. That check uses the higher of the provider's report and Code60's own session estimate. Code60's 70% rollover often occurs before late-window provider compaction, while early provider compaction still runs inside the harness.
@@ -308,7 +328,7 @@ Code60 neither triggers nor blocks an [Agent Provider's](terminology-draft.md#ag
 
 ### What is the difference between Plans and Workflows?
 
-**Plans** guide interactive chat orchestration on [Code60 Gateway](terminology-draft.md#gateway), while [Workflows](terminology-draft.md#workflow) run standalone multi-task coding runs on [Code60 Transmission Server](terminology-draft.md#transmission-server).
+**Plans** guide interactive chat orchestration on [Code60 Gateway](TERMINOLOGY.md#gateway), while [Workflows](TERMINOLOGY.md#workflow) run standalone multi-task coding runs on [Code60 Transmission Server](TERMINOLOGY.md#transmission-server).
 
 - **Execution engine and providers:** **Plans** run inside chat (**Relay**, **Custom Assistants**, or project chats) with any active **Agent Provider**. **Workflows** run on **Code60 Transmission Server** using Code60's internal Codex runtime and separate `code60 workflows login` authentication.
 - **Structure and verification:** A **Plan** is an optional task list that an orchestrator revises in chat and executes by dispatching interactive Code60 workers. A **Workflow** defines up to 100 sequential tasks with independent verification criteria, optional check commands, and automatic repair and retry limits.
@@ -322,7 +342,7 @@ Code60 still forwards any provider **Harness mode** (including a provider's own 
 
 ### How are Code60 Plans different from agent plans?
 
-Code60 **Plans** are application-level plans with human approval gates and worker tracking across Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture). Agent plans live inside a single provider harness.
+Code60 **Plans** are application-level plans with human approval gates and worker tracking across Code60's [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture). Agent plans live inside a single provider harness.
 
 - **Human Accept gate:** A Code60 draft plan blocks new worker dispatches in that conversation until a human clicks **Accept** on that exact revision. No agent tool can accept a Code60 plan.
 - **Worker-level tracking:** After human acceptance, the orchestrator dispatches separate Code60 workers with task IDs (`planTaskId`) and reports progress with evidence notes and worker IDs.
@@ -335,7 +355,7 @@ Code60 **Plans** are application-level plans with human approval gates and worke
 
 **Scheduled Jobs** run locally on the host computer inside a mandatory separate Git worktree. There is no cloud runner or remote service.
 
-- **Local backend service:** The per-user [Code60 Gateway](terminology-draft.md#gateway) service (`launchd` on macOS or user `systemd` without linger on Linux) runs each job directly on the host machine. The machine must stay awake with an active user login session.
+- **Local backend service:** The per-user [Code60 Gateway](TERMINOLOGY.md#gateway) service (`launchd` on macOS or user `systemd` without linger on Linux) runs each job directly on the host machine. The machine must stay awake with an active user login session.
 - **Separate Git worktree:** Each run creates a separate Git worktree from the job's local repository and base branch. It runs one headless turn under an explicit deny-by-default permission allowlist, without external MCP servers or implicit memory.
 - **Manual review:** Code60 keeps the worktree, transcript, and diff on disk and never automatically applies, merges, commits, or pushes changes.
 
@@ -357,12 +377,12 @@ Each occurrence runs one headless turn, and at most one job from **Scheduled Job
 
 ### Is Code60 accessible?
 
-Code60 includes broad keyboard, screen-reader, contrast, and motion accessibility support, though formal accessibility certification remains future work on the [Code60 roadmap](../ROADMAP.md).
+Code60 includes broad keyboard, screen-reader, contrast, and motion accessibility support, though formal accessibility certification remains future work on the [Code60 roadmap](ROADMAP.md).
 
 - **Keyboard and focus:** Code60 uses IBM Carbon Design System components and includes a **Skip to main content** link. Menus, tables, trees, dialogs, and the command palette (`Cmd+K` or `Ctrl+K`) support full keyboard navigation. Closing overlays restores focus to the trigger control.
 - **Screen readers and status cues:** Controls include accessible labels, Accessible Rich Internet Applications (ARIA) states, and polite or alert status announcements. Status indicators include text labels alongside color.
 - **Themes, text, and system preferences:** **Personalize** settings offer **Light**, **Dark**, and **System** themes, adjustable interface text size, and focus highlights. The interface also respects operating-system `forced-colors` (high-contrast) and `prefers-reduced-motion` settings by switching to system colors and turning off animations.
-- **Current compliance status:** Code60 makes no formal Web Content Accessibility Guidelines (WCAG) compliance claim today. Full accessibility readiness sits under the `v0.12.0` milestone in the [Code60 roadmap](../ROADMAP.md).
+- **Current compliance status:** Code60 makes no formal Web Content Accessibility Guidelines (WCAG) compliance claim today. Full accessibility readiness sits under the `v0.12.0` milestone in the [Code60 roadmap](ROADMAP.md).
 
 ## Architecture and Development
 
@@ -389,18 +409,18 @@ Search existing issues first, then open the **Bug report** form on [GitHub Issue
 Email **[support@code60.dev](mailto:support@code60.dev)** privately. Do not open a public issue or publish exploit details before coordinating disclosure.
 
 - **Details to include:** Share the Code60 version, platform, reproduction steps, potential impact, and a minimal example without credentials, private prompts, or sensitive data. Only the latest release receives security fixes.
-- **Response target:** Maintainers aim to acknowledge reports within five business days before reviewing and coordinating fixes. That five-day window is a response target and does not guarantee a fix date. See [Reporting a vulnerability](../SECURITY.md#reporting-a-vulnerability).
+- **Response target:** Maintainers aim to acknowledge reports within five business days before reviewing and coordinating fixes. That five-day window is a response target and does not guarantee a fix date. See [Reporting a vulnerability](SECURITY.md#reporting-a-vulnerability).
 
 ### How do I request a feature?
 
 Search existing issues first, then open the **Feature request** form on [GitHub Issues](https://github.com/CodeManufactoryLLC/code60/issues/new/choose).
 
 - **Focus on the problem:** Describe the user problem before suggesting an implementation. Include the target behavior, observable acceptance criteria (such as error states and accessibility), and scope boundaries.
-- **Review and other forms:** Maintainers check proposals against [ARCHITECTURE.md](../ARCHITECTURE.md), including its non-goals, before scheduling work. Use the **Maintenance** form for tooling, documentation, dependency, or refactoring proposals.
+- **Review and other forms:** Maintainers check proposals against [ARCHITECTURE.md](ARCHITECTURE.md), including its non-goals, before scheduling work. Use the **Maintenance** form for tooling, documentation, dependency, or refactoring proposals.
 
 ## Provider Support
 
-Code60 connects both layers of its [Two-Layer Architecture](terminology-draft.md#two-layer-architecture) to coding-agent providers through ACP. It never asks for provider passwords and never stores API keys. Each provider keeps its own credentials in the backend user's storage.
+Code60 connects both layers of its [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture) to coding-agent providers through ACP. It never asks for provider passwords and never stores API keys. Each provider keeps its own credentials in the backend user's storage.
 
 The standard provider catalog covers **Antigravity, Claude, Codex, Copilot, Droid, Kiro, and OpenCode**. Under **Connect → Providers**, a user can verify a CLI that already holds an active login. A user can also run Code60's in-app installation and browser sign-in flow.
 
@@ -429,7 +449,7 @@ Yes, through any agent that supports local models. Code60 does not run local lan
 Yes in the worker layer, **Scheduled Jobs**, and **Workflows**, where each **Agent Provider** discovers skills from the repository working directory.
 
 - **Worker layer, Scheduled Jobs, and Workflows:** Code60 starts project workers, **Scheduled Jobs**, and **Workflows** inside the repository's Git worktree (or direct target folder). Each **Agent Provider** discovers repository skills and instruction files there according to its own rules.
-- **Orchestration layer:** In Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture), **Relay**, **Custom Assistants**, and project orchestrators run in private Code60 workspace folders outside the Git checkout. Provider harnesses generally do not auto-discover repository skills for the orchestrator.
+- **Orchestration layer:** In Code60's [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture), **Relay**, **Custom Assistants**, and project orchestrators run in private Code60 workspace folders outside the Git checkout. Provider harnesses generally do not auto-discover repository skills for the orchestrator.
 
 ### Does Code60 use my Agent Provider's existing user-level skills?
 

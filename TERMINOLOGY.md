@@ -1,4 +1,25 @@
-# Code60 Terminology (Draft)
+# Code60 Terminology
+
+> **Applies to:** Code60 `v0.4.1` · **Last update:** `2026-11-25`
+> Open **Manage → About** or run `code60 status` to check the local Code60 version. See [Code60 FAQ](FAQ.md) for common questions.
+
+## Terms
+
+- [ACP](#acp)
+- [Agent Provider](#agent-provider)
+- [Computer Use](#computer-use)
+- [Continuity Checkpoint](#continuity-checkpoint)
+- [Gateway](#gateway)
+- [Internal Prompts](#internal-prompts)
+- [MCP](#mcp)
+- [Memory Capture](#memory-capture)
+- [Operating Contract](#operating-contract)
+- [Orchestration](#orchestration)
+- [Relay](#relay)
+- [Scheduled Job](#scheduled-job)
+- [Transmission Server](#transmission-server)
+- [Two-Layer Architecture](#two-layer-architecture)
+- [Workflow](#workflow)
 
 ## ACP
 

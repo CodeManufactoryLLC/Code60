@@ -3,6 +3,8 @@
 Code60 runs coding agents on your machine. Its browser safeguards protect the
 application interface; they do not sandbox the agents you launch. Read the
 limitations below before giving an agent access to sensitive repositories.
+For quick answers on auto-approval, sandboxing, and secret handling, see the
+[Security and Permissions FAQ](FAQ.md#security-and-permissions).
 
 ## Runtime safeguards and limits
 
