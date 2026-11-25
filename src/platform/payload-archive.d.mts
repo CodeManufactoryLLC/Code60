@@ -9,7 +9,7 @@ export interface PayloadArchiveEntry {
 export function writeArchive(
   root: string,
   destination: string,
-  options?: { signal?: AbortSignal },
+  options?: { signal?: AbortSignal; level?: number },
 ): Promise<void>;
 export function extractArchive(
   archive: string,
