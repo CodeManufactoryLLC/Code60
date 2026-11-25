@@ -225,6 +225,7 @@ import { DiffReads, prepareUnlessAborted } from "./diff-reads.js";
 import { desktopPath } from "./environment.js";
 import { readFiles } from "./files.js";
 import { GitSetup } from "./git-setup.js";
+import { buildProviderDescriptors, type HealthProviderDescriptor } from "./health-check.js";
 import { INFERENCE_VERSIONS } from "./inference-versions.js";
 import {
   type Customization,
@@ -917,6 +918,11 @@ export class ApplicationHost {
   readonly modelDefaults: ModelDefaults;
   private providerMutation = false;
   private readonly agentSetup: AgentSetup;
+  private readonly healthOps: {
+    refreshPath(signal: AbortSignal): Promise<boolean>;
+    detectProvider(id: string, signal: AbortSignal): Promise<void>;
+    probeProvider(id: string, signal: AbortSignal): Promise<void>;
+  };
   private readonly diffReads = new DiffReads();
   private get workspace(): Workspace | undefined {
     return this.projectState.workspace;
@@ -2543,43 +2549,75 @@ export class ApplicationHost {
       fetch: storage.providerFetch,
       download: storage.providerDownload,
     });
+    const refreshPathForHealth = async (signal: AbortSignal): Promise<boolean> => {
+      if (this.storage.refreshPath) {
+        await this.storage.refreshPath(signal);
+        return true;
+      }
+      if (!this.storage.detectAgent) {
+        const recovered = await desktopPath({ env: this.env, signal });
+        setEnvironmentPath(this.env as NodeJS.ProcessEnv, recovered);
+        return recovered.length > 0;
+      }
+      return true;
+    };
+    const detectProviderForHealth = async (
+      id: string,
+      command: readonly [string, ...string[]],
+      signal: AbortSignal,
+    ) => {
+      if (id === "codex") {
+        const managed = await codexProvider.environment();
+        if (managed.PATH) setEnvironmentPath(this.env as NodeJS.ProcessEnv, managed.PATH);
+      }
+      await (this.storage.detectAgent ?? detectProvider)(
+        id,
+        command,
+        id === "codex" ? this.env : await providers.environment(id),
+      );
+      signal.throwIfAborted();
+    };
+    const probeProviderForHealth = (
+      id: string,
+      command: readonly [string, ...string[]],
+      signal: AbortSignal,
+    ) =>
+      probeAgent(
+        this.deps.agents,
+        {
+          name: id,
+          command,
+          env: Object.fromEntries(
+            Object.entries(this.env).filter(
+              (entry): entry is [string, string] => entry[1] !== undefined,
+            ),
+          ),
+        },
+        signal,
+      );
+    this.healthOps = {
+      refreshPath: refreshPathForHealth,
+      detectProvider: async (id, signal) => {
+        const command = this.config?.agents[id]?.command;
+        if (!command) throw new Error("Provider command unavailable.");
+        await detectProviderForHealth(id, command, signal);
+      },
+      probeProvider: async (id, signal) => {
+        const command = this.config?.agents[id]?.command;
+        if (!command) throw new Error("Provider command unavailable.");
+        await probeProviderForHealth(id, command, signal);
+      },
+    };
     this.agentSetup = new AgentSetup({
       codex: codexProvider,
       providers: providers.policies,
       command: (id) => this.config?.agents[id]?.command,
       detect: async (id, command, signal) => {
-        if (this.storage.refreshPath) await this.storage.refreshPath(signal);
-        else if (!this.storage.detectAgent)
-          setEnvironmentPath(
-            this.env as NodeJS.ProcessEnv,
-            await desktopPath({ env: this.env, signal }),
-          );
+        await refreshPathForHealth(signal);
         signal.throwIfAborted();
-        if (id === "codex") {
-          const managed = await codexProvider.environment();
-          if (managed.PATH) setEnvironmentPath(this.env as NodeJS.ProcessEnv, managed.PATH);
-        }
-        await (this.storage.detectAgent ?? detectProvider)(
-          id,
-          command,
-          id === "codex" ? this.env : await providers.environment(id),
-        );
-        signal.throwIfAborted();
+        await detectProviderForHealth(id, command, signal);
       },
-      probe: (id, command, signal) =>
-        probeAgent(
-          this.deps.agents,
-          {
-            name: id,
-            command,
-            env: Object.fromEntries(
-              Object.entries(this.env).filter(
-                (entry): entry is [string, string] => entry[1] !== undefined,
-              ),
-            ),
-          },
-          signal,
-        ),
+      probe: probeProviderForHealth,
       save: async (record) => {
         if (!this.storage.preferences.setAgentSetup) throw new Error("Agent setup cannot be saved");
         await this.storage.preferences.setAgentSetup(record);
@@ -5351,6 +5389,85 @@ export class ApplicationHost {
       }
       return { state: "ready" as const };
     });
+  }
+
+  healthProviders(): HealthProviderDescriptor[] {
+    return buildProviderDescriptors(
+      this.snapshot(false, true),
+      (id) => this.config?.agents[id]?.command,
+      this.agentSetup.record?.commands,
+    );
+  }
+
+  healthRefreshPath(signal: AbortSignal): Promise<boolean> {
+    return this.healthOps.refreshPath(signal);
+  }
+
+  healthDetectProvider(id: string, signal: AbortSignal): Promise<void> {
+    return this.healthOps.detectProvider(id, signal);
+  }
+
+  healthProbeProvider(id: string, signal: AbortSignal): Promise<void> {
+    return this.healthOps.probeProvider(id, signal);
+  }
+
+  healthRagModelRoot(): string {
+    return this.storage.ragModelRoot ?? "";
+  }
+
+  async healthProjectGitStatuses(): Promise<
+    Array<{
+      id: string;
+      label: string;
+      status: "ready" | "no_commits" | "not_repository" | "error";
+    }>
+  > {
+    const open = this.snapshot(false, true).openProjects ?? [];
+    return Promise.all(
+      open.map(async (project) => {
+        try {
+          const readiness = await this.probeGit(project.path);
+          return {
+            id: project.id,
+            label: basename(project.path),
+            status:
+              readiness.status === "ready" ||
+              readiness.status === "no_commits" ||
+              readiness.status === "not_repository"
+                ? readiness.status
+                : ("error" as const),
+          };
+        } catch {
+          return { id: project.id, label: basename(project.path), status: "error" as const };
+        }
+      }),
+    );
+  }
+
+  async healthMcpSummary(): Promise<{
+    targetCount: number;
+    unavailableProjects: number;
+    recoveryPending: number;
+    issueCount: number;
+  }> {
+    const { targets, unavailableProjects } = await this.mcpTargets();
+    let recoveryPending = 0;
+    let issueCount = 0;
+    for (const target of targets) {
+      try {
+        const read = await this.mcpRead(target.address);
+        recoveryPending += read.pendingRecovery.length;
+        issueCount += read.issues.length;
+      } catch {
+        issueCount++;
+      }
+    }
+    return {
+      targetCount: targets.length,
+      unavailableProjects,
+      recoveryPending,
+      issueCount,
+    };
   }
 
   async initialDatabaseStatus(): Promise<{ state: "ready" | "not-selected" | "unavailable" }> {

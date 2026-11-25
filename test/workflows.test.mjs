@@ -57,6 +57,7 @@ describe("branch protection policy", () => {
     expect(ci.on).toHaveProperty("workflow_dispatch", null);
     expect(ci.jobs.passed.if).toBe("always()");
     expect(ci.jobs.passed.needs).toEqual([
+      "impact",
       "check",
       "browser",
       "package",
@@ -66,6 +67,7 @@ describe("branch protection policy", () => {
       "payload-clean-install",
       "update",
       "uninstall",
+      "mac",
     ]);
   });
 });
@@ -73,7 +75,7 @@ describe("branch protection policy", () => {
 describe("browser and package validation", () => {
   it("splits Linux payload production from independent verified acceptance consumers", () => {
     const producer = ci.jobs.payload;
-    expect(producer.needs).toBeUndefined();
+    expect(producer.needs).toBe("impact");
     expect(producer["timeout-minutes"]).toBe(15);
     expect(
       producer.steps.some(
@@ -130,7 +132,7 @@ describe("browser and package validation", () => {
     };
     for (const [name, spec] of Object.entries(consumers)) {
       const job = ci.jobs[name];
-      expect(job.needs).toBe("payload");
+      expect(job.needs).toEqual(["impact", "payload"]);
       expect(job["timeout-minutes"]).toBe(30);
       expect(job.steps[0].with.ref).toBe(producer.steps[0].with.ref);
       const download = job.steps.findIndex((step) =>
@@ -171,21 +173,9 @@ describe("browser and package validation", () => {
       expect(evidenceUpload.with.path).toContain("test-results/artifact-handoff/");
     }
 
-    const passedStep = ci.jobs.passed.steps[0];
-    for (const [envVar, jobName] of [
-      ["CHECK", "check"],
-      ["BROWSER", "browser"],
-      ["PACKAGE", "package"],
-      ["CLEAN_INSTALL", "clean-install"],
-      ["PAYLOAD", "payload"],
-      ["PAYLOAD_ACCEPTANCE", "payload-acceptance"],
-      ["PAYLOAD_CLEAN_INSTALL", "payload-clean-install"],
-      ["UPDATE", "update"],
-      ["UNINSTALL", "uninstall"],
-    ]) {
-      expect(passedStep.env[envVar]).toContain(`needs.${jobName}.result`);
-      expect(passedStep.run).toContain(`test "$${envVar}" = success`);
-    }
+    const passedStep = ci.jobs.passed.steps.at(-1);
+    expect(passedStep.env.CI_NEEDS).toContain("toJSON(needs)");
+    expect(passedStep.run).toBe("node scripts/ci-impact.mjs gate");
   });
   it("requires real installed uninstall/reinstall and isolated native engine checks", () => {
     expect(
@@ -390,7 +380,7 @@ describe("browser and package validation", () => {
       ).toBe(true);
     expect(ci.jobs.browser.steps.some((step) => step.run === "npm run test:browser")).toBe(true);
     expect(ci.jobs.package.steps.some((step) => step.run === "npm run test:packaged")).toBe(true);
-    expect(ci.jobs["clean-install"].needs).toBe("package");
+    expect(ci.jobs["clean-install"].needs).toEqual(["impact", "package"]);
     expect(ci.jobs["clean-install"]["timeout-minutes"]).toBe(30);
     expect(
       ci.jobs["clean-install"].steps.some(
@@ -401,7 +391,7 @@ describe("browser and package validation", () => {
     expect(
       ci.jobs["clean-install"].steps.some((step) => step.run === "npm run test:packaged:clean"),
     ).toBe(true);
-    expect(ci.jobs.passed.steps[0].env.CLEAN_INSTALL).toContain("needs.clean-install.result");
+    expect(ci.jobs.passed.steps.at(-1).env.CI_NEEDS).toContain("toJSON(needs)");
     expect(
       ci.jobs.payload.steps.some(
         (step) => step.run === "npm run devcontainer -- exec npm run package:payload",
@@ -413,11 +403,7 @@ describe("browser and package validation", () => {
           step.run === "npm run test:packaged:clean -- --payload release/payloads/linux-x64.json",
       ),
     ).toBe(true);
-    expect(ci.jobs.passed.steps[0].env.PAYLOAD).toContain("needs.payload.result");
-    expect(ci.jobs.passed.steps[0].env.UPDATE).toContain("needs.update.result");
-    expect(ci.jobs.passed.steps[0].run).toContain('test "$UPDATE" = success');
-    expect(ci.jobs.passed.steps[0].env.UNINSTALL).toContain("needs.uninstall.result");
-    expect(ci.jobs.passed.steps[0].run).toContain('test "$UNINSTALL" = success');
+    expect(ci.jobs.passed.steps.at(-1).run).toBe("node scripts/ci-impact.mjs gate");
     expect(
       ci.jobs["payload-clean-install"].steps.some(
         (step) =>
@@ -446,12 +432,110 @@ describe("browser and package validation", () => {
     expect(release.jobs.preflight.if).toBe("github.ref == 'refs/heads/main'");
     expect(release.jobs.package.needs).toEqual(["preflight", "mac"]);
     expect(release.jobs.payload.env).toEqual({ COMPOSE_BAKE: "false" });
-    expect(release.jobs.bootstrap.needs).toEqual(["preflight", "mac", "payload", "uninstall"]);
+    expect(release.jobs.bootstrap.needs).toEqual([
+      "preflight",
+      "mac",
+      "package",
+      "payload",
+      "uninstall",
+    ]);
     expect(nativeTests.jobs.test.steps.some((step) => step.run === "npm run test:payload")).toBe(
       true,
     );
     expect(JSON.stringify(release)).not.toContain("npm publish");
     expect(release.permissions).toEqual({ contents: "read" });
     expect(packageJson.scripts["test:browser"]).toBe("npm run build && playwright test");
+  });
+});
+
+describe("impact-selected steps and unconditional release coverage", () => {
+  const stepFor = (job, command) => job.steps.find((step) => step.run === command);
+  it("binds each Linux payload scenario to its own condition", () => {
+    const exec = "npm run devcontainer -- exec npm run ";
+    for (const [jobName, suite, command] of [
+      ["payload-acceptance", "engines", `${exec}test:payload -- --workflows`],
+      ["payload-acceptance", "setup", `${exec}test:setup`],
+      ["payload-acceptance", "shell", `${exec}test:installation -- --require-fish`],
+      ["payload-acceptance", "update", `${exec}test:update`],
+      [
+        "payload-acceptance",
+        "uninstall-engines",
+        `${exec}test:uninstall:engines -- release/payloads/linux-x64.json`,
+      ],
+      ...[
+        ["clean-payload", "payload"],
+        ["managed", "managed"],
+        ["clean-setup", "setup"],
+      ].map(([key, mode]) => [
+        "payload-clean-install",
+        key,
+        `npm run test:packaged:clean -- --${mode} release/payloads/linux-x64.json`,
+      ]),
+    ]) {
+      expect(stepFor(ci.jobs[jobName], command)?.if).toBe(
+        `contains(fromJSON(needs.impact.outputs.plan), '${suite}')`,
+      );
+      expect(stepFor(release.jobs.payload, command)).toBeDefined();
+      expect(stepFor(release.jobs.payload, command).if).toBeUndefined();
+    }
+    expect(stepFor(ci.jobs["payload-acceptance"], `${exec}test:payload`).if).toContain(
+      "'payload-smoke'",
+    );
+    expect(
+      stepFor(
+        release.jobs.payload,
+        "npm run test:packaged:clean -- --update release/payloads/linux-x64.json",
+      )?.if,
+    ).toBeUndefined();
+    expect(
+      stepFor(
+        release.jobs.uninstall,
+        "npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json",
+      )?.if,
+    ).toBeUndefined();
+    expect(stepFor(release.jobs.package, "npm run test:packaged:clean").if).toBeUndefined();
+    expect(stepFor(release.jobs.package, "node scripts/test-rag-model.mjs").if).toBeUndefined();
+  });
+
+  it("selects native suites for PRs and defaults to all native checks for a release", () => {
+    expect(ci.jobs.mac.with.suites).toContain("needs.impact.outputs.plan");
+    expect(release.jobs.mac.with.ref).toContain("needs.preflight.outputs.sha");
+    expect(release.jobs.mac.with.suites).toBeUndefined();
+    expect(JSON.parse(nativeTests.on.workflow_call.inputs.suites.default)).toEqual(["mac-full"]);
+    for (const [command, suite] of [
+      ["npm run test:setup", "mac-setup"],
+      ["npm run test:installation -- --require-fish", "mac-shell"],
+      ["npm run test:packaged", "mac-package"],
+      ["npm run test:payload", "mac-payload"],
+    ]) {
+      const condition = stepFor(nativeTests.jobs.test, command).if;
+      expect(condition).toContain("'mac-full'");
+      expect(condition).toContain(`'${suite}'`);
+    }
+    expect(nativeTests.jobs.workflows.if).toContain("'mac-full'");
+    expect(nativeTests.jobs.workflows.if).toContain("'mac-update'");
+    expect(nativeTests.jobs.workflows.if).toContain("'mac-engines'");
+    expect(nativeTests.jobs.workflows.strategy.matrix.include.map((entry) => entry.suite)).toEqual([
+      "mac-update",
+      "mac-engines",
+      "mac-engines",
+      "mac-engines",
+    ]);
+    expect(nativeTests.jobs.uninstall.if).toContain("'mac-full'");
+    expect(nativeTests.jobs.uninstall.if).toContain("'mac-uninstall'");
+    for (const job of [
+      "check",
+      "browser",
+      "package",
+      "clean-install",
+      "payload",
+      "payload-acceptance",
+      "payload-clean-install",
+      "update",
+      "uninstall",
+      "mac",
+    ]) {
+      expect(ci.jobs[job].if).toBe(`contains(fromJSON(needs.impact.outputs.jobs), '${job}')`);
+    }
   });
 });

@@ -18,6 +18,7 @@ export default defineConfig({
     "navigation-icons.e2e.ts",
     "provider-login.e2e.ts",
     "all-provider-login.e2e.ts",
+    "health-check.e2e.ts",
     "web-server.e2e.ts",
     "terminal.e2e.ts",
   ],

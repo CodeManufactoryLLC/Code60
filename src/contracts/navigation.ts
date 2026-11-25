@@ -155,6 +155,15 @@ export const pages = [
     icon: "app-system-manager",
   },
   {
+    id: "health-check",
+    initialOrder: 29,
+    label: "Health Check",
+    group: "apps",
+    order: 2,
+    database: false,
+    icon: "app-health-check",
+  },
+  {
     id: "apps",
     initialOrder: 14,
     label: "Apps",

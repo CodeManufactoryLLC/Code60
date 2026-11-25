@@ -42,6 +42,7 @@ export { chatReferenceSchema } from "./chat-context.js";
 export * from "./custom-agents.js";
 export * from "./database.js";
 export * from "./details.js";
+export * from "./health-check.js";
 export * from "./logs.js";
 export * from "./model-defaults.js";
 export * from "./plans.js";
@@ -455,6 +456,12 @@ export interface ApplicationClient {
   listTerminals?(): Promise<import("./terminal.js").TerminalSummary[]>;
   onTerminalEvent?(listener: (event: import("./terminal.js").TerminalEvent) => void): () => void;
   onTerminalsChanged?(listener: () => void): () => void;
+  healthCheck?(
+    request: import("./health-check.js").HealthCheckRequest,
+  ): Promise<import("./health-check.js").HealthSnapshot>;
+  onHealthChanged?(
+    listener: (snapshot: import("./health-check.js").HealthSnapshot) => void,
+  ): () => void;
   memorySnapshot(): Promise<import("../contracts/index.js").MemorySnapshot>;
   browseMemories(
     request: import("../contracts/index.js").MemoryBrowse,

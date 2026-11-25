@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import {
+  chmod,
   cp,
   mkdir,
   mkdtemp,
@@ -34,6 +35,7 @@ import {
   nativeAllowed,
   pruneNative,
 } from "../scripts/distribution/policy.mjs";
+import { updateFixture } from "../scripts/distribution/update-fixture.mjs";
 import { packageBootstrap } from "../scripts/package-bootstrap.mjs";
 import { readStableBootstrap } from "../src/platform/index.js";
 
@@ -72,7 +74,7 @@ function value(os = "linux", arch = "x64") {
     },
   };
 }
-async function fixture() {
+async function fixture(os = "linux", arch = "x64", bundleId = undefined) {
   const parent = await temp();
   const root = join(parent, "source");
   await mkdir(root);
@@ -100,12 +102,17 @@ async function fixture() {
     await mkdir(dirname(join(root, path)), { recursive: true });
     await writeFile(join(root, path), "synthetic fixture");
   }
+  if (bundleId) {
+    const bundlePath = join(root, `dist/engines/${bundleId}/bundle.json`);
+    await mkdir(dirname(bundlePath), { recursive: true });
+    await writeFile(bundlePath, JSON.stringify({ bundleId }));
+  }
   await writeFile(join(root, "package.json"), JSON.stringify({ name: "code60", version: "0.4.1" }));
   await writeFile(
     join(root, "dist/renderer/index.html"),
     '<script src="./assets/index.js"></script><link href="./assets/index.css">',
   );
-  const expected = value();
+  const expected = value(os, arch);
   const pack = async (includeDirectories = false) => {
     await rm(join(root, "payload.json"), { force: true });
     await writeFile(
@@ -113,6 +120,7 @@ async function fixture() {
       JSON.stringify({
         ...expected,
         lockfileSha256: await sha256(join(root, "package-lock.json")),
+        ...(bundleId ? { transmissionBundle: bundleId } : {}),
         files: await inventory(root),
         ...(includeDirectories ? { directories: await inventoryDirectories(root) } : {}),
       }),
@@ -529,4 +537,35 @@ it("packs only builtins bootstrap files with both exact descriptors and strict s
   expect(registryResult.descriptor).toEqual(process.platform === "darwin" ? mac : f.expected);
   await writeFile(join(input, mac.archive.name), "changed");
   await expect(packageBootstrap(root, input)).rejects.toThrow("checksum");
+});
+it("round-trips empty, small, and large archive entries at custom compression levels and updates fixture inventory incrementally", async () => {
+  const root = await temp();
+  const source = join(root, "source");
+  await mkdir(join(source, "nested"), { recursive: true });
+  const large = Buffer.alloc(1_200_000, 0x5a);
+  await writeFile(join(source, "empty.txt"), "");
+  await writeFile(join(source, "nested/small.sh"), "#!/bin/sh\necho ok\n");
+  await chmod(join(source, "nested/small.sh"), 0o755);
+  await writeFile(join(source, "large.bin"), large);
+  await symlink("nested/small.sh", join(source, "run.sh"));
+  const archive = join(root, "fast.tar.gz");
+  await writeArchive(source, archive, { level: 1 });
+  const out = join(root, "out");
+  await extractArchive(archive, out, join(root, "fast.tar"));
+  expect((await stat(join(out, "empty.txt"))).size).toBe(0);
+  expect((await stat(join(out, "nested/small.sh"))).mode & 0o111).toBeTruthy();
+  expect(await readFile(join(out, "large.bin"))).toEqual(large);
+  expect(await readFile(join(out, "run.sh"), "utf8")).toBe("#!/bin/sh\necho ok\n");
+
+  const [hostOs, hostArch] = platform().split("-");
+  const f = await fixture(hostOs, hostArch, "a".repeat(64));
+  const candidate = await updateFixture(f.expected, f.parent, () => createReadStream(f.archive));
+  const acquired = await acquirePayload(candidate.descriptor, {
+    parent: f.parent,
+    transport: () => createReadStream(candidate.archive),
+  });
+  const metadata = JSON.parse(await readFile(join(acquired.root, "payload.json"), "utf8"));
+  await rm(join(acquired.root, "payload.json"));
+  expect(metadata.files).toEqual(await inventory(acquired.root));
+  expect(candidate.distinctEngineManifest).toBe(true);
 });

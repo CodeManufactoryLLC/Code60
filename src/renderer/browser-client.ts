@@ -127,6 +127,8 @@ export function createBrowserClient(
     listTerminals: () => rpc("terminal-list"),
     onTerminalEvent: (listener) => events.on("terminal-event", listener),
     onTerminalsChanged: (listener) => events.on("terminals-changed", listener),
+    healthCheck: (request) => rpc("health-check", request),
+    onHealthChanged: (listener) => events.on("health-changed", listener),
     memorySnapshot: () => rpc("memory-snapshot"),
     browseMemories: (request: unknown) => rpc("memory-browse", request),
     memoryDetail: (request: unknown) => rpc("memory-detail", request),

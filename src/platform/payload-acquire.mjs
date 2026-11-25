@@ -15,6 +15,52 @@ export async function sha256(path, signal) {
   }
   return hash.digest("hex");
 }
+
+const VERIFY_SMALL_BYTES = 256 * 1024;
+const VERIFY_CONCURRENCY = 16;
+
+async function fileSha256(path, size, signal) {
+  if (size <= VERIFY_SMALL_BYTES) {
+    const bytes = await readFile(path, { signal });
+    return createHash("sha256").update(bytes).digest("hex");
+  }
+  return sha256(path, signal);
+}
+
+async function verifyEntries(root, actual, inventory, signal) {
+  let index = 0;
+  let failed;
+  const worker = async () => {
+    while (!failed) {
+      signal?.throwIfAborted();
+      const current = index++;
+      if (current >= actual.length) return;
+      const entry = actual[current];
+      const item = inventory.get(entry.path);
+      try {
+        if (
+          !item ||
+          item.type !== entry.type ||
+          (entry.type === "2"
+            ? item.link !== entry.link
+            : item.size !== entry.size ||
+              item.sha256 !== (await fileSha256(join(root, entry.path), entry.size, signal)))
+        ) {
+          failed ??= new Error("Payload file integrity mismatch");
+          return;
+        }
+      } catch (error) {
+        failed ??= error;
+        return;
+      }
+    }
+  };
+  await Promise.allSettled(
+    Array.from({ length: Math.min(VERIFY_CONCURRENCY, actual.length) }, () => worker()),
+  );
+  if (failed) throw failed;
+  signal?.throwIfAborted();
+}
 const hosts = new Set([
   "github.com",
   "release-assets.githubusercontent.com",
@@ -111,18 +157,7 @@ async function verifyPayload(root, expected, entries, signal) {
     )
       throw Error("Payload directory inventory mismatch");
   }
-  for (const entry of actual) {
-    const item = inventory.get(entry.path);
-    if (
-      !item ||
-      item.type !== entry.type ||
-      (entry.type === "2"
-        ? item.link !== entry.link
-        : item.size !== entry.size ||
-          item.sha256 !== (await sha256(join(root, entry.path), signal)))
-    )
-      throw new Error("Payload file integrity mismatch");
-  }
+  await verifyEntries(root, actual, inventory, signal);
   for (const path of [
     "package.json",
     "dist/management/main.js",

@@ -396,6 +396,20 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
+## Health Check
+
+- ID: `health-check`
+- Status: shipped
+- Purpose: Inspect read-only system health across the Code60 backend, scheduler, Transmission server, providers, workspace stores, memory, MCP connectors, disk space and local machine context with granular per-check, category or full rechecks.
+- Access: Manage → Health Check (also available from Apps → Health Check)
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Read-only diagnostics; active probes run only when explicitly requested by the user.
+- Limits: No database is required. Passive local checks run on page open; active provider authentication probes, embedding checksum verification and optional registry release checks run only on explicit human request with per-check cancellation and never start engines, repair services or mutate state. Copy health report omits hostname, IP addresses, proxy hosts and filesystem paths by default unless explicitly opted in. Relay and awareness cannot run health probes or read host-identifying details.
+- Pages: `health-check`
+- Settings sections: none
+- Tools: none
+
 ## Data Viewer
 
 - ID: `data`

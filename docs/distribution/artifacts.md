@@ -94,7 +94,7 @@ path and fails acceptance rather than claiming success.
 
 Native smoke evidence is under `test-results/payload`; Docker evidence is under
 `test-results/clean-install`. Record unavailable native validation separately.
-Ordinary PR CI remains Linux-only and requires payload acceptance in `CI passed`.
+PR CI selects Linux payload and native Apple Silicon checks using the [impact rules](../../CONTRIBUTING.md#browser-and-package-ci).
 The manual native workflow accepts an exact PR commit and retains the macOS payload;
 manual release generation verifies both targets against its clean selected commit
 before assembling the bootstrap. It uploads workflow artifacts only, with no npm
