@@ -65,7 +65,7 @@
     "test:transmission": "playwright test --config test/transmission-native.config.ts"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "^2.4.0",
+    "@agentclientprotocol/sdk": "^2.9.1",
     "@carbon/ai-chat": "1.25.0",
     "@carbon/icons-react": "11.92.0",
     "@carbon/react": "1.121.0",
