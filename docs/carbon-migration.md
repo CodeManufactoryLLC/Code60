@@ -2,6 +2,8 @@
 
 The full-app worktree integrates the approved Scheduled Jobs design at `656b0ae` with upstream `f0f7e5a`. The reference worktree can still run independently. The renderer uses `@carbon/react` 1.121.0, a customizable verdigris accent, locally bundled Plex Sans and White/G100. The product header and navigation belong to the application. Scheduled Jobs owns its task tabs, forms and evidence.
 
+This ledger records the migration. For current agent instructions, worked examples, and decisions that still apply, see [Using IBM Carbon in Code60](carbon-design-system.md) and its [exception register](carbon-design-system.md#exception-register).
+
 ## Route inventory and interaction decisions
 
 | Workspace | Destinations and deep links | Operator task |

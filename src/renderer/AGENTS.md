@@ -12,6 +12,8 @@ Specialist code/diff/tree widgets may retain their functional implementation;
 standard actions, forms, navigation, menus, tables and modals should use Carbon.
 No comparison destination, preference or feature flag is introduced.
 
+Start renderer changes with [Using IBM Carbon in Code60](../../docs/carbon-design-system.md). Check the [exception register](../../docs/carbon-design-system.md#exception-register) before reusing a local treatment on another surface.
+
 ## Carbon implementation boundaries
 
 - `carbon/application.scss` owns upstream styles and White/G100 tokens in the
