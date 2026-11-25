@@ -157,6 +157,15 @@ Yes. Code60 ships under the [Apache License, Version 2.0](../LICENSE), which per
 
 Code60 is free and open-source under the [Apache License, Version 2.0](../LICENSE). Code60 uses your existing third-party coding agents and tools and is subject to their cost structure.
 
+### How does Code60 affect token usage?
+
+Code60 does not bill for tokens, and actual usage depends on the active **Agent Provider** and models. Total token usage balances extra upfront coordination against potential net savings on complex, multi-step tasks.
+
+- **Upfront cost versus net savings:** Running an orchestrator alongside workers in Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture) adds upfront tokens for instructions, tools, and updates. On complex, long-trajectory tasks, narrow worker contexts, plan review, and independent verification can reduce drift and rework. That higher reliability may reduce net token usage across the full task.
+- **Parallel runs and workflows:** Running multiple workers in parallel increases immediate token usage. **Transmission Workflows** also spend tokens on independent verification, repair passes, and fresh-session retries.
+- **Optional helper features:** Active **Memory** extraction, **Search** overviews, **Create with prompt** drafting, and automatic context handoffs send relevant context to the active provider. Turning **Memory** off stops memory extraction and recall.
+- **Cost control and visibility:** The composer footer shows live context usage whenever the provider reports it. The **Model** picker lets a user set separate model and reasoning defaults for orchestrators and workers.
+
 ## Orchestration and Workers
 
 ### How are Code60 subagents different than my Agent Provider's subagents?
@@ -184,6 +193,39 @@ No. Code60 has no native desktop [Computer Use](terminology-draft.md#computer-us
 - **Web browser automation:** **Relay**, **Custom Assistants**, and project chats include the `code60_browser` tool using Playwright. It controls web pages in **Headless**, **Visible**, or **Existing Browser** mode and cannot control native desktop applications.
 - **Scope and limits:** Workers, helpers, and **Scheduled Jobs** do not receive `code60_browser`. Message **Undo** does not undo external website changes.
 - **External MCP servers:** A user can connect external MCP servers under **Connect → MCP Servers** for extra automation outside Code60's browser tool.
+
+### Does Code60 support MCP?
+
+Yes. Code60 supports [MCP](terminology-draft.md#mcp) for both its own orchestration tools and external tool servers. See [MCP Configuration](../MCP.md) for full details.
+
+- **Orchestration tools:** In Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture), orchestrators receive Code60's MCP tools for worker control, planning, reviews, and browser automation. Workers never receive those tools.
+- **External MCP servers:** Under **Connect → MCP Servers**, a user can manage User and open-project servers with visual forms or strict JSON. Project server IDs override User IDs, new servers start off, and project servers require human approval for their exact revision.
+- **Transports and scope:** Code60 supports `stdio` and Streamable HTTP transports for tools only. It omits legacy Server-Sent Events (SSE), resources, prompts, sampling, and elicitation.
+- **Secrets and limits:** MCP secrets stay in macOS Keychain, Linux Secret Service, or explicit temporary memory, with S256 PKCE OAuth support. **Scheduled Jobs**, setup probes, and internal helpers receive no external MCP servers.
+
+## Scheduled Jobs
+
+### Where do Scheduled Jobs run?
+
+**Scheduled Jobs** run locally on the host computer inside a mandatory separate Git worktree. There is no cloud runner or remote service.
+
+- **Local backend service:** The per-user Code60 backend (`launchd` on macOS or user `systemd` without linger on Linux) runs each job directly on the host machine. The machine must stay awake with an active user login session.
+- **Separate Git worktree:** Each run creates a separate Git worktree from the job's local repository and base branch. It runs one headless turn under an explicit deny-by-default permission allowlist, without external MCP servers or implicit memory.
+- **Manual review:** Code60 keeps the worktree, transcript, and diff on disk and never automatically applies, merges, commits, or pushes changes.
+
+### Do Scheduled Jobs automatically resume when I restart my computer?
+
+Future occurrences resume automatically when the per-user backend service is active, while incomplete runs and occurrences during downtime never replay.
+
+- **Automatic service startup:** After `code60 service install`, `launchd` (macOS) or user `systemd` without linger (Linux) starts the backend again when the user logs in. Future occurrences from **Scheduled Jobs** continue on their normal cadence.
+- **No catch-up or replay:** Code60 never replays a run that stops during a reboot and never catches up on occurrences from sleep or downtime.
+- **Uncertain leftover processes:** If a reboot leaves uncertain process ownership behind, Code60 pauses new launches. A user must confirm the old process no longer runs and clear the block in **Apps → System Manager**.
+
+### Do Scheduled Jobs re-try automatically?
+
+No. **Scheduled Jobs** never retry runs that fail, time out, or overlap with another active job.
+
+Each occurrence runs one headless turn, and at most one job from **Scheduled Jobs** runs at a time. Code60 records the outcome in **Execution history** and waits for the next future occurrence. A user can inspect the transcript and changes under **Automate → Scheduled Jobs**, then click **Run** manually when ready.
 
 ## Accessibility
 
