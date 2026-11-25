@@ -17,6 +17,13 @@ No. Code60 currently supports **macOS Apple Silicon** and **Linux `x64`** only a
 
 A Windows device can still open Code60's browser interface over a private local network through **Web Server (Beta)**. Code60 must still run on a macOS or Linux host for that setup.
 
+### What are the system requirements for running Code60?
+
+- **Operating system:** **macOS Apple Silicon** (`arm64`) or **Linux `x64`** with `glibc` and `libgomp1`. Linux service enrollment also requires an active user `systemd` session.
+- **Runtime and tools:** Node.js 24 (`>=24.22.0 <25` for setup, updates, uninstall, and **Transmission Workflows**), `npm`, Git, and at least one **Agent Provider**.
+- **Hardware and power:** Code60 runs local embeddings on the CPU and requires no graphics card. Background scheduling requires an awake machine with an active user login session.
+- **Browser and optional tools:** A modern desktop browser for the interface. Browser automation (`code60_browser`) also requires Chrome on the host machine, plus Microsoft's Playwright Chrome extension for existing-browser mode.
+
 ### Do I need Docker to run Code60?
 
 No. Code60 installs, runs, and supports local development without Docker.
@@ -30,6 +37,26 @@ Only optional contributor workflows require a local Linux Docker engine with Com
 
 Optional Docker agent workers for stricter filesystem and network boundaries appear on the future roadmap. Code60 runs without them.
 
+### Does Code60 have a CLI?
+
+Yes, for local lifecycle management only. The `code60` command-line interface (CLI) cannot submit prompts or run coding agents.
+
+- **Opening and pairing:** `code60 open` opens the browser interface, and `code60 pairing on|off|status` controls local pairing codes.
+- **Installation and backend service:** `code60 setup`, `code60 status`, `code60 update`, `code60 uninstall`, and `code60 service` manage installation and the per-user backend service.
+- **Workflow sign-in:** `code60 workflows login` opens the internal Codex login flow for **Transmission Workflows**.
+
+### Does Code60 have a native desktop app?
+
+No. Code60 runs as a local Node.js 24 backend with a React browser interface.
+
+There is no Electron wrapper, native window application, or DMG, DEB, or AppImage installer. Closing or refreshing the browser keeps active agents, **Scheduled Jobs**, and **Transmission Workflows** running in the background.
+
+### Does Code60 have a native mobile app?
+
+No. Code60 has no native iOS or Android app.
+
+A phone or tablet on the same private local network can open Code60's browser interface through **Web Server (Beta)**. A user turns it on from the controlling localhost browser under **Experiments → Web Server (Beta)** and enters the single-use 60-second code. File choosers still browse files on the host machine running Code60.
+
 ## Workspaces and Worktrees
 
 ### Does Code60 automatically delete worktrees?
@@ -40,6 +67,17 @@ No. Code60 never deletes Git worktrees automatically.
 - **Scheduled Jobs and Transmission Workflows:** Worktrees from **Scheduled Jobs** and **Transmission Workflows** stay on disk. A user can inspect changes and diffs with normal Git tools.
 - **Manual removal:** For an inactive run, open its actions menu (for example, in **Apps → Data Viewer**) and choose **Delete worktree**. Code60 blocks removal while the run or its agent process remains active.
 - **Confirmation and history:** Before removing a worktree and its run branch, Code60 shows a confirmation dialog. That dialog lists the worktree path, branch, and every file with edits that removal erases. After removal, the session record stays visible as inactive.
+
+## Data and Storage
+
+### How does Code60 store data?
+
+Code60 keeps all application data locally on the host machine. New run directories and files use private permissions (`0700` and `0600`), and Code60 does not encrypt local files.
+
+- **Databases:** Project history, configurations, **Internal Prompts** edits, and `$` commands live in SQLite (default `$XDG_DATA_HOME/code60/databases/default.sqlite`). Application memory uses a separate private `memory.sqlite`.
+- **Run records and transcripts:** Runs write `run.json` and `events.jsonl` under `<git-common-dir>/code60/runs/`, `$XDG_STATE_HOME/code60/dirs/<key>/runs/`, or `.code60_workspace/` beside the database. Code60 does not automatically scrub or expire transcripts.
+- **Configuration, workflows, and logs:** Model Context Protocol (MCP) files live at `$XDG_CONFIG_HOME/code60/mcp.json` and `<project>/.code60/mcp.json`, and **Transmission Workflows** state lives under `$XDG_STATE_HOME/code60/workflows`. Diagnostic logs under `$XDG_STATE_HOME/code60/logs` carry a 7-day, 20 MiB cap.
+- **Credentials:** Provider logins stay in each provider's own backend-user storage. MCP secrets stay in macOS Keychain, Linux Secret Service, or explicit temporary backend memory.
 
 ## Security and Permissions
 
@@ -55,7 +93,7 @@ No. Code60 never deletes Git worktrees automatically.
 
 ### Does Code60 provide a sandbox for my agents?
 
-No. Code60 does not provide an operating-system, filesystem, or network sandbox for coding agents or Model Context Protocol (MCP) servers. Every agent runs with the backend user's operating-system permissions.
+No. Code60 does not provide an operating-system, filesystem, or network sandbox for coding agents or MCP servers. Every agent runs with the backend user's operating-system permissions.
 
 - **Code60 safeguards:** Browser and gateway checks protect the web interface and local application programming interface (API). Git worktrees separate Git working files, and the [Operating Contract](terminology-draft.md#operating-contract) and ACP permissions guide behavior and approval prompts.
 - **Security limits:** None of those controls creates an operating-system security boundary or blocks actions an agent takes without requesting ACP approval. See the [Security Policy](../SECURITY.md) for full details.
@@ -65,7 +103,7 @@ No. Code60 does not provide an operating-system, filesystem, or network sandbox 
 
 Apply sandboxing outside Code60 or through each [Agent Provider](terminology-draft.md#agent-provider).
 
-- **Provider sandbox:** Enable the sandbox settings and **Harness mode** options that each **Agent Provider** supports in its own command-line interface (CLI) or configuration.
+- **Provider sandbox:** Enable the sandbox settings and **Harness mode** options that each **Agent Provider** supports in its own CLI or configuration.
 - **Container or virtual machine:** Run Code60 inside a container (such as the optional [Linux development container](../.devcontainer/README.md)) or a virtual machine. A separate operating-system user account with narrow filesystem and network access also limits what agents can touch.
 - **Manual approval review:** Turn off **Code60 auto-approval** in the composer to review each ACP permission request. Manual review helps inspect prompts, while operating-system boundaries still come from the provider sandbox, container, virtual machine, or user account.
 
@@ -138,6 +176,14 @@ No. Code60 does not call or manage an [Agent Provider's](terminology-draft.md#ag
 In Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture), orchestrators delegate coding tasks by starting Code60 worker sessions through ACP. Each project worker runs in its own Git worktree with its own transcript and lifecycle controls.
 
 Code60 does not block a provider's internal subagents. If a harness spawns its own subagents during a turn, they run inside that session's directory or worktree under that provider's control.
+
+### Does Code60 have Computer Use capabilities?
+
+No. Code60 has no native desktop [Computer Use](terminology-draft.md#computer-use) control.
+
+- **Web browser automation:** **Relay**, **Custom Assistants**, and project chats include the `code60_browser` tool using Playwright. It controls web pages in **Headless**, **Visible**, or **Existing Browser** mode and cannot control native desktop applications.
+- **Scope and limits:** Workers, helpers, and **Scheduled Jobs** do not receive `code60_browser`. Message **Undo** does not undo external website changes.
+- **External MCP servers:** A user can connect external MCP servers under **Connect → MCP Servers** for extra automation outside Code60's browser tool.
 
 ## Accessibility
 

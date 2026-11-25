@@ -12,6 +12,12 @@ An **Agent Provider** is an external coding-agent command-line interface (CLI) o
 
 Agent Providers supply the underlying coding agents for both layers of Code60's [Two-Layer Architecture](#two-layer-architecture). Each provider manages its own credentials, models, and harness modes, while a user manages provider connections under **Connect → Providers**.
 
+## Computer Use
+
+**Computer Use** is an artificial intelligence (AI) agent's ability to operate a computer through its graphical user interface. It includes reading the screen, moving the mouse, typing, and clicking across desktop applications.
+
+Code60 does not provide native desktop Computer Use. For web tasks, Code60 provides browser automation (`code60_browser`), which controls web pages in Chrome without operating native desktop applications.
+
 ## Internal Prompts
 
 **Internal Prompts** are the system prompt templates under **Customize → Internal Prompts** that guide project orchestration and session handoffs in Code60. They cover the **Operating Contract**, handoff summary, handoff turn, and worker-update templates.
