@@ -38,6 +38,20 @@ No. Code60 never deletes Git worktrees automatically.
 - **Harness mode:** **Code60 auto-approval** operates separately from **Harness mode**. Choosing an Ask mode on a provider harness leaves **Code60 auto-approval** on. Any sandboxing depends on that provider harness.
 - **Other run types and limits:** Manual runs, **Scheduled Jobs**, and **Transmission Workflows** keep separate permission policies. ACP permissions do not create an operating-system sandbox and cannot block actions an agent takes without requesting approval.
 
+## Licensing and Pricing
+
+### Can I use Code60 for commercial purposes?
+
+Yes. Code60 ships under the [Apache License, Version 2.0](../LICENSE), which permits commercial use, modification, and distribution under its terms.
+
+- **Notices:** Redistributions must keep the license and attribution notices in [LICENSE](../LICENSE) and [NOTICE](../NOTICE).
+- **Trademarks:** "Code60" and the Code60 logo belong to Code Manufactory LLC. The Apache License grants no trademark rights, so forks and commercial offerings must follow the [Trademark Policy](../TRADEMARKS.md).
+- **Provider terms:** Commercial use of external coding-agent providers also depends on each provider's own terms of service.
+
+### How much does Code60 cost to use?
+
+Code60 is free and open-source under the [Apache License, Version 2.0](../LICENSE). Code60 uses your existing third-party coding agents and tools and is subject to their cost structure.
+
 ## Provider Support
 
 Code60 connects both layers of its [Two-Layer Architecture](terminology-draft.md#two-layer-architecture) to coding-agent providers through ACP. It never asks for provider passwords and never stores application programming interface (API) keys. Each provider keeps its own credentials in the backend user's storage.
