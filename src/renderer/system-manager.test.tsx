@@ -10,6 +10,10 @@ it("shows backend status and directs native lifecycle actions to the local CLI",
     />,
   );
   expect(markup).toContain('<span class="page-title-text">System Manager</span>');
+  expect(markup).toContain("Services");
+  expect(markup).toContain("Terminals");
+  expect(markup).toContain("Active Terminals");
+  expect(markup).toContain("No active terminal sessions.");
   expect(markup).toContain("Backend Service");
   expect(markup).toContain("code60 service repair");
   expect(markup).toContain('aria-label="System Manager actions"');

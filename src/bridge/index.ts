@@ -51,6 +51,7 @@ export * from "./relay.js";
 export * from "./relay-files.js";
 export * from "./relay-reviews.js";
 export * from "./tactics.js";
+export * from "./terminal.js";
 export * from "./web-links.js";
 
 import { modeChangeSchema } from "../contracts/index.js";
@@ -445,6 +446,15 @@ export interface ApplicationClient {
   ): Promise<import("./custom-agents.js").CustomAgentResponse>;
   automation(request: import("./automation.js").AutomationUiRequest): Promise<unknown>;
   onAutomationChanged(listener: () => void): () => void;
+  openTerminal?(
+    request: import("./terminal.js").TerminalOpenRequest,
+  ): Promise<import("./terminal.js").TerminalSessionInfo>;
+  writeTerminal?(request: import("./terminal.js").TerminalWriteRequest): Promise<void>;
+  resizeTerminal?(request: import("./terminal.js").TerminalResizeRequest): Promise<void>;
+  closeTerminal?(request: import("./terminal.js").TerminalCloseRequest): Promise<void>;
+  listTerminals?(): Promise<import("./terminal.js").TerminalSummary[]>;
+  onTerminalEvent?(listener: (event: import("./terminal.js").TerminalEvent) => void): () => void;
+  onTerminalsChanged?(listener: () => void): () => void;
   memorySnapshot(): Promise<import("../contracts/index.js").MemorySnapshot>;
   browseMemories(
     request: import("../contracts/index.js").MemoryBrowse,

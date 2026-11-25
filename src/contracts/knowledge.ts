@@ -38,7 +38,7 @@ const tab = z.discriminatedUnion("kind", [
   z.strictObject({ id: sequence, kind: z.literal("revision"), reviewId: uuid, revisionId: uuid }),
   z.strictObject({
     id: sequence,
-    kind: z.enum(["blank", "explorer", "changes", "recall", "application"]),
+    kind: z.enum(["blank", "explorer", "changes", "recall", "application", "terminal"]),
   }),
 ]);
 const owner = z.discriminatedUnion("kind", [
@@ -270,6 +270,16 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Read-only; no retrieval or provider dispatch.",
   ),
   feature(
+    "terminal",
+    "Terminal",
+    "Open an interactive shell tab in the right sidebar rooted in the selected agent's worktree or workspace directory.",
+    "Relay, project or worker chat → right sidebar → Open Terminal (or Command Palette → Open terminal)",
+    "none",
+    "human-only",
+    "Up to 16 concurrent PTY sessions. Each tab is pinned to the opaque target it was opened for (worker worktree, open project root, or Relay/custom assistant workspace) and keeps its shell and scrollback alive across tab, panel, and page switches. Closing a tab, closing its project, discarding its worktree, or shutting down the backend terminates owned sessions. Awareness exposes tab metadata only, never terminal I/O.",
+    "Human-only; agents cannot open, read, or write interactive terminals.",
+  ),
+  feature(
     "relay",
     "Relay",
     "Application-wide orchestration across explicit targets. Select the relay animation checkbox beside Forward to show the dot above Chat. It defaults to off and remembers your choice in this browser. The dot shows Relay activity across pages: Idle, Listening, Thinking, Speaking, Complete or Attention. The embedded Carbon prompt line opens the selected Code60 thread. Enter sends and Shift+Enter adds a line. Stop targets the current turn.",
@@ -480,12 +490,12 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
     "system-manager",
     "System Manager",
-    "Inspect Backend Service scheduling health automatically every two seconds. Jobs paused is separate from backend lifetime.",
-    "Apps → System Manager",
+    "Inspect Backend Service scheduling health on the Services tab and active right-sidebar terminal sessions with their associated project on the Terminals tab.",
+    "Apps → System Manager (Services and Terminals tabs)",
     "none",
     "human-only",
-    "Automatic checks respect global Pause polling and back off to at most sixty seconds on failure. Manual Refresh Backend Service is available. Install, repair, start, stop and uninstall use local code60 service commands. No database is required; awareness never probes or controls the service.",
-    "Human CLI consent is required for service changes; scheduled jobs retain their own explicit controls.",
+    "Services automatically checks scheduler health every two seconds (respecting global Pause polling and backing off to sixty seconds on failure), with manual refresh. Install, repair, start, stop and uninstall use local code60 service commands. Terminals lists all live interactive shells with their project/Relay association, working directory, shell, PID, start time, and Close terminal control. No database is required; awareness never probes or controls services or terminals.",
+    "Human CLI consent is required for service changes; scheduled jobs and terminal sessions retain their own explicit controls.",
   ),
   feature(
     "data",

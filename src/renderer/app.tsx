@@ -39,7 +39,6 @@ import { usePressFeedback } from "./press-feedback.js";
 import { useProjectConnection } from "./project-connection.js";
 import { useProjectWorkspace } from "./project-workspace.js";
 import { useProviderManagement } from "./provider-management.js";
-
 import { RelayInputFocus } from "./relay-pulse.js";
 import { useResumeDestination } from "./resume-destination.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
@@ -49,6 +48,7 @@ import { hasOrchestrationProvider } from "./snapshot-state.js";
 import { Splash } from "./splash.js";
 import { useSplashEntry } from "./splash-entry.js";
 import { initialTabs, type SettingsSectionId, updateTabs } from "./tabs.js";
+import { selectedTerminalSource } from "./terminal-source.js";
 import { useUpdateNotice, useUpdates } from "./updates.js";
 
 export function App({
@@ -323,6 +323,7 @@ export function App({
     sessionCommands,
     setSetup,
     setExplorerOpen,
+    terminalSource: selectedTerminalSource(state, workerId),
   });
 
   const footer = (close: () => void) => (

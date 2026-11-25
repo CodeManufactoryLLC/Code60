@@ -13,6 +13,7 @@ import { RelayPlansPanel } from "./relay-plans-panel.js";
 import { RetainedProjectPanels } from "./retained-project-panels.js";
 import type { ReviewPreview } from "./review-actions.js";
 import { projectChatIdentity } from "./session-panel.js";
+import { selectedTerminalSource } from "./terminal-source.js";
 import { WorkerChat } from "./worker-chat.js";
 
 const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
@@ -112,6 +113,7 @@ export function ChatWorkspace({
   const displayedRelayPlan = relayActive ? relay?.plans?.at(-1) : undefined;
   const relayWorkerActive = !!snapshot?.runs.find((run) => run.record.id === workerId)?.relay;
   const recallSource = selectedRecallSource(state, workerId, transcripts, scope.viewKey);
+  const terminalSource = selectedTerminalSource(state, workerId);
   const reviewSummaries = snapshot?.reviews ?? [];
   const projectFiles =
     showsProjectFiles(snapshot, workerId) ||
@@ -276,6 +278,7 @@ export function ChatWorkspace({
             }
             api={api}
             recallSource={recallSource}
+            terminalSource={terminalSource}
             reviews={reviewSummaries}
             project={directory ?? ""}
             targetLabel={
@@ -336,6 +339,17 @@ export function ChatWorkspace({
                 !projectFiles
               }
               recallSource={recallSource}
+              terminalSource={
+                id
+                  ? selectedTerminalSource(state, id)
+                  : {
+                      target: {
+                        kind: "relay",
+                        ...(owner.conversationId ? { conversationId: owner.conversationId } : {}),
+                      },
+                      label: owner.title?.trim() || "Relay",
+                    }
+              }
               open={panelOpen[owner.conversationId ?? ""] ?? false}
               onOpen={(open) => setPanelOpen((s) => ({ ...s, [owner.conversationId ?? ""]: open }))}
               planRequest={id ? undefined : planRequest}

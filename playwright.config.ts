@@ -19,6 +19,7 @@ export default defineConfig({
     "provider-login.e2e.ts",
     "all-provider-login.e2e.ts",
     "web-server.e2e.ts",
+    "terminal.e2e.ts",
   ],
   workers: 1,
   timeout: 60_000,

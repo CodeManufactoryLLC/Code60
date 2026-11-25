@@ -7063,3 +7063,147 @@ describe("independent diff reads", () => {
     );
   });
 });
+
+describe("controller terminals", () => {
+  it("opens project and worker terminals, enforces lifecycle cleanup, and rejects invalid targets", async () => {
+    await expect(
+      controller.openTerminal({ target: { kind: "relay" }, cols: 80, rows: 24 }),
+    ).rejects.toThrow("Relay is unavailable");
+    await expect(
+      controller.openTerminal({ target: { kind: "project" }, cols: 80, rows: 24 }),
+    ).rejects.toThrow("Choose a folder first");
+
+    const id = await start();
+    const worktree = controller.snapshot().runs.find((entry) => entry.record.id === id)
+      ?.record.worktree;
+    if (worktree) await fs.mkdir(worktree, { recursive: true });
+    try {
+      const projectTerm = await controller.openTerminal({
+        target: { kind: "project" },
+        cols: 80,
+        rows: 24,
+      });
+      expect(projectTerm.cwd).toBe(directory);
+      expect(projectTerm.project).toBe(directory);
+      expect(projectTerm.targetKind).toBe("project");
+
+      const liveWorkerTerm = await controller.openTerminal({
+        target: { kind: "project-worker", runId: id },
+        cols: 80,
+        rows: 24,
+      });
+      expect(liveWorkerTerm.runId).toBe(id);
+      expect(liveWorkerTerm.cwd).toBe(worktree ?? directory);
+      expect(liveWorkerTerm.targetKind).toBe("project-worker");
+
+      await expect(
+        controller.openTerminal({
+          target: { kind: "project-worker", runId: "missing-run" },
+          cols: 80,
+          rows: 24,
+        }),
+      ).rejects.toThrow("Unknown worker run");
+
+      await controller.action({ type: "finish", id });
+      await vi.waitFor(() => expect(controller.active).toBe(false));
+      await controller.terminals.close({ id: liveWorkerTerm.id });
+
+      // Open again from history after run finished, then confirm discard closes it.
+      const historyWorkerTerm = await controller.openTerminal({
+        target: { kind: "project-worker", runId: id },
+        cols: 80,
+        rows: 24,
+      });
+      expect(controller.terminals.list().map((entry) => entry.id)).toContain(historyWorkerTerm.id);
+      await controller.action({ type: "discard", id });
+      expect(controller.terminals.list().map((entry) => entry.id)).not.toContain(
+        historyWorkerTerm.id,
+      );
+
+      // Replacing database closes database-owned project terminal.
+      await controller.connect(join(directory, "second.sqlite"), true);
+      expect(controller.terminals.list()).toEqual([]);
+
+      await controller.shutdown();
+      await expect(
+        controller.openTerminal({ target: { kind: "project" }, cols: 80, rows: 24 }),
+      ).rejects.toThrow("Application is closing");
+    } finally {
+      if (worktree) await fs.rm(worktree, { recursive: true, force: true });
+    }
+  });
+
+  it("opens Relay and retained-project terminals and preserves Relay across project close and database swap", async () => {
+    await controller.shutdown();
+    controller = new ApplicationHost(
+      controllerDeps(),
+      {
+        XDG_CONFIG_HOME: join(directory, "config"),
+        XDG_STATE_HOME: join(directory, "state"),
+        SHELL: "/bin/sh",
+      },
+      { confirm },
+      { openDatabase, preferences, relay: true },
+    );
+    await controller.restore();
+    await controller.connect(
+      join(directory, "relay-term.sqlite"),
+      true,
+      controller.snapshot().databaseEpoch,
+    );
+    const projectDir = join(directory, "proj");
+    await fs.mkdir(projectDir);
+    await controller.open(projectDir, controller.snapshot().databaseEpoch);
+    const snap = controller.snapshot();
+
+    const relayTerm = await controller.openTerminal({
+      target: { kind: "relay" },
+      cols: 80,
+      rows: 24,
+    });
+    expect(relayTerm.targetKind).toBe("relay");
+    expect(relayTerm.project).toBeNull();
+
+    const projectTerm = await controller.openTerminal({
+      target: {
+        kind: "project",
+        projectId: snap.projectInstanceId ?? undefined,
+        databaseEpoch: snap.databaseEpoch,
+      },
+      cols: 80,
+      rows: 24,
+    });
+    expect(projectTerm.cwd).toBe(projectDir);
+    expect(controller.terminals.list()).toHaveLength(2);
+
+    // Closing the project closes only its terminal and preserves Relay's terminal.
+    await controller.projectAction({
+      type: "close",
+      projectId: snap.projectInstanceId as string,
+    });
+    expect(controller.terminals.list().map((entry) => entry.id)).toEqual([relayTerm.id]);
+
+    // Opening project again and replacing the database preserves Relay's terminal.
+    await controller.open(projectDir, controller.snapshot().databaseEpoch);
+    const reopened = controller.snapshot();
+    const projectTerm2 = await controller.openTerminal({
+      target: {
+        kind: "project",
+        projectId: reopened.projectInstanceId ?? undefined,
+        databaseEpoch: reopened.databaseEpoch,
+      },
+      cols: 80,
+      rows: 24,
+    });
+    expect(controller.terminals.list().map((entry) => entry.id)).toContain(projectTerm2.id);
+    await controller.connect(
+      join(directory, "relay-term-2.sqlite"),
+      true,
+      controller.snapshot().databaseEpoch,
+    );
+    expect(controller.terminals.list().map((entry) => entry.id)).toEqual([relayTerm.id]);
+
+    await controller.shutdown();
+    expect(controller.terminals.list()).toEqual([]);
+  });
+});

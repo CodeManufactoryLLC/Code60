@@ -32,6 +32,8 @@ const PACKAGE_OWNERS: Readonly<Record<string, string>> = {
   "@headless-tree/core": "renderer",
   "@headless-tree/react": "renderer",
   "monaco-editor": "renderer",
+  "@xterm/xterm": "renderer",
+  "@xterm/addon-fit": "renderer",
 };
 
 const IMPORT_RE =

@@ -323,6 +323,8 @@ export async function startGateway(options: GatewayOptions = {}) {
     application.mcp.subscribe(() => emit("mcp-changed")),
     application.memory.subscribe(() => emit("memory-changed")),
     application.rag.subscribe((status) => emit("rag-status", status)),
+    application.terminals.subscribe((event) => emit("terminal-event", event)),
+    application.terminals.subscribeChanges(() => emit("terminals-changed")),
     logs.subscribe(() => emit("logs-changed")),
   ];
   const detach = async (session: string) => {
@@ -724,9 +726,12 @@ export async function startGateway(options: GatewayOptions = {}) {
           if (!operation) throw new Error("Unknown application operation.");
           const receiptKey = `${owner}:${value.id}`;
           const fingerprint = createHash("sha256").update(json(value)).digest("hex");
-          const privateProgress = ["setup-provider-read", "setup-codex-read"].includes(
-            value.operation,
-          );
+          const privateProgress = [
+            "setup-provider-read",
+            "setup-codex-read",
+            "terminal-write",
+            "terminal-resize",
+          ].includes(value.operation);
           const existing = privateProgress ? undefined : receipts.get(receiptKey);
           if (existing) {
             if (existing.fingerprint !== fingerprint)

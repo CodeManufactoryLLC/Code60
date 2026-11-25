@@ -147,6 +147,7 @@ import {
   parseSearchSummary,
   parseSearchSummaryRequestId,
   parseTaskAction,
+  parseTerminalOpen,
   planMarkdown,
   type RagIdentity,
   type RagQuery,
@@ -159,6 +160,7 @@ import {
   type SavedChat,
   summarizeReview,
   TACTICS,
+  type TerminalSessionInfo,
   tacticPrompt,
 } from "../bridge/index.js";
 import type { ModeChange } from "../core/index.js";
@@ -270,6 +272,7 @@ import { summarizeRun } from "./run-summary.js";
 import { type PollOwner, ScopedPoller } from "./scoped-poller.js";
 import { inspectSetupDatabase, prepareSetupDatabase } from "./setup-database.js";
 import { captureTask, taskDelivery } from "./tactic-context.js";
+import { ApplicationTerminals } from "./terminals.js";
 
 export interface DesktopDialogs {
   confirm(presentation: ConfirmationId, detail: string): Promise<boolean>;
@@ -364,6 +367,7 @@ interface Batch {
 /** Owns one workspace and independent batches. All history mutations are serialized. */
 export class ApplicationHost {
   readonly mcp: McpManagement;
+  readonly terminals: ApplicationTerminals;
   private readonly connectors: McpRuntime;
   private readonly authentication: McpAuthentication | undefined;
   mcpRecovery(value: McpRecoveryRequest) {
@@ -2452,6 +2456,7 @@ export class ApplicationHost {
             : [],
         ),
     );
+    this.terminals = new ApplicationTerminals(env as NodeJS.ProcessEnv);
     this.authentication = storage.mcpAuthentication
       ? new McpAuthentication(
           join(stateHome(env), "code60", "mcp-authentication"),
@@ -5399,6 +5404,7 @@ export class ApplicationHost {
       previous?.close();
       await this.setConfig(config);
       if (previous?.path !== database.path) {
+        await this.terminals.closeDatabaseOwned();
         await this.clearWorkspace();
         this.savedPrompts = this.readPrompts(database);
       }
@@ -5449,9 +5455,10 @@ export class ApplicationHost {
         database.close();
         return;
       }
-      const stopped = await Promise.allSettled(
-        owners.map((owner) => this.projectHost.run(owner, () => this.stopProject())),
-      );
+      const stopped = await Promise.allSettled([
+        this.terminals.closeDatabaseOwned(),
+        ...owners.map((owner) => this.projectHost.run(owner, () => this.stopProject())),
+      ]);
       if (stopped.some((result) => result.status === "rejected"))
         throw new Error(
           "Database replacement stopped because some project work could not be stopped.",
@@ -5680,6 +5687,86 @@ export class ApplicationHost {
     this.changed();
   }
 
+  async openTerminal(value: unknown): Promise<TerminalSessionInfo> {
+    if (this.closing) throw new Error("Application is closing");
+    const request = parseTerminalOpen(value);
+    if (request.target.kind === "relay" || request.target.kind === "relay-worker") {
+      if (!this.relay) throw new Error("Relay is unavailable");
+      const resolved = await this.relay.terminalTarget(
+        request.target.conversationId,
+        request.target.kind === "relay-worker" ? request.target.runId : undefined,
+      );
+      return this.terminals.open(
+        {
+          ...resolved,
+          projectId: null,
+          databaseOwned: false,
+        },
+        request.cols,
+        request.rows,
+      );
+    }
+    if (this.relay || request.target.databaseEpoch !== undefined) {
+      this.assertDatabaseRequest(request.target.databaseEpoch);
+    }
+    const owner = request.target.projectId
+      ? this.projectHost.byId(request.target.projectId)
+      : this.projectHost.current;
+    if (owner.closed) throw new Error("This project is no longer open");
+    const workspace = owner.state.workspace;
+    if (!workspace) throw new Error("Choose a folder first");
+    if (request.target.kind === "project") {
+      return this.terminals.open(
+        {
+          cwd: workspace.dir,
+          label: basename(workspace.dir) || workspace.dir,
+          project: workspace.dir,
+          projectId: owner.id,
+          targetKind: "project",
+          runId: null,
+          databaseOwned: true,
+        },
+        request.cols,
+        request.rows,
+      );
+    }
+    const runId = request.target.runId;
+    let record: { agent: string; worktree?: string | null } | undefined;
+    for (const batch of owner.state.batches.keys()) {
+      const live = batch.runs().find((entry) => entry.id === runId);
+      if (live) {
+        record = { agent: live.agent, worktree: live.worktree };
+        break;
+      }
+    }
+    if (!record) {
+      const listed = owner.state.history.find((entry) => entry.record.id === runId);
+      if (listed) record = { agent: listed.record.agent, worktree: listed.record.worktree };
+    }
+    if (!record) {
+      try {
+        const stored = await workspace.store.read(runId);
+        record = { agent: stored.agent, worktree: stored.worktree };
+      } catch {
+        throw new Error(`Unknown worker run: ${runId}`);
+      }
+    }
+    const label = owner.state.conversations.workers.get(runId)?.label ?? record.agent;
+    return this.terminals.open(
+      {
+        cwd: record.worktree || workspace.dir,
+        label,
+        project: workspace.dir,
+        projectId: owner.id,
+        targetKind: "project-worker",
+        runId,
+        databaseOwned: true,
+      },
+      request.cols,
+      request.rows,
+    );
+  }
+
   projectAction(value: ProjectAction): Promise<void> {
     const request = parseProjectAction(value);
     const owner = this.projectHost.byId(request.projectId);
@@ -5705,6 +5792,7 @@ export class ApplicationHost {
           if (stopped.some((result) => result.status === "rejected"))
             throw new Error("Some project work could not be stopped. The project was kept open.");
           if (request.type === "close") {
+            await this.terminals.closeByProject(owner.id);
             if (this.projectHost.selected === owner) this.relaySelected = true;
             this.projectHost.remove(owner);
             this.projectSessionPaths = this.projectSessionPaths.filter((path) => path !== folder);
@@ -6483,6 +6571,7 @@ export class ApplicationHost {
           return workspace.store.readEvents(action.id);
         case "discard": {
           if (this.taskOperation) throw new Error("Wait for the task operation to finish");
+          await this.terminals.closeByRun(action.id);
           await this.cancelProjectDiffReads();
           const operationId = randomUUID();
           const began = Date.now();
@@ -7041,6 +7130,7 @@ export class ApplicationHost {
     this.closing = true;
     this.authentication?.beginShutdown();
     const results = await Promise.allSettled([
+      this.terminals.closeAll(true),
       this.connectors
         .close()
         .then(() => this.authentication?.close())

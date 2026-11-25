@@ -3,6 +3,7 @@ import type { AppPagesProps } from "./app-page-props.js";
 import { pageCommands } from "./navigation.js";
 import type { Command } from "./overlays.js";
 import { updateTabs } from "./tabs.js";
+import type { TerminalSource } from "./terminal-source.js";
 
 type CommandContext = Pick<
   AppPagesProps,
@@ -24,6 +25,7 @@ type CommandContext = Pick<
   sessionCommands(run: DesktopRun): Command[];
   setSetup(value: boolean): void;
   setExplorerOpen(value: boolean): void;
+  terminalSource?: TerminalSource | undefined;
 };
 export function appCommands({
   api,
@@ -43,6 +45,7 @@ export function appCommands({
   sessionCommands,
   setSetup,
   setExplorerOpen,
+  terminalSource,
 }: CommandContext): Command[] {
   const {
     theme,
@@ -76,6 +79,27 @@ export function appCommands({
       icon: "add",
       disabled: busy || !database || !directory,
       run: () => setSetup(true),
+    },
+    {
+      id: "open-terminal",
+      label: "Open terminal",
+      group: "Project",
+      icon: "terminal",
+      disabled:
+        busy ||
+        !terminalSource?.target ||
+        (terminalSource.target.kind !== "project" &&
+          terminalSource.target.kind !== "project-worker"),
+      run: () => {
+        if (!terminalSource?.target) return;
+        fileAction({
+          type: "terminal",
+          target: terminalSource.target,
+          label: terminalSource.label,
+        });
+        setExplorerOpen(true);
+        setTabs((current) => updateTabs(current, { type: "open", id: "chat" }));
+      },
     },
     {
       id: "project",
