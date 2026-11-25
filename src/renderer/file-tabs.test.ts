@@ -259,3 +259,26 @@ it("opens separate pinned revision tabs, deduplicates by review and revision, an
   expect(state.active).not.toBe(first);
   expect(state.entries).toHaveLength(4);
 });
+
+it("opens multiple concurrent terminal tabs, replaces blank tabs, and numbers duplicate labels", () => {
+  let state = updateFileTabs(emptyFileTabs(), { type: "blank" });
+  state = updateFileTabs(state, {
+    type: "terminal",
+    target: { kind: "relay" },
+    label: "Relay",
+  });
+  expect(state.entries).toHaveLength(1);
+  const first = state.entries[0];
+  if (!first) throw new Error("Missing first terminal tab");
+  expect(fileTabLabel(first, state.entries)).toBe("Terminal · Relay");
+  state = updateFileTabs(state, {
+    type: "terminal",
+    target: { kind: "relay" },
+    label: "Relay",
+  });
+  expect(state.entries).toHaveLength(2);
+  const [one, two] = state.entries;
+  if (!one || !two) throw new Error("Missing numbered terminal tabs");
+  expect(fileTabLabel(one, state.entries)).toBe("Terminal · Relay (1)");
+  expect(fileTabLabel(two, state.entries)).toBe("Terminal · Relay (2)");
+});

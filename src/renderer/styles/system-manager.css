@@ -153,6 +153,106 @@
   overflow-wrap: anywhere;
 }
 
+.system-manager-terminals {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.system-manager-terminals-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.system-manager-terminals-header h2 {
+  margin: 0;
+  font: var(--card-weight, 700) var(--card-size, 22px) / 1.25 var(--card-font, var(--font));
+}
+
+.system-manager-terminals-count,
+.system-manager-terminals-empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.system-manager-terminal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.system-manager-terminal-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 12px 16px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--ui-radius);
+  background: var(--surface);
+}
+
+.system-manager-terminal-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.system-manager-terminal-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.system-manager-terminal-kind {
+  color: var(--muted);
+  font: var(--meta-font);
+}
+
+.system-manager-terminal-meta {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.system-manager-terminal-meta > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.system-manager-terminal-meta dt {
+  color: var(--muted);
+  min-width: 56px;
+}
+
+.system-manager-terminal-meta dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.system-manager-terminal-path {
+  font-family: var(--mono);
+}
+
+.system-manager-terminal-actions {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
 @media (max-width: 560px) {
   .system-manager-page {
     padding: 12px;

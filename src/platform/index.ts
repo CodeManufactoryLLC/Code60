@@ -95,6 +95,7 @@ export {
   runtimeProcessExists,
   waitForRuntimeExit,
 } from "./process-identity.js";
+export { type OwnedPty, type SpawnPtyOptions, spawnOwnedPty } from "./pty.js";
 export {
   findRuntimeProcesses,
   inspectRuntimeProcess,

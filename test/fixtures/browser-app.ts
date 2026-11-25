@@ -23,7 +23,11 @@ export async function browserApp(
   await mkdir(config, { recursive: true });
   await mkdir(processLog);
   const shell = join(directory, "test-shell");
-  await writeFile(shell, '#!/bin/sh\nexec /bin/sh -c "$2"\n', { mode: 0o700 });
+  await writeFile(
+    shell,
+    '#!/bin/sh\nif [ "$1" = "-lc" ] || [ "$1" = "-c" ]; then exec /bin/sh -c "$2"; fi\nexec /bin/sh -i\n',
+    { mode: 0o700 },
+  );
   await writeFile(
     join(config, "config.json"),
     JSON.stringify({

@@ -5,6 +5,7 @@ import { cleanBuild } from "./clean-build.mjs";
 
 await cleanBuild(fileURLToPath(new URL("../dist/", import.meta.url)));
 for (const args of [
+  ["scripts/build-pty-helper.mjs"],
   ["node_modules/typescript/bin/tsc", "-p", "tsconfig.build.json"],
   ["node_modules/vite/bin/vite.js", "build"],
 ]) {

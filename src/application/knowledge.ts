@@ -235,6 +235,10 @@ export class DesktopKnowledge {
     } else if (cap.id === "memory-recall") {
       reason =
         "Read-only tab available in Relay, project chats and workers, including without a database for Relay. Only recorded recall IDs are resolved. Memory contents are human-only.";
+    } else if (cap.id === "terminal") {
+      reason =
+        "Interactive human-only terminal tab available in Relay, custom assistants, project chats and workers. Backend resolves the opaque target directory; terminal I/O is never exposed to awareness.";
+      action = "Open the right sidebar and choose Open Terminal.";
     } else if (cap.id === "plans") {
       status = "unknown";
       reason =
@@ -323,7 +327,7 @@ export class DesktopKnowledge {
       action = "Open Apps → Workflows.";
     } else if (cap.id === "system-manager") {
       reason =
-        "The browser shows scheduler health. Local code60 service commands manage the unified macOS/Linux login backend; awareness never probes or controls the service.";
+        "The browser shows scheduler health on Services and active interactive terminal sessions with their associated project on Terminals. Local code60 service commands manage the unified macOS/Linux login backend; awareness never probes or controls services or terminals.";
       action = "Apps → System Manager.";
     } else if (cap.id === "updates") {
       reason =
@@ -502,7 +506,7 @@ export class DesktopKnowledge {
       if (request.revision !== this.tabRevision(panel, tab))
         throw new Error("View changed; rediscover tabs");
       const value =
-        tab.kind === "recall" || tab.kind === "application"
+        tab.kind === "recall" || tab.kind === "application" || tab.kind === "terminal"
           ? undefined
           : await this.sources.readView(caller, panel, tab);
       this.sources.valid(caller);

@@ -120,6 +120,13 @@ export function createBrowserClient(
     onAutomationChanged: (listener: () => void) => {
       return events.on("automation-changed", listener);
     },
+    openTerminal: (request) => rpc("terminal-open", request),
+    writeTerminal: (request) => rpc("terminal-write", request),
+    resizeTerminal: (request) => rpc("terminal-resize", request),
+    closeTerminal: (request) => rpc("terminal-close", request),
+    listTerminals: () => rpc("terminal-list"),
+    onTerminalEvent: (listener) => events.on("terminal-event", listener),
+    onTerminalsChanged: (listener) => events.on("terminals-changed", listener),
     healthCheck: (request) => rpc("health-check", request),
     onHealthChanged: (listener) => events.on("health-changed", listener),
     memorySnapshot: () => rpc("memory-snapshot"),

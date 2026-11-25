@@ -74,6 +74,10 @@ import {
   parseSetupSession,
   parseStart,
   parseTaskAction,
+  parseTerminalClose,
+  parseTerminalOpen,
+  parseTerminalResize,
+  parseTerminalWrite,
   parseWebLink,
 } from "../bridge/index.js";
 import type { Interactions } from "./interactions.js";
@@ -133,6 +137,14 @@ export function applicationOperations(
   handle("mcp-move", (value) => controller.mcpMove(parseMcpManagement(mcpMoveSchema, value)));
   handle("workflow", (value) => workflows.request(value));
   handle("automation", (value) => automations.request(value));
+  handle("terminal-open", (value) => controller.openTerminal(parseTerminalOpen(value)));
+  handle("terminal-write", (value) => controller.terminals.write(parseTerminalWrite(value)));
+  handle("terminal-resize", (value) => controller.terminals.resize(parseTerminalResize(value)));
+  handle("terminal-close", (value) => controller.terminals.close(parseTerminalClose(value)));
+  handle("terminal-list", (value) => {
+    if (value !== undefined) throw new Error("Invalid terminal list request.");
+    return controller.terminals.list();
+  });
   handle("model-default", (value) => controller.modelDefault(parseModelDefaultAction(value)));
   handle("logs-query", (value) => {
     const query = parseLogQuery(value);

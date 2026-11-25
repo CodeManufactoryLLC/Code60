@@ -1,0 +1,82 @@
+/* Terminal panel styles. Imported into components layer by style.css. */
+
+.file-panel-terminal-slot {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.file-panel-terminal-slot[hidden] {
+  display: none;
+}
+
+.terminal-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--cds-layer-01, var(--chat-neutral));
+  overflow: hidden;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 8px 4px 12px;
+  border-bottom: 1px solid var(--cds-border-subtle-01, var(--border));
+  background: var(--cds-layer-01, var(--chat-neutral));
+  flex-shrink: 0;
+}
+
+.terminal-cwd {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--meta-font);
+  letter-spacing: var(--meta-spacing);
+  color: var(--cds-text-secondary, var(--muted));
+}
+
+.terminal-status {
+  flex-shrink: 0;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--meta-font);
+  color: var(--cds-text-secondary, var(--muted));
+}
+
+.terminal-status.is-error {
+  color: var(--cds-support-error, var(--destructive));
+}
+
+.terminal-restart {
+  flex-shrink: 0;
+}
+
+.terminal-viewport {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 8px;
+  overflow: hidden;
+  background: var(--cds-layer-01, var(--chat-neutral));
+}
+
+.terminal-viewport .xterm {
+  height: 100%;
+  width: 100%;
+}
+
+.terminal-viewport .xterm-viewport {
+  scrollbar-width: thin;
+}

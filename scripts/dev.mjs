@@ -10,6 +10,11 @@ const vitePort = developmentPort(process.env.CODE60_VITE_PORT, "CODE60_VITE_PORT
 const gatewayPort = developmentPort(process.env.CODE60_DEV_GATEWAY_PORT, "CODE60_DEV_GATEWAY_PORT");
 if (vitePort !== undefined && vitePort === gatewayPort)
   throw new Error("Development gateway and Vite ports must differ.");
+execFileSync(process.execPath, ["scripts/build-pty-helper.mjs"], {
+  cwd: root,
+  stdio: "inherit",
+  timeout: 60_000,
+});
 execFileSync(process.execPath, ["node_modules/typescript/bin/tsc", "-p", "tsconfig.build.json"], {
   cwd: root,
   stdio: "inherit",

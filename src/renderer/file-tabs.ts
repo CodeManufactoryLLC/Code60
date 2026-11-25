@@ -1,3 +1,4 @@
+import type { TerminalTarget } from "../bridge/index.js";
 import type { ReviewPreview, ReviewScope } from "./review-actions.js";
 import type { ReviewAddress } from "./review-content.js";
 import { reviewScopeKey } from "./review-session.js";
@@ -21,7 +22,8 @@ export type FileTab =
       scope?: ReviewScope;
       related?: ReviewPreview["related"];
     }
-  | { id: number; kind: "application"; preview: ReviewPreview };
+  | { id: number; kind: "application"; preview: ReviewPreview }
+  | { id: number; kind: "terminal"; target: TerminalTarget; label: string };
 
 export interface FileTabs {
   entries: FileTab[];
@@ -49,6 +51,7 @@ export type FileTabAction =
       related?: ReviewPreview["related"];
     }
   | { type: "application"; preview: ReviewPreview }
+  | { type: "terminal"; target: TerminalTarget; label: string }
   | { type: "select" | "close"; id: number }
   | { type: "move"; id: number; to: number };
 
@@ -139,6 +142,16 @@ export function updateFileTabs(state: FileTabs, action: FileTabAction): FileTabs
   }
   const kind = action.type === "browse" ? "explorer" : action.type;
   const active = state.entries.find((tab) => tab.id === state.active);
+  if (action.type === "terminal" && active?.kind === "blank") {
+    return {
+      ...state,
+      entries: state.entries.map((tab) =>
+        tab.id === active.id
+          ? { id: tab.id, kind: "terminal", target: action.target, label: action.label }
+          : tab,
+      ),
+    };
+  }
   if ((kind === "explorer" || kind === "recall") && active?.kind === "blank") {
     return {
       ...state,
@@ -146,36 +159,38 @@ export function updateFileTabs(state: FileTabs, action: FileTabAction): FileTabs
     };
   }
   const tab: FileTab =
-    action.type === "application"
-      ? { id: state.nextId, kind: "application", preview: action.preview }
-      : action.type === "plan"
-        ? { id: state.nextId, kind: "plan", planId: action.planId, title: action.title }
-        : action.type === "changes"
-          ? {
-              id: state.nextId,
-              kind: "changes",
-            }
-          : action.type === "revision"
+    action.type === "terminal"
+      ? { id: state.nextId, kind: "terminal", target: action.target, label: action.label }
+      : action.type === "application"
+        ? { id: state.nextId, kind: "application", preview: action.preview }
+        : action.type === "plan"
+          ? { id: state.nextId, kind: "plan", planId: action.planId, title: action.title }
+          : action.type === "changes"
             ? {
                 id: state.nextId,
-                kind: "revision",
-                reviewId: action.reviewId,
-                revisionId: action.revisionId,
-                title: action.title,
-                ...(action.scope ? { scope: action.scope } : {}),
-                ...(action.related ? { related: action.related } : {}),
+                kind: "changes",
               }
-            : action.type === "file"
+            : action.type === "revision"
               ? {
                   id: state.nextId,
-                  kind: "file",
-                  path: action.path,
-                  ...(action.source ? { source: action.source } : {}),
+                  kind: "revision",
+                  reviewId: action.reviewId,
+                  revisionId: action.revisionId,
+                  title: action.title,
+                  ...(action.scope ? { scope: action.scope } : {}),
+                  ...(action.related ? { related: action.related } : {}),
                 }
-              : {
-                  id: state.nextId,
-                  kind: kind === "recall" ? "recall" : kind === "blank" ? "blank" : "explorer",
-                };
+              : action.type === "file"
+                ? {
+                    id: state.nextId,
+                    kind: "file",
+                    path: action.path,
+                    ...(action.source ? { source: action.source } : {}),
+                  }
+                : {
+                    id: state.nextId,
+                    kind: kind === "recall" ? "recall" : kind === "blank" ? "blank" : "explorer",
+                  };
   return {
     ...state,
     entries: [...state.entries, tab],
@@ -185,6 +200,16 @@ export function updateFileTabs(state: FileTabs, action: FileTabAction): FileTabs
 }
 
 export function fileTabLabel(tab: FileTab, entries: FileTab[]): string {
+  if (tab.kind === "terminal") {
+    const sameLabel = entries.filter(
+      (entry): entry is Extract<FileTab, { kind: "terminal" }> =>
+        entry.kind === "terminal" && entry.label === tab.label,
+    );
+    const base = tab.label ? `Terminal · ${tab.label}` : "Terminal";
+    if (sameLabel.length <= 1) return base;
+    const index = sameLabel.findIndex((entry) => entry.id === tab.id);
+    return `${base} (${index + 1})`;
+  }
   if (tab.kind === "application") return `Application · ${tab.preview.title}`;
   if (tab.kind === "plan") return `Plan · ${tab.title}`;
   if (tab.kind === "changes" || tab.kind === "recall" || tab.kind === "explorer")
