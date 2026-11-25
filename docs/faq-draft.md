@@ -150,6 +150,16 @@ Code60 includes broad keyboard, screen-reader, contrast, and motion accessibilit
 - **Themes, text, and system preferences:** **Personalize** settings offer **Light**, **Dark**, and **System** themes, adjustable interface text size, and focus highlights. The interface also respects operating-system `forced-colors` (high-contrast) and `prefers-reduced-motion` settings by switching to system colors and turning off animations.
 - **Current compliance status:** Code60 makes no formal Web Content Accessibility Guidelines (WCAG) compliance claim today. Full accessibility readiness sits under the `v0.12.0` milestone in the [Code60 roadmap](../ROADMAP.md).
 
+## Architecture and Development
+
+### What programming language does Code60 use?
+
+Code60 uses **TypeScript** for both its local Node.js 24 backend and its React browser interface.
+
+- **Application code:** Core logic, gateway services, management commands, and the React user interface use TypeScript (`.ts`, `.tsx`, and `.mts`).
+- **Styling and markup:** The browser interface uses Cascading Style Sheets (CSS), Sass (`SCSS`), and HyperText Markup Language (HTML) with IBM Carbon Design System styles.
+- **Tooling and packaging:** Build, validation, and distribution scripts use JavaScript modules (`.mjs`) running on Node.js 24.
+
 ## Provider Support
 
 Code60 connects both layers of its [Two-Layer Architecture](terminology-draft.md#two-layer-architecture) to coding-agent providers through ACP. It never asks for provider passwords and never stores API keys. Each provider keeps its own credentials in the backend user's storage.
