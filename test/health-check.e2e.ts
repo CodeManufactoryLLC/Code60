@@ -66,8 +66,9 @@ test("browser: Health Check runs passive checks, supports granular rechecks and 
     await expect(page.getByTestId("health-last-completed")).toContainText("Last completed:");
     await expect(page.getByTestId("health-last-completed")).not.toContainText("Not yet completed");
     const notifications = local.page.getByRole("region", { name: "Notifications" });
-    await expect(notifications.getByRole("log")).toHaveCount(1);
-    await expect(notifications.getByRole("log")).toContainText("Health check complete:");
+    const toasts = notifications.locator(".carbon-toast-owner");
+    await expect(toasts).toHaveCount(1);
+    await expect(toasts).toContainText("Health check complete:");
 
     // Toolbar uses Carbon Dropdowns (no native <select>) and does not overlap the table header.
     await expect(page.locator(".health-toolbar-filter select")).toHaveCount(0);
