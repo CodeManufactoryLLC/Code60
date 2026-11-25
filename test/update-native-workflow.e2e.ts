@@ -413,7 +413,7 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
       const page = await context.newPage();
       await page.goto((await connection()).origin);
       await onboard(page);
-      await expandNavigation(page, "Automation");
+      await expandNavigation(page, "Develop");
       await page.locator("#tab-workflows").click();
       if (engineVersion.endsWith("18")) {
         await page.getByRole("tab", { name: "Execution history", exact: true }).click();
@@ -563,7 +563,7 @@ for (const engineVersion of ["0.1.0-staging.20", "0.1.0-staging.18"] as const)
       context = await browser.newContext();
       const reopened = await context.newPage();
       await reopened.goto((await connection()).origin);
-      await expandNavigation(reopened, "Automation");
+      await expandNavigation(reopened, "Develop");
       await reopened.locator("#tab-workflows").click();
       await reopened.getByRole("tab", { name: "Execution history", exact: true }).click();
       await reopened.getByRole("button", { name: /Work across application update/ }).click();

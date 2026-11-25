@@ -13,6 +13,7 @@ import { Button as AppButton } from "./carbon/button.js";
 import { Checkbox as CarbonCheckbox } from "./carbon/choices.js";
 import { TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
+import { ChatTurn, EmbeddedChat } from "./embedded-chat.js";
 import { Modal } from "./modal.js";
 
 type Message = { id: string; role: "user" | "assistant"; text: string };
@@ -108,14 +109,11 @@ export function WorkflowForm({
       if (alive.current) setBusy(false);
     }
   };
-  const generate = async () => {
-    if (generating || !prompt.trim()) return;
+  const generate = async (text: string) => {
+    if (generation.current || !providerReady || !text.trim() || text.length > 16_000) return false;
     const requestId = randomId();
     const ticket = revision.current;
-    const conversation = [
-      ...messages,
-      { id: randomId(), role: "user" as const, text: prompt },
-    ].slice(-20);
+    const conversation = [...messages, { id: randomId(), role: "user" as const, text }].slice(-20);
     setMessages(conversation);
     setPrompt("");
     setError("");
@@ -133,7 +131,8 @@ export function WorkflowForm({
           messages: conversation.map(({ role, text }) => ({ role, text })),
         }),
       ) as WorkflowDraftReply;
-      if (!alive.current || generation.current !== requestId || revision.current !== ticket) return;
+      if (!alive.current || generation.current !== requestId || revision.current !== ticket)
+        return false;
       setMessages(
         [
           ...conversation,
@@ -144,9 +143,14 @@ export function WorkflowForm({
         taskKeys.current = result.draft.tasks.map(() => randomId());
         change({ ...draft, ...result.draft });
       }
+      return true;
     } catch (cause) {
-      if (alive.current && generation.current === requestId)
+      if (alive.current && generation.current === requestId) {
+        setMessages(messages);
+        setPrompt((current) => current || text);
         setError(cause instanceof Error ? cause.message : "Could not create workflow draft");
+      }
+      return false;
     } finally {
       if (alive.current && generation.current === requestId) {
         setGenerating(false);
@@ -378,59 +382,48 @@ export function WorkflowForm({
       {error && !chat && <p role="alert">{error}</p>}
       {chat && active && (
         <Modal
+          footer={
+            !providerReady && (
+              <AppButton
+                variant="primary"
+                type="button"
+                onClick={() => {
+                  closeChat();
+                  onProvider();
+                }}
+              >
+                Connect a provider
+              </AppButton>
+            )
+          }
           title="Create with prompt"
           busy={false}
           onClose={closeChat}
           closeLabel="Close chat"
-          initialFocus="textarea"
         >
-          <div className="workflow-draft-chat" role="log" aria-live="polite">
-            {messages.map((message) => (
-              <div key={message.id}>
-                <strong>{message.role === "user" ? "You" : "Assistant"}</strong>
-                <p>{message.text}</p>
-              </div>
-            ))}
-          </div>
           {error && <p role="alert">{error}</p>}
-          {!providerReady ? (
-            <AppButton
-              type="button"
-              onClick={() => {
-                closeChat();
-                onProvider();
-              }}
-            >
-              Connect a provider
-            </AppButton>
-          ) : (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void generate();
-              }}
-            >
-              <div>
-                <CarbonTextArea
-                  labelText={<>Describe the workflow</>}
-                  value={prompt}
-                  maxLength={16_000}
-                  onChange={(event) => setPrompt(event.target.value)}
-                />
-              </div>
-              <div className="workflow-actions">
-                <AppButton type="submit" disabled={generating || !prompt.trim()}>
-                  {generating ? "Drafting…" : "Send"}
-                </AppButton>
-                {generating && (
-                  <AppButton type="button" onClick={cancelDraft}>
-                    Cancel generation
-                  </AppButton>
-                )}
-              </div>
-            </form>
+          {providerReady && (
+            <div className="workflow-draft-chat">
+              <EmbeddedChat
+                active
+                label="Describe the workflow"
+                draft={prompt}
+                onEdit={setPrompt}
+                onSend={generate}
+                canSend={!generating}
+                disabled={false}
+                focus
+                limit={16_000}
+                stop={generating ? cancelDraft : undefined}
+              >
+                {messages.map((message) => (
+                  <ChatTurn key={message.id} from={message.role}>
+                    <p>{message.text}</p>
+                  </ChatTurn>
+                ))}
+              </EmbeddedChat>
+            </div>
           )}
-          {error && !chat && <p role="alert">{error}</p>}
         </Modal>
       )}
     </section>

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { Snapshot, StartRequest } from "../bridge/index.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { Checkbox as CarbonCheckbox } from "./carbon/choices.js";
@@ -47,7 +47,34 @@ export function NewSession(props: {
       />
     );
   return (
-    <Modal title="Select run configuration" busy={props.busy} onClose={props.onClose}>
+    <Modal
+      footer={
+        <>
+          <AppButton
+            variant="secondary"
+            type="button"
+            disabled={props.busy}
+            onClick={props.onClose}
+          >
+            Cancel
+          </AppButton>
+          <AppButton
+            type="button"
+            className="primary"
+            disabled={props.busy}
+            onClick={() => {
+              setConfigurationId(undefined);
+              setChoosing(false);
+            }}
+          >
+            Do not use a run configuration
+          </AppButton>
+        </>
+      }
+      title="Select run configuration"
+      busy={props.busy}
+      onClose={props.onClose}
+    >
       {props.snapshot.configurations.length === 0 && <p>No saved run configurations.</p>}
       <ul className="project-list" aria-label="Available run configurations">
         {props.snapshot.configurations.map((entry) => (
@@ -69,22 +96,6 @@ export function NewSession(props: {
           </li>
         ))}
       </ul>
-      <div className="modal-footer">
-        <AppButton type="button" disabled={props.busy} onClick={props.onClose}>
-          Cancel
-        </AppButton>
-        <AppButton
-          type="button"
-          className="primary"
-          disabled={props.busy}
-          onClick={() => {
-            setConfigurationId(undefined);
-            setChoosing(false);
-          }}
-        >
-          Do not use a run configuration
-        </AppButton>
-      </div>
     </Modal>
   );
 }
@@ -102,11 +113,38 @@ export function LaunchConfirmation({
   onClose(): void;
   onSave(name: string): Promise<boolean>;
 }) {
+  const formId = useId();
   const [save, setSave] = useState(false);
   const [name, setName] = useState("");
   const [saved, setSaved] = useState(false);
   return (
-    <Modal title="Agent sessions started" busy={busy} onClose={onClose}>
+    <Modal
+      footer={
+        <>
+          <AppButton
+            variant={save && !saved ? "secondary" : "primary"}
+            type="button"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Done
+          </AppButton>
+          {save && !saved && (
+            <AppButton
+              form={formId}
+              type="submit"
+              className="primary"
+              disabled={busy || !name.trim()}
+            >
+              {busy ? "Saving…" : "Save configuration"}
+            </AppButton>
+          )}
+        </>
+      }
+      title="Agent sessions started"
+      busy={busy}
+      onClose={onClose}
+    >
       <p role="status">
         {count} agent {count === 1 ? "session" : "sessions"} started. Check the sessions table and
         chats for progress or startup errors.
@@ -115,6 +153,7 @@ export function LaunchConfirmation({
         <p role="status">Run configuration saved.</p>
       ) : (
         <form
+          id={formId}
           onSubmit={(event) => {
             event.preventDefault();
             void onSave(name).then((success) => {
@@ -147,20 +186,8 @@ export function LaunchConfirmation({
               {error}
             </div>
           )}
-          {save && (
-            <div className="modal-footer">
-              <AppButton type="submit" className="primary" disabled={busy || !name.trim()}>
-                {busy ? "Saving…" : "Save configuration"}
-              </AppButton>
-            </div>
-          )}
         </form>
       )}
-      <div className="modal-footer">
-        <AppButton type="button" disabled={busy} onClick={onClose}>
-          Done
-        </AppButton>
-      </div>
     </Modal>
   );
 }
@@ -184,6 +211,7 @@ export function NewRun({
   onBack?(request: StartRequest): void;
   onStart(request: StartRequest, name?: string): Promise<void>;
 }) {
+  const formId = useId();
   const editing = configurationName !== undefined;
   const [name, setName] = useState(configurationName ?? "");
   const [prompt, setPrompt] = useState(initial?.prompt ?? "");
@@ -208,6 +236,27 @@ export function NewRun({
   const unavailable = agents.filter((agent) => !snapshot.agents.includes(agent.name));
   return (
     <Modal
+      footer={
+        <>
+          <AppButton variant="secondary" type="button" disabled={busy} onClick={onClose}>
+            Cancel
+          </AppButton>
+          <AppButton
+            form={formId}
+            type="submit"
+            className="primary"
+            disabled={busy || !agents[0] || unavailable.length > 0 || (editing && !name.trim())}
+          >
+            {editing
+              ? busy
+                ? "Saving…"
+                : "Save configuration"
+              : busy
+                ? "Starting…"
+                : "Start agents"}
+          </AppButton>
+        </>
+      }
       title={editing ? "Run configuration" : "New agent sessions"}
       busy={busy}
       onClose={onClose}
@@ -215,6 +264,7 @@ export function NewRun({
       initialFocus="[data-initial-focus]"
     >
       <form
+        id={formId}
         onSubmit={(event) => {
           event.preventDefault();
           void onStart(request(), name);
@@ -364,29 +414,11 @@ export function NewRun({
             </div>
           </details>
         </fieldset>
-        <div className="modal-footer">
-          {onBack && (
-            <AppButton type="button" disabled={busy} onClick={() => onBack(request())}>
-              Back
-            </AppButton>
-          )}
-          <AppButton type="button" disabled={busy} onClick={onClose}>
-            Cancel
+        {onBack && (
+          <AppButton type="button" disabled={busy} onClick={() => onBack(request())}>
+            Back
           </AppButton>
-          <AppButton
-            type="submit"
-            className="primary"
-            disabled={busy || !agents[0] || unavailable.length > 0 || (editing && !name.trim())}
-          >
-            {editing
-              ? busy
-                ? "Saving…"
-                : "Save configuration"
-              : busy
-                ? "Starting…"
-                : "Start agents"}
-          </AppButton>
-        </div>
+        )}
       </form>
     </Modal>
   );

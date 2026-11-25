@@ -118,15 +118,6 @@
   }
 }
 
-@media (forced-colors: active) {
-  .status-label[data-status="waiting"] {
-    color: HighlightText;
-    background: Highlight;
-    border-color: Highlight;
-    forced-color-adjust: none;
-  }
-}
-
 .sr-only {
   position: absolute;
   width: 1px;
@@ -305,13 +296,11 @@
   }
   .agent-message-bubble {
     border-color: CanvasText;
-    background: Canvas;
     color: CanvasText;
     box-shadow: none;
   }
   .composer:focus-within {
     background: Canvas;
-    outline: 2px solid Highlight;
   }
 }
 
@@ -400,11 +389,8 @@
   .chat-connection-frame .chat-empty {
     transition: none;
   }
-  .activity-display[data-animate="true"] .activity-name,
-  .chat-connecting[data-animate="true"] .activity-name {
+  .chat-loading.cds--loading {
     animation: none;
-    background: none;
-    color: var(--text);
   }
 }
 

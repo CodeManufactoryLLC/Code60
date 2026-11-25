@@ -180,7 +180,7 @@ it("rewinds a zero-edit request, retires its provider, and sends only surviving 
     text: "Discarded request marker",
   });
   await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
-  expect(confirm).toHaveBeenLastCalledWith("Undo this request?", expect.stringContaining("unsent"));
+  expect(confirm).toHaveBeenLastCalledWith("undo-request", expect.stringContaining("unsent"));
   expect(agents.sessions[0]?.stops.length).toBeGreaterThan(0);
   expect(agents.sessions[1]?.prompts).toHaveLength(0);
   expect(JSON.stringify(relay.snapshot().events)).not.toContain("Discarded request marker");

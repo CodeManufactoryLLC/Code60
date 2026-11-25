@@ -3307,10 +3307,7 @@ describe("desktop orchestration", () => {
     git.files = [{ path: "hello.txt", status: "untracked" }];
     confirm.mockResolvedValue(false);
     await controller.action({ type: "discard", id });
-    expect(confirm).toHaveBeenCalledWith(
-      "Discard this worktree?",
-      expect.stringContaining("hello.txt"),
-    );
+    expect(confirm).toHaveBeenCalledWith("discard-worktree", expect.stringContaining("hello.txt"));
     expect(git.removed).toEqual([]);
     confirm.mockResolvedValue(true);
     await controller.action({ type: "discard", id });
@@ -3448,7 +3445,7 @@ describe("prompt templates", () => {
     expect(state("handoffTurn")?.source).toBe("database");
     await expect(controller.resetPromptTemplate("handoffTurn")).resolves.toBe(true);
     expect(confirm).toHaveBeenLastCalledWith(
-      "Reset prompt template?",
+      "reset-prompt",
       expect.stringContaining("the template from config.json"),
     );
     expect(state("handoffTurn")).toMatchObject({
@@ -3515,7 +3512,7 @@ describe("project database", () => {
     expect(controller.snapshot().projects).toHaveLength(1);
     expect(await controller.clearProjects()).toBe(true);
     expect(confirm).toHaveBeenLastCalledWith(
-      "Clear project history?",
+      "clear-history",
       expect.stringContaining("not affected"),
     );
     expect(controller.snapshot().projects).toEqual([]);

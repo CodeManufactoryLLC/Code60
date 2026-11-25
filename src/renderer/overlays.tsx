@@ -58,6 +58,7 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
       busy={false}
       onClose={onClose}
       initialFocus="input"
+      passive
       className="command-palette"
       onKeyDown={(event) => {
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {

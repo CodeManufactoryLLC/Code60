@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { defaultTransitionTimes, useTransitionTimes } from "./transition-times.js";
 
 interface ReadingPosition {
@@ -139,19 +139,50 @@ export function createChatScroll(
   };
 }
 
+/** Carbon mounts a restored thread asynchronously. Reveal the requested event
+ * only when its custom response is present in this conversation's live embed. */
+export function whenChatEventAppears(
+  frame: HTMLElement | null,
+  index: number,
+  reveal: (node: HTMLElement) => void,
+) {
+  if (!frame) return;
+  const find = () =>
+    frame.querySelector<HTMLElement>(`.embedded-chat [data-event-index="${index}"]`);
+  const existing = find();
+  if (existing) {
+    reveal(existing);
+    return;
+  }
+  const observer = new MutationObserver(() => {
+    const node = find();
+    if (node) {
+      observer.disconnect();
+      reveal(node);
+    }
+  });
+  observer.observe(frame, { childList: true, subtree: true });
+  return () => observer.disconnect();
+}
+
 export function useChatScroll(active: boolean, key: string) {
   const { scrollResponse } = useTransitionTimes();
   const response = useRef(scrollResponse);
   response.current = scrollResponse;
   const scroll = useRef<HTMLDivElement>(null);
-  const content = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
+  const onViewport = useCallback((node: HTMLDivElement) => {
+    scroll.current = node;
+    setViewport(node);
+  }, []);
   const saved = useRef({ key, following: true, top: 0 });
   const controller = useRef<ReturnType<typeof createChatScroll> | null>(null);
   useEffect(() => {
     if (saved.current.key !== key) saved.current = { key, following: true, top: 0 };
-    const element = scroll.current;
+    const element = viewport;
     if (!active || !element) return;
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const inner = element.firstElementChild;
     const current = createChatScroll(
       element,
       saved.current,
@@ -159,17 +190,17 @@ export function useChatScroll(active: boolean, key: string) {
       () => response.current,
       // Height already eases each frame. Applying a second easing would throw the status
       // below the viewport before scrolling caught up with it.
-      () => content.current?.querySelector("[data-layout-animating='true']") != null,
+      () => inner?.querySelector("[data-layout-animating='true']") != null,
     );
     controller.current = current;
     // Initial history and returning to a conversation restore without replaying motion.
     current.update(true);
     const resize = new ResizeObserver(() => current.update());
     resize.observe(element);
-    const inner = content.current;
     if (inner) resize.observe(inner);
-    const layoutEnded = (event: TransitionEvent) => {
+    const layoutEnded = (event: Event) => {
       if (
+        event instanceof TransitionEvent &&
         event.propertyName === "height" &&
         event.target instanceof HTMLElement &&
         event.target.classList.contains("chat-message-layout")
@@ -212,13 +243,13 @@ export function useChatScroll(active: boolean, key: string) {
       media.removeEventListener("change", settle);
       document.removeEventListener("visibilitychange", settle);
     };
-  }, [active, key]);
+  }, [active, key, viewport]);
   useEffect(() => {
     controller.current?.update(scrollResponse === 0);
   }, [scrollResponse]);
   return {
     scroll,
-    content,
+    onViewport,
     pause: () => controller.current?.pause(),
     reveal: (top: number, duration: number, valid: () => boolean) =>
       controller.current?.reveal(top, duration, valid),

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -5,7 +6,8 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
 import type { spawnOwnedProcess as Spawn } from "../src/platform/index.js";
-import { onboard } from "./fixtures/browser-app.js";
+import { createDatabase, onboard, openProject } from "./fixtures/browser-actions.js";
+import { commitFixture } from "./fixtures/git-repository.js";
 
 const { spawnOwnedProcess } = (await import(
   pathToFileURL(resolve("dist/platform/index.js")).href
@@ -97,9 +99,35 @@ test("development: Fast Refresh preserves the backend and backend edits restart 
     const initial = await connection();
     if (!initial) throw new Error("Development backend never became ready");
     const page = await context.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => {
+      if (
+        message.type() === "error" &&
+        /invalid hook call|descendant of|cannot contain a nested/i.test(message.text())
+      )
+        errors.push(message.text());
+    });
     await page.goto(origin);
     await onboard(page);
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
+    // The chooser is lazy-loaded. Open it against Vite while the dependencies are symlinked.
+    const project = join(directory, "sample-project");
+    await mkdir(project);
+    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: project });
+    commitFixture(project);
+    await createDatabase(page, directory);
+    await openProject(page, directory, "sample-project");
+    await expect(
+      page.getByRole("group", { name: `Project controls for ${project}`, exact: true }),
+    ).toBeVisible();
+    expect(execFileSync("git", ["status", "--porcelain"], { cwd: project, encoding: "utf8" })).toBe(
+      "",
+    );
+    expect(errors).toEqual([]);
+    // The disposable source copy must own the cache even when node_modules resolves elsewhere.
+    const cache = join(directory, "test-results/dev/vite-cache");
+    expect(await realpath(cache)).toBe(cache);
     await page.getByRole("button", { name: "Workspace", exact: true }).click();
     const footer = page.getByRole("note", { name: "Running Code60 version" });
     await expect(footer).toBeVisible();

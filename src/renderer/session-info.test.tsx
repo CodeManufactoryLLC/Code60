@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { SessionState } from "../core/index.js";
-import { contextUsage, SessionInfo } from "./session-info.js";
+import { contextUsage, SessionExtras, SessionInfo } from "./session-info.js";
 import { transcript } from "./transcript.js";
 import { replyTurns } from "./unread.js";
 
@@ -26,20 +26,29 @@ const state: SessionState = {
     ],
   },
 };
-const render = (overrides: Partial<Parameters<typeof SessionInfo>[0]> = {}) =>
+const render = (
+  overrides: Partial<Parameters<typeof SessionInfo>[0] & Parameters<typeof SessionExtras>[0]> = {},
+) =>
   renderToStaticMarkup(
-    <SessionInfo
-      harness="droid"
-      sessionId="session-one"
-      state={state}
-      ended={false}
-      editable
-      changing={false}
-      autoApproval
-      onAutoApprovalChange={async () => {}}
-      onMode={() => {}}
-      {...overrides}
-    />,
+    <>
+      <SessionInfo
+        sessionId="session-one"
+        state={state}
+        ended={false}
+        editable
+        changing={false}
+        onMode={() => {}}
+        {...overrides}
+      />
+      <SessionExtras
+        harness="droid"
+        active
+        ended={false}
+        autoApproval
+        onAutoApprovalChange={async () => {}}
+        {...overrides}
+      />
+    </>,
   );
 
 describe("session information", () => {

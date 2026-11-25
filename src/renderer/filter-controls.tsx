@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { randomId } from "./browser-platform.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { Select as CarbonSelect, TextInput as CarbonTextInput } from "./carbon/fields.js";
@@ -35,6 +35,7 @@ export function FilterControls({
   const now = useTicker(open, 30000);
   const [selected, setSelected] = useState("");
   const [draft, setDraft] = useState<SavedFilter>();
+  const formId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const entry = library.definitions.find((item) => filterIdentity(item).id === selected);
   const active = library.definitions.find((item) => filterIdentity(item).id === library.active);
@@ -103,7 +104,51 @@ export function FilterControls({
         </AppButton>
       )}
       {open && (
-        <Modal title="Filters" busy={false} onClose={close} className="filter-dialog" wide>
+        <Modal
+          footer={
+            <>
+              {draft ? (
+                <>
+                  <AppButton variant="secondary" type="button" onClick={() => setDraft(undefined)}>
+                    Cancel edit
+                  </AppButton>
+                  <AppButton
+                    form={formId}
+                    type="submit"
+                    className="primary"
+                    disabled={!!problem || !!error}
+                  >
+                    Save filter
+                  </AppButton>
+                </>
+              ) : (
+                <>
+                  <AppButton variant={selected ? "secondary" : "primary"} onClick={close}>
+                    Done
+                  </AppButton>
+                  {selected && (
+                    <AppButton
+                      variant="primary"
+                      type="button"
+                      disabled={!!filterProblem(entry, fields) || !!error}
+                      onClick={() => onChange({ ...library, active: selected })}
+                    >
+                      Apply filter
+                    </AppButton>
+                  )}
+                </>
+              )}
+            </>
+          }
+          initialFocus={
+            draft ? 'input[aria-label="Filter name"]' : 'select[aria-label="Filter definition"]'
+          }
+          title="Filters"
+          busy={false}
+          onClose={close}
+          className="filter-dialog"
+          wide
+        >
           <div className="filter-content">
             {error && (
               <div role="alert">
@@ -188,13 +233,6 @@ export function FilterControls({
                     <div className="button-group">
                       <AppButton
                         type="button"
-                        disabled={!!issue || !!error}
-                        onClick={() => onChange({ ...library, active: value.id })}
-                      >
-                        Apply filter
-                      </AppButton>
-                      <AppButton
-                        type="button"
                         disabled={!editableFilter(item) || !!error}
                         onClick={() => setDraft(structuredClone(value))}
                       >
@@ -223,6 +261,7 @@ export function FilterControls({
               })()}
             {draft && (
               <form
+                id={formId}
                 onSubmit={(event) => {
                   event.preventDefault();
                   save();
@@ -366,14 +405,6 @@ export function FilterControls({
                       ? "Apply to search all retained history."
                       : `${preview(draft, now)} matching rows`)}
                 </p>
-                <div className="button-group">
-                  <AppButton type="submit" className="primary" disabled={!!problem || !!error}>
-                    Save filter
-                  </AppButton>
-                  <AppButton type="button" onClick={() => setDraft(undefined)}>
-                    Cancel edit
-                  </AppButton>
-                </div>
               </form>
             )}
           </div>

@@ -143,7 +143,7 @@ export function applicationOperations(
     parseLogClear(value);
     if (
       !(await interactions.confirm(
-        "Clear logs?",
+        "clear-logs",
         "Only diagnostic logs will be cleared. Transcripts, run records, databases and worktrees are kept.",
       ))
     )
@@ -181,7 +181,7 @@ export function applicationOperations(
     if (!controller.connected) throw new Error("Connect to a database first");
     const path = await interactions.pick("folder");
     controller.assertDatabaseRequest(epoch);
-    if (!path || !(await interactions.confirm("Open project?", path))) return false;
+    if (!path || !(await interactions.confirm("open-project", path))) return false;
     controller.assertDatabaseRequest(epoch);
     await controller.open(path, epoch);
     return true;
@@ -293,7 +293,7 @@ export function applicationOperations(
   handle("project-search-page", (value) => controller.searchProjectsPage(value));
   handle("project-search-cancel", (value) => controller.cancelProjectSearch(value));
   handle("project-search-open", (value) =>
-    controller.openSearchSource(value, (path) => interactions.confirm("Open project?", path)),
+    controller.openSearchSource(value, (path) => interactions.confirm("open-project", path)),
   );
   handle("search-summary", (value) => controller.summarizeSearch(parseSearchSummary(value)));
   handle("search-summary-cancel", (value) =>
@@ -349,14 +349,12 @@ export function applicationOperations(
     if (value !== undefined) throw new Error("Invalid request");
     if (
       await interactions.confirm(
-        "Stop all runs?",
+        "stop-runs",
         "Active interactive work will be cancelled. Scheduled jobs and worktrees are kept.",
       )
     )
       await controller.stopAll();
   });
-  handle("web-link", async (value) =>
-    interactions.confirm("Open web link?", parseWebLink(value).url),
-  );
+  handle("web-link", async (value) => interactions.confirm("open-link", parseWebLink(value).url));
   return operations;
 }

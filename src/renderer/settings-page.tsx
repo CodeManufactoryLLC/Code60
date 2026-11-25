@@ -1,7 +1,8 @@
 import { type ReactNode, useId } from "react";
 import type { Versions } from "../bridge/index.js";
 import { AboutSection } from "./about-section.js";
-import { parseTheme, type Theme } from "./appearance.js";
+import { defaultAccentColor, parseTheme, type Theme } from "./appearance.js";
+import { Button } from "./carbon/button.js";
 import { RadioButton as CarbonRadioButton } from "./carbon/choices.js";
 import { Select as CarbonSelect } from "./carbon/fields.js";
 import { Switch as CarbonSwitch } from "./carbon/switch.js";
@@ -19,6 +20,8 @@ export function SettingsPage({
   pollingControls,
   theme,
   onTheme,
+  accentColor,
+  onAccentColor,
   textStyles,
   onTextStyles,
   lines,
@@ -45,6 +48,8 @@ export function SettingsPage({
   onSignals(on: boolean): void;
   charts: boolean;
   onCharts(on: boolean): void;
+  accentColor: string;
+  onAccentColor(color: string): void;
   theme: Theme;
   onTheme(theme: Theme): void;
   textStyles: TextStyles;
@@ -61,7 +66,7 @@ export function SettingsPage({
     <div
       role="tabpanel"
       id={`panel-settings-${page}`}
-      aria-labelledby={`tab-settings-${page}`}
+      aria-label={settingsLabels[page]}
       hidden={section !== page}
     >
       {children}
@@ -90,6 +95,26 @@ export function SettingsPage({
                 <option value="dark">Dark</option>
                 <option value="system">System</option>
               </CarbonSelect>
+            </div>
+            <div className="settings-row accent-color-setting">
+              <label htmlFor={`${id}-accent`}>Accent color</label>
+              <div className="accent-color-controls">
+                <input
+                  type="color"
+                  id={`${id}-accent`}
+                  value={accentColor}
+                  onChange={(event) => onAccentColor(event.currentTarget.value)}
+                />
+                <span>{accentColor.toUpperCase()}</span>
+                <Button
+                  variant="quiet"
+                  className="small"
+                  disabled={accentColor === defaultAccentColor}
+                  onClick={() => onAccentColor(defaultAccentColor)}
+                >
+                  Reset to verdigris
+                </Button>
+              </div>
             </div>
           </SettingsCard>
           <SettingsCard title="Accessibility">

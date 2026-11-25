@@ -134,7 +134,7 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
     await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     const open = async () => {
-      await expandNavigation(page, "Automation");
+      await expandNavigation(page, "Develop");
       await page.locator("#tab-workflows").click();
     };
     await open();
@@ -266,7 +266,7 @@ test("native workflow: bundled engine survives backend restart, pauses, resumes 
     const reopened = await context.newPage();
     await reopened.goto(gateway.origin);
     await expect(reopened.getByRole("banner", { name: "Code60" })).toBeVisible();
-    await expandNavigation(reopened, "Automation");
+    await expandNavigation(reopened, "Develop");
     await reopened.locator("#tab-workflows").click();
     await reopened.getByRole("tab", { name: "Execution history", exact: true }).click();
     await reopened.getByRole("button", { name: /Native preserved execution/ }).click();

@@ -1,10 +1,11 @@
-import type { ReactNode } from "react";
+import { Button } from "@carbon/react";
 import type { DatabaseMode, ProjectEntry } from "../bridge/index.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { Icon } from "./icons.js";
+import { Modal } from "./modal.js";
 import { pathLabel } from "./path-label.js";
 
-export interface ProjectSelectorProps {
+interface ProjectDialogProps {
   projects: readonly ProjectEntry[];
   database: string | null;
   busy: boolean;
@@ -13,11 +14,10 @@ export interface ProjectSelectorProps {
   onOpen(path: string): void;
   onCreate(): void;
   onRemove(path: string): void;
-  footerAction?: ReactNode;
+  onClose(): void;
 }
 
-/** Shared project controls for the startup sidebar and the in-app modal. */
-export function ProjectSelector({
+export function ProjectDialog({
   projects,
   database,
   busy,
@@ -26,10 +26,27 @@ export function ProjectSelector({
   onOpen,
   onCreate,
   onRemove,
-  footerAction,
-}: ProjectSelectorProps) {
+  onClose,
+}: ProjectDialogProps) {
   return (
-    <>
+    <Modal
+      title="Open Project"
+      busy={busy}
+      size="sm"
+      className="project-dialog"
+      initialFocus=".project-item:enabled, .button-group button:enabled, .cds--modal-footer .cds--btn--primary:enabled"
+      onClose={onClose}
+      footer={
+        <>
+          <Button kind="secondary" disabled={busy} onClick={onClose}>
+            Cancel
+          </Button>
+          <Button kind="primary" disabled={busy || !database} onClick={onCreate}>
+            Open Folder
+          </Button>
+        </>
+      }
+    >
       {!database ? (
         <>
           <p className="muted">No database connected.</p>
@@ -49,6 +66,7 @@ export function ProjectSelector({
             <li key={project.path} className="project-row">
               <AppButton
                 type="button"
+                variant="quiet"
                 className="project-item"
                 disabled={busy}
                 onClick={() => onOpen(project.path)}
@@ -72,21 +90,11 @@ export function ProjectSelector({
       ) : (
         <p className="muted">No recent projects.</p>
       )}
-      <AppButton
-        type="button"
-        className="project-open-folder"
-        disabled={busy || !database}
-        onClick={onCreate}
-      >
-        <Icon name="add" />
-        <span>Open Folder</span>
-      </AppButton>
       {error && (
         <div className="error-banner" role="alert">
           {error}
         </div>
       )}
-      {footerAction && <div className="modal-footer">{footerAction}</div>}
-    </>
+    </Modal>
   );
 }

@@ -17,3 +17,8 @@ it("only returns the identity fields for the saved destination", () => {
     readResume(storage('{"page":"project","project":"a","chat":"other","action":"run"}'), "db"),
   ).toEqual({ page: "project", project: "a" });
 });
+it("reopens a former provider detail destination on Providers", () => {
+  expect(readResume(storage('{"page":"provider","provider":"claude"}'), "db")).toEqual({
+    page: "providers",
+  });
+});

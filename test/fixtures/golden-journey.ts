@@ -77,7 +77,7 @@ export async function goldenJourney(fixture: GoldenApplication, setupDatabase?: 
     await openProject(page, fixture.directory, "project with spaces");
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const chat = page.locator(".orchestration-chat-page:visible");
-    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const composer = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
     const request = `Plan a change in ${repo}\nCreate result.txt containing "human accepted target" followed by a newline. Use an isolated worktree and wait for my approval.`;
     await composer.fill(request);
     await composer.press("Enter");
@@ -122,12 +122,16 @@ export async function goldenJourney(fixture: GoldenApplication, setupDatabase?: 
       .getByRole("button", { name: "Undo", exact: true });
     await undo.click();
     let confirm = page.getByRole("dialog", { name: "Undo this request?", exact: true });
+    await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await expect(confirm.getByRole("button", { name: "Undo request", exact: true })).toHaveClass(
+      /cds--btn--danger/,
+    );
     await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
     expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("human accepted target\n");
     await unchanged();
     await undo.click();
     confirm = page.getByRole("dialog", { name: "Undo this request?", exact: true });
-    await confirm.getByRole("button", { name: "Confirm", exact: true }).click();
+    await confirm.getByRole("button", { name: "Undo request", exact: true }).click();
     await expect
       .poll(async () => readFile(join(repo, "result.txt"), "utf8"), { timeout: 20_000 })
       .toBe("original\n");

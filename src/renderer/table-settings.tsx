@@ -60,7 +60,6 @@ export function TableSettings({
   textStyles: TextStyles;
 }) {
   const id = useId();
-  const density = useRef<HTMLSelectElement>(null);
   const columnsMenu = useRef<HTMLDivElement>(null);
   const columnsTrigger = useRef<HTMLButtonElement>(null);
   const [columnsOpen, setColumnsOpen] = useState(false);
@@ -95,15 +94,30 @@ export function TableSettings({
     change({ ...current, order });
   };
   const visibleCount = available.filter((column) => !current.hidden.includes(column.key)).length;
-  useEffect(() => {
-    density.current?.focus();
-  }, []);
   const close = () => {
     onClose();
   };
   const change = (next: TableView) => setDraft(visibleSettingsView(columns, next));
   return (
     <Modal
+      footer={
+        <>
+          <AppButton variant="secondary" type="button" onClick={close}>
+            Cancel
+          </AppButton>
+          <AppButton
+            type="button"
+            className="primary"
+            onClick={() => {
+              onApply(draft);
+              close();
+            }}
+          >
+            Apply
+          </AppButton>
+        </>
+      }
+      initialFocus=".table-columns-dropdown button"
       title={title}
       busy={false}
       onClose={close}
@@ -204,7 +218,6 @@ export function TableSettings({
                       <span id={`${id}-density`}>Row density</span>
                     </>
                   }
-                  ref={density}
                   aria-labelledby={`${id}-density`}
                   value={current.density}
                   onChange={(event) =>
@@ -326,26 +339,9 @@ export function TableSettings({
           </fieldset>
         </div>
       </div>
-      <footer className="table-settings-footer">
-        <AppButton type="button" onClick={() => setDraft(undefined)}>
-          Reset to defaults
-        </AppButton>
-        <div className="table-settings-actions">
-          <AppButton type="button" onClick={close}>
-            Cancel
-          </AppButton>
-          <AppButton
-            type="button"
-            className="primary"
-            onClick={() => {
-              onApply(draft);
-              close();
-            }}
-          >
-            Apply
-          </AppButton>
-        </div>
-      </footer>
+      <AppButton type="button" onClick={() => setDraft(undefined)}>
+        Reset to defaults
+      </AppButton>
     </Modal>
   );
 }

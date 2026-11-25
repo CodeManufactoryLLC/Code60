@@ -38,7 +38,6 @@ it.each([
   ["orchestrator", "app-communication"],
   ["worker", "app-down-right"],
   ["project", "app-folder"],
-  ["provider", "app-helmet"],
 ] as const)("uses a safe actual %s title without artwork", (page, icon) => {
   const html = renderToStaticMarkup(
     <PageTitle page={page} as="h2">

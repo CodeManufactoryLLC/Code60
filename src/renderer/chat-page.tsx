@@ -1,5 +1,6 @@
 import {
   type ReactNode,
+  useContext,
   useEffect,
   useId,
   useLayoutEffect,
@@ -17,7 +18,6 @@ import type {
 import type { RunEvent } from "../core/index.js";
 import { ActivityDisplay } from "./activity-display.js";
 import { Button } from "./carbon/button.js";
-import { ScrollArea } from "./carbon/scroll-area.js";
 import { Surface as Card } from "./carbon/surfaces.js";
 import { chatDraftKey, useChatDraft } from "./chat-draft.js";
 import { ChatMessage } from "./chat-message.js";
@@ -29,17 +29,18 @@ import {
   isLiveMessage,
   turnTimings,
 } from "./chat-presentation.js";
-import { useChatScroll } from "./chat-scroll.js";
+import { useChatScroll, whenChatEventAppears } from "./chat-scroll.js";
 import { conversationId, type OpenChat } from "./chats.js";
-import { CommandComposer, CommandMessage, invokedCommand } from "./command-composer.js";
+import { CommandMessage, invokedCommand } from "./command-composer.js";
 import { revisionSlot, useConversationRevisions } from "./conversation-revisions.js";
-import { Icon } from "./icons.js";
+import { ChatTurn, EmbeddedChat } from "./embedded-chat.js";
 import { TurnTimer } from "./message-controls.js";
 import { useOrchestratorActions } from "./orchestrator-actions.js";
 import { PageTitle } from "./page-title.js";
 import { PendingApprovals } from "./pending-approvals.js";
+import { RelayInputFocus } from "./relay-pulse.js";
 import type { ReviewPreview } from "./review-actions.js";
-import { SessionInfo } from "./session-info.js";
+import { SessionExtras, SessionInfo } from "./session-info.js";
 import { statusSpec } from "./session-presentation.js";
 import { TacticsControl } from "./tactics.js";
 import { type Block, transcript } from "./transcript.js";
@@ -100,6 +101,7 @@ export function ChatPage({
   notice?: ReactNode;
   request?: OpenChat | undefined;
 }) {
+  const reportRelayFocus = useContext(RelayInputFocus);
   const [renaming, setRenaming] = useState(false);
   const id = useId();
   const run = chat?.run;
@@ -124,11 +126,12 @@ export function ChatPage({
   const { activityDetails: detailsDuration } = useTransitionTimes();
   const {
     scroll,
-    content,
+    onViewport,
     pause,
     resume,
     reveal: revealActivity,
   } = useChatScroll(active && !hidden, key);
+  const frame = useRef<HTMLDivElement>(null);
   const shown = active && !hidden;
   const revisionFlow = useConversationRevisions({
     api,
@@ -233,20 +236,19 @@ export function ChatPage({
       setExpandedActivities((current) => new Set([...current, group]));
       return;
     }
-    const element = scroll.current?.querySelector<HTMLElement>(
-      `[data-event-index="${target.eventIndex}"]`,
-    );
-    const viewport = scroll.current;
-    if (!element || !viewport) return;
-    pause();
-    const top =
-      viewport.scrollTop +
-      element.getBoundingClientRect().top -
-      viewport.getBoundingClientRect().top -
-      viewport.clientHeight / 3;
-    revealActivity(top, group ? detailsDuration : 0, () => element.isConnected);
-    element.focus({ preventScroll: true });
-    matched.current = `${key}:${target.serial}`;
+    return whenChatEventAppears(frame.current, target.eventIndex, (element) => {
+      const viewport = scroll.current;
+      if (!viewport) return;
+      pause();
+      const top =
+        viewport.scrollTop +
+        element.getBoundingClientRect().top -
+        viewport.getBoundingClientRect().top -
+        viewport.clientHeight / 3;
+      revealActivity(top, group ? detailsDuration : 0, () => element.isConnected);
+      element.focus({ preventScroll: true });
+      matched.current = `${key}:${target.serial}`;
+    });
   }, [
     shown,
     target,
@@ -362,10 +364,10 @@ export function ChatPage({
     setVisible(300);
     setExpandedActivities(new Set());
   }, [setError]);
-  async function send() {
-    if (!ready || !run || !draft.trim()) return;
+  async function send(submitted: string) {
+    if (!ready || busy || !run || !submitted.trim()) return false;
     const sent = draftState.sent();
-    const text = sent.text;
+    const text = sent.text.trim() === submitted ? sent.text : submitted;
     const command = relay ? undefined : invokedCommand(commands, text);
     if (
       await action({
@@ -380,7 +382,9 @@ export function ChatPage({
     ) {
       draftState.clear(sent);
       resume();
+      return true;
     }
+    return false;
   }
   async function undoRequest() {
     const undoId = run?.id ?? (relay ? chat?.conversationId : undefined);
@@ -406,6 +410,122 @@ export function ChatPage({
       : run
         ? statusSpec[run.status].label
         : "Not connected";
+  const hasLiveDetails = liveTurn !== null && activityTurns.groups.has(liveTurn);
+  const liveOverride =
+    run?.stopping || pending === "cancel" || pending === "stop"
+      ? "Stopping"
+      : pending === "send"
+        ? "Sending"
+        : undefined;
+  const responding = chat?.activity?.state === "responding" && !liveOverride;
+  const liveAnchor = items.find((item) => item.key === liveTurn);
+  // Activity belongs to its prompt. Giving the status or its collapsed details
+  // their own Carbon messages creates empty assistant bubbles and announcements.
+  const liveContent = !opening && liveTurn !== null && (
+    <>
+      {responding ? (
+        hasLiveDetails && (
+          <Button
+            variant="quiet"
+            type="button"
+            className="activity-history-toggle"
+            id={`${id}-live-activity`}
+            aria-expanded={expandedActivities.has(liveTurn)}
+            aria-controls={detailsId(liveTurn)}
+            onClick={() => toggleActivity(liveTurn)}
+          >
+            Activity details
+          </Button>
+        )
+      ) : (
+        <ActivityDisplay
+          id={`${id}-live-activity`}
+          controls={detailsId(liveTurn)}
+          expanded={expandedActivities.has(liveTurn)}
+          onToggle={() => toggleActivity(liveTurn)}
+          activity={chat?.activity?.state === "connecting" ? undefined : chat?.activity}
+          fallback={progress || label}
+          delegated={delegated}
+          hidden={hidden}
+          override={liveOverride}
+        />
+      )}
+      {(!responding || hasLiveDetails) && activityDetails(liveTurn)}
+    </>
+  );
+  const promptControls = (
+    <SessionInfo
+      sessionId={run?.id ?? ""}
+      active={active}
+      state={run?.sessionState}
+      ended={!!ended}
+      editable={ready && !busy}
+      changing={!!run?.modeChanging || pending === "set-mode"}
+      sessionRole="orchestrator"
+      onSaveDefault={() => {
+        if (run) void action({ type: "save-model-default", id: run.id });
+      }}
+      onMode={(change) => {
+        if (run) void action({ type: "set-mode", id: run.id, change });
+      }}
+    />
+  );
+  const footer = (
+    <Card as="section" className="composer" aria-label="Chat composer">
+      {chat?.checkpoint?.phase === "undoing" && (
+        <p role="alert">
+          Undo needs recovery before another request can start.
+          <Button type="button" disabled={busy} onClick={() => void undoRequest()}>
+            Resume Undo
+          </Button>
+        </p>
+      )}
+      {!!draftState.attachments.length && (
+        <ul className="chat-attachments" aria-label="Attached code references">
+          {draftState.attachments.map((attachment, index) => (
+            <li key={JSON.stringify(attachment.reference)}>
+              {attachment.label}
+              <Button
+                variant="quiet"
+                type="button"
+                disabled={busy}
+                aria-label={`Remove ${attachment.label}`}
+                onClick={() => draftState.remove(index)}
+              >
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!relay && /^\$\S+/.test(draft) && !invokedCommand(commands, draft) && (
+        <p className="command-plain-text muted" role="status">
+          No matching command. This message will be sent as plain text.
+        </p>
+      )}
+      <SessionExtras
+        harness={run?.agent ?? "N/A"}
+        ended={!!ended}
+        active={active}
+        autoApproval={autoApproval}
+        onAutoApprovalChange={(value) => api.setOrchestrationAutoApproval(value)}
+      >
+        {!relay && (
+          <TacticsControl
+            selection={chat?.tactic}
+            disabled={!database || !run || busy}
+            active={active && !hidden}
+            context={`${run?.id ?? ""}:${project ?? ""}`}
+            onChange={(tactic) =>
+              run
+                ? action({ type: "set-tactic", id: run.id, project, tactic })
+                : Promise.resolve(false)
+            }
+          />
+        )}
+      </SessionExtras>
+    </Card>
+  );
   return (
     <main
       className="orchestration-chat-page"
@@ -469,6 +589,7 @@ export function ChatPage({
           />
         )}
       </header>
+      {!liveAnchor && liveContent}
       {notice}
       {failure && (
         <div className="error-banner" role="alert">
@@ -481,7 +602,7 @@ export function ChatPage({
         </div>
       )}
       <div className="orchestration-chat-body">
-        <div className="chat-connection-frame">
+        <div className="chat-connection-frame" ref={frame}>
           <ActivityDisplay
             key={run?.id ?? "empty"}
             presentation="connecting"
@@ -498,297 +619,221 @@ export function ChatPage({
               progress === "Stopping"
             }
           />
-          <ScrollArea
-            className="transcript"
-            ref={scroll}
-            role="log"
-            aria-label="Orchestration conversation"
-            aria-busy={opening}
-          >
-            <div className="chat-transcript-content" ref={content}>
-              {blocks.length === 0 && initialized && (
-                <div className="chat-empty">
-                  <h2>Give Code60 a task.</h2>
-                </div>
-              )}
-              {blocks.length > visible && (
-                <Button
-                  variant="quiet"
-                  type="button"
-                  onClick={() => {
-                    pause();
-                    setVisible((count) => count + 300);
-                  }}
-                >
-                  Show earlier activity
-                </Button>
-              )}
-              {items.map((item, index) => (
-                <div className="chat-turn-content" key={item.key}>
-                  {revisionSlots.get(index)}
-                  {!item.activity &&
-                    (() => {
-                      const block = item.blocks[0] as Block;
-                      const event = events[Number(block.key)];
-                      const feedback =
-                        event?.type === "prompt"
-                          ? revisionFlow.summaries.find((review) =>
-                              feedbackAt(review, run?.id, event.turn),
-                            )
-                          : undefined;
-                      const fresh =
-                        Number(block.key) >= receivedEvents.current.count &&
-                        isLiveMessage(event?.at, visibility.current.since) &&
-                        !chat?.restored &&
-                        active &&
-                        !hidden;
-                      const message = feedback ? (
-                        <article
-                          className={`event prompt${target?.eventIndex === Number(block.key) ? " search-match" : ""}`}
-                          data-event-index={block.key}
-                          tabIndex={-1}
-                          aria-label="Your review feedback"
-                        >
-                          <div className="chat-message-speaker">You</div>
-                          <p>Feedback on {feedback.title}</p>
-                          <Button
-                            variant="quiet"
-                            type="button"
-                            onClick={() => {
-                              const batch = feedback.submissions.find(
-                                (batch) =>
-                                  (batch.deliveredChatId ?? feedback.originChatId) === run?.id &&
-                                  batch.deliveredTurn ===
-                                    (event?.type === "prompt" ? event.turn : undefined),
-                              );
-                              if (batch && revisionFlow.showFeedback(feedback.id, batch.revisionId))
-                                return;
-                              if (!relay) onReview?.(feedback.id);
-                            }}
-                          >
-                            View submitted feedback
-                          </Button>
-                        </article>
-                      ) : (
-                        <ChatMessage
-                          key={item.key}
-                          block={block}
-                          eventIndex={block.key}
-                          className={target?.eventIndex === Number(block.key) ? "search-match" : ""}
-                          {...(target?.eventIndex === Number(block.key) ? { tabIndex: -1 } : {})}
-                          at={events[Number(block.key)]?.at}
-                          prompt={
-                            relay ? (
-                              block.text
-                            ) : (
-                              <CommandMessage text={block.text} commands={commands} />
-                            )
-                          }
-                          openLink={api.openWebLink}
-                          incoming={block.type === "message" && fresh}
-                          visible={active && !hidden}
-                          onCopied={onCopied}
-                          actions={
-                            block === latestRequest &&
-                            chat?.checkpoint && (
-                              <Button
-                                variant="quiet"
-                                className="message-undo"
-                                type="button"
-                                disabled={busy}
-                                onClick={() => void undoRequest()}
-                              >
-                                Undo
-                              </Button>
-                            )
-                          }
-                        />
-                      );
-                      return block.type === "message" || block.type === "prompt" ? (
-                        <ChatMessageLayout incoming={fresh} active={active && !hidden}>
-                          {message}
-                        </ChatMessageLayout>
-                      ) : (
-                        message
-                      );
-                    })()}
-                  {item.blocks.map((block) => {
-                    const timing = timings.get(block.key);
-                    return timing && !timing.active ? (
-                      <div className="chat-turn-history" key={block.key}>
-                        <TurnTimer
-                          timing={timing}
-                          visible={active}
-                          disclosure={
-                            liveTurn !== block.key && activityTurns.groups.has(block.key)
-                              ? {
-                                  id: historyId(block.key),
-                                  controls: detailsId(block.key),
-                                  expanded: expandedActivities.has(block.key),
-                                  toggle: () => toggleActivity(block.key),
-                                }
-                              : undefined
-                          }
-                        />
-                        {liveTurn !== block.key &&
-                          activityTurns.groups.has(block.key) &&
-                          activityDetails(block.key)}
-                      </div>
-                    ) : null;
-                  })}
-                </div>
-              ))}
-              {revisionSlots.get(items.length)}
-              {revisionFlow.footer}
-              {!opening && (
-                <ActivityDisplay
-                  key={run?.id ?? "empty"}
-                  id={`${id}-live-activity`}
-                  controls={detailsId(activityTurns.current)}
-                  expanded={expandedActivities.has(activityTurns.current)}
-                  onToggle={() => toggleActivity(activityTurns.current)}
-                  activity={chat?.activity?.state === "connecting" ? undefined : chat?.activity}
-                  fallback={progress || label}
-                  delegated={delegated}
-                  hidden={hidden}
-                  override={
-                    run?.stopping || pending === "cancel" || pending === "stop"
-                      ? "Stopping"
-                      : pending === "send"
-                        ? "Sending"
-                        : undefined
-                  }
-                />
-              )}
-              {liveTurn !== null && activityDetails(liveTurn)}
-              {liveTurn === null &&
-                activityTurns.current === "session" &&
-                activityTurns.groups.has("session") && (
-                  <>
-                    <Button
-                      variant="quiet"
-                      type="button"
-                      className="activity-history-toggle"
-                      id={historyId("session")}
-                      aria-expanded={expandedActivities.has("session")}
-                      aria-controls={detailsId("session")}
-                      onClick={() => toggleActivity("session")}
-                    >
-                      Session details
-                    </Button>
-                    {activityDetails("session")}
-                  </>
-                )}
-            </div>
-          </ScrollArea>
-        </div>
-        {run && (
-          <PendingApprovals
-            requests={run.pending}
-            key={run.id}
-            onAnswer={(permissionId, answer) =>
-              api.orchestrationChatAction({ type: "permission", id: run.id, permissionId, answer })
-            }
-          />
-        )}
-        <Card as="section" className="composer" aria-label="Chat composer">
-          {chat?.checkpoint?.phase === "undoing" && (
-            <p role="alert">
-              Undo needs recovery before another request can start.
-              <Button type="button" disabled={busy} onClick={() => void undoRequest()}>
-                Resume Undo
-              </Button>
-            </p>
-          )}
-          {!!draftState.attachments.length && (
-            <ul className="chat-attachments" aria-label="Attached code references">
-              {draftState.attachments.map((attachment, index) => (
-                <li key={JSON.stringify(attachment.reference)}>
-                  {attachment.label}
-                  <Button
-                    variant="quiet"
-                    type="button"
-                    disabled={busy}
-                    aria-label={`Remove ${attachment.label}`}
-                    onClick={() => draftState.remove(index)}
-                  >
-                    Remove
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <label className="sr-only" htmlFor={`${id}-message`}>
-            Message to orchestrator
-          </label>
-          <CommandComposer
-            key={key}
-            id={`${id}-message`}
-            value={draft}
-            commands={commands}
-            commandsEnabled={!relay}
+          <EmbeddedChat
+            footer={footer}
+            promptControls={promptControls}
+            key={JSON.stringify([key, chat?.conversationId, chat?.generation])}
+            active={shown}
+            onInputFocusChange={relay && !chat?.customAgentId ? reportRelayFocus : undefined}
+            label="Message to orchestrator"
+            draft={draft}
+            canSend={!!ready && !busy}
             disabled={
               !available || !run || pending === "undo-request" || (connecting && !chat?.restored)
             }
-            onChange={edit}
-            onSend={() => void send()}
-          />
-          <SessionInfo
-            leading={
-              !relay && (
-                <TacticsControl
-                  selection={chat?.tactic}
-                  disabled={!database || !run || busy}
-                  active={active && !hidden}
-                  context={`${run?.id ?? ""}:${project ?? ""}`}
-                  onChange={(tactic) =>
-                    run
-                      ? action({ type: "set-tactic", id: run.id, project, tactic })
-                      : Promise.resolve(false)
-                  }
-                />
-              )
+            commands={relay ? undefined : commands}
+            onEdit={edit}
+            onSend={send}
+            stop={
+              working && available && !busy && !run?.stopping
+                ? () => action({ type: "cancel", id: run?.id ?? null })
+                : undefined
             }
-            harness={run?.agent ?? "N/A"}
-            sessionId={run?.id ?? ""}
-            active={active}
-            state={run?.sessionState}
-            ended={!!ended}
-            editable={ready && !busy}
-            changing={!!run?.modeChanging || pending === "set-mode"}
-            autoApproval={autoApproval}
-            onAutoApprovalChange={(value) => api.setOrchestrationAutoApproval(value)}
-            sessionRole="orchestrator"
-            onSaveDefault={() => {
-              if (run) void action({ type: "save-model-default", id: run.id });
-            }}
-            onMode={(change) => {
-              if (run) void action({ type: "set-mode", id: run.id, change });
-            }}
+            onViewport={onViewport}
           >
-            {working ? (
+            {blocks.length === 0 && initialized && (
+              <div className="chat-empty">
+                <h2>Give Code60 a task.</h2>
+              </div>
+            )}
+            {blocks.length > visible && (
               <Button
+                variant="quiet"
                 type="button"
-                className="composer-send"
-                disabled={!available || busy || !!run?.stopping}
-                onClick={() => void action({ type: "cancel", id: run?.id ?? null })}
+                onClick={() => {
+                  pause();
+                  setVisible((count) => count + 300);
+                }}
               >
-                <Icon name="stop" />
-                Stop
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                type="button"
-                className="primary composer-send"
-                disabled={busy || !ready || !draft.trim()}
-                onClick={() => void send()}
-              >
-                Send <Icon name="arrow--up" />
+                Show earlier activity
               </Button>
             )}
-          </SessionInfo>
-        </Card>
+            {items.map((item, index) => {
+              if (
+                item.activity &&
+                item !== liveAnchor &&
+                !revisionSlots.has(index) &&
+                !item.blocks.some((block) => {
+                  const timing = timings.get(block.key);
+                  return timing && !timing.active;
+                })
+              )
+                return null;
+              const first = item.blocks[0];
+              return (
+                <ChatTurn
+                  key={item.key}
+                  at={events[Number(first?.key)]?.at}
+                  from={first?.type === "prompt" && !first.automatic ? "user" : "assistant"}
+                >
+                  <div className="chat-turn-content">
+                    {revisionSlots.get(index)}
+                    {!item.activity &&
+                      (() => {
+                        const block = item.blocks[0] as Block;
+                        const event = events[Number(block.key)];
+                        const feedback =
+                          event?.type === "prompt"
+                            ? revisionFlow.summaries.find((review) =>
+                                feedbackAt(review, run?.id, event.turn),
+                              )
+                            : undefined;
+                        const fresh =
+                          Number(block.key) >= receivedEvents.current.count &&
+                          isLiveMessage(event?.at, visibility.current.since) &&
+                          !chat?.restored &&
+                          active &&
+                          !hidden;
+                        const message = feedback ? (
+                          <article
+                            className={`event prompt${target?.eventIndex === Number(block.key) ? " search-match" : ""}`}
+                            data-event-index={block.key}
+                            tabIndex={-1}
+                            aria-label="Your review feedback"
+                          >
+                            <div className="chat-message-speaker">You</div>
+                            <p>Feedback on {feedback.title}</p>
+                            <Button
+                              variant="quiet"
+                              type="button"
+                              onClick={() => {
+                                const batch = feedback.submissions.find(
+                                  (batch) =>
+                                    (batch.deliveredChatId ?? feedback.originChatId) === run?.id &&
+                                    batch.deliveredTurn ===
+                                      (event?.type === "prompt" ? event.turn : undefined),
+                                );
+                                if (
+                                  batch &&
+                                  revisionFlow.showFeedback(feedback.id, batch.revisionId)
+                                )
+                                  return;
+                                if (!relay) onReview?.(feedback.id);
+                              }}
+                            >
+                              View submitted feedback
+                            </Button>
+                          </article>
+                        ) : (
+                          <ChatMessage
+                            key={item.key}
+                            block={block}
+                            eventIndex={block.key}
+                            className={
+                              target?.eventIndex === Number(block.key) ? "search-match" : ""
+                            }
+                            {...(target?.eventIndex === Number(block.key) ? { tabIndex: -1 } : {})}
+                            at={events[Number(block.key)]?.at}
+                            prompt={
+                              relay ? (
+                                block.text
+                              ) : (
+                                <CommandMessage text={block.text} commands={commands} />
+                              )
+                            }
+                            openLink={api.openWebLink}
+                            incoming={block.type === "message" && fresh}
+                            visible={active && !hidden}
+                            onCopied={onCopied}
+                            actions={
+                              block === latestRequest &&
+                              chat?.checkpoint && (
+                                <Button
+                                  variant="quiet"
+                                  className="message-undo"
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => void undoRequest()}
+                                >
+                                  Undo
+                                </Button>
+                              )
+                            }
+                          />
+                        );
+                        return block.type === "message" || block.type === "prompt" ? (
+                          <ChatMessageLayout incoming={fresh} active={active && !hidden}>
+                            {message}
+                          </ChatMessageLayout>
+                        ) : (
+                          message
+                        );
+                      })()}
+                    {item.blocks.map((block) => {
+                      const timing = timings.get(block.key);
+                      return timing && !timing.active ? (
+                        <div className="chat-turn-history" key={block.key}>
+                          <TurnTimer
+                            timing={timing}
+                            visible={active}
+                            disclosure={
+                              liveTurn !== block.key && activityTurns.groups.has(block.key)
+                                ? {
+                                    id: historyId(block.key),
+                                    controls: detailsId(block.key),
+                                    expanded: expandedActivities.has(block.key),
+                                    toggle: () => toggleActivity(block.key),
+                                  }
+                                : undefined
+                            }
+                          />
+                          {liveTurn !== block.key &&
+                            activityTurns.groups.has(block.key) &&
+                            activityDetails(block.key)}
+                        </div>
+                      ) : null;
+                    })}
+                    {item === liveAnchor && liveContent}
+                  </div>
+                </ChatTurn>
+              );
+            })}
+            {revisionSlots.get(items.length)}
+            {revisionFlow.footer}
+            {liveTurn === null &&
+              activityTurns.current === "session" &&
+              activityTurns.groups.has("session") && (
+                <>
+                  <Button
+                    variant="quiet"
+                    type="button"
+                    className="activity-history-toggle"
+                    id={historyId("session")}
+                    aria-expanded={expandedActivities.has("session")}
+                    aria-controls={detailsId("session")}
+                    onClick={() => toggleActivity("session")}
+                  >
+                    Session details
+                  </Button>
+                  {activityDetails("session")}
+                </>
+              )}
+            {run && run.pending.length > 0 && (
+              <PendingApprovals
+                requests={run.pending}
+                key={`approval-${run.id}`}
+                onAnswer={(permissionId, answer) =>
+                  api.orchestrationChatAction({
+                    type: "permission",
+                    id: run.id,
+                    permissionId,
+                    answer,
+                  })
+                }
+              />
+            )}
+          </EmbeddedChat>
+        </div>
       </div>
     </main>
   );

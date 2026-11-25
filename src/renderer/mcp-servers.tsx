@@ -1,3 +1,4 @@
+import { Accordion, AccordionItem, InlineNotification, Tag } from "@carbon/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   ApplicationClient,
@@ -91,7 +92,7 @@ export function McpServersPage({
   api: ApplicationClient;
   active: boolean;
   contextKey: string;
-  configuration?: { scope: string; select(scope: string): void } | undefined;
+  configuration: { scope: string; select(scope: string): void; reload(): void };
   onFormDirty?(dirty: boolean): void;
   readOnly?: boolean | undefined;
 }) {
@@ -99,9 +100,7 @@ export function McpServersPage({
     typeof document === "undefined" || document.visibilityState !== "hidden",
   );
   const [targets, setTargets] = useState<McpManagementTargets>();
-  const [ownScope, setOwnScope] = useState("user");
-  const scope = configuration?.scope ?? ownScope;
-  const setScope = configuration?.select ?? setOwnScope;
+  const { scope, select: setScope } = configuration;
   const [read, setRead] = useState<McpManagementRead>();
   const [selected, setSelected] = useState<string>();
   const [editor, setEditor] = useState<Editor>();
@@ -287,11 +286,15 @@ export function McpServersPage({
   };
   return (
     <section className="mcp-servers-page">
-      <p className="mcp-notice">
-        Manage servers for new agent sessions. Tests only initialize and discover tools; they never
-        call business tools.
-      </p>
-      {error && !editor && !remove && !move && <p role="alert">{error}</p>}
+      {error && !editor && !remove && !move && (
+        <InlineNotification
+          role="alert"
+          kind="error"
+          title="Server configuration unavailable"
+          subtitle={error}
+          hideCloseButton
+        />
+      )}
       {targets?.unavailableProjects ? (
         <p role="status">
           Some project configurations are unavailable because their storage identity or permissions
@@ -299,28 +302,32 @@ export function McpServersPage({
         </p>
       ) : null}
       {read && (!read.document || read.pendingRecovery.length > 0) && (
-        <div role="alert">
-          {!read.document ? (
-            <p>
-              Invalid configuration. Guided changes and new connections are blocked. Repair the file
-              in the JSON view.
-            </p>
-          ) : (
-            <p>Pending configuration recovery blocks writes to this configuration.</p>
-          )}
+        <div>
+          <InlineNotification
+            role="alert"
+            kind="warning"
+            hideCloseButton
+            title={read.document ? "Recovery required" : "Invalid configuration"}
+            subtitle={
+              read.document
+                ? "Pending configuration recovery blocks writes to this configuration."
+                : "Guided changes and new connections are blocked. Repair the file in the JSON view."
+            }
+          />
           {read.issues.map((issue) => (
             <p key={`${issue.code}:${issue.line}:${issue.column}:${issue.path.join(".")}`}>
               {issue.message} Line {issue.line}, column {issue.column}.
             </p>
           ))}
-          <details>
-            <summary>Recovery guidance</summary>
-            <p>
-              Preserve configuration files, private backups and transaction evidence. Do not delete
-              writer locks or replay uncertain actions. Follow the MCP configuration recovery
-              runbook or review the affected transaction under Configuration maintenance.
-            </p>
-          </details>
+          <Accordion>
+            <AccordionItem title="Recovery guidance">
+              <p>
+                Preserve configuration files, private backups and transaction evidence. Do not
+                delete writer locks or replay uncertain actions. Follow the MCP configuration
+                recovery runbook or review the affected transaction under Configuration maintenance.
+              </p>
+            </AccordionItem>
+          </Accordion>
         </div>
       )}
       {read && !read.inheritanceComplete && (
@@ -331,6 +338,24 @@ export function McpServersPage({
       <DataTable
         {...table}
         tableId="mcp-servers"
+        title="Configured servers"
+        description="Manage servers available to new agent sessions."
+        emptyMessage={
+          read?.document && !blocked
+            ? "No servers configured. Choose Add server to create the first one."
+            : read
+              ? "No server definitions to display."
+              : error
+                ? "Server list unavailable."
+                : "Loading servers…"
+        }
+        renderCell={(row, key) =>
+          key === "enabled" ? (
+            <Tag size="sm" type={row.enabled === "Yes" ? "green" : "gray"}>
+              {row.enabled}
+            </Tag>
+          ) : undefined
+        }
         workspace={read?.target.targetId ?? "user"}
         rows={rows}
         columns={[...columns]}
@@ -350,76 +375,61 @@ export function McpServersPage({
             label: "Reload configurations",
             run: () => {
               setError("");
+              configuration.reload();
               void refresh();
             },
             disabled: busy,
           },
         ]}
-        scope={
-          <Select
-            labelText="Configuration"
-            aria-label="Configuration"
-            value={scope}
-            disabled={busy || Boolean(editor || remove || move)}
-            onChange={(e) => {
-              setScope(e.target.value);
-              setRead(undefined);
-              setSelected(undefined);
-              setError("");
-            }}
-          >
-            <option value="user">User</option>
-            {targets?.targets
-              .filter((t) => t.address.scope === "project")
-              .map((t) => (
-                <option key={t.address.targetId} value={t.address.targetId}>
-                  {t.label}
-                </option>
-              ))}
-            {scope !== "user" && !targets?.targets.some((t) => t.address.targetId === scope) && (
-              <option value={scope}>Closed project</option>
-            )}
-          </Select>
-        }
         onActions={(id, bounds) => setMenu({ id, x: bounds.x, y: bounds.y + bounds.height })}
       />
       {selectedId && (
         <section className="mcp-details" aria-label="Selected server">
-          <strong>{status?.label}</strong>
-          <span>
-            {status?.shadowedSources.length
-              ? " Overrides the user definition, including while disabled or unapproved."
-              : ""}
-          </span>
-          <Button type="button" disabled={blocked || !local} onClick={() => openEdit(selectedId)}>
-            Edit server
-          </Button>
-          <Button
-            variant="quiet"
-            type="button"
-            disabled={blocked || !local}
-            onClick={() => setRemove(captured(selectedId))}
-          >
-            Remove server
-          </Button>
-          <Button
-            type="button"
-            disabled={blocked || !local || (targets?.targets.length ?? 0) < 2}
-            onClick={() => openMove(selectedId)}
-          >
-            Move server
-          </Button>
-          {!local && (
+          <h2>{status?.label}</h2>
+          {Boolean(status?.shadowedSources.length) && (
+            <p>Overrides the user definition, including while disabled or unapproved.</p>
+          )}
+          <div className="mcp-actions">
+            <Button type="button" disabled={blocked || !local} onClick={() => openEdit(selectedId)}>
+              Edit server
+            </Button>
             <Button
               type="button"
-              onClick={() => {
-                setScope("user");
-                setRead(undefined);
-              }}
+              disabled={blocked || !local || (targets?.targets.length ?? 0) < 2}
+              onClick={() => openMove(selectedId)}
             >
-              Open user configuration
+              Move server
             </Button>
-          )}
+            {!local && (
+              <Button
+                type="button"
+                onClick={() => {
+                  setScope("user");
+                  setRead(undefined);
+                }}
+              >
+                Open user configuration
+              </Button>
+            )}
+            {read && !editor && !remove && !move && (
+              <McpAuthenticationPanel
+                api={api}
+                read={read}
+                serverId={selectedId}
+                blocked={blocked}
+                active={active}
+              />
+            )}
+            <Button
+              variant="quiet"
+              className="destructive"
+              type="button"
+              disabled={blocked || !local}
+              onClick={() => setRemove(captured(selectedId))}
+            >
+              Remove server
+            </Button>
+          </div>
         </section>
       )}
       {read && !editor && !remove && !move && (
@@ -429,15 +439,6 @@ export function McpServersPage({
           read={read}
           serverId={selectedId}
           blocked={blocked}
-        />
-      )}
-      {read && selectedId && !editor && !remove && !move && (
-        <McpAuthenticationPanel
-          api={api}
-          read={read}
-          serverId={selectedId}
-          blocked={blocked}
-          active={active}
         />
       )}
       {active && visible && menu && (
@@ -470,6 +471,7 @@ export function McpServersPage({
       )}
       {active && visible && editor?.base.document && (
         <Modal
+          editorFooter
           title={`${editor.originalId ? "Edit" : "Add"} MCP server — ${editor.target.label}`}
           wide
           busy={busy}
@@ -534,7 +536,37 @@ export function McpServersPage({
         </Modal>
       )}
       {active && visible && remove?.base.document && (
-        <Modal title="Remove MCP server?" busy={busy} onClose={() => setRemove(undefined)}>
+        <Modal
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => setRemove(undefined)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="destructive"
+                type="button"
+                disabled={busy || stale(remove)}
+                onClick={() => {
+                  const document = structuredClone(remove.base.document);
+                  if (document && remove.originalId) {
+                    delete document.servers[remove.originalId];
+                    void save(remove, document);
+                  }
+                }}
+              >
+                Confirm removal
+              </Button>
+            </>
+          }
+          title="Remove MCP server?"
+          busy={busy}
+          onClose={() => setRemove(undefined)}
+        >
           <p>
             Remove {remove.initial?.label} from {remove.target.label}?
           </p>
@@ -542,34 +574,60 @@ export function McpServersPage({
             <p>The user definition will become effective.</p>
           ) : null}
           {error && <p role="alert">{error}</p>}
-          <div className="dialog-actions">
-            <Button
-              variant="quiet"
-              type="button"
-              disabled={busy}
-              onClick={() => setRemove(undefined)}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="destructive"
-              type="button"
-              disabled={busy || stale(remove)}
-              onClick={() => {
-                const document = structuredClone(remove.base.document);
-                if (document && remove.originalId) {
-                  delete document.servers[remove.originalId];
-                  void save(remove, document);
-                }
-              }}
-            >
-              Confirm removal
-            </Button>
-          </div>
         </Modal>
       )}
       {active && visible && move && (
         <Modal
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  previewGeneration.current++;
+                  setMove(undefined);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                type="button"
+                disabled={
+                  busy ||
+                  !move.preview?.allowed ||
+                  !move.request ||
+                  !same(read?.target, move.source.target) ||
+                  read?.revision !== move.source.revision
+                }
+                onClick={() => {
+                  if (!move.request || pending.current) return;
+                  pending.current = true;
+                  setBusy(true);
+                  setError("");
+                  const payload = move.request;
+                  void api
+                    .mcpMove({ ...payload, requestId: requestId(payload) })
+                    .then(
+                      async (result) => {
+                        if (result.status === "recovery-required")
+                          setError("Configuration recovery is required. Your draft is retained.");
+                        else setMove(undefined);
+                        await refresh();
+                      },
+                      (cause) => setError(message(cause)),
+                    )
+                    .finally(() => {
+                      pending.current = false;
+                      setBusy(false);
+                    });
+                }}
+              >
+                Confirm move
+              </Button>
+            </>
+          }
           title="Move MCP server"
           busy={busy}
           onClose={() => {
@@ -625,53 +683,6 @@ export function McpServersPage({
             </div>
           )}
           {error && <p role="alert">{error}</p>}
-          <div className="dialog-actions">
-            <Button
-              variant="quiet"
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                previewGeneration.current++;
-                setMove(undefined);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={
-                busy ||
-                !move.preview?.allowed ||
-                !move.request ||
-                !same(read?.target, move.source.target) ||
-                read?.revision !== move.source.revision
-              }
-              onClick={() => {
-                if (!move.request || pending.current) return;
-                pending.current = true;
-                setBusy(true);
-                setError("");
-                const payload = move.request;
-                void api
-                  .mcpMove({ ...payload, requestId: requestId(payload) })
-                  .then(
-                    async (result) => {
-                      if (result.status === "recovery-required")
-                        setError("Configuration recovery is required. Your draft is retained.");
-                      else setMove(undefined);
-                      await refresh();
-                    },
-                    (cause) => setError(message(cause)),
-                  )
-                  .finally(() => {
-                    pending.current = false;
-                    setBusy(false);
-                  });
-              }}
-            >
-              Confirm move
-            </Button>
-          </div>
         </Modal>
       )}
     </section>

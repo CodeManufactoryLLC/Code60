@@ -104,6 +104,7 @@ export function McpRecoveryPanel({
   return (
     <>
       <Button
+        variant="quiet"
         type="button"
         disabled={busy || !active}
         onClick={() => {
@@ -114,7 +115,57 @@ export function McpRecoveryPanel({
         Configuration recovery
       </Button>
       {opened && (
-        <Modal title="MCP configuration recovery" busy={busy} onClose={() => setOpened(false)}>
+        <Modal
+          footer={
+            <>
+              {decision && review ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setDecision(undefined)}
+                  >
+                    Cancel recovery
+                  </Button>
+                  <Button
+                    className="destructive"
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void act({
+                        action: "recover",
+                        direction: decision,
+                        transactionId: review.transactionId,
+                        reviewRevision: review.reviewRevision,
+                        targets: review.targets.map(({ target, expectedRevision }) => ({
+                          target,
+                          expectedRevision,
+                        })),
+                        requestId: randomId(),
+                      })
+                    }
+                  >
+                    Confirm {decision === "complete" ? "complete" : "roll back"}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="primary"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setOpened(false)}
+                >
+                  Close recovery
+                </Button>
+              )}
+            </>
+          }
+          initialFocus={decision ? ".cds--btn--secondary" : undefined}
+          title="MCP configuration recovery"
+          busy={busy}
+          onClose={() => setOpened(false)}
+        >
           <p>
             Only recorded configuration writes can be completed or rolled back. Startup never
             replays them. Backups and transaction evidence stay private. Recovery affects only
@@ -210,33 +261,6 @@ export function McpRecoveryPanel({
                     Every reviewed revision and project identity is rechecked. Credentials and
                     approvals are not transferred; running work is not replayed.
                   </p>
-                  <Button
-                    variant="quiet"
-                    type="button"
-                    disabled={busy}
-                    onClick={() => setDecision(undefined)}
-                  >
-                    Cancel recovery
-                  </Button>
-                  <Button
-                    type="button"
-                    disabled={busy}
-                    onClick={() =>
-                      void act({
-                        action: "recover",
-                        direction: decision,
-                        transactionId: review.transactionId,
-                        reviewRevision: review.reviewRevision,
-                        targets: review.targets.map(({ target, expectedRevision }) => ({
-                          target,
-                          expectedRevision,
-                        })),
-                        requestId: randomId(),
-                      })
-                    }
-                  >
-                    Confirm {decision === "complete" ? "complete" : "roll back"}
-                  </Button>
                 </fieldset>
               )}
             </>
@@ -252,9 +276,6 @@ export function McpRecoveryPanel({
             onClick={() => void act({ action: "list", target })}
           >
             Refresh recovery evidence
-          </Button>
-          <Button variant="quiet" type="button" disabled={busy} onClick={() => setOpened(false)}>
-            Close recovery
           </Button>
         </Modal>
       )}

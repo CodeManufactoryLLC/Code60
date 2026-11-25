@@ -1,3 +1,4 @@
+import { Button } from "@carbon/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
 import type { BrowserSession, Choices, Interaction } from "../bridge/index.js";
@@ -120,6 +121,9 @@ export default function HostPicker({
       pending.current = false;
     }
   };
+  const confirmChoice = () => {
+    if (!editing && target) void submit(true, target.id);
+  };
   const travel = (index: number) => void load({ index, directory: listing?.history[index] });
   const closeEditor = () => {
     setFolderName(null);
@@ -132,7 +136,23 @@ export default function HostPicker({
       className="host-picker"
       busy={locked}
       onClose={() => void submit(false)}
+      footer={
+        <>
+          <Button kind="secondary" disabled={locked} onClick={() => void submit(false)}>
+            Cancel
+          </Button>
+          <Button kind="primary" disabled={locked || !target || editing} onClick={confirmChoice}>
+            {creating ? "Create database" : folder ? "Choose folder" : "Open"}
+          </Button>
+        </>
+      }
     >
+      <div className="picker-path">
+        <span className="cds--label">Location</span>
+        <div className="picker-location">
+          <bdi>{choices?.directory ?? "Workspace roots"}</bdi>
+        </div>
+      </div>
       <nav className="picker-navigation" aria-label="Folder navigation">
         <div className="picker-directions">
           <AppButton
@@ -166,26 +186,25 @@ export default function HostPicker({
             <Icon name="arrow--up" />
           </AppButton>
         </div>
-        <span className="picker-location" title={choices?.directory}>
-          <bdi dir="ltr">{choices?.directory ?? "Workspace roots"}</bdi>
-        </span>
-        {item?.directory && (
-          <AppButton
-            type="button"
-            disabled={locked}
-            onClick={() => void load({ directory: item.id })}
+        <div className="picker-tools">
+          <Button
+            kind="ghost"
+            size="sm"
+            disabled={locked || !item?.directory}
+            onClick={() => item?.directory && void load({ directory: item.id })}
           >
             Open folder
-          </AppButton>
-        )}
-        <AppButton
-          type="button"
-          ref={newFolder}
-          disabled={locked || !current}
-          onClick={() => setFolderName("")}
-        >
-          New folder
-        </AppButton>
+          </Button>
+          <Button
+            kind="ghost"
+            size="sm"
+            ref={newFolder}
+            disabled={locked || !current}
+            onClick={() => setFolderName("")}
+          >
+            New folder
+          </Button>
+        </div>
       </nav>
       {folderName !== null && (
         <form
@@ -205,19 +224,26 @@ export default function HostPicker({
         >
           <div>
             <CarbonTextInput
-              labelText={<>New folder name</>}
+              labelText="New folder name"
               ref={formInput}
               maxLength={200}
               value={folderName}
               onChange={(e) => setFolderName(e.target.value)}
             />
           </div>
-          <AppButton type="submit" disabled={locked || !validName(folderName)}>
-            Create folder
-          </AppButton>
-          <AppButton type="button" disabled={locked} onClick={closeEditor}>
-            Dismiss
-          </AppButton>
+          <div className="picker-tools">
+            <Button type="button" kind="ghost" size="sm" disabled={locked} onClick={closeEditor}>
+              Dismiss
+            </Button>
+            <Button
+              kind="tertiary"
+              size="sm"
+              type="submit"
+              disabled={locked || !validName(folderName)}
+            >
+              Create folder
+            </Button>
+          </div>
         </form>
       )}
       <div
@@ -284,32 +310,22 @@ export default function HostPicker({
           {error}
         </p>
       )}
-      <form
-        className="picker-footer"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!editing && target) void submit(true, target.id);
-        }}
-      >
-        {creating && (
-          <div>
-            <CarbonTextInput
-              labelText={<>Database filename</>}
-              value={filename}
-              maxLength={200}
-              onChange={(e) => setFilename(e.target.value)}
-            />
-          </div>
-        )}
-        <div className="picker-actions">
-          <AppButton type="button" disabled={locked} onClick={() => void submit(false)}>
-            Cancel
-          </AppButton>
-          <AppButton type="submit" className="primary" disabled={locked || !target || editing}>
-            {creating ? "Create database" : folder ? "Choose folder" : "Open"}
-          </AppButton>
-        </div>
-      </form>
+      {creating && (
+        <form
+          className="picker-filename"
+          onSubmit={(event) => {
+            event.preventDefault();
+            confirmChoice();
+          }}
+        >
+          <CarbonTextInput
+            labelText="Database filename"
+            value={filename}
+            maxLength={200}
+            onChange={(event) => setFilename(event.target.value)}
+          />
+        </form>
+      )}
     </Modal>
   );
 }

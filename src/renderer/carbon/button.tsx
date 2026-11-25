@@ -7,7 +7,7 @@ export function Button({
   className = "",
   type = "button",
   ...props
-}: ComponentProps<"button"> & { variant?: "primary" | "neutral" | "quiet" }) {
+}: ComponentProps<"button"> & { variant?: "secondary" | "primary" | "neutral" | "quiet" }) {
   const names = new Set(className.split(/\s+/));
   const icon = names.has("icon-button");
   const quiet = variant === "quiet" || icon || names.has("ghost") || props.role === "tab";
@@ -26,7 +26,9 @@ export function Button({
             ? "primary"
             : quiet
               ? "ghost"
-              : "tertiary"
+              : variant === "secondary"
+                ? "secondary"
+                : "tertiary"
       }
       className={`${className}${icon ? " carbon-icon-control" : ""}`}
       {...props}

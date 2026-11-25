@@ -9,6 +9,7 @@ import type {
   ChatUndoResult,
   CodexSetupIdentity,
   Command,
+  ConfirmationId,
   DeleteCommand,
   DesktopRun,
   DetailFrame,
@@ -271,7 +272,7 @@ import { inspectSetupDatabase, prepareSetupDatabase } from "./setup-database.js"
 import { captureTask, taskDelivery } from "./tactic-context.js";
 
 export interface DesktopDialogs {
-  confirm(title: string, detail: string): Promise<boolean>;
+  confirm(presentation: ConfirmationId, detail: string): Promise<boolean>;
 }
 
 export interface DesktopStorage {
@@ -818,7 +819,7 @@ export class ApplicationHost {
       if (
         definition.type === "stdio" &&
         !(await this.dialogs.confirm(
-          "Test MCP server?",
+          "test-mcp",
           "This launches the configured command with its arguments and bindings. Only initialization and tool discovery are performed.",
         ))
       )
@@ -1252,7 +1253,7 @@ export class ApplicationHost {
     this.assertDatabaseRequest(parsed.databaseEpoch);
     return this.rag.clear(parsed, () =>
       this.dialogs.confirm(
-        "Clear RAG index?",
+        "clear-index",
         "Remove only the derived conversation index for this database. Original conversations and run records are kept.",
       ),
     );
@@ -3110,7 +3111,7 @@ export class ApplicationHost {
     if (!this.projectHost.find(source.project.path)) {
       const accepted = await (confirm
         ? confirm(source.project.path)
-        : this.dialogs.confirm("Open this project?", source.project.path));
+        : this.dialogs.confirm("open-search-project", source.project.path));
       this.assertDatabaseRequest(request.databaseEpoch);
       await this.projectSearch.source(request, request.sourceId);
       if (!accepted) return null;
@@ -4084,7 +4085,7 @@ export class ApplicationHost {
     ];
     if (
       !(await this.dialogs.confirm(
-        "Undo this request?",
+        "undo-request",
         `Rewind to before “${checkpoint.text.slice(0, 240)}” and restore this conversation's changes.\n${targets.join("\n") || "No recorded file changes."}${request.replacesDraft ? "\nYour unsent composer draft will be replaced with the original request." : ""}`,
       ))
     )
@@ -5441,7 +5442,7 @@ export class ApplicationHost {
             owner.state.conversations.sessions.some((session) => session.chat),
         ) &&
         !(await this.dialogs.confirm(
-          "Replace database?",
+          "replace-database",
           "This stops and closes database-owned projects and chats. Relay and its workers will keep running.",
         ))
       ) {
@@ -5506,7 +5507,7 @@ export class ApplicationHost {
       const database = this.requireDatabase();
       if (this.projects.length === 0) return true;
       const confirmed = await this.dialogs.confirm(
-        "Clear project history?",
+        "clear-history",
         `This removes all ${this.projects.length} projects from ${database.path}. Project folders and their runs are not affected.`,
       );
       if (!confirmed) return false;
@@ -5690,7 +5691,7 @@ export class ApplicationHost {
           const folder = this.workspace.dir;
           if (
             !(await this.dialogs.confirm(
-              request.type === "close" ? "Close project?" : "Stop folder?",
+              request.type === "close" ? "close-project" : "stop-folder",
               request.type === "close"
                 ? `Close ${folder} and stop its project-owned work? Relay workers in this folder will keep running.`
                 : `Stop project work and Relay workers in ${folder}? Other folders will keep running.`,
@@ -5859,7 +5860,7 @@ export class ApplicationHost {
       if (!entry) throw new Error("Unknown run configuration");
       if (
         !(await this.dialogs.confirm(
-          "Delete run configuration?",
+          "delete-configuration",
           `Delete "${entry.name}"? Existing sessions are not affected.`,
         ))
       )
@@ -5915,7 +5916,7 @@ export class ApplicationHost {
       if (!entry) throw new Error("This command no longer exists");
       if (
         !(await this.dialogs.confirm(
-          "Delete command?",
+          "delete-command",
           `Delete /${entry.name}? This cannot be undone.`,
         ))
       )
@@ -5956,7 +5957,7 @@ export class ApplicationHost {
           : "the built-in template";
       if (
         !(await this.dialogs.confirm(
-          "Reset prompt template?",
+          "reset-prompt",
           `Remove the saved ${id} edit from ${database.path}? Future uses of this template use ${restores}. Turns already in progress are not affected.`,
         ))
       )
@@ -6491,7 +6492,7 @@ export class ApplicationHost {
             action.id,
             async (files, record) =>
               this.dialogs.confirm(
-                "Discard this worktree?",
+                "discard-worktree",
                 `This permanently removes ${record.worktree} and ${record.branch}.\n\nFiles that will be lost:\n${files.map((file) => `${file.status} ${file.path}`).join("\n") || "(no changed files)"}`,
               ),
           ).catch((error: unknown) => {

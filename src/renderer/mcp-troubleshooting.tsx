@@ -73,31 +73,69 @@ export function McpTroubleshooting({
     }
   }
   return (
-    <section aria-label="MCP troubleshooting">
-      <Button type="button" disabled={busy || !active} onClick={() => void run("report")}>
-        Review troubleshooting report
-      </Button>
-      <Button type="button" disabled={busy || !active} onClick={() => setCleanup(true)}>
-        Verify cleanup
-      </Button>
+    <section aria-label="MCP troubleshooting" className="mcp-maintenance-row">
+      <h3>Troubleshooting</h3>
+      <div className="mcp-actions">
+        <Button
+          variant="quiet"
+          type="button"
+          disabled={busy || !active}
+          onClick={() => void run("report")}
+        >
+          Review troubleshooting report
+        </Button>
+        <Button
+          variant="quiet"
+          type="button"
+          disabled={busy || !active}
+          onClick={() => setCleanup(true)}
+        >
+          Verify cleanup
+        </Button>
+      </div>
       {notice && <p role="status">{notice}</p>}
       {cleanup && (
-        <Modal title="Verify owned MCP cleanup?" busy={busy} onClose={() => setCleanup(false)}>
+        <Modal
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => setCleanup(false)}
+              >
+                Cancel cleanup verification
+              </Button>
+              <Button
+                variant="primary"
+                type="button"
+                disabled={busy}
+                onClick={() => void run("verify-cleanup")}
+              >
+                Confirm cleanup verification
+              </Button>
+            </>
+          }
+          title="Verify owned MCP cleanup?"
+          busy={busy}
+          onClose={() => setCleanup(false)}
+        >
           <p>
             Retry only cleanup handles retained by this backend for this configuration. Authority
             stays revoked. This does not reconnect, replay calls, delete locks or stop unrelated
             processes. Remote cleanup may still be unverifiable.
           </p>
-          <Button variant="quiet" type="button" disabled={busy} onClick={() => setCleanup(false)}>
-            Cancel cleanup verification
-          </Button>
-          <Button type="button" disabled={busy} onClick={() => void run("verify-cleanup")}>
-            Confirm cleanup verification
-          </Button>
         </Modal>
       )}
       {report && (
         <Modal
+          footer={
+            <>
+              <Button variant="primary" type="button" onClick={() => setReport(undefined)}>
+                Close report
+              </Button>
+            </>
+          }
           title="Safe MCP troubleshooting report"
           busy={busy}
           onClose={() => setReport(undefined)}
@@ -127,9 +165,6 @@ export function McpTroubleshooting({
             }}
           >
             Copy safe report
-          </Button>
-          <Button variant="quiet" type="button" onClick={() => setReport(undefined)}>
-            Close report
           </Button>
         </Modal>
       )}

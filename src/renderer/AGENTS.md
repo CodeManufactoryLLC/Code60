@@ -1,7 +1,7 @@
 # Carbon application migration — current direction
 
 The user approved extending the Scheduled Jobs Carbon trial across the rest of
-the application. Upstream Carbon React components, White/G100, standard blue,
+the application. Upstream Carbon React components, White/G100, a customizable verdigris accent,
 productive typography and locally bundled IBM Plex Sans now supersede historical
 Neobrutalism colors, artwork sizing, shadows, rounded cards, custom control
 presentation and role-typography requirements below. Preserve stored appearance
@@ -25,7 +25,7 @@ No comparison destination, preference or feature flag is introduced.
   storage scoped to the active database or the database-independent workspace.
   Preserve navigation handlers, availability checks and view ownership. Resume
   must never dispatch a prompt, start a job or accept pending work.
-- Keep Work, Automation, Inspect and Manage in Carbon SideNavMenu disclosures. Use compact heading typography above indented destination rows. Reveal the active route on navigation and preserve manual toggles during background updates. Keep enabled
+- Keep Chat, Develop, Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments in Carbon SideNavMenu disclosures. Use compact heading typography above indented destination rows. Reveal the active route on navigation and preserve manual toggles during background updates. Keep enabled
   projects and conversations directly reachable. Use Home and Apps as task indexes.
   Use one descriptive heading per destination. Keep install, login, verification,
   retry and cancel controls at the relevant provider step. Preserve saved decorative
@@ -33,6 +33,7 @@ No comparison destination, preference or feature flag is introduced.
 - Use upstream Carbon controls through the small native-prop adapters in `carbon/`.
   Keep specialist tree, Monaco, telemetry SVG and native transcript/scroll logic.
   Color inputs use the browser's accessible native chooser.
+- Interactive conversations and workflow prompt drafting use the lazy embedded Carbon AI Chat and its prompt line. The conversation workspace fills the area between the navigation and inspector, from behind the page title to the viewport bottom. Place model, context usage and harness approval mode beside Send inside the expanded prompt line. Keep supplementary session controls in the after-input slot and keep standard page gutters on other destinations. Keep Code60's authenticated thread and draft ownership, render rich actions as user-defined responses, and keep Carbon history and session persistence off. Project command suggestions accept / or $ and insert the existing $name token with arguments.
 - Shared tables use HTML Carbon tables with ID selection, sort, bounded loaded-row
   paging and search; preserve backend cursors, retained-log submissions and filters.
   Table settings use visible column switches, width selects and Earlier/Later actions.
@@ -169,7 +170,7 @@ keyboard controls, drafts and domain ownership. Never put authentication in link
   same scrollable content. Do not add this greeting to other navigation homes.
   Show exactly six clickable, title-only feature cards in this order:
   Relay, Custom Assistants, Search, Projects, Apps and Sessions. Use theme-aware
-  artwork, restrained blue accents, shared focus styles and responsive stacking. Relay selects the
+  artwork, the configured accent, shared focus styles and responsive stacking. Relay selects the
   application conversation and clears worker selection. Search and Sessions retain
   database gating; Custom Assistants, Projects and Apps remain available without a database.
   The Custom Assistants card opens management without opening a chat or connecting an agent.
@@ -499,7 +500,7 @@ worker artwork disclosure and independent Rename/Archive targets without clippin
 
 - Files uses borderless page and inspector surfaces with `--chat-neutral` fill, neutral selection and blue hover. The + New Tab dropdown item creates blank tabs with a single centered, compact, left-aligned list of blank-tab choices, including Open Files and any Open Changes/saved-plan actions. Open Files replaces the blank with Explorer; multiple Explorers are allowed and share expansions and hidden-file preferences. Deduplicate file tabs by relative path. File/document views offer Close current tab below the header; main and blank views have no close symbol. Delete on the closed selector remains available for every stored tab. Use keyboard-only Alt+Left/Right reordering; arrow/Home/End/typeahead highlight options for explicit Enter/Space selection. Restore selector focus after add/close/reorder; closing the last tab keeps the empty panel open and focuses the enabled empty selector. Keep file names and code case-preserving; resolve Monaco preview colors from the app theme tokens, including System appearance.
 
-- Without a database, show Connect to database on the sidebar and preserve database warnings and connection controls. Relay remains available under the exceptions above. The Projects heading has a circular Add Project icon action immediately left of its circular chevron, opening the database connection flow before connection and the existing project picker afterward. Keep the list free of a duplicate Add Project row. The Open Project modal has no header bottom border, centers Open Folder below the list, and uses a labelled Carbon close icon at the upper-right of each project row for history-only removal. Keep open/remove buttons independent, with one row hover fill and no separately filled Remove region. Do not show a standalone Open Project header. Keep cancellation/errors in the modal and show a success toast after project opening. Retained projects may be opened or selected while other projects are active.
+- Without a database, show Connect to database on the sidebar and preserve database warnings and connection controls. Relay remains available under the exceptions above. The Projects heading has a circular Add Project icon action immediately left of its circular chevron, opening the database connection flow before connection and the existing project picker afterward. Keep the list free of a duplicate Add Project row. Use a content-sized Carbon Open Project modal with a scrollable recent-project list, an independent history removal button per row, and Cancel and Open Folder in the shared Carbon modal footer. Keep open/remove buttons independent, with one row hover fill and no separately filled Remove region. Do not show a standalone Open Project header. Keep cancellation/errors in the modal and show a success toast after project opening. Retained projects may be opened or selected while other projects are active.
 
 - Chat File Explorer always opens the current project root. Route legacy Files, palette and Browse project files through Chat to an existing or newly created Explorer tab; Search file sources open or select file tabs directly. Never select a worktree/private orchestration root; offer Open project when absent. Clear stale selections on project changes and discard stale reads. Put Show hidden files only in the native modal opened by the settings icon beside the Explorer title; changes apply immediately, Escape/Done closes and restores trigger focus, and workspace/page/tab changes and hiding the panel dismiss it. Do not show a Reveal in Files preview button.
 - Show current-project worker sessions, including history, in the normal Chat hierarchy. Nest only known owned workers beneath their controlling orchestrator; unknown/manual sessions stay directly beneath Chat, except finished ones, which are hidden unless a current orchestrator owns them or the user opened them. Name workers, in rows and their chat heading, by the role label the orchestrator assigned at dispatch, falling back to provider / short run ID. Keep sidebar names as text beside their decorative icons, with role and status in accessible descriptions and tooltips, plus independent approval counts. Show unread reply counts only for orchestrators, never worker badges, tooltips or accessible descriptions. Separate worker disclosures expand on new children without changing selection; otherwise retain manual collapse. External navigation reveals ancestors. Preserve visible-row keyboard navigation, drafts, scroll, permissions, recovery, Copy, timing and shared file panel. No popup, dock, fullscreen, close/minimize or reorder controls. Worker selection must not change backend orchestrator selection. Load history on demand through the shared cache, never merely to populate rows.
@@ -563,8 +564,9 @@ worker artwork disclosure and independent Rename/Archive targets without clippin
 
 - Keep the left sidebar borderless from the drag strip through the footer; do not
   replace the removed border with a full-height divider overlay.
-- New chat connections use a centered, non-interactive animated icon above
-  spotlight “Connecting...” text, without a timer or duplicate inline status.
+- New chat connections use a centered, non-interactive Carbon loading circle above
+  a steady “Connecting...” label. Live chat status disclosures use a transparent background
+  and the same small loading circle. Active sidebar entries keep their labels steady.
   Reuse activity fade timing for gentle entrance/exit. Hide the empty task prompt
   until the session is ready and the loader has faded out. Preserve Cancel, errors,
   drafts, transcript layout and scroll; stop animation in hidden/reduced-motion/

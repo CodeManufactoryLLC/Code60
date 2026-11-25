@@ -88,6 +88,8 @@ export function PollingWidget({
       {open && (
         <Modal
           title="Polling controls"
+          size="sm"
+          initialFocus=".polling-dialog-body button"
           className="polling-dialog"
           busy={busy}
           onClose={() => setOpen(false)}

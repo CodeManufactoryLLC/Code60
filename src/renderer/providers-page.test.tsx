@@ -3,7 +3,6 @@ import { expect, it, vi } from "vitest";
 import type { ApplicationClient, Snapshot } from "../bridge/index.js";
 import { type ProviderManagement, providerActionReasons } from "./provider-management.js";
 import { ProvidersPage } from "./providers-page.js";
-import { ProvidersSidebar } from "./providers-sidebar.js";
 
 const snapshot = {
   orchestration: { allowAll: false },
@@ -35,22 +34,20 @@ const management: ProviderManagement = {
 };
 const api = { modelDefault: async () => {} } as unknown as ApplicationClient;
 
-it("uses saved membership order, a first-position creation card, independent menus and one primary status", () => {
+it("lists enabled providers in membership order with their menus, defaults and one primary label", () => {
   const html = renderToStaticMarkup(
-    <ProvidersPage snapshot={snapshot} api={api} management={management} onOpen={() => {}} />,
+    <ProvidersPage snapshot={snapshot} api={api} management={management} />,
   );
-  expect(html).not.toContain("Code60 auto-approval");
-  expect(html.indexOf('aria-label="Add Provider"')).toBeLessThan(
-    html.indexOf('aria-label="Open claude"'),
-  );
-  expect(html.indexOf('aria-label="Open claude"')).toBeLessThan(
-    html.indexOf('aria-label="Open codex"'),
-  );
-  expect(html).not.toContain('aria-label="Open droid"');
-  expect(html.match(/aria-label="Primary Provider"/g)).toHaveLength(1);
-  expect(html).toContain('data-tooltip="Primary Provider"');
-  expect(html).toContain('aria-label="More actions for claude"');
-  expect(html).toMatch(/<\/button>.*class="navigation-row-actions"/);
+  const rows = [...html.matchAll(/<li\b[^>]*>(.*?)<\/li>/gs)].map((match) => match[1]);
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toContain("<h2>claude (Primary)</h2>");
+  expect(rows[0]).toContain('aria-label="More actions for claude"');
+  expect(rows[0]).toContain("Claude model");
+  expect(rows[0]).toContain('aria-label="Clear claude worker model default"');
+  expect(rows[1]).toContain("<h2>codex</h2>");
+  expect(rows[1]).toContain("Codex model");
+  expect(rows[1]).toContain('aria-label="Clear codex orchestrator model default"');
+  expect(html).not.toContain('aria-label="Open ');
 });
 
 it("keeps Add Provider present and disabled when all providers are added and shares errors", () => {
@@ -63,52 +60,11 @@ it("keeps Add Provider present and disabled when all providers are added and sha
         addReason: "All supported providers are connected",
         error: "Save failed. Retry.",
       }}
-      onOpen={() => {}}
     />,
   );
-  expect(html).toMatch(/<button[^>]*aria-label="Add Provider"[^>]*disabled=""/);
+  expect(html).toMatch(/<button[^>]*disabled=""/);
   expect(html).toContain('title="All supported providers are connected"');
   expect(html).toContain('role="alert">Save failed. Retry.');
-});
-
-it("scopes saved defaults to the selected provider and shows the provider title", () => {
-  const html = renderToStaticMarkup(
-    <ProvidersPage
-      snapshot={snapshot}
-      api={api}
-      management={management}
-      providerId="codex"
-      onOpen={() => {}}
-    />,
-  );
-  expect(html).toContain("Verified provider");
-  expect(html).toContain("Codex model");
-  expect(html).not.toContain("Claude model");
-  expect(html).toContain('aria-label="Clear codex orchestrator model default"');
-  expect(html).not.toContain("Permissions");
-});
-
-it("mirrors provider navigation and primary status in an always-open sidebar card", () => {
-  const html = renderToStaticMarkup(
-    <ProvidersSidebar
-      setup={snapshot.agentSetup}
-      management={management}
-      selectedId="codex"
-      active
-      onHome={() => {}}
-      onOpen={() => {}}
-      onKeyDown={() => {}}
-      onNext={() => {}}
-      onFirst={() => {}}
-      onLast={() => {}}
-    />,
-  );
-  expect(html).toContain('aria-label="Add Provider"');
-  expect(html).not.toContain('id="providers-card-toggle"');
-  expect(html).toContain('id="provider-codex"');
-  expect(html).toContain('aria-current="page"');
-  expect(html.match(/<div[^>]*id="provider-pages"[^>]*>/)?.[0]).not.toMatch(/hidden|inert/);
-  expect(html.match(/aria-label="More actions for /g)).toHaveLength(2);
 });
 
 it("derives primary and work restrictions consistently for every management surface", () => {

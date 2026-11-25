@@ -15,15 +15,15 @@ describe("Apps home", () => {
     const labels = home.props.cards.map((card: { label: string }) => card.label);
     expect(labels).toEqual([
       "Appearance",
-      "Command Builder",
+      "Commands",
       "Data Viewer",
+      "Internal Prompts",
       "MCP Servers",
       "Memory",
       "Polling",
-      "Prompt Builder",
       "Scheduled Jobs",
       "System Manager",
-      "Update Manager",
+      "Updates",
       "Workflows",
     ]);
     for (const card of home.props.cards.filter((card: { id: string }) =>
@@ -65,20 +65,24 @@ describe("Apps home", () => {
       expect(studio).toContain('aria-label="Open Scheduled Jobs"');
       expect(studio).not.toContain('data-icon="app-robotic-arm"');
       expect(studio).not.toContain("disabled");
-      expect(html.indexOf("Open Prompt Builder")).toBeLessThan(html.indexOf("Open Scheduled Jobs"));
+      expect(html.indexOf("Open Internal Prompts")).toBeLessThan(
+        html.indexOf("Open Scheduled Jobs"),
+      );
       const viewer = html.match(/<button[^>]*data-feature="tables"[\s\S]*?<\/button>/)?.[0];
       expect(viewer).toContain('aria-label="Open Data Viewer"');
       expect(viewer).not.toContain('data-icon="app-database"');
       expect(viewer).not.toContain("disabled");
-      expect(html.indexOf("Open Command Builder")).toBeLessThan(html.indexOf("Open Data Viewer"));
-      expect(html.indexOf("Open Data Viewer")).toBeLessThan(html.indexOf("Open Prompt Builder"));
+      expect(html.indexOf("Open Commands")).toBeLessThan(html.indexOf("Open Data Viewer"));
+      expect(html.indexOf("Open Data Viewer")).toBeLessThan(html.indexOf("Open Internal Prompts"));
       const manager = html.match(
         /<button[^>]*data-feature="system-manager"[\s\S]*?<\/button>/,
       )?.[0];
       expect(manager).toContain('aria-label="Open System Manager"');
       expect(manager).not.toContain('data-icon="app-system-manager"');
       expect(manager).not.toContain("disabled");
-      expect(html.indexOf("Open Prompt Builder")).toBeLessThan(html.indexOf("Open System Manager"));
+      expect(html.indexOf("Open Internal Prompts")).toBeLessThan(
+        html.indexOf("Open System Manager"),
+      );
       expect(html).not.toContain("Open Relay");
     },
   );

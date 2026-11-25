@@ -249,7 +249,7 @@ The user-approved extension of the Scheduled Jobs trial replaces the remaining
 browser presentation with upstream Carbon React. This direction supersedes
 historical visual-only Neobrutalism/card/artwork/typography rules below. Carbon
 White/G100 follows the existing resolved scheme, with local IBM Plex Sans,
-productive controls and standard blue. No appearance records are erased. Domain
+productive controls and a customizable verdigris accent. No appearance records are erased. Domain
 operations, backend confirmations, visibility ownership and retained state remain
 authoritative. Standard controls and dialogs use Carbon; specialist code/diff/tree
 widgets keep their functional integration. See the [migration ledger](docs/carbon-migration.md)
@@ -259,7 +259,7 @@ migration as the finished application.
 ## Product shell and resume
 
 The product header owns browser history, connection status, commands and workspace
-controls. The responsive panel uses Carbon UI Shell submenus for Work, Automation, Inspect and Manage. Opening a destination reveals its group. Toggling a group preserves the current view and its nested disclosures.
+controls. The responsive panel uses Carbon UI Shell submenus for Chat, Develop, Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments. Opening a destination reveals its group. Toggling a group preserves the current view and its nested disclosures.
 The start screen occupies the viewport and hides the retained workspace until entry. Provider setup opens one native modal above it. The header skip link focuses the active panel. The application grid retains inactive destinations and their drafts. Startup pairs
 the controlling browser and verifies a provider before restoring a destination.
 Each browser stores a route identity per active database and a separate identity for
@@ -2929,13 +2929,11 @@ no self-knowledge catalog change is needed.
 
 ## Providers navigation and management
 
-Providers replaces Settings → Agents. A database-independent sidebar Card after
-Projects has independent heading, Add Provider and disclosure controls. Its saved
-membership order, names, logos, primary marker and More actions match the gallery.
-The gallery starts with a dashed Add Provider card, always present and disabled
-when all catalog providers are enabled. Cards and sidebar rows open provider
-details with scoped saved orchestrator/worker model defaults and Clear actions;
-opening never probes or starts a provider. Details breadcrumbs link to Providers.
+Connect → Providers is a single database-independent page. It lists verified providers
+in saved membership order, with “(Primary)” beside the primary provider's name.
+Add Provider opens setup. Each row offers More actions and shows any saved
+orchestrator and worker model defaults with their Clear controls. Opening the
+page never probes or starts a provider. Former saved provider destinations reopen here.
 
 `providerAction` accepts only strict set-primary/disconnect actions and a provider
 ID, with main-owned management availability in the setup snapshot. Validate again
@@ -2949,15 +2947,9 @@ compatible. Save atomically before publishing; failed saves preserve the previou
 record. Use the existing provider lifecycle for primary replacement and refresh
 allowed membership without restarting unrelated chats on additional disconnect.
 
-Both visible menu items expose disabled reasons. Reuse native anchored-menu
-positioning, keyboard, dismissal and focus behavior with licensed Neobrutalism
-menu presentation. The primary gallery card alone has a 36px circular read-only
-checked status at bottom right with a Primary Provider hover/focus tooltip; sidebar
-markers are compact. Share mutation state/errors across views, return disconnected
-details to Providers, remember disclosure and reveal explicit provider destinations.
-Use local Neobrutalism adaptations with existing themes, typography and accessibility;
-no Base UI runtime, arbitrary provider configuration, management MCP tool or version
-bump is introduced. This section supersedes earlier Settings → Agents descriptions.
+Both menu items expose disabled reasons and use the shared anchored menu for
+keyboard navigation, dismissal and focus restoration. The page shares pending
+state and errors across provider actions.
 
 ## Neobrutalism modal dialogs
 
@@ -3466,7 +3458,7 @@ and normal work use the same managed or installed CLI as login. Explicit backend
 
 ## Web Server Beta
 
-Settings → Advanced → Web Server Beta is an explicit, human-only LAN exception to
+Experiments → Web Server (Beta) is an explicit, human-only LAN exception to
 the loopback default. It is off by default and persists only its enabled preference
 in private gateway settings. Only the controlling localhost browser may change it
 or issue single-use 60-second LAN pairing codes. LAN always requires pairing,

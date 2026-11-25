@@ -1,11 +1,33 @@
 import { describe, expect, it } from "vitest";
 import {
+  accentProperties,
+  defaultAccentColor,
   defaultSidebarAppearance,
   observeColorScheme,
+  parseAccentColor,
   parseSidebarAppearance,
   parseTheme,
   sidebarAppearanceProperties,
 } from "./appearance.js";
+
+describe("accent color", () => {
+  it("restores a valid swatch and falls back to verdigris for invalid storage", () => {
+    expect(parseAccentColor("#A00B89")).toBe("#a00b89");
+    for (const invalid of [null, "blue", "#bad", "#12345678", "var(--primary)"]) {
+      expect(parseAccentColor(invalid)).toBe(defaultAccentColor);
+    }
+  });
+  it("preserves the swatch and supplies readable light and dark variants", () => {
+    expect(accentProperties("#ffffff")).toMatchObject({
+      "--code60-accent-ink": "#656565",
+      "--code60-accent-bright": "#ffffff",
+    });
+    expect(accentProperties("#000000")).toMatchObject({
+      "--code60-accent-ink": "#000000",
+      "--code60-accent-bright": "#b3b3b3",
+    });
+  });
+});
 
 describe("saved background appearance (legacy storage)", () => {
   it.each([null, "broken", "null", "[]", "42", '"opacity"'])(

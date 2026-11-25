@@ -40,6 +40,7 @@ import { useProjectConnection } from "./project-connection.js";
 import { useProjectWorkspace } from "./project-workspace.js";
 import { useProviderManagement } from "./provider-management.js";
 
+import { RelayInputFocus } from "./relay-pulse.js";
 import { useResumeDestination } from "./resume-destination.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
 import { useScopedDetails } from "./scoped-details.js";
@@ -82,6 +83,7 @@ export function App({
   );
   const providerManagement = useProviderManagement(api, snapshot);
 
+  const [relayListening, setRelayListening] = useState(false);
   const [palette, setPalette] = useState(false);
   const [notifications, setNotifications] = useState<ToastMessage[]>([]);
   const notificationId = useRef(0);
@@ -205,9 +207,6 @@ export function App({
     selectedId: navigationSelectedId,
     onPage: selectPage,
     onSection: setSettingsSection,
-    providers: snapshot?.agentSetup?.enabled ?? [],
-    onProvider: (providerId) =>
-      setTabs((current) => updateTabs(current, { type: "provider", providerId })),
     onProject: (projectId) =>
       setTabs((current) => updateTabs(current, { type: "project", projectId })),
     selectWorker,
@@ -240,15 +239,6 @@ export function App({
       setTabs((current) => updateTabs(current, { type: "select", id: "projects" }));
   }, [snapshot, tabs.active, tabs.projectId]);
 
-  useEffect(() => {
-    if (
-      snapshot &&
-      tabs.active === "provider" &&
-      !snapshot.agentSetup?.enabled.includes(tabs.providerId ?? "")
-    )
-      setTabs((current) => updateTabs(current, { type: "select", id: "providers" }));
-  }, [snapshot, tabs.active, tabs.providerId]);
-
   useLayoutEffect(() => {
     // Reveal nested sidebar ancestors before focus, without waiting for another frame.
     if (splash) return;
@@ -257,9 +247,15 @@ export function App({
         ? `tab-settings-${settingsSection}`
         : tabs.active === "chat" && navigationSelectedId
           ? `conversation-${navigationSelectedId}`
-          : sidebarPageElementId(tabs.active, tabs.projectId, tabs.providerId);
-    return focusNavigation(tabs.active === "automations" ? "jobs-page-heading" : id);
-  }, [tabs.active, tabs.projectId, tabs.providerId, settingsSection, splash, navigationSelectedId]);
+          : sidebarPageElementId(tabs.active, tabs.projectId);
+    return focusNavigation(
+      tabs.active === "automations"
+        ? "jobs-page-heading"
+        : document.getElementById(id)
+          ? id
+          : `panel-${tabs.active}`,
+    );
+  }, [tabs.active, tabs.projectId, settingsSection, splash, navigationSelectedId]);
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -399,6 +395,9 @@ export function App({
       >
         {!splash && (
           <PageTabBar
+            relayListening={relayListening}
+            showRelayDot={preferences.showRelayDot}
+            onShowRelayDotChange={preferences.setShowRelayDot}
             commands={() => setPalette(true)}
             workspace={(close) => (
               <>
@@ -414,8 +413,6 @@ export function App({
             navigation={navigation}
             openProjects={snapshot?.openProjects}
             selectedProjectId={snapshot?.projectInstanceId}
-            providerSetup={snapshot?.agentSetup}
-            providerManagement={providerManagement}
             customAgents={snapshot?.customAgents ?? []}
             chats={snapshot?.chats ?? []}
             selectedId={navigationSelectedId}
@@ -502,5 +499,5 @@ export function App({
       />
     </div>
   );
-  return content;
+  return <RelayInputFocus.Provider value={setRelayListening}>{content}</RelayInputFocus.Provider>;
 }

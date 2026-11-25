@@ -1,4 +1,4 @@
-import { Tab, TabList, TabPanel, TabPanels, Tabs } from "@carbon/react";
+import { InlineNotification, Tab, TabList, TabPanel, TabPanels, Tabs } from "@carbon/react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   type ApplicationClient,
@@ -289,6 +289,27 @@ export function McpWorkspace({
   }
   return (
     <section className="mcp-workspace">
+      <div className="mcp-scope">
+        <Select
+          labelText="Configuration"
+          aria-label="Configuration"
+          value={scope}
+          disabled={busy || formDirty}
+          onChange={(e) => select(e.target.value)}
+        >
+          <option value="user">User</option>
+          {targets?.targets
+            .filter((t) => t.address.scope === "project")
+            .map((t) => (
+              <option key={t.address.targetId} value={t.address.targetId}>
+                {t.label}
+              </option>
+            ))}
+          {scope !== "user" && !targets?.targets.some((t) => t.address.targetId === scope) && (
+            <option value={scope}>Unavailable project</option>
+          )}
+        </Select>
+      </div>
       <Tabs
         selectedIndex={mode === "servers" ? 0 : 1}
         onChange={({ selectedIndex }) => {
@@ -300,30 +321,15 @@ export function McpWorkspace({
           <Tab disabled={busy}>Servers</Tab>
           <Tab disabled={busy}>JSON</Tab>
         </TabList>
-        {mode === "json" && (
-          <div className="mcp-workspace-controls">
-            <Select
-              labelText="Configuration"
-              aria-label="Configuration"
-              value={scope}
-              disabled={busy}
-              onChange={(e) => select(e.target.value)}
-            >
-              <option value="user">User</option>
-              {targets?.targets
-                .filter((t) => t.address.scope === "project")
-                .map((t) => (
-                  <option key={t.address.targetId} value={t.address.targetId}>
-                    {t.label}
-                  </option>
-                ))}
-              {scope !== "user" && !targets?.targets.some((t) => t.address.targetId === scope) && (
-                <option value={scope}>Unavailable project</option>
-              )}
-            </Select>
-          </div>
+        {error && (
+          <InlineNotification
+            role="alert"
+            kind="error"
+            title="Configuration error"
+            subtitle={error}
+            hideCloseButton
+          />
         )}
-        {error && <p role="alert">{error}</p>}
         {draft?.ownerLost && (
           <Button
             variant="quiet"
@@ -338,10 +344,11 @@ export function McpWorkspace({
           <TabPanel>
             {mode === "servers" && (
               <McpServersPage
+                key={scope}
                 api={api}
                 active={active && visible}
                 contextKey={contextKey}
-                configuration={{ scope, select }}
+                configuration={{ scope, select, reload: load }}
                 onFormDirty={setFormDirty}
                 readOnly={draft?.ownerLost ?? false}
                 {...table}
@@ -352,10 +359,8 @@ export function McpWorkspace({
             {mode === "json" && (
               <>
                 <PageTitle page="mcp-servers" />
-                <p>
-                  Save writes this dedicated configuration exactly for future sessions. Existing
-                  connections keep their captured state. Use credential references; resolved
-                  credentials are never inserted here.
+                <p className="mcp-editor-description">
+                  Changes apply to future sessions. Use credential references in place of secrets.
                 </p>
                 {draft && state && (
                   <>
@@ -369,6 +374,7 @@ export function McpWorkspace({
                         Save configuration
                       </Button>
                       <Button
+                        variant="quiet"
                         type="button"
                         disabled={busy || !state.editable || !state.validation.valid}
                         onClick={() =>
@@ -382,6 +388,7 @@ export function McpWorkspace({
                         Format JSON
                       </Button>
                       <Button
+                        variant="quiet"
                         type="button"
                         disabled={busy}
                         onClick={() =>
@@ -391,6 +398,7 @@ export function McpWorkspace({
                         Discard changes
                       </Button>
                       <Button
+                        variant="quiet"
                         type="button"
                         disabled={busy}
                         onClick={() => {
@@ -403,22 +411,31 @@ export function McpWorkspace({
                       <span role="status">{state.dirty ? "Unsaved changes" : "Saved"}</span>
                     </div>
                     {state.stale && (
-                      <p role="alert">
-                        Configuration or owner changed. Your draft is retained. Compare or
-                        explicitly discard/reload before saving.
-                      </p>
+                      <InlineNotification
+                        role="alert"
+                        kind="warning"
+                        hideCloseButton
+                        title="Configuration or owner changed."
+                        subtitle="Your draft is retained. Compare or explicitly discard/reload before saving."
+                      />
                     )}
                     {state.blocked && (
-                      <p role="alert">
-                        Pending recovery blocks writes. Preserve private evidence and follow the MCP
-                        configuration recovery runbook.
-                      </p>
+                      <InlineNotification
+                        role="alert"
+                        kind="warning"
+                        hideCloseButton
+                        title="Pending recovery blocks writes."
+                        subtitle="Preserve private evidence and follow the MCP configuration recovery runbook."
+                      />
                     )}
                     {!state.editable && (
-                      <p role="alert">
-                        The original file is not valid UTF-8. Use a valid backup or a confirmed
-                        reset; the original bytes remain protected.
-                      </p>
+                      <InlineNotification
+                        role="alert"
+                        kind="error"
+                        hideCloseButton
+                        title="The original file is not valid UTF-8."
+                        subtitle="Use a valid backup or a confirmed reset. The original bytes remain protected."
+                      />
                     )}
                     {!state.validation.valid && (
                       <ul aria-label="Configuration issues">
@@ -483,101 +500,161 @@ export function McpWorkspace({
       </Tabs>
       <section className="mcp-maintenance" aria-label="Configuration maintenance">
         <h2>Configuration maintenance</h2>
-        <div className="mcp-workspace-controls">
-          <Button
-            variant="quiet"
-            type="button"
-            disabled={busy || !draft}
-            onClick={() => void openBackups()}
-          >
-            Restore backup
-          </Button>
-          <Button
-            type="button"
-            disabled={
-              busy || !draft || Boolean(draft.latest.pendingRecovery.length) || draft.ownerLost
-            }
-            onClick={() => void openReset(false)}
-          >
-            Reset this configuration
-          </Button>
-          {target?.address.scope === "project" && (
+        <div className="mcp-maintenance-row">
+          <h3>Backup and recovery</h3>
+          <div className="mcp-actions">
             <Button
+              variant="quiet"
+              type="button"
+              disabled={busy || !draft}
+              onClick={() => void openBackups()}
+            >
+              Restore backup
+            </Button>
+            <Button
+              variant="quiet"
+              className="destructive"
               type="button"
               disabled={
                 busy || !draft || Boolean(draft.latest.pendingRecovery.length) || draft.ownerLost
               }
-              onClick={() => void openReset(true)}
+              onClick={() => void openReset(false)}
             >
-              Reset User and this project
+              Reset this configuration
             </Button>
-          )}
+            {target?.address.scope === "project" && (
+              <Button
+                variant="quiet"
+                className="destructive"
+                type="button"
+                disabled={
+                  busy || !draft || Boolean(draft.latest.pendingRecovery.length) || draft.ownerLost
+                }
+                onClick={() => void openReset(true)}
+              >
+                Reset User and this project
+              </Button>
+            )}
+            {target && (
+              <McpRecoveryPanel
+                api={api}
+                target={target.address}
+                active={active && visible}
+                dirty={Boolean(state?.dirty || formDirty)}
+                onChanged={() => {
+                  void load();
+                }}
+              />
+            )}
+          </div>
         </div>
         {target && (
           <McpTroubleshooting api={api} target={target.address} active={active && visible} />
         )}
-        {target && (
-          <McpRecoveryPanel
-            api={api}
-            target={target.address}
-            active={active && visible}
-            dirty={Boolean(state?.dirty || formDirty)}
-            onChanged={() => {
-              void load();
-            }}
-          />
-        )}
       </section>
       {active && visible && guard && (
-        <Modal title={guard.title} busy={busy} onClose={() => setGuard(undefined)}>
+        <Modal
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => setGuard(undefined)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="destructive"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  void reload().then(
+                    () => {
+                      setGuard(undefined);
+                      guard.proceed();
+                    },
+                    (cause) => setError(failure(cause)),
+                  );
+                }}
+              >
+                Discard
+              </Button>
+              <Button
+                variant="primary"
+                type="button"
+                disabled={busy || !state?.canSave}
+                onClick={() => {
+                  void saveText().then((saved) => {
+                    if (saved) {
+                      setGuard(undefined);
+                      guard.proceed();
+                    }
+                  });
+                }}
+              >
+                Save
+              </Button>
+            </>
+          }
+          title={guard.title}
+          busy={busy}
+          onClose={() => setGuard(undefined)}
+        >
           {error && <p role="alert">{error}</p>}
           <p>
             Save the JSON draft, discard it and read the latest saved configuration, or cancel.
             Discard never writes the file.
           </p>
-          <div className="dialog-actions">
-            <Button
-              variant="quiet"
-              type="button"
-              disabled={busy}
-              onClick={() => setGuard(undefined)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                void reload().then(
-                  () => {
-                    setGuard(undefined);
-                    guard.proceed();
-                  },
-                  (cause) => setError(failure(cause)),
-                );
-              }}
-            >
-              Discard
-            </Button>
-            <Button
-              type="button"
-              disabled={busy || !state?.canSave}
-              onClick={() => {
-                void saveText().then((saved) => {
-                  if (saved) {
-                    setGuard(undefined);
-                    guard.proceed();
-                  }
-                });
-              }}
-            >
-              Save
-            </Button>
-          </div>
         </Modal>
       )}
       {active && visible && backups && (
         <Modal
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setBackups(undefined);
+                  setBackup(undefined);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="destructive"
+                type="button"
+                disabled={
+                  busy ||
+                  !backup ||
+                  !draft ||
+                  draft.ownerLost ||
+                  Boolean(draft.latest.pendingRecovery.length)
+                }
+                onClick={() => {
+                  if (!draft || !backup) return;
+                  const value = {
+                    target: backup.target,
+                    expectedRevision: backup.expectedRevision,
+                    backupId: backup.backupId,
+                    expectedBackupRevision: backup.backupRevision,
+                  };
+                  void mutate(value, (requestId) => api.mcpRestore({ ...value, requestId })).then(
+                    (saved) => {
+                      if (saved) {
+                        setBackups(undefined);
+                        setBackup(undefined);
+                      }
+                    },
+                  );
+                }}
+              >
+                Confirm restore
+              </Button>
+            </>
+          }
           title="Restore MCP backup"
           wide
           busy={busy}
@@ -655,52 +732,41 @@ export function McpWorkspace({
             </>
           )}
           {error && <p role="alert">{error}</p>}
-          <div className="dialog-actions">
-            <Button
-              variant="quiet"
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setBackups(undefined);
-                setBackup(undefined);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={
-                busy ||
-                !backup ||
-                !draft ||
-                draft.ownerLost ||
-                Boolean(draft.latest.pendingRecovery.length)
-              }
-              onClick={() => {
-                if (!draft || !backup) return;
-                const value = {
-                  target: backup.target,
-                  expectedRevision: backup.expectedRevision,
-                  backupId: backup.backupId,
-                  expectedBackupRevision: backup.backupRevision,
-                };
-                void mutate(value, (requestId) => api.mcpRestore({ ...value, requestId })).then(
-                  (saved) => {
-                    if (saved) {
-                      setBackups(undefined);
-                      setBackup(undefined);
-                    }
-                  },
-                );
-              }}
-            >
-              Confirm restore
-            </Button>
-          </div>
         </Modal>
       )}
       {active && visible && reset && (
-        <Modal title="Reset MCP configuration?" busy={busy} onClose={() => setReset(undefined)}>
+        <Modal
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => setReset(undefined)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="destructive"
+                type="button"
+                disabled={busy || reset.blocked}
+                onClick={() => {
+                  const value = reset.request;
+                  void mutate(value, (requestId) => api.mcpReset({ ...value, requestId })).then(
+                    (saved) => {
+                      if (saved) setReset(undefined);
+                    },
+                  );
+                }}
+              >
+                Confirm reset
+              </Button>
+            </>
+          }
+          title="Reset MCP configuration?"
+          busy={busy}
+          onClose={() => setReset(undefined)}
+        >
           <p>Configurations: {reset.configurationLabels.join(", ")}.</p>
           <p>
             {reset.request.includeUser
@@ -733,31 +799,6 @@ export function McpWorkspace({
           </p>
           {reset.blocked && <p role="alert">Pending recovery blocks reset.</p>}
           {error && <p role="alert">{error}</p>}
-          <div className="dialog-actions">
-            <Button
-              variant="quiet"
-              type="button"
-              disabled={busy}
-              onClick={() => setReset(undefined)}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="destructive"
-              type="button"
-              disabled={busy || reset.blocked}
-              onClick={() => {
-                const value = reset.request;
-                void mutate(value, (requestId) => api.mcpReset({ ...value, requestId })).then(
-                  (saved) => {
-                    if (saved) setReset(undefined);
-                  },
-                );
-              }}
-            >
-              Confirm reset
-            </Button>
-          </div>
         </Modal>
       )}
     </section>

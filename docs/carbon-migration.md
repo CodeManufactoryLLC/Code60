@@ -1,17 +1,20 @@
 # Code60 product interface
 
-The full-app worktree integrates the approved Scheduled Jobs design at `656b0ae` with upstream `f0f7e5a`. The reference worktree can still run independently. The renderer uses `@carbon/react` 1.121.0, standard blue, locally bundled Plex Sans and White/G100. The product header and navigation belong to the application. Scheduled Jobs owns its task tabs, forms and evidence.
+The full-app worktree integrates the approved Scheduled Jobs design at `656b0ae` with upstream `f0f7e5a`. The reference worktree can still run independently. The renderer uses `@carbon/react` 1.121.0, a customizable verdigris accent, locally bundled Plex Sans and White/G100. The product header and navigation belong to the application. Scheduled Jobs owns its task tabs, forms and evidence.
 
 ## Route inventory and interaction decisions
 
 | Workspace | Destinations and deep links | Operator task |
 | --- | --- | --- |
-| Work | Home, Assistants, Chat, Custom Assistants, Projects, Project, Search | Home offers task entry points. Project and provider lists keep their primary action by the list. Open projects expose their conversations in navigation. A conversation retains its composer and transcript while Files, plans, worker activity, changes and evidence occupy its contextual panel. Files resolves into that panel. |
-| Automation | Scheduled Jobs, Workflows | Read next run and running state from Schedules. Expand for details or explicitly open scoped history. Workflows separates saved definitions from execution history. Edit a copy reuses a definition and requires a fresh reviewed submission. Playback, evidence and reconnect act on one run. |
-| Inspect | Data Viewer, Sessions, Configurations, Memories, Messages, Events, Logs, Worktrees, Polling | Open a record alongside the relevant table or in a bounded detail dialog. Search operates on its submitted query. The independent server cursors and retained log stream own older entries. Table density, sorting, column visibility and order remain available where supported. |
-| Manage | Providers, Provider, Apps, System Manager, Settings, Advanced, Experiments, Episodic Memory, RAG, Web Server Beta, Contributor Tools, Prompt Builder, Command Builder | Apps indexes tasks. Provider setup exposes install, login, verify, retry and cancellation. System Manager keeps recovery beside the affected service. Builders put editing and save actions with the working fields. |
-| MCP Servers | Apps → MCP Servers | Servers and JSON use line tabs for the same scoped configuration. The table toolbar owns Add server, selection owns authentication and connection actions, and configuration maintenance groups backup, reset, recovery and troubleshooting. The JSON editor retains draft ownership and the save/discard decision. |
-| Settings sections | About, Appearance, Memory, Polling, Table defaults, Text, Update Manager | Workspace and Appearance provide system, dark and light themes. Update Manager shows the installed release and the terminal commands to update, reconnect and recover. Text controls interface sizing. The renderer preserves stored decorative preferences when displaying Carbon defaults. Destination glyphs come from Carbon. Extracted memory statements are text rows. |
+| Chat | Relay, Custom Assistants | Resume a conversation or manage assistants. |
+| Develop | Projects, Workflows | Open a project, navigate its conversations or manage workflow definitions and runs. |
+| Automate | Scheduled Jobs | Manage schedules and inspect execution history. |
+| Connect | MCP Servers, Providers | Configure servers or manage provider setup and connections. |
+| Customize | Internal Prompts, Commands, MCP Servers | Edit internal prompts, build project commands or manage MCP servers. |
+| Personalize | Appearance, Table Defaults, Text | Adjust theme, table presentation and interface text. |
+| Manage | About, Polling, System Manager, Updates | Inspect installation details, configure polling and access recovery instructions. |
+| Contributor Tools | Memory Tester, Retrieval Tests | Test episodic memory extraction and conversation retrieval. |
+| Experiments | Web Server (Beta) | Inspect or configure private-LAN access. |
 | Startup and ownership | Pairing, takeover, backend reconnect, provider prerequisites, database selection, explicit workspace setup and verified return | Required actions appear in the affected state. Resume stores a validated route identity for each database and a separate browser-local identity for work without a database. A missing identity opens Relay. |
 
 The sidebar groups are entry points. Nested destinations keep their existing IDs, command palette targets, database gates and keyboard contracts. The shared header supplies global commands, history, connection state and Workspace. Navigating between destinations retains inactive components wherever drafts, scroll position or independent subscriptions require that lifetime.
@@ -42,3 +45,10 @@ Authenticated IBM Carbon MCP documentation and code searches informed each famil
 Carbon owns standard fields, button semantics, tabs, menu surfaces, table elements, theme tokens and composed dialogs. Code60 owns session and execution identity, cancellation, server cursors, revision checks, selection, evidence assembly and focus across view transitions. Monaco, trees, diffs, telemetry and transcript scrolling keep their specialist implementations. The shared stylesheet bridges these retained layouts to Carbon. The job stylesheet contains schedule-specific layout. Visual evidence and run-specific results are recorded in the worktree QA directory under `test-results/qa/carbon-full-app`.
 
 The [visual review and functional coverage](review/carbon-full-app/README.md) include before/after comparisons for the major operator workflows.
+
+
+## Modal dialogs
+
+Code60 uses Carbon’s composed modal for its dialogs. Forms keep their completion buttons in the footer, in keyboard order after the fields. Secondary actions appear on the left, and the primary or danger action appears on the right. The body scrolls independently on short screens. Content tools such as Copy, Preview and Add condition stay with the content they affect.
+
+Passive viewers support backdrop dismissal. Transactions require an explicit action, the header close button or Escape. Destructive confirmations focus Cancel and label the danger button with its effect. The controlling browser receives the presentation identifier with the gateway request. The gateway still validates ownership, expiry and the answer independently. [Carbon modal guidelines](https://carbondesignsystem.com/components/modal/usage/)

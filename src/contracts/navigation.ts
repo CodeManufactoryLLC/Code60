@@ -23,7 +23,6 @@ export interface PageDefinition {
 export const parentPageIds = [
   "assistants",
   "projects",
-  "providers",
   "apps",
   "tables",
   "settings",
@@ -78,17 +77,6 @@ export const pages = [
     initialOrder: 25,
     database: false,
     icon: "app-helmet",
-  },
-  {
-    id: "provider",
-    label: "Provider",
-    group: "legacy",
-    order: 0,
-    initialOrder: 26,
-    database: false,
-    icon: "app-helmet",
-    parent: "providers",
-    internal: true,
   },
   {
     id: "project",
@@ -188,7 +176,7 @@ export const pages = [
   {
     id: "episodic-memory",
     initialOrder: 3,
-    label: "Episodic Memory",
+    label: "Memory Tester",
     group: "experiments",
     order: 0,
     database: true,
@@ -197,7 +185,7 @@ export const pages = [
   {
     id: "rag",
     initialOrder: -1,
-    label: "RAG",
+    label: "Retrieval Tests",
     group: "experiments",
     order: 1,
     database: true,
@@ -205,7 +193,7 @@ export const pages = [
   },
   {
     id: "web-server",
-    label: "Web Server Beta",
+    label: "Web Server (Beta)",
     group: "advanced",
     order: 2,
     initialOrder: 28,
@@ -315,7 +303,7 @@ export const pages = [
   {
     id: "prompts",
     initialOrder: 11,
-    label: "Prompt Builder",
+    label: "Internal Prompts",
     group: "apps",
     order: 1,
     database: true,
@@ -324,7 +312,7 @@ export const pages = [
   {
     id: "commands",
     initialOrder: 12,
-    label: "Command Builder",
+    label: "Commands",
     group: "apps",
     order: 0,
     database: true,
@@ -347,9 +335,9 @@ export const settingsSections = [
   { id: "appearance", label: "Appearance", icon: "app-color-palette", parent: "apps" },
   { id: "memory", label: "Memory", icon: "app-bookshelf", parent: "apps" },
   { id: "polling-settings", label: "Polling", icon: "app-heart-rate", parent: "apps" },
-  { id: "table-defaults", label: "Table defaults", icon: "app-table", parent: "settings" },
+  { id: "table-defaults", label: "Table Defaults", icon: "app-table", parent: "settings" },
   { id: "text", label: "Text", icon: "app-text-size", parent: "settings" },
-  { id: "updates", label: "Update Manager", icon: "app-cloud-computing", parent: "apps" },
+  { id: "updates", label: "Updates", icon: "app-cloud-computing", parent: "apps" },
 ] as const satisfies readonly {
   id: string;
   label: string;

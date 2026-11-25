@@ -5,15 +5,13 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import type { McpConfigurationStore as StoreType } from "../src/application/index.js";
-import { expandNavigation } from "./fixtures/browser-actions.js";
+import { openMcpServers } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
 
 const original =
   '{"version":1,"servers":{"docs":{"label":"Private definition","enabled":false,"type":"stdio","command":"never-run","args":[],"env":{"PRIVATE_TOKEN":{"credentialRef":"private-reference"}}}}}\n';
 async function app(page: Page) {
-  await expandNavigation(page, "Manage");
-  await page.getByRole("tab", { name: "Apps", exact: true }).click();
-  await page.getByRole("button", { name: "Open MCP Servers", exact: true }).click();
+  await openMcpServers(page);
   await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
 }
 async function edit(page: Page, value: string) {
@@ -353,7 +351,7 @@ test("MCP troubleshooting: launch-stage warning and explicit bounded discovery r
       await page.getByRole("button", { name: "Test connection", exact: true }).click();
       const confirm = page.getByRole("dialog", { name: "Test MCP server?", exact: true });
       await expect(confirm).toContainText("Only initialization and tool discovery");
-      await confirm.getByRole("button", { name: "Confirm", exact: true }).click();
+      await confirm.getByRole("button", { name: "Test connection", exact: true }).click();
       await expect(page.getByLabel("MCP connection controls")).toContainText("MCP_LAUNCH (launch)");
       await expect(page.getByLabel("MCP connection controls")).toContainText(
         "Other tools remain available",

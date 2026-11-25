@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
-import type { RelayReviewRequest, RelayReviewResponse, Review, TaskView } from "../bridge/index.js";
+import type {
+  ConfirmationId,
+  RelayReviewRequest,
+  RelayReviewResponse,
+  Review,
+  TaskView,
+} from "../bridge/index.js";
 import { parseRelayReview, summarizeReview } from "../bridge/index.js";
 import {
   ACTIVE_STATUSES,
@@ -128,7 +134,7 @@ export class RelayReviews {
       changed(): void;
       feedback(review: Review, batchId: string, text: string): void;
       withdraw(reviewId: string, batchId: string): void;
-      confirm(title: string, detail: string): Promise<boolean>;
+      confirm(presentation: ConfirmationId, detail: string): Promise<boolean>;
       checkpoint?(): string | undefined;
       integrate?(
         review: Review,
@@ -798,10 +804,10 @@ export class RelayReviews {
       if (
         !(await this.hooks.confirm(
           action.type === "apply"
-            ? "Apply reviewed changes?"
+            ? "apply-changes"
             : action.type === "undo"
-              ? "Undo reviewed changes?"
-              : "Recover interrupted changes?",
+              ? "undo-changes"
+              : "recover-changes",
           `${origin(review).cwd}\n${proposal.changes.length} file changes. Newer edits are rechecked before writing.`,
         ))
       )

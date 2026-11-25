@@ -1,13 +1,11 @@
 import { mkdir, open, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { expandNavigation } from "./fixtures/browser-actions.js";
+import { openMcpServers } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
 
 async function apps(page: Page) {
-  await expandNavigation(page, "Manage");
-  await page.getByRole("tab", { name: "Apps", exact: true }).click();
-  await page.getByRole("button", { name: "Open MCP Servers", exact: true }).click();
+  await openMcpServers(page);
   await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
 }
 const alive = (pid: number) => {
@@ -55,7 +53,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     await expect(confirmation).toHaveCount(0);
     await expect(stat(evidence)).rejects.toThrow();
     await page.getByRole("button", { name: "Test connection", exact: true }).click();
-    await confirmation.getByRole("button", { name: "Confirm", exact: true }).click();
+    await confirmation.getByRole("button", { name: "Test connection", exact: true }).click();
     await expect(page.getByLabel("MCP connection controls")).toContainText("1 tools discovered");
     const events = async () =>
       (await readFile(evidence, "utf8"))
@@ -90,7 +88,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
       .toBe(before + 1);
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const chat = page.locator(".orchestration-chat-page:visible");
-    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const composer = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
     await composer.fill(
       JSON.stringify([{ message: "MCP turn is active" }, { hang: "cancellable" }]),
     );
@@ -177,8 +175,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.press("ArrowRight");
     await page.keyboard.insertText(" ");
-    await expandNavigation(page, "Manage");
-    await page.getByRole("tab", { name: "Apps", exact: true }).click();
+    await page.getByRole("link", { name: "Code60", exact: true }).click();
     await apps(page);
     await expect(page.locator(".mcp-json-editor")).toContainText("Project override");
     await expect(
@@ -229,7 +226,7 @@ test("MCP runtime: Cancel and browser detach stop page-owned discovery processes
       await page.getByRole("button", { name: "Test connection", exact: true }).click();
       await page
         .getByRole("dialog", { name: "Test MCP server?", exact: true })
-        .getByRole("button", { name: "Confirm", exact: true })
+        .getByRole("button", { name: "Test connection", exact: true })
         .click();
     };
     await begin();

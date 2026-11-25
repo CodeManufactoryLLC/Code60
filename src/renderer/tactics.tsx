@@ -90,7 +90,42 @@ export function TacticsDialog({
     }
   };
   return (
-    <Modal title="Tactics" busy={busy} wide className="tactics-dialog" onClose={onClose}>
+    <Modal
+      footer={
+        <>
+          <AppButton variant="secondary" disabled={busy} onClick={onClose}>
+            Cancel
+          </AppButton>
+          {preview && (
+            <AppButton
+              type="button"
+              className="primary"
+              disabled={busy || selected === preview.id}
+              onClick={async () => {
+                if (busy) return;
+                setBusy(true);
+                setError("");
+                try {
+                  if (await onApply(preview.id)) onClose();
+                  else setError("The tactic could not be saved. Try Apply again.");
+                } catch {
+                  setError("The tactic could not be saved. Try Apply again.");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {busy ? "Saving…" : selected === preview.id ? "Applied" : "Apply to chat"}
+            </AppButton>
+          )}
+        </>
+      }
+      title="Tactics"
+      busy={busy}
+      wide
+      className="tactics-dialog"
+      onClose={onClose}
+    >
       <div className="tactics-layout">
         <section className="tactics-browser" aria-label="Available tactics">
           <label className="sr-only" htmlFor={`${id}-search`}>
@@ -162,26 +197,6 @@ export function TacticsDialog({
             <>
               <header className="tactic-heading">
                 <h3>{preview.title}</h3>
-                <AppButton
-                  type="button"
-                  className="primary"
-                  disabled={busy || selected === preview.id}
-                  onClick={async () => {
-                    if (busy) return;
-                    setBusy(true);
-                    setError("");
-                    try {
-                      if (await onApply(preview.id)) onClose();
-                      else setError("The tactic could not be saved. Try Apply again.");
-                    } catch {
-                      setError("The tactic could not be saved. Try Apply again.");
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  {busy ? "Saving…" : selected === preview.id ? "Applied" : "Apply to chat"}
-                </AppButton>
               </header>
               {error && <p role="alert">{error}</p>}
               <div className="tactic-content" key={preview.id}>

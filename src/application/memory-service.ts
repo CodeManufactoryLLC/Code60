@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serialize } from "node:v8";
+import type { ConfirmationId } from "../bridge/index.js";
 import {
   DEFAULT_MEMORY_SETTINGS,
   type MemoryAction,
@@ -301,7 +302,10 @@ export class MemoryService {
   detail(id: string) {
     return this.call<MemoryDetail>("detail", id);
   }
-  async action(action: MemoryAction, confirm: (title: string, detail: string) => Promise<boolean>) {
+  async action(
+    action: MemoryAction,
+    confirm: (presentation: ConfirmationId, detail: string) => Promise<boolean>,
+  ) {
     if (this.mutating) throw new Error("Memory settings are changing. Try again.");
     await this.loadSettings();
     let retentionToken: string | undefined;
@@ -316,7 +320,7 @@ export class MemoryService {
         );
         if (
           !(await confirm(
-            "Automatically delete old memories?",
+            "enable-retention",
             `${preview.count} unpinned memories are currently older than ${after} days and will be deleted. Future unpinned memories will also expire after ${after} days. Original transcripts are kept.`,
           ))
         )
@@ -328,7 +332,7 @@ export class MemoryService {
       const record = "id" in action ? (await this.detail(action.id)).record : undefined;
       if (
         !(await confirm(
-          action.type === "promote" ? "Share this memory globally?" : "Forget derived memories?",
+          action.type === "promote" ? "share-memory" : "forget-memories",
           action.type === "promote"
             ? `${record?.text ?? ""}\n\nAll projects and agents may receive this memory. Original scope and evidence remain visible.`
             : "Exclude these derived memories from future recall and suppress recreation from the same sources. Original transcripts and already running agent context are not erased.",

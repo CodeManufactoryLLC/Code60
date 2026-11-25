@@ -95,7 +95,7 @@ export function CommandsPage({
         <PageTitle page="commands" className="table-title" id={`${id}-heading`} />
         <ControlDescription>
           Reusable prompts shared across projects in this database. Start an orchestrator message
-          with $name to use one.
+          with $name to use one. Type / to browse suggestions.
         </ControlDescription>
       </header>
       <div className="commands-scroll">

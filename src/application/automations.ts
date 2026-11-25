@@ -7,6 +7,7 @@ import {
   schedulerControl,
   subscribeService,
 } from "../automation/index.js";
+import type { ConfirmationId } from "../bridge/index.js";
 import { type AutomationEditor, parseAutomationUiRequest } from "../bridge/index.js";
 import { upcomingOccurrences } from "../core/index.js";
 
@@ -20,7 +21,7 @@ export class DesktopAutomations {
     private readonly env: Readonly<NodeJS.ProcessEnv>,
     private readonly dialogs: {
       pick(): Promise<string | null>;
-      confirm(title: string, detail: string): Promise<boolean>;
+      confirm(presentation: ConfirmationId, detail: string): Promise<boolean>;
     },
     private readonly changed: () => void,
     private readonly providers: () => string[],
@@ -68,8 +69,7 @@ export class DesktopAutomations {
     if (request.action === "pickRepository") {
       const path = await this.dialogs.pick();
       check();
-      if (!path || !(await this.dialogs.confirm("Use this automation repository?", path)))
-        return null;
+      if (!path || !(await this.dialogs.confirm("use-repository", path))) return null;
       check();
       for (const [id, choice] of this.repositories)
         if (choice.expires < Date.now()) this.repositories.delete(id);
@@ -87,7 +87,7 @@ export class DesktopAutomations {
       if (
         request.control !== "status" &&
         !(await this.dialogs.confirm(
-          `${request.control.charAt(0).toUpperCase() + request.control.slice(1)} Scheduling Service?`,
+          `${request.control}-scheduler`,
           "The local service can run saved prompts while Code60 is quit. Your computer must be awake and logged in. Worktrees are not a sandbox. Stop/uninstall pauses schedules and preserves evidence.",
         ))
       )
@@ -126,7 +126,7 @@ export class DesktopAutomations {
     if (request.action === "delete") {
       if (
         !(await this.dialogs.confirm(
-          "Delete automation?",
+          "delete-automation",
           "Cancel active work first. Saved run evidence and worktrees will be kept.",
         ))
       )

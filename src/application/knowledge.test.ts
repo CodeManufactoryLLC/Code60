@@ -197,7 +197,7 @@ describe("DesktopKnowledge", () => {
   it("reports retained desktop update targets and scheduler controls without probes", async () => {
     const { knowledge, reads } = setup();
     const updates = result(
-      await knowledge.call("code60_get_capabilities", { query: "Update Manager" }, relay),
+      await knowledge.call("code60_get_capabilities", { query: "Updates" }, relay),
     );
     expect(updates.entries).toEqual(
       expect.arrayContaining([
@@ -276,12 +276,17 @@ describe("DesktopKnowledge", () => {
         expect.objectContaining({
           id: "model-settings",
           agentAccess: "human-only",
-          availability: expect.objectContaining({ status: verified ? "unknown" : "blocked" }),
+          availability: expect.objectContaining({
+            status: verified ? "unknown" : "blocked",
+            action: verified
+              ? expect.stringContaining("Connect → Providers")
+              : "Providers → Add Provider.",
+          }),
         }),
       ]);
     },
   );
-  it("keeps Providers discoverable without a database and directs model setup to its details", async () => {
+  it("keeps Providers discoverable without a database and directs model setup to Add Provider", async () => {
     const { knowledge } = setup({ database: null, providers: [] });
     const capabilities = result(
       await knowledge.call("code60_get_capabilities", { query: "Providers" }, relay),
@@ -323,7 +328,7 @@ describe("DesktopKnowledge", () => {
           availability: expect.objectContaining({
             status: "available",
             reason: expect.stringContaining("human-only"),
-            action: expect.stringContaining("Sidebar → Assistants → Custom Assistants"),
+            action: expect.stringContaining("Sidebar → Chat → Custom Assistants"),
           }),
         }),
       ]),
@@ -811,7 +816,7 @@ it("describes human MCP authentication prerequisites without exposing definition
 it("keeps LAN beta discoverable without probing or granting server authority", async () => {
   const { knowledge } = setup({ database: null, providers: [] });
   const capabilities = result(
-    await knowledge.call("code60_get_capabilities", { query: "Web Server Beta" }, relay),
+    await knowledge.call("code60_get_capabilities", { query: "Web Server (Beta)" }, relay),
   );
   expect(capabilities.entries).toEqual([
     expect.objectContaining({

@@ -18,7 +18,29 @@ export function ProjectConfirmation({
   onConfirm(): void;
 }) {
   return (
-    <Modal title="Open project?" className="project-confirmation" busy={busy} onClose={onCancel}>
+    <Modal
+      footer={
+        <>
+          <AppButton variant="secondary" type="button" disabled={busy} onClick={onCancel}>
+            Cancel
+          </AppButton>
+          <AppButton
+            type="button"
+            className="primary"
+            disabled={busy || blocked}
+            onClick={onConfirm}
+          >
+            Open project
+          </AppButton>
+        </>
+      }
+      initialFocus=".cds--btn--secondary"
+      size="sm"
+      title="Open project?"
+      className="project-confirmation"
+      busy={busy}
+      onClose={onCancel}
+    >
       <p>Open {pathLabel(path)}?</p>
       <p className="project-confirmation-path">{path}</p>
       {blocked && <p>Finish or stop all runs before switching projects.</p>}
@@ -27,14 +49,6 @@ export function ProjectConfirmation({
           {error}
         </div>
       )}
-      <div className="modal-footer">
-        <AppButton type="button" disabled={busy} onClick={onCancel}>
-          Cancel
-        </AppButton>
-        <AppButton type="button" className="primary" disabled={busy || blocked} onClick={onConfirm}>
-          Open project
-        </AppButton>
-      </div>
     </Modal>
   );
 }

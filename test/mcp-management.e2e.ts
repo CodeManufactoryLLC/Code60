@@ -4,13 +4,11 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import type { McpConfigurationStore as StoreType } from "../src/application/index.js";
-import { expandNavigation } from "./fixtures/browser-actions.js";
+import { openMcpServers } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
 
 async function app(page: Page) {
-  await expandNavigation(page, "Manage");
-  await page.getByRole("tab", { name: "Apps", exact: true }).click();
-  await page.getByRole("button", { name: "Open MCP Servers", exact: true }).click();
+  await openMcpServers(page);
   await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
 }
 async function clickAdd(page: Page) {
@@ -38,6 +36,12 @@ test("MCP management: user scope, templates, pasted review, HTTP edits, cancella
     await app(page);
     const providerProcesses = await readdir(fixture.processLog);
     await expect(page.getByLabel("Configuration", { exact: true })).toHaveValue("user");
+    const workspace = page.locator(".mcp-workspace");
+    await expect(workspace.getByRole("heading", { name: "Configured servers" })).toBeVisible();
+    await expect(
+      workspace.getByRole("status").filter({ hasText: "No servers configured." }),
+    ).toBeVisible();
+    await expect(workspace.getByRole("table")).toHaveCount(0);
     await expect(stat(config(fixture.directory))).rejects.toThrow();
     let form = await add(page, "docs", "Documentation");
     await form.getByRole("button", { name: "Add argument", exact: true }).click();

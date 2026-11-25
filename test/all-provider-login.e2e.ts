@@ -169,8 +169,8 @@ test("browser: paired HTTP LAN browser installs and signs in without a secure-co
   try {
     const local = await fixture.open();
     await local.page.getByRole("button", { name: "Close provider setup", exact: true }).click();
-    await local.page.getByRole("button", { name: "Web Server Beta", exact: true }).click();
-    const settings = local.page.getByRole("main", { name: "Web Server Beta", exact: true });
+    await local.page.getByRole("button", { name: "Web Server (Beta)", exact: true }).click();
+    const settings = local.page.getByRole("main", { name: "Web Server (Beta)", exact: true });
     await expect(settings.getByRole("switch")).toBeEnabled();
     await settings.getByRole("switch").press("Space");
     await expect(settings.locator("p[role=status]")).toHaveText("Listening");
@@ -210,8 +210,7 @@ test("browser: paired HTTP LAN browser installs and signs in without a secure-co
     await expect(wizard.locator("p[role=status]")).toHaveText("Kiro connected");
     await page.screenshot({ path: test.info().outputPath("lan-provider-connected.png") });
     await local.page.getByRole("button", { name: "Take control", exact: true }).click();
-    await expandNavigation(local.page, "Manage");
-    await local.page.locator("#advanced-toggle").click();
+    await expandNavigation(local.page, "Experiments");
     await local.page.locator("#tab-web-server").click();
     await expect(settings.getByRole("switch")).toBeEnabled();
     await settings.getByRole("switch").press("Space");

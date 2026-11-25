@@ -415,8 +415,13 @@
 
 .composer:focus-within {
   --nb-card-fill: var(--composer-focus-bg);
-  outline: 2px solid var(--focus-line);
-  outline-offset: 2px;
+}
+
+/* Carbon forwards the prompt frame through its shadow host. Keep the editing
+   caret and individual control indicators without highlighting the whole group. */
+.embedded-chat cds-aichat-container::part(prompt-container):focus-within {
+  outline: none;
+  box-shadow: none;
 }
 
 .composer-footer {
@@ -844,25 +849,22 @@
   padding-inline: 0;
 }
 
-/* Session controls share the composer's bottom row. */
-.orchestration-chat-body .session-info {
-  justify-content: space-between;
+/* Supplementary controls sit below the prompt. Session choices share its Send row. */
+.orchestration-chat-body .session-extras {
+  justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 8px 16px;
-  min-width: 0;
+  gap: 4px 12px;
 }
 
-.composer-mode,
-.session-option-picker {
-  min-width: 0;
-  max-width: 100%;
+.session-extras .composer-harness {
+  margin-inline-start: auto;
 }
 
-.composer-mode {
-  display: flex;
+.chat-prompt-controls {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
 }
 
 .mode-trigger {
@@ -879,12 +881,6 @@
   box-shadow: none;
 }
 
-/* Permission controls use the button's state colors and saved button typography. */
-.composer-mode :is(.mode-trigger, .neo-dropdown-menu button, .neo-toggle) span {
-  color: inherit;
-  font-size: inherit;
-}
-
 .mode-trigger[aria-disabled="true"] {
   cursor: default;
   color: var(--muted);
@@ -896,16 +892,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-}
-
-.composer-session-summary {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  min-width: 0;
-  max-width: 100%;
-  margin-left: auto;
 }
 
 .composer-model {
@@ -1027,7 +1013,7 @@
   order: 1;
 }
 
-/* Local artwork and spotlight indicate activity without changing semantic evidence. */
+/* Keep the live status and its details disclosure in the same reading position. */
 .activity-display {
   padding: 0;
   border: 0;
@@ -1035,7 +1021,7 @@
   min-height: 0;
   background: transparent;
   box-shadow: none;
-  width: 300px;
+  width: fit-content;
   height: var(--activity-size);
   opacity: 1;
   transform: scale(1);
@@ -1213,7 +1199,8 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
 }
 
 .worker-chat-identity .worker-chat-subtitle {
-  display: block;
+  display: flex;
+  align-items: center;
   width: fit-content;
   padding: 0;
   border: 0;
@@ -1383,4 +1370,22 @@ button.activity-history-toggle:is(:hover, :active, :focus) {
   padding: 0;
   margin: 0;
   gap: 0;
+}
+
+.embedded-chat {
+  --activity-size: 48px;
+  --activity-gutter: 0px;
+}
+
+.embedded-chat,
+.embedded-chat-element {
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 0;
+  inline-size: 100%;
+  block-size: 100%;
+}
+.orchestration-chat-body > .embedded-chat {
+  width: 100%;
+  block-size: auto;
 }

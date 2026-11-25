@@ -27,7 +27,6 @@ export function NavigationCards<Card extends NavigationCard>({
   onOpen,
   renderActions,
   renderArtwork,
-  renderStatus,
   intro,
   children,
   pending = false,
@@ -37,7 +36,6 @@ export function NavigationCards<Card extends NavigationCard>({
   onOpen(card: Card): void;
   renderActions?(card: Card): import("react").ReactNode;
   renderArtwork?(card: Card): import("react").ReactNode;
-  renderStatus?(card: Card): import("react").ReactNode;
   intro?: import("react").ReactNode;
   children?: import("react").ReactNode;
   pending?: boolean;
@@ -92,7 +90,6 @@ export function NavigationCards<Card extends NavigationCard>({
               )}
               <Icon name="arrow--right" />
             </Button>
-            {renderStatus?.(card)}
             {renderActions && <div className="navigation-row-actions">{renderActions(card)}</div>}
           </li>
         ))}

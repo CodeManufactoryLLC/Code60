@@ -44,6 +44,7 @@ describe("browser capability catalog", () => {
     expect(mcp?.limitations).toContain("Pending recovery blocks affected writes");
     expect(mcp?.limitations).toContain("User and this project");
     expect(mcp?.confirmation).toContain("Save, Discard or Cancel");
+    expect(mcp?.purpose).toContain("configuration above the Servers and JSON tabs");
     expect(mcp?.purpose).toContain("enable, approve, test");
     expect(mcp?.limitations).toContain("idle Reconnect");
     expect(mcp?.limitations).toContain("Tests initialize/discover only");
@@ -52,6 +53,14 @@ describe("browser capability catalog", () => {
     expect(mcp?.limitations).toContain("newer edits or corrupt evidence block recovery");
     expect(mcp?.limitations).toContain("no force or lock deletion");
     expect(mcp?.confirmation).toContain("Complete/Roll back");
+  });
+  it("exposes the browser accent preference under Appearance without prerequisites", () => {
+    expect(SETTINGS_CAPABILITIES.appearance).toBe("settings");
+    expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "settings")).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      limitations: expect.stringContaining("Accent color picker"),
+    });
   });
   it("describes scheduler upgrade recovery without granting service authority", () => {
     const updates = APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates");
@@ -65,7 +74,7 @@ describe("browser capability catalog", () => {
       agentAccess: "human-only",
       access: expect.stringContaining("Left navigation sidebar"),
       limitations: expect.stringMatching(
-        /Work, Automation, Inspect and Manage.*Skip to main content/,
+        /Chat, Develop, Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments.*Skip to main content/,
       ),
     });
     expect(
@@ -81,7 +90,7 @@ describe("browser capability catalog", () => {
     expect(navigation?.prerequisite).toBe("none");
     expect(navigation?.agentAccess).toBe("human-only");
     expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates")?.access).toContain(
-      "Update Manager",
+      "Updates",
     );
   });
   it("classifies bounded human-only navigation history without database prerequisites", () => {
@@ -113,7 +122,7 @@ describe("browser capability catalog", () => {
     expect(search?.purpose).toContain("open or closed");
     expect(search?.limitations).toContain("no selected project");
     expect(search?.limitations).toContain("pages of 100");
-    expect(search?.confirmation).toContain("Open Project");
+    expect(search?.confirmation).toContain("Open project or Cancel");
   });
   it("describes Carbon table search, bounded paging and named column controls without changing access", () => {
     const data = APPLICATION_CAPABILITIES.find((capability) => capability.id === "data");
@@ -153,7 +162,7 @@ describe("browser capability catalog", () => {
       APPLICATION_CAPABILITIES.find((capability) => capability.id === "automations"),
     ).toMatchObject({
       label: "Scheduled Jobs",
-      access: "Automation → Scheduled Jobs (also Apps → Scheduled Jobs)",
+      access: "Automate → Scheduled Jobs (also Apps → Scheduled Jobs)",
       prerequisite: "none",
       agentAccess: "human-only",
       confirmation: "Human installation and schedule consent.",
@@ -169,12 +178,15 @@ describe("browser capability catalog", () => {
     expect(jobs?.limitations).toContain("Delete requires browser confirmation");
   });
   it("uses the Custom Assistants name with the existing stable capability ID", () => {
+    expect(APPLICATION_CAPABILITIES.find((c) => c.id === "relay")?.purpose).toContain(
+      "relay animation checkbox beside Forward",
+    );
     expect(APPLICATION_CAPABILITIES.find((c) => c.id === "relay")?.access).toContain(
-      "Sidebar → Assistants → Relay",
+      "Sidebar → Chat → Relay",
     );
     expect(APPLICATION_CAPABILITIES.find((c) => c.id === "custom-agents")).toMatchObject({
       label: "Custom Assistants",
-      access: expect.stringContaining("Sidebar → Assistants → Custom Assistants → New Assistant"),
+      access: expect.stringContaining("Sidebar → Chat → Custom Assistants → New Assistant"),
       prerequisite: "none",
       agentAccess: "human-only",
     });
@@ -190,10 +202,10 @@ describe("browser capability catalog", () => {
     expect(settings?.purpose).not.toContain("whole-window background opacity");
     expect(settings?.purpose).toContain("Browser-native window management is outside Code60");
   });
-  it("describes Apps-owned preferences and Update Manager with unchanged human-only access", () => {
+  it("describes Apps-owned preferences and Updates with unchanged human-only access", () => {
     expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates")).toMatchObject({
-      label: "Update Manager",
-      access: "Apps → Update Manager",
+      label: "Updates",
+      access: "Manage → Updates (also available from Apps → Updates)",
       prerequisite: "none",
       agentAccess: "human-only",
     });
@@ -266,12 +278,12 @@ describe("browser capability catalog", () => {
   });
   it("classifies Providers navigation and human management without retaining an Agents settings route", () => {
     expect(PAGE_CAPABILITIES.providers).toBe("providers");
-    expect(PAGE_CAPABILITIES.provider).toBe("providers");
+    expect(PAGE_CAPABILITIES).not.toHaveProperty("provider");
     expect(SETTINGS_CAPABILITIES).not.toHaveProperty("agents");
     const providers = APPLICATION_CAPABILITIES.find((capability) => capability.id === "providers");
     expect(providers).toMatchObject({
       label: "Providers",
-      access: "Providers → provider details → title actions for Disconnect or Set as Primary",
+      access: "Connect → Providers → More actions beside a provider → Disconnect or Set as Primary",
       prerequisite: "none",
     });
     expect(providers?.limitations).toContain("stopped interactive agent work");
@@ -374,7 +386,7 @@ describe("browser capability catalog", () => {
     expect(projects).toMatchObject({
       prerequisite: "database",
       access: expect.stringContaining("project row → + (New Session)"),
-      confirmation: expect.stringContaining("Confirm the full selected path"),
+      confirmation: expect.stringContaining("Confirm the full selected path with Open project"),
       limitations: expect.stringContaining(
         "Archiving the last displayed project chat returns to its home without a replacement",
       ),
@@ -391,7 +403,7 @@ describe("browser capability catalog", () => {
       label: "Commands",
       prerequisite: "database",
       purpose: expect.stringContaining("$name"),
-      access: expect.stringContaining("$ command picker"),
+      access: expect.stringContaining("/ or $ command picker"),
       limitations: expect.stringContaining("/name is plain text"),
     });
     for (const command of BUILTIN_COMMANDS)
@@ -438,7 +450,7 @@ it("describes LAN beta as human-only and separate from local pairing policy", ()
   expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "web-server")).toMatchObject({
     agentAccess: "human-only",
     prerequisite: "none",
-    access: "Settings → Advanced → Web Server Beta",
+    access: "Experiments → Web Server (Beta)",
     limitations: expect.stringContaining("LAN always requires pairing"),
     confirmation: expect.stringContaining("123-456"),
   });

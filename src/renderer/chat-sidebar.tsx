@@ -3,6 +3,7 @@ import type { DesktopRun, OrchestrationChat, OrchestrationChatAction } from "../
 import type { RunEvent } from "../core/index.js";
 import { activityLabel } from "./activity-display.js";
 import { AgentLogo } from "./agent-logo.js";
+import { ActivityLoading } from "./carbon/activity-loading.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { ChatMenu } from "./chat-menu.js";
 import { RenameChat } from "./chat-name.js";
@@ -312,9 +313,10 @@ export function ChatSidebar({
                 {entry.role === "worker" && <NavigationIcon name="app-down-right" />}
               </span>
             )}
-            <span className="chat-sidebar-label" data-working={working && documentVisible}>
-              {entry.label}
-            </span>
+            <div className="chat-sidebar-label" data-working={working && documentVisible}>
+              {working && documentVisible && <ActivityLoading />}
+              <span>{entry.label}</span>
+            </div>
             {(unread > 0 || approvals > 0) && (
               <span className="chat-sidebar-indicators">
                 {unread > 0 && (

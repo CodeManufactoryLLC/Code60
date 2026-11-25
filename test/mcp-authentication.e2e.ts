@@ -3,14 +3,12 @@ import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { connect } from "node:net";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { expandNavigation } from "./fixtures/browser-actions.js";
+import { openMcpServers } from "./fixtures/browser-actions.js";
 import { browserApp, onboard } from "./fixtures/browser-app.js";
 import { oauthServer } from "./fixtures/mcp-oauth-server.js";
 
 async function apps(page: Page) {
-  await expandNavigation(page, "Manage");
-  await page.getByRole("tab", { name: "Apps", exact: true }).click();
-  await page.getByRole("button", { name: "Open MCP Servers", exact: true }).click();
+  await openMcpServers(page);
   await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
 }
 async function authentication(page: Page) {
@@ -98,7 +96,7 @@ test("MCP credentials: explicit temporary entry, clearing, reload, no plaintext 
     await expect(dialog).toContainText("credentials recorded");
     await dialog.getByRole("button", { name: "Sign out…", exact: true }).click();
     await dialog
-      .getByRole("group", { name: "Confirm authentication change" })
+      .locator(".cds--modal-footer")
       .getByRole("button", { name: "Cancel", exact: true })
       .click();
     expect(await readFile(file, "utf8")).toBe(original);

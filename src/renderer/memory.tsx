@@ -11,6 +11,7 @@ import { Checkbox as CarbonCheckbox } from "./carbon/choices.js";
 import { Select as CarbonSelect } from "./carbon/fields.js";
 import { Switch as CarbonSwitch } from "./carbon/switch.js";
 import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
+import { ModalActions } from "./modal.js";
 import { ControlDescription } from "./overlays.js";
 import { SettingsCard, SettingsHeader } from "./settings-layout.js";
 
@@ -254,10 +255,12 @@ export function MemoryInspector({
   busy,
   names,
   onAction,
+  onClose,
 }: {
   detail: MemoryDetail;
   busy: boolean;
   names?: Pick<MemorySnapshot, "projects" | "conversations"> | undefined;
+  onClose?(): void;
   onAction(action: MemoryAction): void;
 }) {
   const m = detail.record;
@@ -421,14 +424,21 @@ export function MemoryInspector({
           >
             Promote to global
           </AppButton>
-          <AppButton
-            type="button"
-            className="primary"
-            disabled={busy || !changed || !text.trim()}
-            onClick={() => onAction({ type: "edit", ...identity, text, pinned })}
-          >
-            Save changes
-          </AppButton>
+          <ModalActions>
+            {onClose && (
+              <AppButton variant="secondary" disabled={busy} onClick={onClose}>
+                Cancel
+              </AppButton>
+            )}
+            <AppButton
+              type="button"
+              className="primary"
+              disabled={busy || !changed || !text.trim()}
+              onClick={() => onAction({ type: "edit", ...identity, text, pinned })}
+            >
+              Save changes
+            </AppButton>
+          </ModalActions>
         </span>
       </div>
     </div>

@@ -39,6 +39,7 @@ function transport() {
   const client = createBrowserClient(
     { token: "a".repeat(64), generation: 7, version: 1, controlling: true },
     () => {},
+    async () => false,
   );
   return {
     client,

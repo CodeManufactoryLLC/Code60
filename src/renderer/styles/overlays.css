@@ -7,10 +7,6 @@
   margin-top: 16px;
 }
 
-.project-dialog .project-row > button {
-  border: 0;
-}
-
 .polling-dialog-body .button-group {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -131,15 +127,6 @@
   width: min(520px, calc(100vw - 32px));
 }
 
-.project-dialog {
-  height: min(600px, calc(100dvh - 32px));
-}
-
-.project-dialog[open] {
-  display: flex;
-  flex-direction: column;
-}
-
 .changes-dialog {
   width: min(960px, 92vw);
 }
@@ -176,10 +163,6 @@
   white-space: nowrap;
 }
 
-.project-dialog > .modal-heading {
-  border-bottom: 0;
-}
-
 .modal-heading > button {
   width: 36px;
   min-height: 36px;
@@ -198,14 +181,6 @@
   background: var(--hover-bg);
 }
 
-:where(.project-dialog) .modal-heading > button {
-  width: 40px;
-  height: 40px;
-  min-height: 40px;
-  margin: -8px -16px 0 0;
-  --icon-size: 18px;
-}
-
 .agent-setup-dialog .modal-heading {
   margin-bottom: 0;
 }
@@ -217,24 +192,6 @@
     repeating-linear-gradient(135deg, var(--destructive) 0 8px, var(--bg) 8px 16px) top / 100% 6px
     no-repeat,
     var(--surface);
-}
-
-.modal-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 20px -16px 0;
-  padding: 10px 16px;
-  border-top: 1px solid transparent;
-  background: var(--surface);
-}
-
-.project-dialog > .modal-footer {
-  margin-top: auto;
 }
 
 fieldset {
@@ -320,103 +277,6 @@ label.check-label {
   --letter-spacing: normal;
   font-size: 11px;
   overflow-wrap: anywhere;
-}
-
-.project-list {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  max-height: 50vh;
-  overflow: auto;
-  scrollbar-gutter: stable;
-}
-
-.project-dialog .project-list {
-  margin: 0 -16px;
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: none;
-}
-
-.project-remove {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 28px;
-  height: 28px;
-  min-height: 28px;
-  padding: 0;
-  opacity: 0.5;
-  transition: opacity var(--motion) ease;
-}
-
-.project-remove:hover,
-.project-remove:focus-visible {
-  opacity: 1;
-}
-
-.project-row {
-  position: relative;
-  display: flex;
-  gap: 0;
-  margin-bottom: 0;
-  border-radius: var(--button-radius);
-}
-
-.project-row:has(> button:hover:not(:disabled)) {
-  background: var(--hover-bg);
-}
-
-.project-row > .project-item:not(:disabled) {
-  background: transparent;
-  color: var(--text);
-}
-
-.project-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  text-align: left;
-  min-width: 0;
-  padding-right: 40px;
-  font-family: var(--font);
-  font-weight: inherit;
-}
-
-.project-item strong {
-  font-weight: inherit;
-}
-
-.project-list > li > .project-item {
-  width: 100%;
-}
-
-.project-item .path {
-  max-width: 100%;
-}
-
-.project-open-folder {
-  align-self: center;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  margin-inline: auto;
-  padding: 8px 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--accent);
-  text-align: left;
-}
-
-.project-open-folder:hover:not(:disabled) {
-  background: transparent;
-  color: var(--text);
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 .project-confirmation-path {
@@ -595,25 +455,6 @@ label.check-label {
 }
 
 /* Command palette */
-.command-palette {
-  position: fixed;
-  margin: 12vh auto auto;
-  width: min(640px, calc(100vw - 32px));
-  max-height: 76vh;
-  padding: 0;
-  overflow: hidden;
-  scrollbar-gutter: auto;
-  flex-direction: column;
-}
-
-.command-palette[open] {
-  display: flex;
-}
-
-.command-palette::backdrop {
-  background: #0009;
-}
-
 .command-palette .palette-input {
   display: flex;
   align-items: center;
@@ -856,9 +697,6 @@ label.check-label {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow: auto;
-  scrollbar-gutter: stable;
-  max-height: 75vh;
 }
 
 .git-setup-body > :where(button) {
@@ -938,21 +776,11 @@ label.check-label {
   min-width: 0;
 }
 
-.polling-dialog {
-  min-height: min(200px, calc(100dvh - 32px));
-}
-
-.polling-dialog[open] {
-  display: flex;
-  flex-direction: column;
-}
-
 .polling-dialog-body {
   display: flex;
   align-items: center;
   justify-content: center;
   flex: 1;
-  min-height: 120px;
   padding: 16px 0;
 }
 

@@ -43,6 +43,8 @@ describe("activity presentation", () => {
       );
       expect(html).toContain('class="chat-connecting" role="status"');
       expect(html).toContain(">Connecting...</span>");
+      expect(html).toContain("cds--loading--small");
+      expect(html).not.toContain("cds--loading-overlay");
       expect(html).not.toContain("<button");
       expect(html).not.toContain('class="activity-timer"');
       expect(html).not.toContain("aria-expanded");
@@ -53,6 +55,7 @@ describe("activity presentation", () => {
   it("preserves attribution, counts, and plain text without implying test success", () => {
     const html = render(activity);
     expect(html).toContain(">Executing...</span>");
+    expect(html).toContain("cds--loading__stroke");
     expect(html).toContain('data-tooltip="Observed activity: Executing');
     expect(html).not.toContain("<img");
     expect(html).not.toContain("testing.gif");
@@ -102,5 +105,6 @@ describe("activity presentation", () => {
     expect(html).toContain(">Stopping...</span>");
     expect(html).not.toContain("<img");
     expect(html).toContain('data-animate="false"');
+    expect(html).not.toContain("cds--loading__stroke");
   });
 });

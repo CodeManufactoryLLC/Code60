@@ -272,7 +272,7 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
   control(
     "code60_create_command",
     "Create a command",
-    "Save a reusable $ command immediately in the connected Code60 database, shared across projects. Use only when the user requests command creation. Returns the saved command, available in Command Builder and the orchestrator $ command picker. Create-only: cannot overwrite, update or delete. Duplicate names and the 200-command limit return errors.",
+    "Save a reusable $ command immediately in the connected Code60 database, shared across projects. Use only when the user requests command creation. Returns the saved command, available on the Commands page and the orchestrator $ command picker. Create-only: cannot overwrite, update or delete. Duplicate names and the 200-command limit return errors.",
     object(
       {
         name: {

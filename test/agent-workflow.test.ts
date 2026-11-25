@@ -143,8 +143,8 @@ it.each(["readable", "legacy"] as const)(
       expect(git("rev-parse", "HEAD")).toBe(head);
       expect(await readFile(join(worktree, "result.txt"), "utf8")).toBe("human accepted target\n");
       expect(confirm.mock.calls.map((call) => (call as unknown[])[0])).toEqual([
-        "Undo this request?",
-        "Undo this request?",
+        "undo-request",
+        "undo-request",
       ]);
       expect(service.workerSnapshot().runs).toHaveLength(0);
       expect(service.snapshot().plans).toHaveLength(0);

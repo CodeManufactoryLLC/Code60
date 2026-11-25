@@ -123,7 +123,7 @@
 /* Match the Light sidebar canvas across cards; preserve system colors. */
 @media (forced-colors: none) {
   :root:not([data-color-scheme="dark"]) .sidebar {
-    --accent-bg: #93c5fd;
+    --accent-bg: var(--cds-highlight);
   }
 
   .sidebar-navigation-card {
@@ -132,10 +132,10 @@
 
   :root:not([data-color-scheme="dark"]) .sidebar-navigation-card {
     --nb-card-fill: var(--content-background);
-    --card-header-fill: #5494fd;
+    --card-header-fill: var(--code60-accent-ink);
     --card-header-text: #ffffff;
     --card-header-muted: #ffffff;
-    --card-header-hover: #73a7fd;
+    --card-header-hover: var(--cds-button-primary-hover);
   }
 
   /* Dark headers inherit the same purple and light foreground as breadcrumbs. */
@@ -149,13 +149,13 @@
   }
 
   :root:not([data-color-scheme="dark"]) .sidebar-card-header {
-    --accent: #1e40af;
+    --accent: var(--code60-accent-ink);
     --hover-bg: var(--card-header-hover);
     --accent-bg: var(--card-header-fill);
     --control-hover: var(--card-header-hover);
-    --focus-line: #1e40af;
-    --focus-outline: #1e40af;
-    --focus-inset-shadow: inset 0 0 0 2px #1e40af;
+    --focus-line: var(--code60-accent-ink);
+    --focus-outline: var(--code60-accent-ink);
+    --focus-inset-shadow: inset 0 0 0 2px var(--code60-accent-ink);
   }
 
   .sidebar-navigation-card :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-action) {
@@ -165,8 +165,8 @@
 
   :root:not([data-color-scheme="dark"])
     .sidebar-section
-    > :is(.sidebar-card-toggle, .project-sidebar-open, .provider-sidebar-add) {
-    --focus-outline: #1e40af;
+    > :is(.sidebar-card-toggle, .project-sidebar-open) {
+    --focus-outline: var(--code60-accent-ink);
   }
 
   :root[data-focus-highlight="on"] .sidebar-card-header {
@@ -191,7 +191,7 @@
 }
 
 .sidebar .sidebar-card-toggle,
-.sidebar :is(.project-sidebar-open, .provider-sidebar-add) {
+.sidebar .project-sidebar-open {
   position: absolute;
   z-index: 1;
   top: calc((var(--nav-row-height) - var(--nav-action-height)) / 2);
@@ -204,11 +204,11 @@
   transition: color var(--motion) var(--ease);
 }
 
-.sidebar :is(.project-sidebar-open, .provider-sidebar-add) {
+.sidebar .project-sidebar-open {
   right: 4px;
 }
 
-.sidebar .sidebar-card-header :is(#tab-chat, #tab-providers) {
+.sidebar .sidebar-card-header #tab-chat {
   padding-right: 44px;
 }
 
@@ -220,12 +220,12 @@
 .sidebar-section:has(
     > .sidebar-card-header:hover,
     > .sidebar-card-toggle:hover,
-    > :is(.project-sidebar-open, .provider-sidebar-add):hover,
+    > .project-sidebar-open:hover,
     > .sidebar-card-header :focus-visible,
     > .sidebar-card-toggle:focus-visible,
-    > :is(.project-sidebar-open, .provider-sidebar-add):focus-visible
+    > .project-sidebar-open:focus-visible
   )
-  > :is(.sidebar-card-toggle, .project-sidebar-open, .provider-sidebar-add)
+  > :is(.sidebar-card-toggle, .project-sidebar-open)
   > :is(.sidebar-card-chevron, .sidebar-card-add),
 .project-chat-heading:is(:hover, :has(:focus-visible))
   > .icon-button
@@ -268,8 +268,7 @@
 }
 
 .sidebar-card-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron,
-:is(.project-sidebar-open, .provider-sidebar-add):is(:hover, :focus-visible, :active):not(:disabled)
-  .sidebar-card-add,
+.project-sidebar-open:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
 .project-session-add:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
 .project-chat-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron,
 .chat-sidebar-action:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-action {
@@ -283,7 +282,7 @@
 }
 
 .sidebar-card-toggle:active .sidebar-card-chevron,
-:is(.project-sidebar-open, .provider-sidebar-add):active:not(:disabled) .sidebar-card-add,
+.project-sidebar-open:active:not(:disabled) .sidebar-card-add,
 .project-folder-stop:active:not(:disabled) .sidebar-card-stop,
 .project-session-add:active:not(:disabled) .sidebar-card-add,
 .project-chat-toggle:active .sidebar-card-chevron,
@@ -293,7 +292,7 @@
 }
 
 .sidebar-card-toggle:focus-visible .sidebar-card-chevron,
-:is(.project-sidebar-open, .provider-sidebar-add):focus-visible .sidebar-card-add,
+.project-sidebar-open:focus-visible .sidebar-card-add,
 .project-folder-stop:focus-visible .sidebar-card-stop,
 .project-session-add:focus-visible .sidebar-card-add,
 .project-chat-toggle:focus-visible .sidebar-card-chevron,
@@ -929,7 +928,6 @@
 #assistants-pages,
 #app-pages,
 #settings-pages,
-#provider-pages,
 #chat-pages {
   --nav-indent: 0px;
 }
@@ -1089,15 +1087,6 @@
   pointer-events: none;
 }
 
-/* Immediate child labels share the card heading's gutter, regardless of artwork size. */
-#provider-pages .chat-sidebar-entry {
-  --nav-label-inset: calc(
-    var(--nav-item-padding) +
-    var(--nav-inset) +
-    var(--nav-borderless-offset)
-  );
-}
-
 .sidebar-navigation-card:has(#tab-chat) {
   container-type: inline-size;
 }
@@ -1129,5 +1118,159 @@
 @media (forced-colors: active) {
   .sidebar {
     --nav-borderless-offset: 0px;
+  }
+}
+
+/* Relay's six expressions share one footprint above the navigation groups. */
+.relay-pulse-row {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-block-size: 6rem;
+}
+.relay-pulse-room {
+  --room-shadow: color-mix(in srgb, var(--cds-layer-01), black 23%);
+  --room-depth: color-mix(in srgb, var(--cds-layer-01), black 14%);
+  --room-highlight: color-mix(in srgb, var(--cds-layer-01), white 8%);
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  stroke: none;
+}
+.relay-pulse {
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 40px;
+  color: var(--cds-link-primary);
+}
+.relay-pulse-label {
+  position: absolute;
+  inset-block-start: calc(50% + 20px);
+  text-align: center;
+  visibility: hidden;
+  color: var(--cds-text-secondary);
+  font-size: 0.75rem;
+}
+.relay-pulse:is(:hover, :focus) + .relay-pulse-label {
+  visibility: visible;
+}
+.relay-pulse-core,
+.relay-pulse svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.relay-pulse-core {
+  border-radius: 50%;
+  background: radial-gradient(
+    circle closest-side,
+    currentColor 22%,
+    color-mix(in srgb, var(--code60-accent) 85%, transparent) 39%,
+    color-mix(in srgb, var(--code60-accent) 25%, transparent) 69%,
+    transparent
+  );
+}
+.relay-pulse svg {
+  z-index: 2;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.relay-mark {
+  stroke: var(--cds-layer-01);
+  stroke-width: 2.6;
+}
+.relay-pulse:is([data-state="Attention"], [data-state="Complete"])::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 11px;
+  background: currentColor;
+  border-radius: 50%;
+}
+.relay-pulse:is([data-state="Unavailable"], [data-state="Disconnected"]) .relay-pulse-core {
+  inset: 15px;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--cds-text-secondary);
+  background: transparent;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .relay-pulse[data-state="Idle"] .relay-pulse-core {
+    animation: relay-breathe 2s ease-in-out infinite alternate;
+  }
+  .relay-arcs,
+  .relay-orbit,
+  .relay-wave {
+    transform-origin: 20px 20px;
+  }
+  .relay-arcs {
+    animation: relay-listen 3.6s ease-in-out infinite;
+  }
+  .relay-orbit {
+    animation: relay-orbit 5s linear infinite;
+  }
+  .relay-wave {
+    animation: relay-speak 3.2s linear infinite;
+  }
+  .relay-wave-next {
+    r: 13px;
+    animation-delay: -1.6s;
+  }
+}
+@keyframes relay-breathe {
+  to {
+    opacity: 0.78;
+    transform: scale(0.87);
+  }
+}
+@keyframes relay-listen {
+  50% {
+    transform: scale(0.83);
+  }
+}
+@keyframes relay-orbit {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@keyframes relay-speak {
+  from {
+    transform: scale(0.52);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+@media (forced-colors: active) {
+  .relay-pulse-room {
+    display: none;
+  }
+  .relay-pulse {
+    color: CanvasText;
+  }
+  .relay-pulse .relay-pulse-core {
+    inset: 14px;
+    width: auto;
+    height: auto;
+    background: CanvasText;
+  }
+  .relay-mark {
+    stroke: Canvas;
+  }
+  .relay-pulse,
+  .relay-pulse * {
+    forced-color-adjust: none;
   }
 }

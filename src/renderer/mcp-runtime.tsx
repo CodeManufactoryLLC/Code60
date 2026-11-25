@@ -133,10 +133,11 @@ export function McpRuntimePanel({
     }
   };
   return (
-    <section aria-label="MCP connection controls" className="mcp-details">
+    <section aria-label="MCP connection controls" className="mcp-details mcp-connections">
+      <h2>Connections</h2>
       <p>
-        Enablement and approval apply to future connections. Existing sessions retain their captured
-        configuration until explicitly disconnected or reconnected.
+        Enablement and approval apply to future connections. Reconnect an existing session to use
+        its updated configuration.
       </p>
       {error && <p role="alert">{error}</p>}
       {retry && (
@@ -151,82 +152,91 @@ export function McpRuntimePanel({
       {Boolean(status?.unresolvedCleanup) && (
         <p>MCP_CLEANUP: Cleanup is unresolved. Use Verify cleanup without starting new work.</p>
       )}
-      {definition && serverId && (
-        <>
-          <Button
-            type="button"
-            disabled={blocked || busy}
-            onClick={() =>
-              void act({
-                action: "enable",
-                ...captured,
-                serverId,
-                enabled: !definition.enabled,
-                requestId: randomId(),
-              })
-            }
-          >
-            {definition.enabled ? "Disable server" : "Enable server"}
-          </Button>
-          <Button
-            type="button"
-            disabled={blocked || busy}
-            onClick={() => {
-              const requestId = randomId();
-              setTest(requestId);
-              void act({ action: "test", ...captured, serverId, requestId });
-            }}
-          >
-            Test connection
-          </Button>
-        </>
-      )}
-      {test && (
-        <Button
-          variant="quiet"
-          type="button"
-          onClick={() => void api.mcpRuntime({ action: "cancel-test", requestId: test })}
-        >
-          Cancel connection test
-        </Button>
-      )}
-      {read.target.scope === "project" && (
-        <>
-          <span>
-            Project approval: {status?.approved ? "Approved for this revision" : "Required"}.
-          </span>
-          <Button
-            type="button"
-            disabled={blocked || busy}
-            onClick={() =>
-              setDecision({
-                request: {
-                  action: status?.approved ? "revoke-approval" : "approve",
+      <div className="mcp-actions">
+        {definition && serverId && (
+          <>
+            <Button
+              type="button"
+              disabled={blocked || busy}
+              onClick={() =>
+                void act({
+                  action: "enable",
                   ...captured,
+                  serverId,
+                  enabled: !definition.enabled,
                   requestId: randomId(),
-                },
-                title: status?.approved
-                  ? "Revoke project approval"
-                  : "Approve project configuration",
-                details: [
-                  "Approval trusts this canonical project and this exact saved revision for new connections. Review commands, endpoints and bindings in Servers or JSON first. Existing connections continue until disconnected.",
-                  ...Object.entries(read.document?.servers ?? {}).map(
-                    ([id, value]) =>
-                      `${id}: ${value.type === "stdio" ? value.command : value.url} (${value.enabled ? "enabled" : "disabled"})`,
-                  ),
-                ],
-              })
-            }
+                })
+              }
+            >
+              {definition.enabled ? "Disable server" : "Enable server"}
+            </Button>
+            <Button
+              type="button"
+              disabled={blocked || busy}
+              onClick={() => {
+                const requestId = randomId();
+                setTest(requestId);
+                void act({ action: "test", ...captured, serverId, requestId });
+              }}
+            >
+              Test connection
+            </Button>
+            <p className="mcp-test-hint">
+              Testing initializes the connection and discovers tools without calling them.
+            </p>
+          </>
+        )}
+        {test && (
+          <Button
+            variant="quiet"
+            type="button"
+            onClick={() => void api.mcpRuntime({ action: "cancel-test", requestId: test })}
           >
-            {status?.approved ? "Revoke approval" : "Review project approval"}
+            Cancel connection test
           </Button>
-        </>
-      )}
+        )}
+        {read.target.scope === "project" && (
+          <>
+            <span>
+              Project approval: {status?.approved ? "Approved for this revision" : "Required"}.
+            </span>
+            <Button
+              type="button"
+              disabled={blocked || busy}
+              onClick={() =>
+                setDecision({
+                  request: {
+                    action: status?.approved ? "revoke-approval" : "approve",
+                    ...captured,
+                    requestId: randomId(),
+                  },
+                  title: status?.approved
+                    ? "Revoke project approval"
+                    : "Approve project configuration",
+                  details: [
+                    "Approval trusts this canonical project and this exact saved revision for new connections. Review commands, endpoints and bindings in Servers or JSON first. Existing connections continue until disconnected.",
+                    ...Object.entries(read.document?.servers ?? {}).map(
+                      ([id, value]) =>
+                        `${id}: ${value.type === "stdio" ? value.command : value.url} (${value.enabled ? "enabled" : "disabled"})`,
+                    ),
+                  ],
+                })
+              }
+            >
+              {status?.approved ? "Revoke approval" : "Review project approval"}
+            </Button>
+          </>
+        )}
+      </div>
       {status?.sessions?.map((session) => (
-        <fieldset key={session.sessionGeneration} aria-label={`Session ${session.runId}`}>
-          <p>
+        <fieldset
+          className="mcp-session"
+          key={session.sessionGeneration}
+          aria-label={`Session ${session.runId}`}
+        >
+          <legend>
             Session {session.runId.slice(-12)} — {session.idle ? "Idle" : "Active"}
-          </p>
+          </legend>
           {!session.canReconnect && (
             <p>
               MCP_PROVIDER: This provider cannot load/resume the session. Start a new session to use
@@ -247,63 +257,95 @@ export function McpRuntimePanel({
                 : ""}
             </p>
           ))}
-          <Button
-            type="button"
-            disabled={
-              busy ||
-              !session.connectors.some(
-                (connector) =>
-                  (!serverId || connector.id === serverId) &&
-                  connector.connection !== "disconnected",
-              )
-            }
-            onClick={() => {
-              const connection = {
-                ...captured,
-                sessionGeneration: session.sessionGeneration,
-                serverIds: serverId
-                  ? [serverId]
-                  : session.connectors
-                      .filter((connector) => connector.connection !== "disconnected")
-                      .slice(0, 64)
-                      .map((connector) => connector.id),
-              };
-              void preview(
-                { action: "preview-disconnect", ...connection },
-                { action: "disconnect", ...connection, requestId: randomId() },
-                "Disconnect server",
-              );
-            }}
-          >
-            Disconnect server
-          </Button>
-          <Button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              const connection = {
-                ...captured,
-                sessionGeneration: session.sessionGeneration,
-                serverIds: serverId
-                  ? [serverId]
-                  : session.connectors
-                      .filter((connector) => connector.connection !== "disconnected")
-                      .slice(0, 64)
-                      .map((connector) => connector.id),
-              };
-              void preview(
-                { action: "preview-reconnect", ...connection },
-                { action: "reconnect", ...connection, requestId: randomId() },
-                "Reconnect session servers",
-              );
-            }}
-          >
-            Reconnect session servers
-          </Button>
+          <div className="mcp-actions">
+            <Button
+              type="button"
+              disabled={
+                busy ||
+                !session.connectors.some(
+                  (connector) =>
+                    (!serverId || connector.id === serverId) &&
+                    connector.connection !== "disconnected",
+                )
+              }
+              onClick={() => {
+                const connection = {
+                  ...captured,
+                  sessionGeneration: session.sessionGeneration,
+                  serverIds: serverId
+                    ? [serverId]
+                    : session.connectors
+                        .filter((connector) => connector.connection !== "disconnected")
+                        .slice(0, 64)
+                        .map((connector) => connector.id),
+                };
+                void preview(
+                  { action: "preview-disconnect", ...connection },
+                  { action: "disconnect", ...connection, requestId: randomId() },
+                  "Disconnect server",
+                );
+              }}
+            >
+              Disconnect server
+            </Button>
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                const connection = {
+                  ...captured,
+                  sessionGeneration: session.sessionGeneration,
+                  serverIds: serverId
+                    ? [serverId]
+                    : session.connectors
+                        .filter((connector) => connector.connection !== "disconnected")
+                        .slice(0, 64)
+                        .map((connector) => connector.id),
+                };
+                void preview(
+                  { action: "preview-reconnect", ...connection },
+                  { action: "reconnect", ...connection, requestId: randomId() },
+                  "Reconnect session servers",
+                );
+              }}
+            >
+              Reconnect session servers
+            </Button>
+          </div>
         </fieldset>
       ))}
       {decision && (
-        <Modal title={decision.title} busy={busy} onClose={() => setDecision(undefined)}>
+        <Modal
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => setDecision(undefined)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                className={
+                  decision.request.action === "revoke-approval" ||
+                  decision.request.action === "disconnect"
+                    ? "destructive"
+                    : ""
+                }
+                type="button"
+                disabled={busy}
+                onClick={() => void act(decision.request)}
+              >
+                Confirm {decision.title.toLowerCase()}
+              </Button>
+            </>
+          }
+          title={decision.title}
+          busy={busy}
+          onClose={() => setDecision(undefined)}
+        >
           {decision.details.map((detail) => (
             <p key={detail}>{detail}</p>
           ))}
@@ -314,17 +356,6 @@ export function McpRuntimePanel({
                 ? "Calls are cancelled and this instance loses authority immediately. Configured enablement is unchanged."
                 : "Approval does not grant permission to invoke tools. Existing ACP permission decisions still apply."}
           </p>
-          <Button
-            variant="quiet"
-            type="button"
-            disabled={busy}
-            onClick={() => setDecision(undefined)}
-          >
-            Cancel
-          </Button>
-          <Button type="button" disabled={busy} onClick={() => void act(decision.request)}>
-            Confirm {decision.title.toLowerCase()}
-          </Button>
         </Modal>
       )}
     </section>

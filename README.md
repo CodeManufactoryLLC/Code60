@@ -33,22 +33,24 @@ pairing when you want an explicit local authorization step.
 
 Complete provider verification in the browser. Select **Codex** to connect an existing authenticated installation. If missing, choose **Install Codex and sign in**; otherwise choose **Sign in to Codex** when prompted. Copy the displayed device code, open the sign-in page in its separate tab, and authorize with your ChatGPT account. Device-code login must be enabled in your ChatGPT security settings. Keep setup open until the fresh connection check and automatic save finish. **Connected** confirms both succeeded.
 
+Manage verified providers under **Connect → Providers**. The primary provider has **(Primary)** beside its name. Use a provider’s **More actions** menu to change the primary provider or disconnect it. Saved model defaults can be cleared in the same list.
+
 The same dialog installs and signs in to **Antigravity, Claude, Copilot, Droid, Kiro and OpenCode**. Choose Claude subscription or Anthropic Console, or choose ChatGPT/GitHub Copilot for OpenCode. Some providers return an authorization code to paste into Code60; others display a device code to enter on their website. If Copilot cannot use a system keychain, Code60 asks before allowing its private-file credential fallback. Keep setup open until verification and saving finish.
 
 Installations use fixed, integrity-verified releases in private versioned backend-user storage, preserving existing CLIs and configuration. Native archives and platform packages run without vendor install scripts; the Claude ACP adapter uses npm with lifecycle scripts disabled. Provider logins stay in each harness’s own backend-user storage and survive normal dev-container recreation. Custom launch commands, enterprise endpoint forms and API-key entry retain external setup.
 
 Codex installation uses non-root npm with lifecycle scripts disabled and the official registry, pinned to `@openai/codex@0.171.0`. Code60 activates its private copy under `~/.local/share/code60/providers/codex/0.171.0` and prefers it for the standard Codex connector without changing configuration or replacing an existing CLI. Codex stores credentials in its normal backend-user home. Closing/cancelling setup, reloading, taking control in another tab or stopping the backend cancels the owned installation/login process; it does not log out an account or remove issued credentials. Retry requests a new attempt. Unsupported CLIs offer the compatible installation; custom launch commands retain manual setup. Account switching, logout and API-key entry are outside this setup flow.
 
-After verification Code60 returns to your last available destination for that database and browser. If it is gone, Code60 opens Relay. Use **Workspace** in the header for database selection and theme. **Work** keeps your projects and conversations directly reachable, **Automation** contains Scheduled Jobs and Workflows, **Inspect** opens Data Viewer, and **Manage** provides setup and recovery.
+After verification Code60 returns to your last available destination for that database and browser. If it is gone, Code60 opens Relay. Select the **relay animation** checkbox beside the Back and Forward buttons to show Relay activity above **Chat**. This setting starts off and is saved in your browser. Focus it or hover over it to read its state. An exclamation mark means Relay needs attention, and a brief checkmark marks a completed turn. Use **Workspace** in the header for database selection and theme. In the sidebar, **Chat** opens Relay and Custom Assistants, **Develop** opens Projects and Workflows, and **Automate** opens Scheduled Jobs. Use the **Code60** header link to open Home for Search and the Apps index.
 
 Create or select a database and open a project through the host-side chooser. Project workers require Git with an initial commit. Relay can explicitly target a direct folder. Accept the displayed plan to dispatch work, inspect the automatically integrated changes, and use message Undo to restore covered files and return the request unsent. Undo does not reverse external website effects.
 
 ## LAN access (beta)
 
-Before setting up a provider, close provider setup and choose **Web Server Beta**
+Before setting up a provider, close provider setup and choose **Web Server (Beta)**
 on the start screen to open its settings directly. No database is required.
 
-Open **Settings → Advanced → Web Server Beta** from Code60's localhost browser
+Open **Experiments → Web Server (Beta)** from Code60's localhost browser
 and enable the switch. The page shows the current LAN URL, for example
 `http://192.168.0.16:47994`, and a single-use six-digit pairing code valid for sixty seconds.
 Codes appear as `123-456`; enter them with or without the hyphen.
@@ -156,6 +158,12 @@ transaction recovery and safe troubleshooting reports. Configuration validity,
 authentication and observed connection health are separate. See
 [MCP configuration](MCP.md) and the [recovery runbook](docs/runbooks/mcp-configuration.md).
 
+### Chat
+
+Relay, project chats, custom assistants and interactive workers open their Code60 thread in IBM Carbon AI Chat. Enter sends and Shift+Enter adds a line. Stop acts on the current conversation. You can switch chats while a turn is running and return to its messages, draft and pending approvals.
+
+In a project chat, type `/` or `$` to browse commands. Select a suggestion and add arguments, or type the full `$name` directly. Use the adjacent Files and Changes panels to attach code. Workflows → Create with prompt uses the same prompt line to draft editable fields.
+
 ### Scheduled Jobs Carbon trial
 
 Apps → Scheduled Jobs opens on Schedules. Scan schedule status, next run and live run status. Expand a row to read the saved prompt and settings. Use Run or Stop directly, or open the row menu to edit, pause, enable, inspect history or delete the job. New scheduled job opens a dedicated form.
@@ -164,7 +172,7 @@ Execution history shows all schedules by default. View history on a job applies 
 
 ### Application-wide Carbon migration
 
-Code60 uses upstream Carbon controls and White/G100 themes across its browser UI. Home, Apps, Settings and project/provider homes
+Code60 uses upstream Carbon controls and White/G100 themes across its browser UI. Under **Personalize → Appearance**, use **Accent color** to change the default verdigris. The browser remembers your choice across themes. Home, Apps, Settings and project/provider homes
 use destination rows with direct creation buttons. Backend operations, retained
 conversations and saved appearance records are preserved. See the
 [migration ledger](docs/carbon-migration.md) for implementation, validation and explicit QA limits.

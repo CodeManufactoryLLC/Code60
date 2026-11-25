@@ -17,7 +17,6 @@ import type { NavigationIconName } from "./navigation-icons.js";
 import { pathLabel } from "./path-label.js";
 
 export type NavigationTarget =
-  | { kind: "provider"; id: string }
   | { kind: "custom-agent"; id: string }
   | { kind: "page"; id: PageId }
   | { kind: "settings"; id: SettingsSectionId }
@@ -46,12 +45,6 @@ export function navigationParent(id: PageId): ParentPageId | undefined {
     default:
       return undefined;
   }
-}
-
-export function inNavigationBranch(id: PageId, parent: ParentPageId): boolean {
-  if (id === parent) return true;
-  const owner = navigationParent(id);
-  return owner !== undefined && inNavigationBranch(owner, parent);
 }
 
 export function staticChildren(parent: ParentPageId, database: string | null): NavigationNode[] {
@@ -126,21 +119,16 @@ export function conversationNodes(entries: ReturnType<typeof conversations>): Na
     }));
 }
 
-export function parentActivation(active: boolean, expanded: boolean) {
-  return { navigate: !active, expanded: active ? !expanded : true };
-}
-
 export function isNavigationHome(id: PageId) {
   return (
     id === "home" ||
     id === "project" ||
-    id === "provider" ||
+    id === "providers" ||
     parentPageIds.some((parent) => parent === id)
   );
 }
 
-export function sidebarPageElementId(id: PageId, projectId?: string, providerId?: string) {
-  if (id === "provider") return providerId ? `provider-${providerId}` : "tab-providers";
+export function sidebarPageElementId(id: PageId, projectId?: string) {
   if (id === "project") return projectId ? `project-${projectId}` : "tab-chat";
   if (id === "projects") return "tab-chat";
   if (id === "tables" || id === "advanced" || id === "experiments") return `${id}-toggle`;

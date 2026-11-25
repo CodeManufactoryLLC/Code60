@@ -174,8 +174,38 @@ export function McpAuthenticationPanel({
     (oauth && definition.auth.type === "oauth" && Boolean(definition.auth.clientSecretRef));
   if (!oauth && !hasReferences) return null;
   const selected = review?.references?.find((item) => item.reference === reference);
+  const saveCredential = (
+    <Button
+      variant={oauth ? "neutral" : "primary"}
+      type="button"
+      disabled={
+        busy ||
+        status?.status === "pending" ||
+        !secret ||
+        !review?.previewId ||
+        !reference ||
+        (selected?.purpose === "client-secret" && !review?.issuer)
+      }
+      onClick={() => {
+        if (!review?.previewId) return;
+        const value = secret;
+        setSecret("");
+        void act({
+          action: "credential-write",
+          ...captured,
+          previewId: review.previewId,
+          reference,
+          secret: value,
+          storage,
+          requestId: randomId(),
+        });
+      }}
+    >
+      Save credential
+    </Button>
+  );
   return (
-    <section aria-label="MCP authentication controls" className="mcp-details">
+    <section aria-label="MCP authentication controls">
       <Button
         type="button"
         disabled={blocked || busy}
@@ -188,6 +218,103 @@ export function McpAuthenticationPanel({
       </Button>
       {open && (
         <Modal
+          initialFocus={confirmation ? ".cds--btn--secondary" : undefined}
+          footer={
+            <>
+              {confirmation ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setConfirmation(undefined)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="destructive"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      if (confirmation === "sign-out")
+                        void act({ action: "sign-out", ...captured, requestId: randomId() });
+                      else if (review?.previewId)
+                        void act({
+                          action: "credential-forget",
+                          ...captured,
+                          previewId: review.previewId,
+                          reference,
+                          requestId: randomId(),
+                        });
+                    }}
+                  >
+                    Confirm {confirmation === "sign-out" ? "sign out" : "forget"}
+                  </Button>
+                </>
+              ) : status?.status === "pending" ? (
+                <>
+                  {oauth && (status.attemptId ?? authorization?.attemptId) && (
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        void act({
+                          action: "cancel",
+                          attemptId: (status.attemptId ?? authorization?.attemptId)!,
+                        })
+                      }
+                    >
+                      Cancel sign-in
+                    </Button>
+                  )}
+                  <Button
+                    variant="primary"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setSecret("");
+                      setOpen(false);
+                    }}
+                  >
+                    Continue in background
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="secondary" disabled={busy} onClick={close}>
+                    Close
+                  </Button>
+                  {oauth ? (
+                    <Button
+                      variant="primary"
+                      type="button"
+                      disabled={
+                        busy ||
+                        !review?.issuer ||
+                        !review.previewId ||
+                        review.registration === "client-information-required"
+                      }
+                      onClick={() => {
+                        if (review?.previewId)
+                          void act({
+                            action: "start",
+                            ...captured,
+                            previewId: review.previewId,
+                            storage,
+                            requestId: randomId(),
+                          });
+                      }}
+                    >
+                      Start sign-in
+                    </Button>
+                  ) : (review?.references?.length ?? 0) > 0 ? (
+                    saveCredential
+                  ) : null}
+                </>
+              )}
+            </>
+          }
           title={`Authentication — ${definition.label}`}
           className="mcp-authentication"
           busy={busy}
@@ -316,31 +443,7 @@ export function McpAuthenticationPanel({
               {selected?.purpose === "client-secret" && !review?.issuer && (
                 <p>Review the selected issuer before entering its client secret.</p>
               )}
-              <Button
-                type="button"
-                disabled={
-                  !secret ||
-                  !review?.previewId ||
-                  !reference ||
-                  (selected?.purpose === "client-secret" && !review?.issuer)
-                }
-                onClick={() => {
-                  if (!review?.previewId) return;
-                  const value = secret;
-                  setSecret("");
-                  void act({
-                    action: "credential-write",
-                    ...captured,
-                    previewId: review.previewId,
-                    reference,
-                    secret: value,
-                    storage,
-                    requestId: randomId(),
-                  });
-                }}
-              >
-                Save credential
-              </Button>
+              {oauth && saveCredential}
               <Button
                 type="button"
                 disabled={!review?.previewId || !reference}
@@ -373,29 +476,6 @@ export function McpAuthenticationPanel({
           </fieldset>
           {oauth && (
             <>
-              <Button
-                variant="primary"
-                type="button"
-                disabled={
-                  busy ||
-                  status?.status === "pending" ||
-                  !review?.issuer ||
-                  !review.previewId ||
-                  review.registration === "client-information-required"
-                }
-                onClick={() => {
-                  if (review?.previewId)
-                    void act({
-                      action: "start",
-                      ...captured,
-                      previewId: review.previewId,
-                      storage,
-                      requestId: randomId(),
-                    });
-                }}
-              >
-                Start sign-in
-              </Button>
               {authorization?.authorizationUrl && status?.status === "pending" && (
                 <p>
                   <a
@@ -407,34 +487,7 @@ export function McpAuthenticationPanel({
                   </a>
                 </p>
               )}
-              {status?.status === "pending" && (status.attemptId ?? authorization?.attemptId) && (
-                <Button
-                  variant="quiet"
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void act({
-                      action: "cancel",
-                      attemptId: (status.attemptId ?? authorization?.attemptId)!,
-                    })
-                  }
-                >
-                  Cancel sign-in
-                </Button>
-              )}
             </>
-          )}
-          {status?.status === "pending" && (
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setSecret("");
-                setOpen(false);
-              }}
-            >
-              Continue in background
-            </Button>
           )}
           <Button
             type="button"
@@ -453,32 +506,6 @@ export function McpAuthenticationPanel({
                   ? `Sign out ${definition.label} in this configuration? This revokes affected connections, clears temporary credentials and attempts removal of owned secure entries. Configured enablement is unchanged.`
                   : `Forget ${reference} for ${definition.label}? Affected connections and OAuth grants are revoked. Other manual references are retained; this reference remains in mcp.json.`}
               </p>
-              <Button
-                variant="quiet"
-                type="button"
-                disabled={busy}
-                onClick={() => setConfirmation(undefined)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  if (confirmation === "sign-out")
-                    void act({ action: "sign-out", ...captured, requestId: randomId() });
-                  else if (review?.previewId)
-                    void act({
-                      action: "credential-forget",
-                      ...captured,
-                      previewId: review.previewId,
-                      reference,
-                      requestId: randomId(),
-                    });
-                }}
-              >
-                Confirm {confirmation === "sign-out" ? "sign out" : "forget"}
-              </Button>
             </fieldset>
           )}
         </Modal>

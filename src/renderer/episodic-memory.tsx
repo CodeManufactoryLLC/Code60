@@ -9,6 +9,7 @@ import { randomId } from "./browser-platform.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
+import { pageDefinitions } from "./navigation.js";
 import { PageTitle } from "./page-title.js";
 import { TranscriptNotice, type Transcripts } from "./transcripts.js";
 
@@ -150,7 +151,7 @@ export function EpisodicMemoryPage({
     }
   }
   return (
-    <main className="episodic-memory" aria-label="Episodic Memory">
+    <main className="episodic-memory" aria-label={pageDefinitions["episodic-memory"].label}>
       <header className="memory-heading">
         <PageTitle
           page="episodic-memory"

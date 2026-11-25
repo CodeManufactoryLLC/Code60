@@ -29,7 +29,7 @@ import {
   settingsLabels,
 } from "./navigation.js";
 import { NavigationHomePage } from "./navigation-home-page.js";
-import { sidebarPageElementId, staticChildren } from "./navigation-tree.js";
+import { staticChildren } from "./navigation-tree.js";
 import { PageTitle, PageTitleNavigationContext } from "./page-title.js";
 import { usePageTransition } from "./page-transition.js";
 import { PollingControls, PollingPage } from "./polling.js";
@@ -82,13 +82,11 @@ export function AppPages(props: AppPagesProps) {
     tabs.active,
     tabs.active === "settings"
       ? settingsSection
-      : tabs.active === "provider"
-        ? tabs.providerId
-        : tabs.active === "project"
-          ? tabs.projectId
-          : tabs.active === "chat"
-            ? (props.workerId ?? (snapshot && conversationId(snapshot.chat)))
-            : undefined,
+      : tabs.active === "project"
+        ? tabs.projectId
+        : tabs.active === "chat"
+          ? (props.workerId ?? (snapshot && conversationId(snapshot.chat)))
+          : undefined,
     !splash,
   );
   const titleNavigation = useMemo(
@@ -132,6 +130,8 @@ export function AppPages(props: AppPagesProps) {
     setFit,
     focusHighlight,
     setFocusHighlight,
+    accentColor,
+    setAccentColor,
     signals,
     setSignals,
     charts,
@@ -227,17 +227,6 @@ export function AppPages(props: AppPagesProps) {
         snapshot={snapshot}
         management={props.providerManagement}
         active={!splash && tabs.active === "providers"}
-        onOpen={(id) => void navigation.open({ kind: "provider", id })}
-      />
-    ),
-    provider: (
-      <ProvidersPage
-        api={api}
-        snapshot={snapshot}
-        management={props.providerManagement}
-        providerId={tabs.providerId}
-        active={!splash && tabs.active === "provider"}
-        onOpen={(id) => void navigation.open({ kind: "provider", id })}
       />
     ),
     projects: (
@@ -364,6 +353,8 @@ export function AppPages(props: AppPagesProps) {
           }
           theme={theme}
           onTheme={setTheme}
+          accentColor={accentColor}
+          onAccentColor={setAccentColor}
           textStyles={textStyles}
           onTextStyles={setTextStyles}
           lines={lines}
@@ -691,7 +682,11 @@ export function AppPages(props: AppPagesProps) {
   } satisfies Record<RenderedPageId, ReactNode>;
   return (
     <PageTitleNavigationContext.Provider value={titleNavigation}>
-      <Grid fullWidth className="product-page-grid">
+      <Grid
+        fullWidth
+        className="product-page-grid"
+        data-chat-active={tabs.active === "chat" || undefined}
+      >
         {renderedPages.map(({ id }) => {
           const Shell = id === "chat" ? "div" : Card;
           return (
@@ -705,12 +700,15 @@ export function AppPages(props: AppPagesProps) {
               role="tabpanel"
               tabIndex={-1}
               id={`panel-${id}`}
-              aria-labelledby={
+              aria-label={
                 id === "settings" && settingsSection
-                  ? `tab-settings-${settingsSection}`
-                  : id === "chat" && snapshot
-                    ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
-                    : sidebarPageElementId(id, tabs.projectId, tabs.providerId)
+                  ? settingsLabels[settingsSection]
+                  : pageDefinitions[id].label
+              }
+              aria-labelledby={
+                id === "chat" && snapshot
+                  ? `conversation-${props.workerId ?? conversationId(snapshot.chat)}`
+                  : undefined
               }
               hidden={tabs.active !== id}
             >

@@ -1,142 +1,92 @@
 import type { ApplicationClient, ModelDefaultAction, Snapshot } from "../bridge/index.js";
 import { AgentLogo } from "./agent-logo.js";
-import { Button as AppButton } from "./carbon/button.js";
-import { PrimaryProviderMark } from "./carbon/provider-controls.js";
-import { NavigationCards } from "./navigation-cards.js";
+import { Button } from "./carbon/button.js";
+import { Icon } from "./icons.js";
 import { PageTitle } from "./page-title.js";
 import type { ProviderManagement } from "./provider-management.js";
-import { providerActionReasons } from "./provider-management.js";
 import { ProviderMenu } from "./provider-menu.js";
-import { SettingsCard } from "./settings-layout.js";
 
 export function ProvidersPage({
   api,
   snapshot,
   management,
-  providerId,
-  onOpen,
   active = true,
 }: {
   api: ApplicationClient;
   snapshot: Snapshot | undefined;
   management: ProviderManagement;
-  providerId?: string | undefined;
-  onOpen(id: string): void;
   active?: boolean;
 }) {
   const setup = snapshot?.agentSetup;
-  const providers = (setup?.enabled ?? []).flatMap((id) => {
-    const provider = setup?.providers.find((provider) => provider.id === id);
-    return provider ? [{ ...provider, label: provider.name, available: true }] : [];
-  });
-  const provider = providers.find(({ id }) => id === providerId);
-  const menu = (item: (typeof providers)[number]) => (
-    <ProviderMenu
-      provider={item.id}
-      name={item.name}
-      setup={setup}
-      management={management}
-      active={active}
-    />
-  );
-  const reasons = provider
-    ? providerActionReasons(setup, provider.id, management.pending)
-    : undefined;
-  const defaults =
-    provider && snapshot?.modelDefaults?.providers[provider.id as ModelDefaultAction["provider"]];
   return (
-    <main
-      className={`home-page providers-page${provider ? " provider-details" : ""}`}
-      aria-label={provider?.name ?? "Providers"}
-    >
+    <main className="home-page providers-page" aria-label="Providers">
       <div className="table-controls">
-        <PageTitle
-          page={provider ? "provider" : "providers"}
-          target={provider ? { kind: "provider", id: provider.id } : undefined}
-          className="table-title"
-          actions={
-            provider
-              ? [
-                  {
-                    id: "disconnect",
-                    label: "Disconnect",
-                    disabled: Boolean(reasons?.disconnect),
-                    reason: reasons?.disconnect ?? undefined,
-                    run: () => void management.act({ type: "disconnect", provider: provider.id }),
-                  },
-                  {
-                    id: "primary",
-                    label: "Set as Primary",
-                    disabled: Boolean(reasons?.primary),
-                    reason: reasons?.primary ?? undefined,
-                    run: () => void management.act({ type: "set-primary", provider: provider.id }),
-                  },
-                ]
-              : []
-          }
-        >
-          {provider?.name ?? "Providers"}
-        </PageTitle>
+        <PageTitle page="providers" className="table-title" />
       </div>
-      {provider ? (
-        <div className="provider-detail-content">
-          <div className="provider-identity">
-            <AgentLogo id={provider.logo} size={72} />
-            <span>Verified provider</span>
-            {provider.id === setup?.primary && <PrimaryProviderMark />}
-          </div>
-          <SettingsCard title="Default models">
-            {(["orchestrator", "worker"] as const).map((role) => {
-              const values = defaults?.[role];
-              return values?.length ? (
-                <div className="settings-row" key={role}>
-                  <span>
-                    {role === "orchestrator" ? "Orchestrator" : "Worker"}
-                    <small>{values.map((value) => value.name).join(" · ")}</small>
-                  </span>
-                  <AppButton
-                    type="button"
-                    disabled={management.pending || !api.modelDefault}
-                    aria-label={`Clear ${provider.id} ${role} model default`}
-                    onClick={() =>
-                      void management.clearDefault({
-                        type: "clear",
-                        provider: provider.id as ModelDefaultAction["provider"],
-                        role,
-                      })
-                    }
-                  >
-                    Clear
-                  </AppButton>
-                </div>
-              ) : null;
-            })}
-            {!defaults?.orchestrator?.length && !defaults?.worker?.length && (
-              <p className="settings-empty">No saved model defaults.</p>
-            )}
-          </SettingsCard>
-          {management.error && <p role="alert">{management.error}</p>}
+      <div className="home-content">
+        <div className="navigation-create">
+          <Button
+            variant="primary"
+            disabled={Boolean(management.addReason)}
+            title={management.addReason ?? undefined}
+            onClick={management.add}
+          >
+            Add Provider <Icon name="add" />
+          </Button>
         </div>
-      ) : (
-        <NavigationCards
-          cards={providers}
-          pending={management.pending}
-          create={{
-            label: "Add Provider",
-            title: management.addReason ?? undefined,
-            disabled: Boolean(management.addReason),
-            onClick: management.add,
-          }}
-          onOpen={(provider) => onOpen(provider.id)}
-          renderArtwork={(provider) => <AgentLogo id={provider.logo} size={72} />}
-          renderActions={menu}
-          renderStatus={(provider) =>
-            provider.id === setup?.primary ? <PrimaryProviderMark /> : null
-          }
-        >
-          {management.error && <p role="alert">{management.error}</p>}
-        </NavigationCards>
-      )}
+        {management.error && <p role="alert">{management.error}</p>}
+        <ul className="navigation-list" aria-label="Connected providers">
+          {setup?.enabled.map((id) => {
+            const provider = setup.providers.find((item) => item.id === id);
+            if (!provider) return null;
+            const providerId = id as ModelDefaultAction["provider"];
+            const defaults = snapshot?.modelDefaults?.providers[providerId];
+            return (
+              <li key={id} className="provider-row">
+                <div className="provider-row-header">
+                  <AgentLogo id={provider.logo} />
+                  <h2>
+                    {provider.name}
+                    {id === setup.primary && " (Primary)"}
+                  </h2>
+                  <ProviderMenu
+                    provider={id}
+                    name={provider.name}
+                    setup={setup}
+                    management={management}
+                    active={active}
+                  />
+                </div>
+                {(["orchestrator", "worker"] as const).map((role) => {
+                  const values = defaults?.[role];
+                  if (!values?.length) return null;
+                  return (
+                    <div className="settings-row" key={role}>
+                      <span>
+                        {role === "orchestrator" ? "Orchestrator" : "Worker"} model default
+                        <small>{values.map((value) => value.name).join(" · ")}</small>
+                      </span>
+                      <Button
+                        disabled={management.pending || !api.modelDefault}
+                        aria-label={`Clear ${id} ${role} model default`}
+                        onClick={() =>
+                          void management.clearDefault({
+                            type: "clear",
+                            provider: providerId,
+                            role,
+                          })
+                        }
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  );
+                })}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </main>
   );
 }
