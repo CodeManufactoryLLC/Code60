@@ -69,6 +69,15 @@ The sections below cover individual providers:
 - [Droid](#droid)
 - [Cursor](#cursor)
 
+### Does Code60 work with local models?
+
+Yes, through any agent that supports local models. Code60 does not run local language models directly and connects to coding-agent harnesses through ACP.
+
+- **Through a harness:** A user can run local models when an ACP harness, such as **OpenCode**, points to a local model server. Code60's **Model** picker shows the models that active harness reports.
+- **External setup:** Code60's in-app setup flows cover official cloud sign-ins only. Configuring a harness to call a local model server happens outside Code60 in that harness's own configuration.
+- **Transmission Workflows:** **Transmission Workflows** run only on their Codex runtime and do not support alternate or local model providers.
+- **Local embeddings:** Separately from coding agents, Code60 runs its own embedding model offline on the CPU without a graphics card or external service.
+
 ---
 
 ## Claude
