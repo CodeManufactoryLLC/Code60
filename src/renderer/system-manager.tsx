@@ -1,5 +1,12 @@
+import { Tab, TabList, TabPanel, TabPanels, Tabs } from "@carbon/react";
 import { useEffect, useRef, useState } from "react";
-import type { ApplicationClient, AutomationUiRequest, SchedulerStatus } from "../bridge/index.js";
+import {
+  type ApplicationClient,
+  type AutomationUiRequest,
+  abbreviateTerminalPath,
+  type SchedulerStatus,
+  type TerminalSummary,
+} from "../bridge/index.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { Icon } from "./icons.js";
 import { PageTitle } from "./page-title.js";
@@ -11,12 +18,34 @@ type ServiceAction = Extract<
   { action: "scheduler" | "resumeAll" | "resolveBlock" }
 >;
 
+type SystemManagerApi = Pick<ApplicationClient, "automation" | "onAutomationChanged"> &
+  Partial<Pick<ApplicationClient, "listTerminals" | "closeTerminal" | "onTerminalsChanged">>;
+
+function terminalStartedLabel(startedAt: string): string {
+  const date = new Date(startedAt);
+  if (Number.isNaN(date.getTime())) return startedAt;
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function terminalTargetLabel(kind: TerminalSummary["targetKind"]): string {
+  switch (kind) {
+    case "project-worker":
+      return "Project worker";
+    case "project":
+      return "Project";
+    case "relay-worker":
+      return "Relay worker";
+    case "relay":
+      return "Relay";
+  }
+}
+
 export function SystemManagerPage({
   api,
   active,
   pollingPaused = false,
 }: {
-  api: Pick<ApplicationClient, "automation" | "onAutomationChanged">;
+  api: SystemManagerApi;
   active: boolean;
   pollingPaused?: boolean;
 }) {
@@ -25,6 +54,10 @@ export function SystemManagerPage({
   const [progress, setProgress] = useState("");
   const [reading, setReading] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [tab, setTab] = useState(0);
+  const [terminals, setTerminals] = useState<TerminalSummary[]>([]);
+  const [terminalsError, setTerminalsError] = useState("");
+  const [closingId, setClosingId] = useState<string | null>(null);
   const busy = progress !== "";
   const generation = useRef(0);
   const pending = useRef(false);
@@ -33,6 +66,7 @@ export function SystemManagerPage({
   const refresh = useRef<(background?: boolean, changed?: boolean) => Promise<void>>(
     async () => {},
   );
+  const refreshTerminals = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
     const owner = ++generation.current;
     if (!active) return;
@@ -118,6 +152,38 @@ export function SystemManagerPage({
         () => pollDelay.current,
       );
   }, [active, pollingPaused]);
+  useEffect(() => {
+    if (!active || !api.listTerminals) return;
+    let disposed = false;
+    const listTerminals = api.listTerminals;
+    const load = async () => {
+      if (disposed || document.hidden) return;
+      try {
+        const items = await listTerminals();
+        if (disposed || document.hidden) return;
+        setTerminals(items);
+        setTerminalsError("");
+      } catch (cause) {
+        if (disposed || document.hidden) return;
+        setTerminalsError(
+          cause instanceof Error ? cause.message : "Could not load active terminal sessions.",
+        );
+      }
+    };
+    const onVisibility = () => {
+      if (!document.hidden) void load();
+    };
+    refreshTerminals.current = load;
+    document.addEventListener("visibilitychange", onVisibility);
+    const off = api.onTerminalsChanged?.(() => void load());
+    void load();
+    return () => {
+      disposed = true;
+      refreshTerminals.current = async () => {};
+      document.removeEventListener("visibilitychange", onVisibility);
+      off?.();
+    };
+  }, [active, api]);
   const act = async (request: ServiceAction) => {
     if (pending.current) return;
     pending.current = true;
@@ -152,6 +218,21 @@ export function SystemManagerPage({
       setProgress("");
     }
   };
+  const closeTerminalSession = async (id: string) => {
+    if (!api.closeTerminal || closingId !== null) return;
+    setClosingId(id);
+    setTerminalsError("");
+    try {
+      await api.closeTerminal({ id });
+      await refreshTerminals.current();
+    } catch (cause) {
+      setTerminalsError(
+        cause instanceof Error ? cause.message : "Could not stop terminal session.",
+      );
+    } finally {
+      setClosingId(null);
+    }
+  };
   const state = schedulingServiceState(status, !!error);
   const live = status?.service;
   const statusHint = pollingPaused
@@ -177,78 +258,165 @@ export function SystemManagerPage({
             {
               id: "system-manager-0",
               label: "Refresh Backend Service",
-              run: () => void refresh.current(),
+              run: () => {
+                void refresh.current();
+                void refreshTerminals.current();
+              },
               disabled: busy || reading,
             },
           ]}
         />
       </header>
-      <section
-        className="automation-service"
-        data-state={state}
-        aria-labelledby="automation-service-title"
-        aria-busy={busy || reading}
+      <Tabs
+        selectedIndex={tab}
+        onChange={({ selectedIndex }) => {
+          setTab(selectedIndex);
+        }}
       >
-        <div className="automation-service-summary">
-          <div className="automation-service-copy">
-            <h2 id="automation-service-title">Backend Service</h2>
-            <p className="automation-service-state" role="status">
-              <span className="automation-service-badge" data-state={state}>
-                <Icon name={stateIcon} />
-                {schedulingServiceLabels[state]}
-              </span>
-              {state === "running" && !status?.installed && <span>· Not installed</span>}
-              {live?.pausedAll && <span>· Jobs paused</span>}
-              {live?.activeExecutionId && <span>· A run is active</span>}
-              {progress && <span>· {progress}</span>}
-            </p>
-          </div>
-          <div className="automation-service-actions">
-            {live?.pausedAll && (
-              <AppButton
-                type="button"
-                disabled={busy || reading}
-                onClick={() => void act({ action: "resumeAll" })}
-              >
-                Resume jobs
-              </AppButton>
-            )}
-          </div>
-        </div>
-        {state === "unavailable" && !error && (
-          <p className="automation-service-note">
-            The Backend Service could not be verified. {statusHint}
-          </p>
-        )}
-        {live?.block && (
-          <div className="automation-block" role="alert">
-            <span>
-              {live.block.reason === "leftover_agent"
-                ? "An unfinished agent process needs recovery."
-                : "The service could not save its private state."}
-            </span>
-            <AppButton
-              type="button"
-              className="small"
-              disabled={busy || reading}
-              onClick={() => void act({ action: "resolveBlock" })}
+        <TabList aria-label="System Manager views">
+          <Tab>Services</Tab>
+          <Tab>{terminals.length > 0 ? `Terminals (${terminals.length})` : "Terminals"}</Tab>
+        </TabList>
+        <TabPanels>
+          <TabPanel>
+            <section
+              className="automation-service"
+              data-state={state}
+              aria-labelledby="automation-service-title"
+              aria-busy={busy || reading}
             >
-              Recheck
-            </AppButton>
-          </div>
-        )}
-        <p>
-          Manage the login backend locally with <code>code60 service status</code>,{" "}
-          <code>code60 service repair</code> or <code>code60 service uninstall</code>. Closing this
-          browser keeps approved work running.
-        </p>
-      </section>
-      {error && (
-        <p role="alert">
-          {error} {statusHint}
-        </p>
-      )}
-      {actionError && <p role="alert">{actionError}</p>}
+              <div className="automation-service-summary">
+                <div className="automation-service-copy">
+                  <h2 id="automation-service-title">Backend Service</h2>
+                  <p className="automation-service-state" role="status">
+                    <span className="automation-service-badge" data-state={state}>
+                      <Icon name={stateIcon} />
+                      {schedulingServiceLabels[state]}
+                    </span>
+                    {state === "running" && !status?.installed && <span>· Not installed</span>}
+                    {live?.pausedAll && <span>· Jobs paused</span>}
+                    {live?.activeExecutionId && <span>· A run is active</span>}
+                    {progress && <span>· {progress}</span>}
+                  </p>
+                </div>
+                <div className="automation-service-actions">
+                  {live?.pausedAll && (
+                    <AppButton
+                      type="button"
+                      disabled={busy || reading}
+                      onClick={() => void act({ action: "resumeAll" })}
+                    >
+                      Resume jobs
+                    </AppButton>
+                  )}
+                </div>
+              </div>
+              {state === "unavailable" && !error && (
+                <p className="automation-service-note">
+                  The Backend Service could not be verified. {statusHint}
+                </p>
+              )}
+              {live?.block && (
+                <div className="automation-block" role="alert">
+                  <span>
+                    {live.block.reason === "leftover_agent"
+                      ? "An unfinished agent process needs recovery."
+                      : "The service could not save its private state."}
+                  </span>
+                  <AppButton
+                    type="button"
+                    className="small"
+                    disabled={busy || reading}
+                    onClick={() => void act({ action: "resolveBlock" })}
+                  >
+                    Recheck
+                  </AppButton>
+                </div>
+              )}
+              <p>
+                Manage the login backend locally with <code>code60 service status</code>,{" "}
+                <code>code60 service repair</code> or <code>code60 service uninstall</code>. Closing
+                this browser keeps approved work running.
+              </p>
+            </section>
+            {error && (
+              <p role="alert">
+                {error} {statusHint}
+              </p>
+            )}
+            {actionError && <p role="alert">{actionError}</p>}
+          </TabPanel>
+          <TabPanel>
+            <section
+              className="system-manager-terminals"
+              aria-labelledby="system-manager-terminals-title"
+            >
+              <div className="system-manager-terminals-header">
+                <h2 id="system-manager-terminals-title">Active Terminals</h2>
+                <span className="system-manager-terminals-count" role="status">
+                  {terminals.length === 1 ? "1 session" : `${terminals.length} sessions`}
+                </span>
+              </div>
+              {terminalsError && <p role="alert">{terminalsError}</p>}
+              {terminals.length === 0 ? (
+                <p className="system-manager-terminals-empty">No active terminal sessions.</p>
+              ) : (
+                <ul className="system-manager-terminal-list">
+                  {terminals.map((session) => (
+                    <li key={session.id} className="system-manager-terminal-item">
+                      <div className="system-manager-terminal-main">
+                        <div className="system-manager-terminal-heading">
+                          <Icon name="terminal" />
+                          <strong>{session.label}</strong>
+                          <span className="system-manager-terminal-kind">
+                            {terminalTargetLabel(session.targetKind)}
+                          </span>
+                        </div>
+                        <dl className="system-manager-terminal-meta">
+                          <div>
+                            <dt>Project</dt>
+                            <dd title={session.project ?? "Relay"}>
+                              {session.project
+                                ? (session.displayProject ??
+                                  abbreviateTerminalPath(session.project))
+                                : "Relay"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Folder</dt>
+                            <dd className="system-manager-terminal-path" title={session.cwd}>
+                              {session.displayCwd ?? abbreviateTerminalPath(session.cwd)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Shell</dt>
+                            <dd>
+                              {session.shell} · PID {session.pid} · Started{" "}
+                              {terminalStartedLabel(session.startedAt)}
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
+                      {api.closeTerminal && (
+                        <div className="system-manager-terminal-actions">
+                          <AppButton
+                            type="button"
+                            className="small"
+                            disabled={closingId !== null}
+                            onClick={() => void closeTerminalSession(session.id)}
+                          >
+                            {closingId === session.id ? "Closing…" : "Close terminal"}
+                          </AppButton>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
     </section>
   );
 }

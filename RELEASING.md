@@ -16,7 +16,7 @@ remains an explicit release action. See [update behavior](docs/distribution/upda
 
 ## Tag and publish
 
-Tag the merged release commit on main with its exact package version. Push the tag only as an explicitly authorized release action. The manually dispatched release workflow verifies tag/manifest agreement and builds the npm tarball. Review native validation evidence before publishing its release assets. Do not publish to the npm registry as part of ordinary implementation.
+Tag the merged release commit on main with its exact package version. Push the tag only as an explicitly authorized release action. The manually dispatched release workflow verifies tag/manifest agreement and builds the npm tarball. The tagged candidate must pass the full Linux and native Apple Silicon matrix regardless of its PR routing. Linux verifies the exact npm tarball with a clean install and real offline embeddings, then exercises raw payload, managed install, setup, update and concurrent uninstall, including interrupted update and recovery. The bootstrap job depends on all four validations. Review the captured evidence before publishing release assets. Do not publish to the npm registry as part of ordinary implementation.
 
 ## Updating an installation
 

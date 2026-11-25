@@ -5,7 +5,6 @@ import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { acquirePayload, sha256 } from "./acquire.mjs";
 import { writeArchive } from "./archive.mjs";
-import { inventory } from "./policy.mjs";
 
 export async function updateFixture(identity, parent, transport, signal) {
   const staged = await acquirePayload(identity, { parent, transport, signal });
@@ -19,20 +18,31 @@ export async function updateFixture(identity, parent, transport, signal) {
     await writeFile(join(staged.root, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
     const metadata = JSON.parse(await readFile(join(staged.root, "payload.json"), "utf8"));
     const distinctEngineManifest = typeof metadata.transmissionBundle === "string";
+    const modified = ["package.json"];
     if (distinctEngineManifest) {
-      const path = join(staged.root, "dist/engines", metadata.transmissionBundle, "bundle.json");
+      const relativeBundle = `dist/engines/${metadata.transmissionBundle}/bundle.json`;
+      const path = join(staged.root, relativeBundle);
       const bundle = JSON.parse(await readFile(path, "utf8"));
       bundle.acceptanceCandidate = "distinct manifest; original engine bindings must survive";
       await writeFile(path, `${JSON.stringify(bundle, null, 2)}\n`);
+      modified.push(relativeBundle);
     }
     await rm(join(staged.root, "payload.json"));
     metadata.version = version;
     metadata.dirty = false;
-    metadata.files = await inventory(staged.root);
+    const byPath = new Map(metadata.files.map((entry) => [entry.path, entry]));
+    for (const path of modified) {
+      const file = join(staged.root, path);
+      const existing = byPath.get(path);
+      if (existing?.type !== "0")
+        throw Error(`Update fixture missing expected inventory entry: ${path}`);
+      existing.size = (await stat(file)).size;
+      existing.sha256 = await sha256(file, signal);
+    }
     await writeFile(join(staged.root, "payload.json"), `${JSON.stringify(metadata, null, 2)}\n`);
     const name = `code60-${version}-${identity.os}-${identity.arch}.tar.gz`;
     const archive = join(parent, name);
-    await writeArchive(staged.root, archive, { signal });
+    await writeArchive(staged.root, archive, { signal, level: 1 });
     const descriptor = {
       ...identity,
       version,
@@ -87,7 +97,7 @@ export async function updateFixture(identity, parent, transport, signal) {
         "Synthetic acceptance fixture; not a distributable release\n",
       );
     const bootstrap = join(parent, "bootstrap.tgz");
-    await writeArchive(source, bootstrap, { signal });
+    await writeArchive(source, bootstrap, { signal, level: 1 });
     const bytes = await readFile(bootstrap);
     const registry = {
       name: "code60",

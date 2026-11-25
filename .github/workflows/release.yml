@@ -51,6 +51,14 @@ jobs:
       - run: npm run test:browser
       - run: npm run package:app
       - run: npm run test:packaged
+      - run: node scripts/test-rag-model.mjs
+      - run: npm run test:packaged:clean
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: release-clean-install-evidence
+          path: test-results/clean-install/
+          retention-days: 14
       - name: Verify release package manifest
         env:
           RELEASE_TAG: ${{ inputs.tag }}
@@ -67,7 +75,7 @@ jobs:
   payload:
     needs: preflight
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     # The runner's Compose 2.x Bake path omits the CLI's temporary Dockerfile grant.
     # Scope the classic builder selection to this disposable job only.
     env: { COMPOSE_BAKE: "false" }
@@ -91,21 +99,27 @@ jobs:
       - run: npm run devcontainer -- exec npm run package:payload
       - run: npm run devcontainer -- exec npx --no-install playwright install chromium
       - run: npm run devcontainer -- exec npm run test:payload -- --workflows
+      - run: npm run devcontainer -- exec npm run test:update
       - run: npm run devcontainer -- exec npm run test:setup
       - run: npm run devcontainer -- exec npm run test:uninstall:engines -- release/payloads/linux-x64.json
       - run: npm run devcontainer -- exec npm run test:installation -- --require-fish
       - run: npm run test:packaged:clean -- --payload release/payloads/linux-x64.json
       - run: npm run test:packaged:clean -- --managed release/payloads/linux-x64.json
       - run: npm run test:packaged:clean -- --setup release/payloads/linux-x64.json
+      - run: npm run test:packaged:clean -- --update release/payloads/linux-x64.json
       - run: npm run devcontainer -- down
         if: always()
       - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
-          name: linux-clean-install-evidence
+          name: release-linux-acceptance-evidence
           path: |
             test-results/clean-install/
             test-results/clean-install-concurrent/
+            test-results/payload/
+            test-results/installation/
+            test-results/setup/
+            test-results/update/
             test-results/uninstall-engines/
           retention-days: 14
       - uses: actions/upload-artifact@v7.0.2
@@ -149,7 +163,7 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
   bootstrap:
-    needs: [preflight, mac, payload, uninstall]
+    needs: [preflight, mac, package, payload, uninstall]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

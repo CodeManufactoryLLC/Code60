@@ -418,11 +418,19 @@ contribution under the project's license. Use your own name and email.
 
 ## Browser and package CI
 
-PRs and main pushes run Linux Node 24 unit/static/coverage checks, browser journeys
-and clean-prefix npm package/offline-model smoke tests. A dependent clean-install
-job tests that exact package in isolated customer/driver containers. The aggregate required
-check remains **CI passed**. Manual native validation runs on macOS Apple Silicon
-with Node 24. No native installer or automatic publisher remains. Actual launchd
+PRs and pushes to main use the same [impact rules](scripts/ci-impact.mjs). The required **CI passed** job lists the changed paths, selected checks and intentional skips. A selected job must succeed. Independent security workflows still run.
+
+| Change | Merge evidence |
+|---|---|
+| Documentation and review screenshots | Instruction and reference validation |
+| Application code and unit tests | Full static and coverage check, plus Linux browser journeys for operator-facing code |
+| Embeddings and native runtime | Real offline inference and clean package installation on Linux, plus affected Apple Silicon smoke tests |
+| Launcher, shell and setup | Affected setup, managed installation and shell checks on the supported platforms |
+| Service identity and persistent installation, update, uninstall or recovery | Standalone and clean installed update and uninstall journeys plus affected native checks |
+| Bundled engines | Installed workflow, restart and update checks on affected platforms |
+| CI policy, shared packaging inputs or unclassified paths | Full Linux and native matrix |
+
+Test and fixture changes select their owning checks. Mixed changes select the union. An unavailable comparison runs the full matrix. The release workflow checks the tagged candidate on Linux x64 and native Apple Silicon regardless of its diff. Actual launchd
 and systemd login/update lifecycle checks are required before release claims.
 
 ## Platform distribution candidates

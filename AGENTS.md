@@ -55,9 +55,7 @@ environments.
 - `npm run check` runs instruction validation, typecheck, Biome, Knip unused-code checks, and one
   coverage-enabled test suite with versioned four-metric gates. Run it before
   every commit. Never lower coverage floors or broaden Knip exclusions to hide
-  findings; document explicitly reviewed exceptions. CI for PRs and pushes to main runs only on
-  Linux with Node.js 24. macOS checks run with Node.js 24 only
-  in the manually requested release workflow.
+  findings; document explicitly reviewed exceptions. PRs and pushes to main select Node.js 24 Linux and macOS checks from the changed paths. See [CI routing](CONTRIBUTING.md#browser-and-package-ci). Release candidates run the full matrix.
 - `npm run format` applies Biome formatting and safe fixes to TypeScript,
   JSON, and workflow files. Markdown is not auto-formatted.
 - `npm run build` compiles `src` to `dist` and builds the renderer with Vite.

@@ -10,6 +10,7 @@ import {
   DesktopLogStore,
   DesktopWorkflows,
   filePreferences,
+  HealthCheckService,
   inspectWorkflowRecordsForUninstall,
   openProjectDatabase,
   prepareCodexEnvironment,
@@ -291,6 +292,67 @@ export async function startGateway(options: GatewayOptions = {}) {
     options.workflowClients?.legacy,
     options.workflowRemoval,
   );
+  const startedAt = new Date().toISOString();
+  const healthCheck = new HealthCheckService({
+    env,
+    gateway: () => ({
+      appVersion: CODE60_VERSION,
+      gatewayVersion: GATEWAY_VERSION,
+      pid: process.pid,
+      origin: origin || null,
+      webServerEnabled: webServer?.status().enabled ?? settings?.webServerEnabled ?? false,
+      requirePairing,
+      startedAt,
+      installMode: options.developmentAssets ? "source" : "managed",
+    }),
+    appSnapshot: () => application.snapshot(false, true),
+    schedulerStatus: async () => {
+      const registration = (await readPrivateJson(join(root, "registration.json"), 16_384).catch(
+        (error) => {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          return null;
+        },
+      )) as { installed?: boolean } | null;
+      let recentLowDiskCount = 0;
+      let recentFailedCount = 0;
+      if (scheduler) {
+        try {
+          const history = (await scheduler.request({ action: "history", limit: 20 })) as {
+            executions?: Array<{ status: string; reason: string | null }>;
+          };
+          for (const item of history?.executions ?? []) {
+            if (item.reason === "low_disk") recentLowDiskCount++;
+            if (item.status === "failed" || item.status === "interrupted") recentFailedCount++;
+          }
+        } catch {
+          /* Best-effort execution rollup only. */
+        }
+      }
+      return {
+        status: {
+          installed: registration?.installed === true,
+          nativeState: scheduler ? ("running" as const) : ("unavailable" as const),
+          service: scheduler?.scheduler.status() ?? null,
+        },
+        error: schedulerError,
+        recentLowDiskCount,
+        recentFailedCount,
+      };
+    },
+    transmissionHealth: (signal) => workflows.inspectTransmissionHealth(signal),
+    providers: () => application.healthProviders(),
+    refreshPath: (signal) => application.healthRefreshPath(signal),
+    detectProvider: (id, signal) => application.healthDetectProvider(id, signal),
+    probeProvider: (id, signal) => application.healthProbeProvider(id, signal),
+    projectGitStatuses: () => application.healthProjectGitStatuses(),
+    memorySnapshot: () => application.memory.snapshot(),
+    ragStatus: async () => ({
+      status: await application.rag.status(),
+      modelRoot: application.healthRagModelRoot(),
+    }),
+    mcpSummary: () => application.healthMcpSummary(),
+    logStatus: () => logs.status(),
+  });
   const operations = applicationOperations(
     application,
     logs,
@@ -298,6 +360,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     interactions,
     emit,
     workflows,
+    healthCheck,
   );
   operations.set("backend-stop", async () => {
     if (
@@ -323,7 +386,10 @@ export async function startGateway(options: GatewayOptions = {}) {
     application.mcp.subscribe(() => emit("mcp-changed")),
     application.memory.subscribe(() => emit("memory-changed")),
     application.rag.subscribe((status) => emit("rag-status", status)),
+    application.terminals.subscribe((event) => emit("terminal-event", event)),
+    application.terminals.subscribeChanges(() => emit("terminals-changed")),
     logs.subscribe(() => emit("logs-changed")),
+    healthCheck.subscribe((snapshot) => emit("health-changed", snapshot)),
   ];
   const detach = async (session: string) => {
     const owner = owners.get(session);
@@ -338,6 +404,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     application.knowledge.resetRenderer();
     application.setVisibility({ visible: false, worktrees: false });
     automations.reset();
+    healthCheck.cancel();
     await Promise.allSettled([
       workflows.reset(),
       application.cancelDiffReads(),
@@ -724,9 +791,12 @@ export async function startGateway(options: GatewayOptions = {}) {
           if (!operation) throw new Error("Unknown application operation.");
           const receiptKey = `${owner}:${value.id}`;
           const fingerprint = createHash("sha256").update(json(value)).digest("hex");
-          const privateProgress = ["setup-provider-read", "setup-codex-read"].includes(
-            value.operation,
-          );
+          const privateProgress = [
+            "setup-provider-read",
+            "setup-codex-read",
+            "terminal-write",
+            "terminal-resize",
+          ].includes(value.operation);
           const existing = privateProgress ? undefined : receipts.get(receiptKey);
           if (existing) {
             if (existing.fingerprint !== fingerprint)
@@ -877,6 +947,7 @@ export async function startGateway(options: GatewayOptions = {}) {
       await quiesce();
       closing = true;
       for (const dispose of disposers) dispose();
+      healthCheck.dispose();
       automations.reset();
       for (const stream of streams.values()) stream.end();
       await new Promise<void>((resolve, reject) => {
@@ -952,6 +1023,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     };
   } catch (error) {
     for (const dispose of disposers) dispose();
+    healthCheck.dispose();
     await Promise.allSettled([
       webServer?.close(),
       application.shutdown().finally(closeConnectors),

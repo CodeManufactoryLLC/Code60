@@ -10,7 +10,20 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
+  impact:
+    name: Select required validation
+    runs-on: ubuntu-24.04
+    outputs:
+      jobs: ${{ steps.route.outputs.jobs }}
+      plan: ${{ steps.route.outputs.plan }}
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - id: route
+        run: node scripts/ci-impact.mjs
   check:
+    needs: impact
+    if: contains(fromJSON(needs.impact.outputs.jobs), 'check')
     name: Linux / Node 24
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -21,9 +34,12 @@ jobs:
         with: { node-version: "24", cache: npm, package-manager-cache: false }
       - run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
       - uses: ./.github/actions/private-node
-      - run: npm run check
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'instructions')
+        run: npm run check:instructions
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'check')
+        run: npm run check
       - uses: actions/upload-artifact@v7.0.2
-        if: always()
+        if: always() && contains(fromJSON(needs.impact.outputs.plan), 'check')
         with:
           {
             name: coverage-linux-node-24,
@@ -32,6 +48,8 @@ jobs:
             if-no-files-found: warn,
           }
   browser:
+    needs: impact
+    if: contains(fromJSON(needs.impact.outputs.jobs), 'browser')
     name: Linux browser journeys
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -54,6 +72,8 @@ jobs:
             if-no-files-found: ignore,
           }
   package:
+    needs: impact
+    if: contains(fromJSON(needs.impact.outputs.jobs), 'package')
     name: Linux installed npm package
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -75,8 +95,9 @@ jobs:
           retention-days: 1
           if-no-files-found: error
   clean-install:
+    needs: [impact, package]
+    if: contains(fromJSON(needs.impact.outputs.jobs), 'clean-install')
     name: Linux clean installation acceptance
-    needs: package
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -102,6 +123,8 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
   payload:
+    needs: impact
+    if: contains(fromJSON(needs.impact.outputs.jobs), 'payload')
     name: Linux platform payload
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -134,8 +157,9 @@ jobs:
           retention-days: 7
           if-no-files-found: error
   payload-acceptance:
+    needs: [impact, payload]
+    if: contains(fromJSON(needs.impact.outputs.jobs), 'payload-acceptance')
     name: Linux platform payload acceptance
-    needs: payload
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     # The runner's Compose 2.x Bake path omits the CLI's temporary Dockerfile grant.
@@ -162,13 +186,21 @@ jobs:
       - run: npm run devcontainer -- up
       - run: npm run devcontainer -- exec npm ci
       - run: npm run devcontainer -- exec npm run build
-      - run: npm run devcontainer -- exec npx --no-install playwright install chromium
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'engines') || contains(fromJSON(needs.impact.outputs.plan), 'update') || contains(fromJSON(needs.impact.outputs.plan), 'setup')
+        run: npm run devcontainer -- exec npx --no-install playwright install chromium
       - run: npm run devcontainer -- exec env CODE60_REQUIRE_NATIVE_PROCESS_INSPECTION=1 npx --no-install vitest run src/platform/process-identity.test.ts
-      - run: npm run devcontainer -- exec npm run test:payload -- --workflows
-      - run: npm run devcontainer -- exec npm run test:setup
-      - run: npm run devcontainer -- exec npm run test:update
-      - run: npm run devcontainer -- exec npm run test:uninstall:engines -- release/payloads/linux-x64.json
-      - run: npm run devcontainer -- exec npm run test:installation -- --require-fish
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'payload-smoke') && !contains(fromJSON(needs.impact.outputs.plan), 'engines')
+        run: npm run devcontainer -- exec npm run test:payload
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'engines')
+        run: npm run devcontainer -- exec npm run test:payload -- --workflows
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'setup')
+        run: npm run devcontainer -- exec npm run test:setup
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'update')
+        run: npm run devcontainer -- exec npm run test:update
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'uninstall-engines')
+        run: npm run devcontainer -- exec npm run test:uninstall:engines -- release/payloads/linux-x64.json
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'shell')
+        run: npm run devcontainer -- exec npm run test:installation -- --require-fish
       - run: npm run devcontainer -- down
         if: always()
       - uses: actions/upload-artifact@v7.0.2
@@ -185,8 +217,9 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
   payload-clean-install:
+    needs: [impact, payload]
+    if: contains(fromJSON(needs.impact.outputs.jobs), 'payload-clean-install')
     name: Linux offline payload acceptance
-    needs: payload
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -208,9 +241,12 @@ jobs:
           name: code60-linux-payload
           path: release/payloads/
       - run: npm run verify:artifact -- release/payloads/linux-x64.json
-      - run: npm run test:packaged:clean -- --payload release/payloads/linux-x64.json
-      - run: npm run test:packaged:clean -- --managed release/payloads/linux-x64.json
-      - run: npm run test:packaged:clean -- --setup release/payloads/linux-x64.json
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'clean-payload')
+        run: npm run test:packaged:clean -- --payload release/payloads/linux-x64.json
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'managed')
+        run: npm run test:packaged:clean -- --managed release/payloads/linux-x64.json
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'clean-setup')
+        run: npm run test:packaged:clean -- --setup release/payloads/linux-x64.json
       - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
@@ -221,8 +257,9 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
   update:
+    needs: [impact, payload]
+    if: contains(fromJSON(needs.impact.outputs.jobs), 'update')
     name: Linux offline update acceptance
-    needs: payload
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -255,8 +292,9 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
   uninstall:
+    needs: [impact, payload]
+    if: contains(fromJSON(needs.impact.outputs.jobs), 'uninstall')
     name: Linux concurrent uninstall acceptance
-    needs: payload
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -289,10 +327,18 @@ jobs:
             test-results/clean-install-concurrent/
           retention-days: 7
           if-no-files-found: warn
+  mac:
+    needs: impact
+    if: contains(fromJSON(needs.impact.outputs.jobs), 'mac')
+    uses: ./.github/workflows/native-tests.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      suites: ${{ needs.impact.outputs.plan }}
   passed:
     name: CI passed
     needs:
       [
+        impact,
         check,
         browser,
         package,
@@ -302,20 +348,15 @@ jobs:
         payload-clean-install,
         update,
         uninstall,
+        mac,
       ]
     if: always()
     runs-on: ubuntu-24.04
-    timeout-minutes: 1
+    timeout-minutes: 5
     steps:
-      - name: Require every validation job to succeed
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - name: Verify selected jobs and summarize impact
         env:
-          CHECK: ${{ needs.check.result }}
-          BROWSER: ${{ needs.browser.result }}
-          PACKAGE: ${{ needs.package.result }}
-          CLEAN_INSTALL: ${{ needs.clean-install.result }}
-          PAYLOAD: ${{ needs.payload.result }}
-          PAYLOAD_ACCEPTANCE: ${{ needs.payload-acceptance.result }}
-          PAYLOAD_CLEAN_INSTALL: ${{ needs.payload-clean-install.result }}
-          UPDATE: ${{ needs.update.result }}
-          UNINSTALL: ${{ needs.uninstall.result }}
-        run: test "$CHECK" = success && test "$BROWSER" = success && test "$PACKAGE" = success && test "$CLEAN_INSTALL" = success && test "$PAYLOAD" = success && test "$PAYLOAD_ACCEPTANCE" = success && test "$PAYLOAD_CLEAN_INSTALL" = success && test "$UPDATE" = success && test "$UNINSTALL" = success
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/ci-impact.mjs gate

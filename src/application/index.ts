@@ -1,6 +1,7 @@
 export { DesktopAutomations } from "./automations.js";
 export { prepareCodexEnvironment } from "./codex-provider.js";
 export { ApplicationHost } from "./controller.js";
+export { HealthCheckService } from "./health-check.js";
 export { DesktopLogStore, logProjectId } from "./log-store.js";
 export type { OAuthCallbackPort } from "./mcp-authentication.js";
 export { type McpConnectorRole, resolveMcpConnectors } from "./mcp-configuration.js";

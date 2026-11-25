@@ -747,6 +747,20 @@ separate from the schedule list and execution-history tab in Scheduled Jobs. Sys
 has its own Apps card, sits alphabetically after Prompt Builder, and remains
 available without a database. Both pages defer hidden reads, refresh from pushed
 service notices and preserve native consent for service changes.
+Apps → Health Check (also listed in the Manage sidebar group) provides a
+database-independent, human-only diagnostic view covering Backend/Gateway
+connectivity and version compatibility, Scheduler status/version/registration,
+read-only Transmission engine status and bundled version checks, installed and
+actively probed provider authentication, Git readiness, Relay/database/private
+storage safety, Memory/embeddings/RAG, MCP connector health, machine disk space
+and quotas, and local OS/IP environment context. Passive local checks run on
+page open; active provider authentication probes, checksum verification and
+optional registry checks run only on explicit human request with granular
+per-item, per-section and full cancellation. Health Check never starts engines,
+repairs services, clears locks or mutates state. Copy health report omits
+host-identifying fields (IP addresses, hostname, proxy hosts and paths) by
+default unless explicitly opted in. Relay and awareness cannot invoke health
+probes or read host-identifying details.
 System Manager also checks status two seconds after each completed read while the
 page and document are visible, respecting global Pause polling. Failed or
 unavailable checks back off to at most sixty seconds and reset after recovery.
@@ -3564,3 +3578,35 @@ Installed update ports capture this packaged directory for launcher support rath
 than copying the application platform index or its credential dependencies. The
 regular application compiler excludes the bootstrap source variant. Launcher
 receipt path/hash checks stay strict and identical for initial setup and updates.
+
+## Interactive sidebar terminal and System Manager terminals
+
+Users may open interactive Terminal tabs in the right sidebar for the currently
+displayed agent or workspace (project worker worktree, open project root, or
+Relay / Custom Assistant workspace), and inspect or close active sessions from
+the **Terminals** tab alongside **Services** on **System Manager**.
+
+- **Platform (`src/platform/pty.ts`, `native/posix/code60-pty.c`)**: Compiles a
+  first-party C11 POSIX PTY supervisor (`dist/platform/code60-pty`) during
+  application builds (`scripts/build-pty-helper.mjs`). Spawns the user's shell
+  in a dedicated session/process group with bounded startup and teardown
+  deadlines, orphan process-group cleanup on host disconnect, `TERM=xterm-256color`,
+  `COLORTERM=truecolor`, `CLICOLOR=1`, and default `PROMPT_DIRTRIM=2`. Excluded
+  from the Node-only bootstrap facade (`platform/index.bootstrap.ts`).
+- **Bridge & Gateway (`src/bridge/terminal.ts`, `src/gateway/operations.ts`, `src/gateway/server.ts`)**:
+  Accepts only strict opaque targets (`project-worker`, `project`, `relay-worker`,
+  `relay`) and bounded dimensions/writes — never caller-supplied paths, shell
+  executables, or environment overrides. Streams coalesced PTY output and
+  payload-free change notices over the authenticated browser event stream; skips
+  request-receipt retention for `terminal-write` and `terminal-resize`.
+- **Application (`src/application/terminals.ts`, `src/application/controller.ts`)**:
+  Resolves opaque targets to owned directories, caps concurrent sessions at 16,
+  abbreviates display paths consistently with `PROMPT_DIRTRIM`, and cleans up
+  owned sessions on tab close, worktree discard, project close, database
+  replacement (preserving Relay sessions), and backend shutdown.
+- **Renderer (`@xterm/xterm`, `@xterm/addon-fit`)**: Both packages are boundary-
+  enforced as renderer-only in `test/boundaries.test.ts`; Vite attaches the
+  build CSP style nonce to `@xterm/xterm`'s dynamic `<style>` elements. Terminal
+  tabs stay mounted while open across tab, panel, and page switches. Awareness
+  exposes only tab metadata and rejects `code60_read_view` for terminal tabs;
+  agents have no terminal access.

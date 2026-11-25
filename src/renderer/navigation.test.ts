@@ -57,6 +57,7 @@ describe("navigation registry", () => {
       "commands",
       "prompts",
       "system-manager",
+      "health-check",
       "workflows",
       "mcp-servers",
     ]);
@@ -72,6 +73,8 @@ describe("navigation registry", () => {
     expect(pageDefinitions.automations.label).toBe("Scheduled Jobs");
     expect(pageGroup("system-manager")).toBe("apps");
     expect(pageDefinitions["system-manager"].label).toBe("System Manager");
+    expect(pageGroup("health-check")).toBe("apps");
+    expect(pageDefinitions["health-check"].label).toBe("Health Check");
   });
   it("uses the same availability for palette and sidebar, including database-free Logs", () => {
     for (const database of [null, "/db"]) {
@@ -91,6 +94,7 @@ describe("navigation registry", () => {
     expect(pageAvailable("logs", null)).toBe(true);
     expect(pageAvailable("automations", null)).toBe(true);
     expect(pageAvailable("system-manager", null)).toBe(true);
+    expect(pageAvailable("health-check", null)).toBe(true);
     expect(pageAvailable("memories", null)).toBe(true);
     expect(pageAvailable("settings", null)).toBe(true);
     expect(pageAvailable("apps", null)).toBe(true);

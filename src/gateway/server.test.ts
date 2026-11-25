@@ -945,3 +945,82 @@ it("normal startup preserves an empty selected file and private setup refuses to
   await expect(managementRequest(env, "prepare-database")).rejects.toThrow();
   expect(await readFile(path, "utf8")).toBe("");
 });
+
+it("serves granular read-only health checks through the authenticated browser gateway without mutating state", async () => {
+  const { gateway } = await fixture();
+  const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
+    fetch(`${gateway.origin}${path}`, {
+      method: "POST",
+      headers: { Origin: gateway.origin, "Content-Type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    });
+  const session = await (await post("/api/connect", { version: 1 })).json();
+  const auth = {
+    "X-Code60-Session": session.token,
+    "X-Code60-Generation": String(session.generation),
+    "X-Code60-Client": crypto.randomUUID(),
+  };
+  const operation = (name: string, value?: unknown) =>
+    post(
+      "/api/operation",
+      { id: crypto.randomUUID(), operation: name, ...(value === undefined ? {} : { value }) },
+      auth,
+    );
+  const events = new AbortController();
+  let draining: Promise<void> | undefined;
+  try {
+    const stream = await fetch(`${gateway.origin}/api/events`, {
+      headers: auth,
+      signal: events.signal,
+    });
+    const reader = stream.body?.getReader();
+    if (!reader) throw new Error("Missing browser event stream");
+    draining = (async () => {
+      try {
+        while (!(await reader.read()).done) {
+          /* drain SSE frames */
+        }
+      } catch {
+        /* expected on abort */
+      } finally {
+        reader.releaseLock();
+      }
+    })();
+
+    const snapResp = await operation("health-check", { action: "snapshot" });
+    expect(snapResp.status).toBe(200);
+    const initial = await snapResp.json();
+    expect(initial.environment.gatewayVersion).toBe(1);
+
+    const runResp = await operation("health-check", {
+      action: "run",
+      scope: { kind: "all", includeActive: false },
+    });
+    expect(runResp.status).toBe(200);
+    const passive = await runResp.json();
+    const byId = new Map(
+      (passive.checks as Array<{ id: string; status: string }>).map((c) => [c.id, c]),
+    );
+    expect(byId.get("backend-connection")?.status).toBe("healthy");
+    expect(byId.get("scheduler-status")?.status).toBe("healthy");
+    expect(byId.get("providers-authenticated")?.status).toBe("not_checked");
+
+    const diskResp = await operation("health-check", {
+      action: "run",
+      scope: { kind: "check", checkId: "disk-space", targetId: "state" },
+    });
+    expect(diskResp.status).toBe(200);
+
+    const cancelResp = await operation("health-check", { action: "cancel" });
+    expect(cancelResp.status).toBe(200);
+
+    const invalidResp = await operation("health-check", {
+      action: "run",
+      scope: { kind: "check", checkId: "disk-space", targetId: "../bad" },
+    });
+    expect(invalidResp.status).toBe(400);
+  } finally {
+    events.abort();
+    await draining;
+  }
+});

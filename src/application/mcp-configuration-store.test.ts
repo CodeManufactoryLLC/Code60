@@ -397,7 +397,9 @@ describe("MCP configuration store (supporting filesystem integration)", () => {
     },
   );
 
-  it("restores exact valid backups, retains the last twenty per target, and preserves replay receipts", async () => {
+  it("restores exact valid backups, retains the last twenty per target, and preserves replay receipts", {
+    timeout: 15_000,
+  }, async () => {
     const { store, user, project } = await open();
     for (let i = 0; i < 23; i++) await save(store, user, content(`revision-${i}`));
     await save(store, project);

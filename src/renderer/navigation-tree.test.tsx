@@ -70,6 +70,7 @@ describe("navigation tree", () => {
       "appearance",
       "commands",
       "tables",
+      "health-check",
       "prompts",
       "mcp-servers",
       "memory",

@@ -60,6 +60,20 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
+## Terminal
+
+- ID: `terminal`
+- Status: shipped
+- Purpose: Open an interactive shell tab in the right sidebar rooted in the selected agent's worktree or workspace directory.
+- Access: Relay, project or worker chat → right sidebar → Open Terminal (or Command Palette → Open terminal)
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Human-only; agents cannot open, read, or write interactive terminals.
+- Limits: Up to 16 concurrent PTY sessions. Each tab is pinned to the opaque target it was opened for (worker worktree, open project root, or Relay/custom assistant workspace) and keeps its shell and scrollback alive across tab, panel, and page switches. Closing a tab, closing its project, discarding its worktree, or shutting down the backend terminates owned sessions. Awareness exposes tab metadata only, never terminal I/O.
+- Pages: none
+- Settings sections: none
+- Tools: none
+
 ## Relay
 
 - ID: `relay`
@@ -372,13 +386,27 @@ Schema version: 1
 
 - ID: `system-manager`
 - Status: shipped
-- Purpose: Inspect Backend Service scheduling health automatically every two seconds. Jobs paused is separate from backend lifetime.
-- Access: Apps → System Manager
+- Purpose: Inspect Backend Service scheduling health on the Services tab and active right-sidebar terminal sessions with their associated project on the Terminals tab.
+- Access: Apps → System Manager (Services and Terminals tabs)
 - Prerequisite: none
 - Agent access: human-only
-- Confirmation: Human CLI consent is required for service changes; scheduled jobs retain their own explicit controls.
-- Limits: Automatic checks respect global Pause polling and back off to at most sixty seconds on failure. Manual Refresh Backend Service is available. Install, repair, start, stop and uninstall use local code60 service commands. No database is required; awareness never probes or controls the service.
+- Confirmation: Human CLI consent is required for service changes; scheduled jobs and terminal sessions retain their own explicit controls.
+- Limits: Services automatically checks scheduler health every two seconds (respecting global Pause polling and backing off to sixty seconds on failure), with manual refresh. Install, repair, start, stop and uninstall use local code60 service commands. Terminals lists all live interactive shells with their project/Relay association, working directory, shell, PID, start time, and Close terminal control. No database is required; awareness never probes or controls services or terminals.
 - Pages: `system-manager`
+- Settings sections: none
+- Tools: none
+
+## Health Check
+
+- ID: `health-check`
+- Status: shipped
+- Purpose: Inspect read-only system health across the Code60 backend, scheduler, Transmission server, providers, workspace stores, memory, MCP connectors, disk space and local machine context with granular per-check, category or full rechecks.
+- Access: Manage → Health Check (also available from Apps → Health Check)
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Read-only diagnostics; active probes run only when explicitly requested by the user.
+- Limits: No database is required. Passive local checks run on page open; active provider authentication probes, embedding checksum verification and optional registry release checks run only on explicit human request with per-check cancellation and never start engines, repair services or mutate state. Copy health report omits hostname, IP addresses, proxy hosts and filesystem paths by default unless explicitly opted in. Relay and awareness cannot run health probes or read host-identifying details.
+- Pages: `health-check`
 - Settings sections: none
 - Tools: none
 

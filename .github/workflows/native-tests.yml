@@ -5,6 +5,9 @@ on:
       ref:
         required: true
         type: string
+      suites:
+        type: string
+        default: '["mac-full"]'
 permissions:
   contents: read
 jobs:
@@ -21,21 +24,33 @@ jobs:
       - name: Verify Apple Silicon runner
         run: test "$(uname -m)" = arm64
       - run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
-      - run: npx --no-install playwright install chromium
-      - run: npm run check
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-setup')
+        run: npx --no-install playwright install chromium
+      - if: contains(fromJSON(inputs.suites), 'mac-full')
+        run: npm run check
       - run: npm run prepare:models
-      - run: npm run test:browser
-      - run: npm run package:app
-      - run: npm run test:packaged
-      - run: node scripts/test-rag-model.mjs
-      - name: Supply fish on disposable native runner
+      - if: contains(fromJSON(inputs.suites), 'mac-full')
+        run: npm run test:browser
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-package')
+        run: npm run package:app
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-package')
+        run: npm run test:packaged
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-package')
+        run: node scripts/test-rag-model.mjs
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-shell')
+        name: Supply fish on disposable native runner
         timeout-minutes: 5
         run: brew install fish
-      - run: npm run test:installation -- --require-fish
-      - run: npm run package:payload
-      - run: npm run test:payload
-      - run: npm run test:setup
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-shell')
+        run: npm run test:installation -- --require-fish
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-engines') || contains(fromJSON(inputs.suites), 'mac-payload') || contains(fromJSON(inputs.suites), 'mac-setup') || contains(fromJSON(inputs.suites), 'mac-update') || contains(fromJSON(inputs.suites), 'mac-uninstall')
+        run: npm run package:payload
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-payload')
+        run: npm run test:payload
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-setup')
+        run: npm run test:setup
       - uses: actions/upload-artifact@v7.0.2
+        if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-engines') || contains(fromJSON(inputs.suites), 'mac-payload') || contains(fromJSON(inputs.suites), 'mac-setup') || contains(fromJSON(inputs.suites), 'mac-update') || contains(fromJSON(inputs.suites), 'mac-uninstall')
         with:
           name: code60-darwin-payload
           path: release/payloads/
@@ -65,6 +80,7 @@ jobs:
   workflows:
     name: Native installed workflows (${{ matrix.name }})
     needs: test
+    if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-update') || contains(fromJSON(inputs.suites), 'mac-engines')
     runs-on: macos-15
     timeout-minutes: 35
     strategy:
@@ -73,12 +89,16 @@ jobs:
       matrix:
         include:
           - name: update
+            suite: mac-update
             command: npm run test:update
           - name: regressions
+            suite: mac-engines
             command: npm run test:transmission -- --grep-invert 'native update:' --output test-results/transmission-native/regressions
           - name: update-1
+            suite: mac-engines
             command: npm run test:transmission -- --grep 'native update:' --fully-parallel --shard=1/2 --output test-results/transmission-native/update-1
           - name: update-2
+            suite: mac-engines
             command: npm run test:transmission -- --grep 'native update:' --fully-parallel --shard=2/2 --output test-results/transmission-native/update-2
     steps:
       - uses: actions/checkout@v7
@@ -86,20 +106,30 @@ jobs:
           ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: actions/setup-node@v7
+        if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
         with: { node-version: "24", cache: npm, package-manager-cache: false }
-      - name: Verify Apple Silicon runner
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
+        name: Verify Apple Silicon runner
         run: test "$(uname -m)" = arm64
-      - run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
+        run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
       - uses: actions/download-artifact@v8.0.2
+        if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
         with:
           name: code60-darwin-payload
           path: release/payloads/
-      - run: npm run verify:artifact -- release/payloads/darwin-arm64.json
-      - run: npm run prepare:models
-      - run: npm run build
-      - run: npm run prepare:engines
-      - run: npx --no-install playwright install chromium
-      - name: Run complete native journey
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
+        run: npm run verify:artifact -- release/payloads/darwin-arm64.json
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
+        run: npm run prepare:models
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
+        run: npm run build
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
+        run: npm run prepare:engines
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
+        run: npx --no-install playwright install chromium
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
+        name: Run complete native journey
         run: ${{ matrix.command }}
       - uses: actions/upload-artifact@v7.0.2
         if: always()
@@ -114,6 +144,7 @@ jobs:
   uninstall:
     name: Native installed uninstall acceptance
     needs: test
+    if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-uninstall')
     runs-on: macos-15
     timeout-minutes: 35
     steps:

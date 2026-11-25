@@ -39,6 +39,8 @@ test("development: Fast Refresh preserves the backend and backend edits restart 
   try {
     for (const path of [
       "src",
+      "native",
+      "scripts/build-pty-helper.mjs",
       "scripts/dev.mjs",
       "scripts/dev-backend.mjs",
       "scripts/dev-ports.mjs",
