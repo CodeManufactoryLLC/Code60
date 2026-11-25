@@ -102,6 +102,25 @@ Code60 keeps all application data locally on the host machine. New run directori
 - **Configuration, workflows, and logs:** MCP files live at `$XDG_CONFIG_HOME/code60/mcp.json` and `<project>/.code60/mcp.json`, and **Transmission Workflows** state lives under `$XDG_STATE_HOME/code60/workflows`. Diagnostic logs under `$XDG_STATE_HOME/code60/logs` carry a 7-day, 20 MiB cap.
 - **Credentials:** Provider logins stay in each provider's own backend-user storage. MCP secrets stay in macOS Keychain, Linux Secret Service, or explicit temporary backend memory.
 
+### How much disk space does a Code60 installation use?
+
+A base installation typically uses about **400 MB to 1 GB**, depending on platform, private provider installs, and workflow engines. Total usage grows over time with Git worktrees and local transcripts.
+
+| Component | Typical size or limit | Notes |
+| --- | --- | --- |
+| **Typical base total** | **About 400 MB to 1 GB** | Covers app files, local embeddings, and optional private providers or engines. |
+| Local embedding model | About 164 MB | Local INT8 weights for offline embeddings. |
+| Embedding runtime dependencies | About 125 MB (macOS Apple Silicon) | Total with model is about 290 MB before other app files. |
+| Private provider installs and workflow engines | Varies by provider | Lives under `~/.local/share/code60/providers/` and `$XDG_DATA_HOME/code60/engines`. |
+| Git worktrees | Varies by repository | Code60 never deletes worktrees automatically. |
+| Conversation transcripts | No automatic limit | Local `events.jsonl` and **Relay** journals never expire automatically. |
+| Request checkpoints | Up to 256 MiB per chat | Keeps up to 100 prior requests per chat. |
+| Workflow history | Up to 8 MiB | Keeps up to 200 workflow records. |
+| Diagnostic logs | Up to 20 MiB | Automatically expires after 7 days or 20 MiB. |
+| **Scheduled Jobs** free-space guard | At least 2 GiB free | **Scheduled Jobs** refuse to start below 2 GiB free. |
+
+See [Low disk space](runbooks/low-disk.md) for storage recovery guidance.
+
 ## Security and Permissions
 
 ### How does Code60 Auto-Approval work?
@@ -225,6 +244,17 @@ Yes. Code60 supports [MCP](terminology-draft.md#mcp) for both its own orchestrat
 - **External MCP servers:** Under **Connect → MCP Servers**, a user can manage User and open-project servers with visual forms or strict JSON. Project server IDs override User IDs, new servers start off, and project servers require human approval for their exact revision.
 - **Transports and scope:** Code60 supports `stdio` and Streamable HTTP transports for tools only. It omits legacy Server-Sent Events (SSE), resources, prompts, sampling, and elicitation.
 - **Secrets and limits:** MCP secrets stay in macOS Keychain, Linux Secret Service, or explicit temporary memory, with S256 PKCE OAuth support. **Scheduled Jobs**, setup probes, and internal helpers receive no external MCP servers.
+
+### Does Code60 limit the number of agents that I can run simultaneously?
+
+Yes. Code60 applies per-feature concurrency limits alongside the host machine's resources and each **Agent Provider's** rate limits.
+
+- **Interactive workers:** Each orchestration conversation (such as **Relay**, a **Custom Assistant**, or a project chat) defaults to **4** simultaneous workers (`maxParallel` in `config.json`). Idle workers still hold a slot while their process stays alive. Finishing or stopping an idle worker frees its slot.
+- **Adjusting worker slots:** A user can raise `maxParallel` to any positive integer in `config.json`. Manual multi-copy runs cap at **32** copies per batch.
+- **Scheduled Jobs:** At most **1** job from **Scheduled Jobs** runs globally at a time.
+- **Workflows:** **Code60 Transmission Server** allows at most **1** active **Workflow** per source repository checkout at a time. A workflow whose start or stop still awaits confirmation also holds that slot until a user resolves it.
+- **Custom Assistants:** Code60 supports up to **64** **Custom Assistants** application-wide.
+- **Hardware and provider limits:** Running many agents at once still depends on local CPU, memory, and each **Agent Provider's** own rate limits.
 
 ## Context and History
 
@@ -384,6 +414,20 @@ Yes, through any agent that supports local models. Code60 does not run local lan
 - **External setup:** Code60's in-app setup flows cover official cloud sign-ins only. Configuring a harness to call a local model server happens outside Code60 in that harness's own configuration.
 - **Transmission Workflows:** **Transmission Workflows** run only on their Codex runtime and do not support alternate or local model providers.
 - **Local embeddings:** Separately from coding agents, Code60 runs its own embedding model offline on the CPU without a graphics card or external service.
+
+### Does Code60 use my Agent Provider's existing repository skills?
+
+Yes in the worker layer, **Scheduled Jobs**, and **Workflows**, where each **Agent Provider** discovers skills from the repository working directory.
+
+- **Worker layer, Scheduled Jobs, and Workflows:** Code60 starts project workers, **Scheduled Jobs**, and **Workflows** inside the repository's Git worktree (or direct target folder). Each **Agent Provider** discovers repository skills and instruction files there according to its own rules.
+- **Orchestration layer:** In Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture), **Relay**, **Custom Assistants**, and project orchestrators run in private Code60 workspace folders outside the Git checkout. Provider harnesses generally do not auto-discover repository skills for the orchestrator.
+
+### Does Code60 use my Agent Provider's existing user-level skills?
+
+Yes, through each **Agent Provider**. Code60 does not read provider skill files directly, and it does not disable user-level skills during normal sessions.
+
+- **Host environment:** Code60 launches **Agent Providers** with the backend user's normal home directory (`HOME`). Both orchestrators and workers receive whatever user-level skills and configuration that provider normally loads from the user's home directory.
+- **Containers and custom paths:** The optional Linux development container gives each worktree its own private provider home volume separate from the host home directory. **Workflows** use the backend user's Codex home (or an explicit `CODEX_HOME` path).
 
 ---
 
