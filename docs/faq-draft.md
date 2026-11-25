@@ -271,6 +271,30 @@ Code60 uses **TypeScript** for both Code60 Gateway (its local Node.js 24 backend
 - **Styling and markup:** The browser interface uses Cascading Style Sheets (CSS), Sass (`SCSS`), and HyperText Markup Language (HTML) with IBM Carbon Design System styles.
 - **Tooling and packaging:** Build, validation, and distribution scripts use JavaScript modules (`.mjs`) running on Node.js 24.
 
+## Support and Feedback
+
+### How do I report a bug?
+
+Search existing issues first, then open the **Bug report** form on [GitHub Issues](https://github.com/CodeManufactoryLLC/code60/issues/new/choose).
+
+- **Details to include:** Include the Code60 version or commit SHA, operating system, architecture, actual versus target behavior, and minimal reproduction steps.
+- **Privacy checks:** Remove credentials, private prompts, repository content, and personal data from logs and screenshots before posting. Never attach whole run directories, raw transcripts, or private MCP journals and backups.
+- **MCP reports:** For MCP problems, review and copy the opt-in safe troubleshooting report under **Apps → MCP Servers**.
+
+### How do I report a security vulnerability?
+
+Email **[support@code60.dev](mailto:support@code60.dev)** privately. Do not open a public issue or publish exploit details before coordinating disclosure.
+
+- **Details to include:** Share the Code60 version, platform, reproduction steps, potential impact, and a minimal example without credentials, private prompts, or sensitive data. Only the latest release receives security fixes.
+- **Response target:** Maintainers aim to acknowledge reports within five business days before reviewing and coordinating fixes. That five-day window is a response target and does not guarantee a fix date. See [Reporting a vulnerability](../SECURITY.md#reporting-a-vulnerability).
+
+### How do I request a feature?
+
+Search existing issues first, then open the **Feature request** form on [GitHub Issues](https://github.com/CodeManufactoryLLC/code60/issues/new/choose).
+
+- **Focus on the problem:** Describe the user problem before suggesting an implementation. Include the target behavior, observable acceptance criteria (such as error states and accessibility), and scope boundaries.
+- **Review and other forms:** Maintainers check proposals against [ARCHITECTURE.md](../ARCHITECTURE.md), including its non-goals, before scheduling work. Use the **Maintenance** form for tooling, documentation, dependency, or refactoring proposals.
+
 ## Provider Support
 
 Code60 connects both layers of its [Two-Layer Architecture](terminology-draft.md#two-layer-architecture) to coding-agent providers through ACP. It never asks for provider passwords and never stores API keys. Each provider keeps its own credentials in the backend user's storage.
