@@ -52,6 +52,26 @@ Yes. Code60 ships under the [Apache License, Version 2.0](../LICENSE), which per
 
 Code60 is free and open-source under the [Apache License, Version 2.0](../LICENSE). Code60 uses your existing third-party coding agents and tools and is subject to their cost structure.
 
+## Orchestration and Workers
+
+### How are Code60 subagents different than my Agent Provider's subagents?
+
+In Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture), Code60 subagents (workers) are full Code60 sessions that run in separate Git worktrees. An [Agent Provider's](terminology-draft.md#agent-provider) internal subagents run inside that single provider's process and stay outside Code60's orchestration controls.
+
+- **Separate Git worktrees:** Each Code60 project worker edits files in its own Git worktree and run branch. Code60 integrates those edits safely and supports message-level **Undo**, whereas a provider's internal subagents typically share one working directory.
+- **Cross-provider flexibility:** Code60 can dispatch workers using any active **Agent Provider** and apply separate model defaults for orchestrators and workers. A provider's internal subagents stay within that single provider's harness.
+- **Direct visibility and control:** Each Code60 worker has its own sidebar chat, live transcript, and diff viewer. A user can directly message, cancel, stop, or resume a worker. Provider-internal subagents usually run as internal tool calls without separate Code60 worker views.
+- **Local run records:** Code60 keeps local run records, transcripts, and process-group tracking for each worker. A user or orchestrator can inspect or continue an inactive worker later.
+- **Using both together:** Code60 does not block a provider's internal subagents. If a harness spawns its own subagents inside a worker session, they run within that worker's worktree under that provider's control.
+
+### Does Code60 use my Agent Provider's subagents?
+
+No. Code60 does not call or manage an [Agent Provider's](terminology-draft.md#agent-provider) internal subagents directly.
+
+In Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture), orchestrators delegate coding tasks by starting Code60 worker sessions through ACP. Each project worker runs in its own Git worktree with its own transcript and lifecycle controls.
+
+Code60 does not block a provider's internal subagents. If a harness spawns its own subagents during a turn, they run inside that session's directory or worktree under that provider's control.
+
 ## Provider Support
 
 Code60 connects both layers of its [Two-Layer Architecture](terminology-draft.md#two-layer-architecture) to coding-agent providers through ACP. It never asks for provider passwords and never stores application programming interface (API) keys. Each provider keeps its own credentials in the backend user's storage.

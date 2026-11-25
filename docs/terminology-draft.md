@@ -6,6 +6,12 @@
 
 Through ACP, Code60 opens agent sessions, sends prompts, receives live updates, switches provider models or modes, and answers permission requests.
 
+## Agent Provider
+
+An **Agent Provider** is an external coding-agent command-line interface (CLI) or harness that Code60 connects to through [ACP](#acp). Examples include **Antigravity**, **Claude**, **Codex**, **Copilot**, **Droid**, **Kiro**, and **OpenCode**.
+
+Agent Providers supply the underlying coding agents for both layers of Code60's [Two-Layer Architecture](#two-layer-architecture). Each provider manages its own credentials, models, and harness modes, while a user manages provider connections under **Connect → Providers**.
+
 ## Internal Prompts
 
 **Internal Prompts** are the system prompt templates under **Customize → Internal Prompts** that guide project orchestration and session handoffs in Code60. They cover the **Operating Contract**, handoff summary, handoff turn, and worker-update templates.
