@@ -18,6 +18,12 @@ Agent Providers supply the underlying coding agents for both layers of Code60's 
 
 Code60 does not provide native desktop Computer Use. For web tasks, Code60 provides browser automation (`code60_browser`), which controls web pages in Chrome without operating native desktop applications.
 
+## Continuity Checkpoint
+
+A **Continuity Checkpoint** is a concise summary of recent context that Code60 creates before rolling a long session into a fresh [ACP](#acp) session.
+
+It carries recent context forward as evidence only, without restoring old permissions or task authority. Continuity Checkpoints stay session-local and work even when long-term **Memory** stays off.
+
 ## Gateway
 
 **Code60 Gateway** is Code60's local Node.js 24 backend service. It serves the browser interface, enforces browser and network security boundaries, manages agent sessions, and runs **Scheduled Jobs**.
@@ -36,6 +42,12 @@ A user can edit or reset these templates for the active database. **Relay** keep
 
 In Code60's [Two-Layer Architecture](#two-layer-architecture), Code60 exposes its orchestration MCP tools to the orchestration layer and omits them from the worker layer. Those tools cover worker control, planning, reviews, and browser automation. A user can also connect external MCP tool servers under **Connect → MCP Servers**.
 
+## Memory Capture
+
+**Memory Capture** is the optional background process that collects evidence from recent conversation turns and extracts long-term memory records when **Memory** stays on.
+
+Turning **Memory** off stops Memory Capture immediately and discards pending capture data without affecting existing records or session-local [Continuity Checkpoints](#continuity-checkpoint).
+
 ## Operating Contract
 
 The Operating Contract is the instruction set that defines how a project orchestrator behaves in Code60's [Two-Layer Architecture](#two-layer-architecture). Code60 sends it on every new turn to guide delegation, planning, worker control, tool use, and responses.
@@ -53,6 +65,12 @@ An orchestrator breaks requests into standalone tasks, dispatches worker agents 
 **Relay** is Code60's always-on, application-wide assistant under **Chat → Relay**. It keeps its own persistent workspace and history, separate from any single project or database.
 
 Relay operates in the orchestration layer of Code60's [Two-Layer Architecture](#two-layer-architecture) to coordinate worker agents across explicit targets, including Git repositories and direct folders. A user specifies the target and mode before Relay dispatches work.
+
+## Scheduled Job
+
+A **Scheduled Job** is a local recurring automation under **Automate → Scheduled Jobs** that [Code60 Gateway](#gateway) runs inside a separate Git worktree.
+
+Each run executes one headless turn under an explicit deny-by-default permission allowlist. Code60 leaves the worktree and changes on disk for manual review.
 
 ## Transmission Server
 
