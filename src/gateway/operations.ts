@@ -3,6 +3,7 @@ import type {
   DesktopAutomations,
   DesktopLogStore,
   DesktopWorkflows,
+  HealthCheckService,
 } from "../application/index.js";
 import { logProjectId } from "../application/index.js";
 import {
@@ -32,6 +33,7 @@ import {
   parseGitSetupCommit,
   parseGitSetupFile,
   parseGitSetupIdentity,
+  parseHealthCheckRequest,
   parseLogClear,
   parseLogDetail,
   parseLogQuery,
@@ -84,11 +86,17 @@ export function applicationOperations(
   interactions: Interactions,
   emit: (event: string, value?: unknown) => void,
   workflows: DesktopWorkflows,
+  healthCheck?: HealthCheckService,
 ) {
   const operations = new Map<string, (value: unknown) => unknown>();
   const handle = (name: string, action: (value: unknown) => unknown) => {
     operations.set(name, action);
   };
+  handle("health-check", (value) => {
+    const request = parseHealthCheckRequest(value);
+    if (!healthCheck) throw new Error("Health Check service is unavailable.");
+    return healthCheck.handle(request);
+  });
   handle("mcp-recovery", (value) =>
     controller.mcpRecovery(parseMcpManagement(mcpRecoveryRequestSchema, value)),
   );
