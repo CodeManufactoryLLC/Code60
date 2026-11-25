@@ -38,6 +38,30 @@ No. Code60 never deletes Git worktrees automatically.
 - **Harness mode:** **Code60 auto-approval** operates separately from **Harness mode**. Choosing an Ask mode on a provider harness leaves **Code60 auto-approval** on. Any sandboxing depends on that provider harness.
 - **Other run types and limits:** Manual runs, **Scheduled Jobs**, and **Transmission Workflows** keep separate permission policies. ACP permissions do not create an operating-system sandbox and cannot block actions an agent takes without requesting approval.
 
+### Does Code60 provide a sandbox for my agents?
+
+No. Code60 does not provide an operating-system, filesystem, or network sandbox for coding agents or Model Context Protocol (MCP) servers. Every agent runs with the backend user's operating-system permissions.
+
+- **Code60 safeguards:** Browser and gateway checks protect the web interface and local application programming interface (API). Git worktrees separate Git working files, and the [Operating Contract](terminology-draft.md#operating-contract) and ACP permissions guide behavior and approval prompts.
+- **Security limits:** None of those controls creates an operating-system security boundary or blocks actions an agent takes without requesting ACP approval. See the [Security Policy](../SECURITY.md) for full details.
+- **Roadmap:** Optional Docker workers with filesystem, network, and resource boundaries appear in the [Code60 roadmap](../ROADMAP.md).
+
+### How do I provide a sandbox for my agents with Code60?
+
+Apply sandboxing outside Code60 or through each [Agent Provider](terminology-draft.md#agent-provider).
+
+- **Provider sandbox:** Enable the sandbox settings and **Harness mode** options that each **Agent Provider** supports in its own command-line interface (CLI) or configuration.
+- **Container or virtual machine:** Run Code60 inside a container (such as the optional [Linux development container](../.devcontainer/README.md)) or a virtual machine. A separate operating-system user account with narrow filesystem and network access also limits what agents can touch.
+- **Manual approval review:** Turn off **Code60 auto-approval** in the composer to review each ACP permission request. Manual review helps inspect prompts, while operating-system boundaries still come from the provider sandbox, container, virtual machine, or user account.
+
+### How does Code60 interact with my Agent Provider's sandbox?
+
+Code60 leaves sandbox rules and enforcement to each [Agent Provider](terminology-draft.md#agent-provider) and its own configuration.
+
+- **Harness mode forwarding:** Code60 shows any **Harness mode** options an **Agent Provider** offers over ACP and forwards the user's choice. The harness determines what each mode does, including any sandbox behavior.
+- **Separate from Code60 auto-approval:** **Code60 auto-approval** only answers ACP permission requests. Switching it on or off does not change a provider's operating-system sandbox. Choosing an Ask mode on the harness also leaves **Code60 auto-approval** on.
+- **Transmission Workflows:** In **Transmission Workflows**, the internal Codex harness owns execution permissions and any sandbox rules it applies.
+
 ## Licensing and Pricing
 
 ### Can I use Code60 for commercial purposes?
@@ -74,9 +98,9 @@ Code60 does not block a provider's internal subagents. If a harness spawns its o
 
 ## Provider Support
 
-Code60 connects both layers of its [Two-Layer Architecture](terminology-draft.md#two-layer-architecture) to coding-agent providers through ACP. It never asks for provider passwords and never stores application programming interface (API) keys. Each provider keeps its own credentials in the backend user's storage.
+Code60 connects both layers of its [Two-Layer Architecture](terminology-draft.md#two-layer-architecture) to coding-agent providers through ACP. It never asks for provider passwords and never stores API keys. Each provider keeps its own credentials in the backend user's storage.
 
-The standard provider catalog covers **Antigravity, Claude, Codex, Copilot, Droid, Kiro, and OpenCode**. Under **Connect → Providers**, a user can verify a command-line interface (CLI) that already holds an active login. A user can also run Code60's in-app installation and browser sign-in flow.
+The standard provider catalog covers **Antigravity, Claude, Codex, Copilot, Droid, Kiro, and OpenCode**. Under **Connect → Providers**, a user can verify a CLI that already holds an active login. A user can also run Code60's in-app installation and browser sign-in flow.
 
 In-app setup verifies release integrity before placing exact versions into private backend-user storage. It leaves existing CLIs and configuration intact. Users manage API keys, account switching, logout, enterprise endpoints, and custom launch commands outside Code60.
 
