@@ -1,5 +1,5 @@
 import { createReadStream, createWriteStream } from "node:fs";
-import { lstat, mkdir, open, readdir, readlink, symlink } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readlink, symlink, writeFile } from "node:fs/promises";
 import { dirname, join, posix } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -8,6 +8,31 @@ import { limits } from "./payload-descriptor.mjs";
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const block = 512;
+const SMALL_EXTRACT_BYTES = 1024 * 1024;
+const EXTRACT_CONCURRENCY = 16;
+
+async function runBounded(items, concurrency, task, signal) {
+  let index = 0;
+  let failed;
+  const worker = async () => {
+    while (!failed) {
+      signal?.throwIfAborted();
+      const current = index++;
+      if (current >= items.length) return;
+      try {
+        await task(items[current]);
+      } catch (error) {
+        failed ??= error;
+        return;
+      }
+    }
+  };
+  await Promise.allSettled(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => worker()),
+  );
+  if (failed) throw failed;
+  signal?.throwIfAborted();
+}
 const invalidCharacters = (value) =>
   [...value].some(
     (character) =>
@@ -67,7 +92,7 @@ function paxLine(key, value) {
 }
 
 // Deliberately limited USTAR + per-entry PAX path/linkpath format.
-export async function writeArchive(root, destination, { signal } = {}) {
+export async function writeArchive(root, destination, { signal, level = 6 } = {}) {
   async function* walk(directory, prefix = "") {
     for (const name of (await readdir(directory)).sort()) {
       signal?.throwIfAborted();
@@ -113,7 +138,7 @@ export async function writeArchive(root, destination, { signal } = {}) {
   }
   await pipeline(
     Readable.from(contents()),
-    createGzip({ level: 6, mtime: 0 }),
+    createGzip({ level, mtime: 0 }),
     createWriteStream(destination, { flags: "wx", mode: 0o600 }),
     { signal },
   );
@@ -255,18 +280,37 @@ export async function extractArchive(
     }
     // Nothing from the archive is written until the complete inventory passes.
     await mkdir(destination, { mode: 0o700 });
+    const created = new Set([destination]);
+    const ensureDir = async (dir) => {
+      if (created.has(dir)) return;
+      await mkdir(dir, { recursive: true, mode: 0o755 });
+      for (
+        let current = dir;
+        current !== destination && !created.has(current);
+        current = dirname(current)
+      )
+        created.add(current);
+    };
+    const regularFiles = [];
     for (const entry of entries.values()) {
       signal?.throwIfAborted();
       const path = join(destination, entry.path);
-      await mkdir(dirname(path), { recursive: true, mode: 0o755 });
-      if (entry.type === "5") await mkdir(path, { recursive: true, mode: 0o755 });
-      if (entry.type === "0") {
-        const output = createWriteStream(path, {
-          flags: "wx",
-          mode: entry.mode & 0o111 ? 0o755 : 0o644,
-        });
-        if (!entry.size) await pipeline(Readable.from([]), output, { signal });
-        else
+      await ensureDir(dirname(path));
+      if (entry.type === "5") await ensureDir(path);
+      else if (entry.type === "0") regularFiles.push({ entry, path });
+    }
+    await runBounded(
+      regularFiles,
+      EXTRACT_CONCURRENCY,
+      async ({ entry, path }) => {
+        const mode = entry.mode & 0o111 ? 0o755 : 0o644;
+        if (!entry.size) {
+          await writeFile(path, Buffer.alloc(0), { flag: "wx", mode, signal });
+        } else if (entry.size <= SMALL_EXTRACT_BYTES) {
+          const data = await exact(file, entry.size, entry.offset);
+          await writeFile(path, data, { flag: "wx", mode, signal });
+        } else {
+          const output = createWriteStream(path, { flags: "wx", mode });
           await pipeline(
             createReadStream(temporary, {
               start: entry.offset,
@@ -275,8 +319,10 @@ export async function extractArchive(
             output,
             { signal },
           );
-      }
-    }
+        }
+      },
+      signal,
+    );
     for (const entry of entries.values())
       if (entry.type === "2") await symlink(entry.link, join(destination, entry.path));
     return [...entries.values()];
