@@ -168,7 +168,13 @@ export async function planShellIntegration(
               "esac",
               end,
             ];
-      const block = lines.join(newline) + newline;
+      // POSIX shells treat a CR before newline as a literal token. End each
+      // executable line with a comment so CRLF is preserved without changing
+      // command syntax. Marker lines already consist entirely of comments.
+      const block =
+        lines
+          .map((line) => (newline === "\r\n" && !line.startsWith("#") ? `${line} #` : line))
+          .join(newline) + newline;
       if (before.includes("# >>> code60 PATH") || before.includes("# <<< code60 PATH")) {
         if (
           before.split(block).length === 2 &&
@@ -230,7 +236,10 @@ export async function applyShellIntegration(
     const receiptPath = join(preview.root, "shell.json");
     let saved = await installationSnapshot(receiptPath, 65_536, true);
     const receipts = saved
-      ? (JSON.parse(saved.text) as Record<string, { hash: string; marker: string }>)
+      ? (JSON.parse(saved.text) as Record<
+          string,
+          { hash: string; marker: string; append?: string }
+        >)
       : {};
     for (const edit of preview.edits) {
       try {
@@ -261,7 +270,7 @@ export async function applyShellIntegration(
           edit.mode,
         );
         applied.push(edit.path);
-        receipts[edit.path] = { hash: identity.hash, marker: record.id };
+        receipts[edit.path] = { hash: identity.hash, marker: record.id, append: edit.append };
         await writeInstallationFile(receiptPath, JSON.stringify(receipts), saved?.identity ?? null);
         saved = await installationSnapshot(receiptPath, 65_536, true);
       } catch (error) {

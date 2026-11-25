@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request: null
+  workflow_dispatch: null
 permissions:
   contents: read
 concurrency:
@@ -101,9 +102,9 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
   payload:
-    name: Linux platform payload acceptance
+    name: Linux platform payload
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     # The runner's Compose 2.x Bake path omits the CLI's temporary Dockerfile grant.
     # Scope the classic builder selection to this disposable job only.
     env: { COMPOSE_BAKE: "false" }
@@ -124,39 +125,184 @@ jobs:
       - run: npm run devcontainer -- exec npm ci
       - run: npm run devcontainer -- exec npm run prepare:models
       - run: npm run devcontainer -- exec npm run package:payload
+      - run: npm run devcontainer -- down
+        if: always()
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: code60-linux-payload
+          path: release/payloads/
+          retention-days: 7
+          if-no-files-found: error
+  payload-acceptance:
+    name: Linux platform payload acceptance
+    needs: payload
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # The runner's Compose 2.x Bake path omits the CLI's temporary Dockerfile grant.
+    # Scope the classic builder selection to this disposable job only.
+    env: { COMPOSE_BAKE: "false" }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v7
+        with: { node-version: "24", cache: npm, package-manager-cache: false }
+      - run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: code60-linux-payload
+          path: release/payloads/
+      - run: npm run verify:artifact -- release/payloads/linux-x64.json
+      - name: Prepare isolated runner Docker engine
+        timeout-minutes: 2
+        run: |
+          sudo systemctl start docker
+          docker info
+      - run: npm run devcontainer -- up
+      - run: npm run devcontainer -- exec npm ci
+      - run: npm run devcontainer -- exec npm run build
       - run: npm run devcontainer -- exec npx --no-install playwright install chromium
+      - run: npm run devcontainer -- exec env CODE60_REQUIRE_NATIVE_PROCESS_INSPECTION=1 npx --no-install vitest run src/platform/process-identity.test.ts
       - run: npm run devcontainer -- exec npm run test:payload -- --workflows
       - run: npm run devcontainer -- exec npm run test:setup
       - run: npm run devcontainer -- exec npm run test:update
+      - run: npm run devcontainer -- exec npm run test:uninstall:engines -- release/payloads/linux-x64.json
       - run: npm run devcontainer -- exec npm run test:installation -- --require-fish
-      - run: npm run test:packaged:clean -- --payload release/payloads/linux-x64.json
-      - run: npm run test:packaged:clean -- --managed release/payloads/linux-x64.json
-      - run: npm run test:packaged:clean -- --setup release/payloads/linux-x64.json
-      - run: npm run test:packaged:clean -- --update release/payloads/linux-x64.json
       - run: npm run devcontainer -- down
         if: always()
       - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
-          name: code60-linux-payload
-          path: release/payloads/
-          retention-days: 7
-          if-no-files-found: warn
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
           name: payload-acceptance-evidence
           path: |
-            test-results/clean-install/
+            test-results/artifact-handoff/
             test-results/payload/
             test-results/installation/
             test-results/setup/
             test-results/update/
+            test-results/uninstall-engines/
+          retention-days: 7
+          if-no-files-found: warn
+  payload-clean-install:
+    name: Linux offline payload acceptance
+    needs: payload
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v7
+        with: { node-version: "24", cache: npm, package-manager-cache: false }
+      - run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
+      - run: npm run build:distribution
+      - name: Prepare isolated runner Docker engine
+        timeout-minutes: 2
+        run: |
+          sudo systemctl start docker
+          docker info
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: code60-linux-payload
+          path: release/payloads/
+      - run: npm run verify:artifact -- release/payloads/linux-x64.json
+      - run: npm run test:packaged:clean -- --payload release/payloads/linux-x64.json
+      - run: npm run test:packaged:clean -- --managed release/payloads/linux-x64.json
+      - run: npm run test:packaged:clean -- --setup release/payloads/linux-x64.json
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: payload-clean-install-evidence
+          path: |
+            test-results/artifact-handoff/
+            test-results/clean-install/
+          retention-days: 7
+          if-no-files-found: warn
+  update:
+    name: Linux offline update acceptance
+    needs: payload
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v7
+        with: { node-version: "24", cache: npm, package-manager-cache: false }
+      - run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
+      - run: npm run build:distribution
+      - name: Prepare isolated runner Docker engine
+        timeout-minutes: 2
+        run: |
+          sudo systemctl start docker
+          docker info
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: code60-linux-payload
+          path: release/payloads/
+      - run: npm run verify:artifact -- release/payloads/linux-x64.json
+      - run: npm run test:packaged:clean -- --update release/payloads/linux-x64.json
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: offline-update-evidence
+          path: |
+            test-results/artifact-handoff/
+            test-results/clean-install/
+          retention-days: 7
+          if-no-files-found: warn
+  uninstall:
+    name: Linux concurrent uninstall acceptance
+    needs: payload
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v7
+        with: { node-version: "24", cache: npm, package-manager-cache: false }
+      - run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
+      - run: npm run build:distribution
+      - name: Prepare isolated runner Docker engine
+        timeout-minutes: 2
+        run: |
+          sudo systemctl start docker
+          docker info
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: code60-linux-payload
+          path: release/payloads/
+      - run: npm run verify:artifact -- release/payloads/linux-x64.json
+      - run: npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: concurrent-uninstall-evidence
+          path: |
+            test-results/artifact-handoff/
+            test-results/clean-install/
+            test-results/clean-install-concurrent/
           retention-days: 7
           if-no-files-found: warn
   passed:
     name: CI passed
-    needs: [check, browser, package, clean-install, payload]
+    needs:
+      [
+        check,
+        browser,
+        package,
+        clean-install,
+        payload,
+        payload-acceptance,
+        payload-clean-install,
+        update,
+        uninstall,
+      ]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 1
@@ -166,6 +312,10 @@ jobs:
           CHECK: ${{ needs.check.result }}
           BROWSER: ${{ needs.browser.result }}
           PACKAGE: ${{ needs.package.result }}
-          PAYLOAD: ${{ needs.payload.result }}
           CLEAN_INSTALL: ${{ needs.clean-install.result }}
-        run: test "$CHECK" = success && test "$BROWSER" = success && test "$PACKAGE" = success && test "$CLEAN_INSTALL" = success && test "$PAYLOAD" = success
+          PAYLOAD: ${{ needs.payload.result }}
+          PAYLOAD_ACCEPTANCE: ${{ needs.payload-acceptance.result }}
+          PAYLOAD_CLEAN_INSTALL: ${{ needs.payload-clean-install.result }}
+          UPDATE: ${{ needs.update.result }}
+          UNINSTALL: ${{ needs.uninstall.result }}
+        run: test "$CHECK" = success && test "$BROWSER" = success && test "$PACKAGE" = success && test "$CLEAN_INSTALL" = success && test "$PAYLOAD" = success && test "$PAYLOAD_ACCEPTANCE" = success && test "$PAYLOAD_CLEAN_INSTALL" = success && test "$UPDATE" = success && test "$UNINSTALL" = success

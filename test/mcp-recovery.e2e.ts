@@ -225,6 +225,7 @@ test("MCP troubleshooting: jump to malformed JSON, repair, and preserve draft af
     ).toBeDisabled();
     await edit(page, original);
     await page.getByRole("button", { name: "Save configuration", exact: true }).click();
+    await expect(page.locator('.mcp-json-actions [role="status"]')).toHaveText("Saved");
     await expect.poll(() => fs.readFile(file, "utf8")).toBe(original);
     await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
     const backups = (await fs.readdir(storage)).filter((f) => f.endsWith(".backup"));

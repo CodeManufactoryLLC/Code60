@@ -48,6 +48,25 @@ it("rejects writable Node runtime bindings without modifying them", async () => 
   await expect(verifyInstallationNode(node)).rejects.toThrow("Unsafe Node executable");
   expect((await lstat(node)).mode & 0o777).toBe(0o770);
 });
+it("bounds file publication before side effects and requires an explicit larger receipt limit", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "code60 bounded receipt ")));
+  roots.push(home);
+  const path = join(home, "receipt.json");
+  const text = "x".repeat(1024 * 1024 + 1);
+  await expect(writeInstallationFile(path, text, null)).rejects.toThrow("explicit size bound");
+  await expect(lstat(path)).rejects.toMatchObject({ code: "ENOENT" });
+  for (const maximum of [0, 1.5, 65 * 1024 ** 2])
+    await expect(writeInstallationFile(path, "small", null, 0o600, maximum)).rejects.toThrow(
+      "explicit size bound",
+    );
+  const identity = await writeInstallationFile(path, text, null, 0o600, 2 * 1024 ** 2);
+  expect((await installationSnapshot(path, 2 * 1024 ** 2, true))?.text).toBe(text);
+  await expect(writeInstallationFile(path, "changed", null, 0o600, 2 * 1024 ** 2)).rejects.toThrow(
+    "changed since preview",
+  );
+  await writeInstallationFile(path, "finished", identity, 0o600, 2 * 1024 ** 2);
+  expect(await readFile(path, "utf8")).toBe("finished");
+});
 async function fixture() {
   const home = await realpath(await mkdtemp(join(tmpdir(), "code60 install ' spaces ")));
   roots.push(home);

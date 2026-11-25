@@ -458,3 +458,35 @@ offline customer/driver journey. Preserve custom databases, prior releases,
 workflow bindings and independent filesystem/Git/process evidence. No check
 installs a real host service or edits host profiles. Host tooling and both builds
 share the Node-only platform verifier without importing development dist.
+
+## Uninstall development
+
+Follow [uninstall and recovery](docs/distribution/uninstall.md) and the QA workflow's
+state-preserving uninstall journey. Component tests cover owned file inventories,
+profile consent, guarded shutdown and the standalone recovery launcher. After a
+build, `npm run test:uninstall:engines` additionally checks actual empty bundled
+native engines and retained cache/history with a synthetic inert app; it is not
+full packaged application or native login-service validation. Supply an exact
+macOS descriptor as its optional argument. Never point tests at a real user
+service or profiles. Full installed golden/reinstall and isolated Linux/native
+delivery evidence remain required before Phase 8 is complete.
+
+Run `npm run test:uninstall` against the native payload and
+`npm run test:packaged:clean -- --uninstall release/payloads/linux-x64.json`
+against Linux. Both execute the installed CLI, retain independent SQLite/Git and
+process evidence, repeat durable recovery and reinstall retained data. A fresh
+browser enters through Start and selects the existing project from recent history;
+provider-boundary request counts must show no repeated work. The Linux golden
+journey keeps application trees read-only; only the separately inspected maintenance
+customer receives writable test installation volumes. Keep Docker cleanup failures
+unresolved until exact run-labelled inventories can be inspected again.
+Manual native CI validates uninstall on a fresh dependent runner using the exact
+payload from its baseline job. The artifact handoff must match the clean source
+commit/version/platform and archive hash before tests run; both jobs are required.
+
+Use `npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json`
+to prove that cleanup from one complete Linux run leaves another's reinstalled
+backend and assets responsive. Both run reports and the independent resource/probe
+observations are retained. This is the required Linux CI uninstall command. The
+full CI workflow also accepts manual feature-branch dispatch before a PR exists;
+PR checks and independent cleanup of any failed local run remain required.

@@ -329,6 +329,12 @@ export class DesktopKnowledge {
       reason =
         "Explicit code60 update verifies the stable npm bootstrap and payload before consent and shutdown. Read-only code60 update status and explicit code60 update recover diagnose interruption; awareness never checks, downloads or replaces code.";
       action = "Apps → Updates.";
+    } else if (cap.id === "uninstall") {
+      status = "unknown";
+      reason =
+        "Awareness cannot verify managed installation, service or workflow ownership. The local terminal command checks idle ownership and native process/file evidence (Linux procfs or macOS inspection), asks for removal consent and preserves user data; it separately asks before profile edits.";
+      action =
+        "Run code60 uninstall in the local terminal; use its printed absolute recovery command after interruption.";
     } else if (cap.prerequisite === "runtime") {
       status = "unknown";
       reason =

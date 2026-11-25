@@ -235,6 +235,7 @@ for (const saved of [undefined, "0.1.0-staging.18", "0.1.0-staging.20"] as const
       await expandNavigation(page, "Develop");
       await page.locator("#tab-workflows").click();
       const view = page.locator(".workflows-page");
+      await view.getByRole("tab", { name: "Execution history", exact: true }).click();
       await view.getByRole("button", { name: /Retained native workflow/ }).click();
       await expect(
         view.getByRole("button", { name: "Recover same start request", exact: true }),
@@ -269,13 +270,13 @@ for (const saved of [undefined, "0.1.0-staging.18", "0.1.0-staging.20"] as const
           .getByRole("button", { name: "Reconnect engine…", exact: true })
           .click();
         await expect(
-          page.getByRole("dialog", { name: "Reconnect engine", exact: true }),
+          page.getByRole("dialog", { name: "Reconnect engine?", exact: true }),
         ).toBeVisible();
       } finally {
         await rename(suspended, endpoint);
       }
       await page
-        .getByRole("dialog", { name: "Reconnect engine", exact: true })
+        .getByRole("dialog", { name: "Reconnect engine?", exact: true })
         .getByRole("button", { name: "Reconnect engine", exact: true })
         .click();
       expect(((await client.call("health")) as { pid: number }).pid).toBe(pid);
@@ -284,7 +285,7 @@ for (const saved of [undefined, "0.1.0-staging.18", "0.1.0-staging.20"] as const
         await expect(view.getByRole("button", { name: "Resume workflow" })).toBeDisabled();
       }
       await view.getByRole("button", { name: "Stop workflow" }).click();
-      const confirmation = view.getByRole("dialog", { name: "Stop workflow?" });
+      const confirmation = page.getByRole("dialog", { name: "Stop workflow?", exact: true });
       await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
       expect(
         ((await client.call("get_workflow", { runId: original.runId })) as { status: string })

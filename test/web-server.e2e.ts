@@ -52,8 +52,8 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     const settings = await serverPage(local.page);
     const toggle = settings.getByRole("switch", { name: "Enable Web Server Beta", exact: true });
     await expect(toggle).not.toBeChecked();
-    await toggle.focus();
-    await local.page.keyboard.press("Space");
+    await expect(toggle).toBeEnabled();
+    await toggle.press("Space");
     await expect(settings.locator("p[role=status]")).toHaveText("Listening");
     const url = await settings.getByRole("link").getAttribute("href");
     expect(url).toMatch(/^http:\/\/(?:10\.|172\.|192\.168\.)/);
@@ -163,8 +163,7 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     await local.page.getByRole("button", { name: "Take control", exact: true }).click();
     const localSettings = await serverPage(local.page);
     await expect(localSettings.getByRole("switch")).toBeEnabled();
-    await localSettings.getByRole("switch").focus();
-    await local.page.keyboard.press("Space");
+    await localSettings.getByRole("switch").press("Space");
     await expect(localSettings.locator("p[role=status]")).toHaveText("Off");
     expect(await readdir(fixture.processLog)).toEqual(launches);
     await writeFile(gate, "continue\n");

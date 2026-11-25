@@ -1,10 +1,14 @@
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CODE60_VERSION } from "../core/index.js";
 import { privateDirectory, userServiceDefinition, writePrivateJson } from "../platform/index.js";
-import { backendControl, restoreSchedulerHandoff } from "./registration.js";
+import {
+  type BackendRemovalGuard,
+  backendControl,
+  restoreSchedulerHandoff,
+} from "./registration.js";
 import { gatewayRoot } from "./server.js";
 
 const fake = vi.hoisted(() => ({
@@ -13,11 +17,13 @@ const fake = vi.hoisted(() => ({
   management: vi.fn(),
   legacy: vi.fn(),
   legacyRequest: vi.fn(),
+  exited: vi.fn(),
 }));
 vi.mock("../platform/index.js", async (original) => ({
   ...(await original<typeof import("../platform/index.js")>()),
   controlUserService: fake.control,
   inspectUserService: fake.inspect,
+  waitForRuntimeExit: fake.exited,
 }));
 vi.mock("../automation/index.js", async (original) => ({
   ...(await original<typeof import("../automation/index.js")>()),
@@ -35,13 +41,15 @@ beforeEach(() => {
   fake.inspect.mockResolvedValue({ definitionPresent: true, state: "running", pid: 42 });
   fake.management.mockResolvedValue({ pid: 42 });
   fake.legacy.mockResolvedValue({ installed: false, nativeState: "stopped", service: null });
+  fake.exited.mockResolvedValue(undefined);
 });
 afterEach(async () => {
   for (const directory of directories.splice(0))
     await rm(directory, { recursive: true, force: true });
 });
 async function fixture(installed = false) {
-  if (!installed) fake.inspect.mockResolvedValue({ definitionPresent: false, state: "stopped" });
+  if (!installed)
+    fake.inspect.mockResolvedValue({ definitionPresent: false, state: "stopped", loaded: false });
   const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-registration-")));
   directories.push(directory);
   const env = {
@@ -86,6 +94,19 @@ it("keeps uninstalled status read-only and requires explicit consent before inst
   expect(await backendControl(env, "status")).toMatchObject({ installed: false, service: null });
   await expect(backendControl(env, "install")).rejects.toThrow("consent");
   await expect(readFile(join(root, "registration.json"))).rejects.toMatchObject({ code: "ENOENT" });
+  expect(fake.control).not.toHaveBeenCalled();
+});
+
+it("keeps damaged private registration contents out of management errors", async () => {
+  const f = await fixture();
+  await privateDirectory(f.root);
+  const contents = "private123";
+  const path = join(f.root, "registration.json");
+  await writeFile(path, contents, { mode: 0o600 });
+  await expect(backendControl(f.env, "status")).rejects.toThrow(
+    "Backend registration is unavailable or invalid",
+  );
+  expect(await readFile(path, "utf8")).toBe(contents);
   expect(fake.control).not.toHaveBeenCalled();
 });
 it("pins plain Node and the backend entrypoint, ignoring Electron/AppImage environment", async () => {
@@ -143,6 +164,184 @@ it("drains owned work before a supervisor stop and keeps its installation metada
   expect(fake.management.mock.calls.map((call) => call[1])).toEqual(["status", "shutdown"]);
   expect(fake.control.mock.calls.map((call) => call[1])).toEqual(["stop"]);
   expect(JSON.parse(await readFile(join(root, "registration.json"), "utf8")).installed).toBe(true);
+});
+
+async function removalFixture() {
+  const f = await fixture(true);
+  const registration = join(f.root, "registration.json");
+  const saved = JSON.parse(await readFile(registration, "utf8"));
+  const guard: BackendRemovalGuard = {
+    pid: 42,
+    executable: saved.runtime.executable,
+    entrypoint: saved.runtime.args[0],
+    appVersion: saved.appVersion,
+  };
+  const definition = userServiceDefinition(
+    process.platform,
+    f.env.HOME,
+    f.root,
+    saved.runtime,
+    "backend",
+  );
+  let stopped = false;
+  let removed = false;
+  fake.inspect.mockImplementation(async () => ({
+    state: stopped ? "stopped" : "running",
+    definitionPresent: !removed,
+    loaded: !stopped,
+    ...(stopped ? {} : { pid: 42 }),
+  }));
+  const offline = () =>
+    Object.assign(Error("Backend offline"), { cause: { code: "ECONNREFUSED" } });
+  fake.management.mockImplementation(async (_env, action) => {
+    if (stopped) throw offline();
+    return action === "status" ? { pid: 42, uninstallPrepared: true } : { stopped: true };
+  });
+  fake.control.mockImplementation(async (_definition, action) => {
+    if (action === "stop") stopped = true;
+    if (action === "uninstall") {
+      await unlink(definition.path);
+      removed = true;
+    }
+    return { available: false };
+  });
+  return {
+    ...f,
+    guard,
+    definition,
+    registration,
+    offline,
+    stopped: () => {
+      stopped = true;
+    },
+    removed: () => {
+      stopped = true;
+      removed = true;
+    },
+  };
+}
+it("unregisters only the prepared runtime/PID after authenticated idle preparation and verified exit", async () => {
+  const f = await removalFixture();
+  expect(await backendControl(f.env, "uninstall", true, f.guard)).toMatchObject({
+    installed: false,
+    enginePids: [],
+  });
+  expect(fake.exited).toHaveBeenCalledWith([42]);
+  expect(fake.control.mock.calls.map((call) => call[1])).toEqual(["stop", "uninstall"]);
+  expect(JSON.parse(await readFile(f.registration, "utf8")).installed).toBe(false);
+  await expect(readFile(f.definition.path)).rejects.toMatchObject({ code: "ENOENT" });
+});
+it.each(["restarted", "unprepared", "runtime", "stopped-proof"] as const)(
+  "preserves registration and processes when the %s guard does not match",
+  async (fault) => {
+    const f = await removalFixture();
+    const before = await readFile(f.registration);
+    if (fault === "restarted")
+      fake.inspect.mockResolvedValue({ state: "running", pid: 84, definitionPresent: true });
+    if (fault === "unprepared")
+      fake.management.mockResolvedValue({ pid: 42, uninstallPrepared: false });
+    if (fault === "runtime") f.guard.entrypoint = "/different/gateway.js";
+    if (fault === "stopped-proof") f.guard.pid = null;
+    await expect(backendControl(f.env, "uninstall", true, f.guard)).rejects.toThrow();
+    expect(fake.control).not.toHaveBeenCalled();
+    expect(fake.exited).not.toHaveBeenCalled();
+    expect(await readFile(f.registration)).toEqual(before);
+  },
+);
+it("refuses a restart between authenticated shutdown and the supervisor stop", async () => {
+  const f = await removalFixture();
+  const before = await readFile(f.registration);
+  fake.inspect
+    .mockResolvedValueOnce({ state: "running", pid: 42, definitionPresent: true })
+    .mockResolvedValue({ state: "running", pid: 84, definitionPresent: true });
+  await expect(backendControl(f.env, "uninstall", true, f.guard)).rejects.toThrow(
+    "generation changed before",
+  );
+  expect(fake.control).not.toHaveBeenCalled();
+  expect(await readFile(f.registration)).toEqual(before);
+});
+it("does not delete a definition or mark registration removed when backend exit is uncertain", async () => {
+  const f = await removalFixture();
+  const before = await readFile(f.registration);
+  fake.exited.mockRejectedValue(Error("Recorded process remains"));
+  await expect(backendControl(f.env, "uninstall", true, f.guard)).rejects.toThrow(
+    "process remains",
+  );
+  expect(fake.control.mock.calls.map((call) => call[1])).toEqual(["stop"]);
+  expect(await readFile(f.registration)).toEqual(before);
+  expect(await readFile(f.definition.path, "utf8")).toBe(f.definition.contents);
+});
+it("recovers metadata only after positive native/HTTP absence if the owned definition was already removed", async () => {
+  const f = await removalFixture();
+  f.removed();
+  await unlink(f.definition.path);
+  expect(await backendControl(f.env, "uninstall", true, { ...f.guard, pid: null })).toMatchObject({
+    installed: false,
+    enginePids: [],
+  });
+  expect(fake.control).not.toHaveBeenCalled();
+  expect(JSON.parse(await readFile(f.registration, "utf8")).installed).toBe(false);
+});
+it("retains partial removal when native absence cannot be verified after unregistration", async () => {
+  const f = await removalFixture();
+  const before = await readFile(f.registration);
+  fake.inspect
+    .mockResolvedValueOnce({ state: "running", pid: 42, definitionPresent: true })
+    .mockResolvedValueOnce({ state: "running", pid: 42, definitionPresent: true })
+    .mockResolvedValueOnce({ state: "stopped", definitionPresent: true })
+    .mockResolvedValue({ state: "unavailable", definitionPresent: false });
+  await expect(backendControl(f.env, "uninstall", true, f.guard)).rejects.toThrow(
+    "unregistration could not be verified",
+  );
+  expect(await readFile(f.registration)).toEqual(before);
+});
+it("does not treat a damaged connection record as positive backend absence", async () => {
+  const f = await removalFixture();
+  f.stopped();
+  const before = await readFile(f.registration);
+  fake.management.mockRejectedValue(Error("Malformed metadata"));
+  await expect(backendControl(f.env, "uninstall", true, { ...f.guard, pid: null })).rejects.toThrow(
+    "connection ownership is uncertain",
+  );
+  expect(fake.control).not.toHaveBeenCalled();
+  expect(await readFile(f.registration)).toEqual(before);
+});
+
+it("refuses a backend restart while offline workflow preparation is in progress", async () => {
+  const f = await removalFixture();
+  f.stopped();
+  const before = await readFile(f.registration);
+  fake.inspect
+    .mockResolvedValueOnce({ state: "stopped", definitionPresent: true })
+    .mockResolvedValueOnce({ state: "stopped", definitionPresent: true })
+    .mockResolvedValue({ state: "running", pid: 84, definitionPresent: true });
+  await expect(backendControl(f.env, "uninstall", true, { ...f.guard, pid: null })).rejects.toThrow(
+    "restarted during workflow preparation",
+  );
+  expect(fake.control).not.toHaveBeenCalled();
+  expect(await readFile(f.registration)).toEqual(before);
+});
+it("checks fixed native absence for files-only installations and refuses unexpected responders", async () => {
+  const f = await fixture();
+  const guard = {
+    pid: null,
+    executable: await realpath(process.execPath),
+    entrypoint: "/fixture/gateway/main.js",
+    appVersion: CODE60_VERSION,
+  };
+  fake.management.mockResolvedValue({ pid: 99 });
+  await expect(backendControl(f.env, "uninstall", true, guard)).rejects.toThrow(
+    "unexpected backend",
+  );
+  fake.management.mockRejectedValue(Object.assign(Error("No metadata"), { code: "ENOENT" }));
+  expect(await backendControl(f.env, "uninstall", true, guard)).toMatchObject({
+    installed: false,
+    enginePids: [],
+  });
+  await expect(readFile(join(f.root, "registration.json"))).rejects.toMatchObject({
+    code: "ENOENT",
+  });
+  expect(fake.control).not.toHaveBeenCalled();
 });
 it("preserves the original scheduler pause setting across a failed handoff retry", async () => {
   const { env, root } = await fixture();

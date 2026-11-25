@@ -110,7 +110,10 @@ export async function writePrivateJson(
 }
 
 /** Conservative ownership: PID reuse or inaccessible ownership never authorizes takeover. */
-export async function lockPrivateState(root: string): Promise<() => Promise<void>> {
+export async function lockPrivateState(
+  root: string,
+  options: { reclaimStale?: boolean } = {},
+): Promise<() => Promise<void>> {
   for (const path of [dirname(root), root]) {
     await privateDirectory(path);
     await verifyPrivatePath(path, true);
@@ -123,6 +126,10 @@ export async function lockPrivateState(root: string): Promise<() => Promise<void
       break;
     } catch (error) {
       if (fileCode(error) !== "EEXIST") throw error;
+      if (options.reclaimStale === false)
+        throw new Error(
+          `Service operation lock exists at ${lock}; inspect ownership before retrying. No lock was reclaimed.`,
+        );
       await verifyPrivatePath(lock, true);
       const entries = await readdir(lock);
       const name = entries[0];
@@ -140,16 +147,29 @@ export async function lockPrivateState(root: string): Promise<() => Promise<void
       await rmdir(lock);
     }
   }
+  const directoryIdentity = await verifyPrivatePath(lock, true);
   try {
     await writePrivateFile(join(lock, owner), "", { mode: 0o600, flag: "wx" });
   } catch (error) {
     await rmdir(lock);
     throw error;
   }
+  const ownerIdentity = await verifyPrivatePath(join(lock, owner), false);
   let released = false;
   return async () => {
     if (released) return;
-    await verifyPrivatePath(lock, true);
+    const directory = await verifyPrivatePath(lock, true);
+    const file = await verifyPrivatePath(join(lock, owner), false);
+    if (
+      directory.dev !== directoryIdentity.dev ||
+      directory.ino !== directoryIdentity.ino ||
+      file.dev !== ownerIdentity.dev ||
+      file.ino !== ownerIdentity.ino ||
+      file.ctimeNs !== ownerIdentity.ctimeNs ||
+      file.size !== 0n ||
+      (await readdir(lock)).join(",") !== owner
+    )
+      throw new Error("Service operation lock ownership changed; preserved the lock");
     await unlink(join(lock, owner));
     await rmdir(lock);
     released = true;

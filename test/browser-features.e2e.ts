@@ -404,6 +404,8 @@ test("browser: Carbon application navigation, appearance controls and retained d
     expect(
       await connect.locator(".cds--side-nav__submenu-title").evaluate(fontSize),
     ).toBeGreaterThan(await mcp.locator(".page-tab-label").evaluate(fontSize));
+    // Responsive layout can settle before the sidebar's input fence is released.
+    await expect(nav).toHaveJSProperty("inert", false);
     await mcp.press("Escape");
     await expect(connect).toBeFocused();
     await expect(connect).toHaveAttribute("aria-expanded", "false");

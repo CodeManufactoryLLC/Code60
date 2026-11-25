@@ -12,6 +12,7 @@ export async function backendSupervisor({
   candidateApplication,
   env,
   log,
+  allowUninstall = false,
 }) {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const socketDirectory =
@@ -129,6 +130,11 @@ export async function backendSupervisor({
         )
           await start();
         else if (JSON.stringify(args) === '["--user","stop","code60-backend.service"]')
+          await stop();
+        else if (
+          allowUninstall &&
+          JSON.stringify(args) === '["--user","disable","--now","code60-backend.service"]'
+        )
           await stop();
         else throw Error("Acceptance refuses unexpected backend supervisor mutations");
       } else if (name === "launchctl") {

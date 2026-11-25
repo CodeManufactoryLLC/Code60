@@ -291,6 +291,52 @@ afterEach(async () => {
   await fs.rm(directory, { recursive: true, force: true });
 });
 
+it("fences idle application mutations until uninstall releases the reservation and never reopens a shut down owner", async () => {
+  const next = join(directory, "after-uninstall-reservation.sqlite");
+  const before = controller.snapshot().database;
+  const release = await controller.reserveIdleForUninstall();
+  await expect(controller.connect(next, true)).rejects.toThrow("app is stopping");
+  expect(controller.snapshot().database).toBe(before);
+  expect(databases.has(next)).toBe(false);
+  await release();
+  await controller.connect(next, true);
+  expect(controller.snapshot().database).toBe(next);
+  const pending = await controller.reserveIdleForUninstall();
+  await controller.shutdown();
+  await pending();
+  await expect(controller.connect(join(directory, "after-shutdown.sqlite"), true)).rejects.toThrow(
+    "app is stopping",
+  );
+});
+
+it("refuses uninstall promptly while an application action is awaiting external input", async () => {
+  let enter: () => void = () => {};
+  let answer: (record: ModelDefaultsRecord) => void = () => {};
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
+  const answered = new Promise<ModelDefaultsRecord>((resolve) => {
+    answer = resolve;
+  });
+  const read = vi.spyOn(preferences, "modelDefaults").mockImplementation(async () => {
+    enter();
+    return answered;
+  });
+  const pending = controller.restore();
+  try {
+    await entered;
+    await expect(controller.reserveIdleForUninstall()).rejects.toThrow("operation is pending");
+  } finally {
+    answer(modelDefaults);
+    await pending;
+    read.mockRestore();
+  }
+  const release = await controller.reserveIdleForUninstall();
+  await release();
+  await controller.connect(join(directory, "after-pending-action.sqlite"), true);
+  expect(controller.snapshot().database).toBe(join(directory, "after-pending-action.sqlite"));
+});
+
 it("saves main-owned confirmed model defaults by role, applies only to new sessions, and clears independently", async () => {
   const startAgent = agents.start.bind(agents);
   agents.start = async (spec, signal) => {
@@ -2147,6 +2193,19 @@ describe("retained project runtimes", {
     const second = await newChat(a.id);
     const b = await project("archive-b");
     const other = await newChat(b.id);
+    // The idle event reaches snapshots before its asynchronous run.json write.
+    // Establish durable initial state before asserting archive does not alter it.
+    await vi.waitFor(async () => {
+      for (const chat of [first, second, other]) {
+        const saved = JSON.parse(
+          await fs.readFile(
+            join(chat.directory as string, ".code60/runs", chat.run?.id as string, "run.json"),
+            "utf8",
+          ),
+        ) as { status: string };
+        expect(saved.status).toBe("idle");
+      }
+    });
     const before = controller.snapshot();
     const starts = agents.sessions.length;
     const records = await Promise.all(
@@ -4687,6 +4746,19 @@ describe("app-wide orchestration chat", {
     await setProvider(null);
     expect(controller.snapshot().chat.run).toBeNull();
     expect(controller.snapshot().chat.events).toEqual([]);
+  });
+
+  it("refuses uninstall reservation without cancelling active conversation work", async () => {
+    agents.script = () => "hang";
+    const id = await ready();
+    await controller.orchestrationChatAction({ type: "send", id, text: "working" });
+    expect(controller.hasActiveWork).toBe(true);
+    const cancels = agents.sessions[0]?.cancels;
+    await expect(controller.reserveIdleForUninstall()).rejects.toThrow(
+      "Application work is active",
+    );
+    expect(controller.hasActiveWork).toBe(true);
+    expect(agents.sessions[0]?.cancels).toBe(cancels);
   });
 
   it("cancels a turn, accepts another reply and includes chat in Stop all", async () => {

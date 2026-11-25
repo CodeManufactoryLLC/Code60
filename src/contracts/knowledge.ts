@@ -526,6 +526,16 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Take control explicitly replaces another browser's control; stale page confirmations are rejected. Stopping the backend confirms cancellation of all interactive and scheduled work. Restart never replays uncertain tasks.",
   ),
   feature(
+    "uninstall",
+    "Uninstall Code60",
+    "Remove an owned managed application installation while preserving user data.",
+    "Local terminal → code60 uninstall [--yes]",
+    "none",
+    "human-only",
+    "Requires a receipted installation and Node >=24.22.0 <25 on macOS arm64 or Linux x64. Linux workflow removal requires readable native procfs ownership evidence; restricted or unverifiable emulated process mappings refuse removal. Active or uncertain application, scheduled or independent workflow ownership refuses removal. The command quiesces verified idle owners, unregisters only its backend and removes receipted application releases and launcher. Databases, configuration, run records, engine cache/evidence and project worktrees remain. Unrelated global/npm installations and changed launchers or profile blocks are preserved. No data-purge option. A printed absolute recovery launcher survives partial application/cache deletion; unfinished removal must be recovered before reinstalling. Reinstall validates retained ownership and data through normal setup; an old recovery cannot remove a later activation.",
+    "Default-no local terminal consent is required; non-TTY operation needs Code60's trailing --yes. Shell-profile removal has its own exact preview and explicit interactive approval; --yes never approves profiles. Awareness cannot run uninstall, inspect service/process ownership or modify files.",
+  ),
+  feature(
     "rag",
     "Retrieval Tests",
     "Manually index database-associated chat history.",

@@ -76,6 +76,49 @@ uses an owned writable HOME rather than relying on the image's default user ID.
 Future setup, update, shell integration and native-service
 scenarios are not counted as passing tests in this baseline.
 
+## Uninstall mode
+
+Run `npm run test:packaged:clean -- --uninstall release/payloads/linux-x64.json`
+after building the Linux candidate. It retains setup mode's read-only application
+mounts for the complete shared golden journey. A separate run-owned maintenance
+customer then shares that customer's PID and loopback namespaces, with the same
+synthetic installation/state volumes writable. The runner inspects its exact
+namespace, user and mount identities before starting it; no host PID namespace,
+published port, checkout, credentials or Docker socket is available.
+
+The actual installed CLI rejects missing consent and unexpected release contents
+before stopping the backend. Explicit removal must stop the original backend and
+provider processes, remove only owned application/activation/launcher/service
+files, and preserve logical SQLite contents, selection/configuration bytes,
+profiles, Git/index/HEAD and worktrees. The standalone recovery helper repeats
+removal, then the same verified artifact is reinstalled after temporary bootstrap
+cache removal. Old recovery must refuse the new activation. The separate browser
+driver reopens retained data; offline models, fault detection, leak detection and
+independent Docker cleanup remain required. Native service registration is a
+bounded fixture, not real systemd login validation.
+
+Run `npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json`
+for the same-host isolation check required by Linux CI. It runs two complete
+uninstall/reinstall journeys with distinct ownership labels. One waits with its
+reinstalled backend live while the other completes fault checks and removes its
+resources. Independent Docker inventories must show the first run absent and the
+second present; a real readiness/assets probe must still succeed on the survivor.
+The survivor then completes its own shutdown, fault checks and cleanup. Both
+retain the existing twenty-minute acceptance and ninety-second cleanup bounds.
+Summary evidence under `test-results/clean-install-concurrent` links both complete
+run reports. Cancellation releases held checkpoints and awaits both cleanups.
+
+The CI workflow can also be dispatched on an exact feature-branch commit to run
+the full Linux pipeline before opening a PR. This does not replace required PR
+checks or resolve unverified resources left by a failed local Docker engine.
+
+For native Apple Silicon, `npm run test:uninstall` performs the same real installed
+CLI and retained-data checks around the shared golden journey with an isolated
+supervisor fixture. It does not install a real service or edit host profiles.
+Real Bash/zsh/fish profile removal is exercised by `npm run test:installation`;
+fish is required in Linux/disposable CI and reported separately when unavailable
+on a developer's Mac.
+
 ## Platform payload mode
 
 After building a Linux candidate in the pinned amd64 container, run

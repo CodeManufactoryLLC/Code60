@@ -28,7 +28,12 @@ import {
   nodeRange,
   platform,
 } from "../scripts/distribution/descriptor.mjs";
-import { inventory, nativeAllowed, pruneNative } from "../scripts/distribution/policy.mjs";
+import {
+  inventory,
+  inventoryDirectories,
+  nativeAllowed,
+  pruneNative,
+} from "../scripts/distribution/policy.mjs";
 import { packageBootstrap } from "../scripts/package-bootstrap.mjs";
 import { readStableBootstrap } from "../src/platform/index.js";
 
@@ -101,7 +106,7 @@ async function fixture() {
     '<script src="./assets/index.js"></script><link href="./assets/index.css">',
   );
   const expected = value();
-  const pack = async () => {
+  const pack = async (includeDirectories = false) => {
     await rm(join(root, "payload.json"), { force: true });
     await writeFile(
       join(root, "payload.json"),
@@ -109,6 +114,7 @@ async function fixture() {
         ...expected,
         lockfileSha256: await sha256(join(root, "package-lock.json")),
         files: await inventory(root),
+        ...(includeDirectories ? { directories: await inventoryDirectories(root) } : {}),
       }),
     );
     const archive = join(parent, expected.archive.name);
@@ -153,6 +159,51 @@ async function extractRaw(parts, options) {
   await writeFile(archive, gzipSync(Buffer.concat([...parts, Buffer.alloc(1024)])));
   return extractArchive(archive, join(root, "out"), join(root, "tar"), options);
 }
+
+it("records and verifies empty directory ownership without following symbolic directory links", async () => {
+  const f = await fixture();
+  await mkdir(join(f.root, "node_modules/native/empty platform"), { recursive: true });
+  await symlink("native", join(f.root, "node_modules/link"));
+  const directories = await inventoryDirectories(f.root);
+  expect(directories).toContain("node_modules/native/empty platform");
+  expect(directories.some((path) => path.startsWith("node_modules/link"))).toBe(false);
+  await f.pack(true);
+  const result = await acquirePayload(f.expected, {
+    parent: f.parent,
+    host,
+    transport: f.transport,
+  });
+  expect((await stat(join(result.root, "node_modules/native/empty platform"))).isDirectory()).toBe(
+    true,
+  );
+});
+
+it.each(["missing", "extra", "duplicate", "unsafe", "wrong-type"])(
+  "rejects %s directory metadata before accepting a payload",
+  async (fault) => {
+    const f = await fixture();
+    await mkdir(join(f.root, "node_modules/native-empty"), { recursive: true });
+    await f.pack(true);
+    const path = join(f.root, "payload.json"),
+      data = JSON.parse(await readFile(path, "utf8"));
+    if (fault === "missing") data.directories.pop();
+    if (fault === "extra") data.directories.push("unrecorded-empty");
+    if (fault === "duplicate") data.directories[1] = data.directories[0];
+    if (fault === "unsafe") data.directories[0] = "../../outside";
+    if (fault === "wrong-type") data.directories = {};
+    await writeFile(path, JSON.stringify(data));
+    await rm(f.archive);
+    await writeArchive(f.root, f.archive);
+    f.expected.archive.size = (await stat(f.archive)).size;
+    f.expected.archive.sha256 = await sha256(f.archive);
+    await expect(
+      acquirePayload(f.expected, { parent: f.parent, host, transport: f.transport }),
+    ).rejects.toThrow("directory inventory mismatch");
+    expect((await readdir(f.parent)).filter((name) => name.startsWith(".code60-payload-"))).toEqual(
+      [],
+    );
+  },
+);
 describe("distribution identities", () => {
   it("requires matching exact platform descriptors and canonical fixed release URLs", () => {
     const linux = value();
@@ -439,6 +490,9 @@ it("packs only builtins bootstrap files with both exact descriptors and strict s
   const archive = await packageBootstrap(root, input);
   const result = await execute("tar", ["-tzf", archive]);
   expect(result.stdout).not.toMatch(/node_modules|dist\/|models\/|test\//);
+  expect(result.stdout).not.toMatch(/credential|network-policy|application\/|gateway\/|renderer\//);
+  expect(result.stdout).toContain("lib/runtime/platform/installation-removal.js");
+  expect(result.stdout).toContain("lib/runtime/management/removal-support.js");
   const unpack = join(f.parent, "unpack");
   await mkdir(unpack);
   await execute("tar", ["-xzf", archive, "-C", unpack]);

@@ -713,32 +713,183 @@ it("provides authenticated scoped MCP management without leaking definitions thr
   }
 });
 
-it("inspects update interruption only through authenticated payload-free private management", async () => {
-  const { gateway, env, directory } = await fixture();
-  const saved = (await readPrivateJson(
+it.each(["update-summary", "uninstall-summary"] as const)(
+  "inspects %s only through authenticated payload-free private management",
+  async (action) => {
+    const { gateway, env, directory } = await fixture();
+    const saved = (await readPrivateJson(
+      join(directory, "state/code60/gateway/connection.json"),
+      4096,
+    )) as { token: string };
+    const call = (headers: Record<string, string>, body?: string) =>
+      fetch(`${gateway.origin}/management/${action}`, {
+        method: "POST",
+        headers,
+        ...(body ? { body } : {}),
+      });
+    expect((await call({})).status).toBe(403);
+    expect(
+      (await call({ "X-Code60-Management": saved.token, Origin: gateway.origin })).status,
+    ).toBe(403);
+    expect((await call({ "X-Code60-Management": saved.token }, "{}")).status).toBe(400);
+    const before = await readdir(join(directory, "state/code60/gateway"));
+    const result = await managementRequest(env, action);
+    expect(result).toMatchObject({
+      pid: process.pid,
+      interactiveActive: false,
+      scheduledActive: false,
+      schedulerAvailable: true,
+    });
+    if (action === "uninstall-summary") {
+      expect(result.scheduledUncertain).toBe(false);
+      expect(result.workflows).toEqual({ completed: 0, active: 0, uncertain: 0 });
+      expect(await readdir(join(directory, "state/code60"))).not.toContain("workflows");
+    }
+    expect(await readdir(join(directory, "state/code60/gateway"))).toEqual(before);
+    expect((await managementRequest(env, "status")).database).toEqual({ state: "not-selected" });
+  },
+);
+
+it("keeps damaged private workflow contents out of uninstall inspection errors", async () => {
+  const { env, directory } = await fixture();
+  const root = join(directory, "state/code60/workflows");
+  await mkdir(root, { mode: 0o700 });
+  const contents = "private draft fixture that must never appear in errors";
+  await writeFile(join(root, "registry.json"), contents, { mode: 0o600 });
+  await expect(managementRequest(env, "uninstall-summary")).rejects.toThrow(
+    "Workflow history is unavailable; preserve state before uninstalling",
+  );
+  expect(await readFile(join(root, "registry.json"), "utf8")).toBe(contents);
+  expect(await readdir(root)).toEqual(["registry.json"]);
+  expect((await managementRequest(env, "status")).pid).toBe(process.pid);
+});
+
+it("keeps damaged private connection contents out of uninstall client errors without quiescing the backend", async () => {
+  const f = await fixture();
+  const path = join(f.directory, "state/code60/gateway/connection.json");
+  const contents = "private123";
+  await writeFile(path, contents, { mode: 0o600 });
+  await expect(managementRequest(f.env, "prepare-uninstall")).rejects.toThrow(
+    "Backend connection metadata is unavailable or invalid",
+  );
+  expect(await readFile(path, "utf8")).toBe(contents);
+  expect((await fetch(`${f.gateway.origin}/api/connection`)).status).toBe(200);
+});
+
+it("prepares uninstall only with private authentication and no payload, then keeps all owners quiescent", async () => {
+  const { env, directory, gateway } = await fixture();
+  const metadata = (await readPrivateJson(
     join(directory, "state/code60/gateway/connection.json"),
     4096,
   )) as { token: string };
-  const call = (headers: Record<string, string>, body?: string) =>
-    fetch(`${gateway.origin}/management/update-summary`, {
+  const request = (headers: Record<string, string>, value?: string) =>
+    fetch(`${gateway.origin}/management/prepare-uninstall`, {
       method: "POST",
       headers,
-      ...(body ? { body } : {}),
+      ...(value ? { body: value } : {}),
     });
-  expect((await call({})).status).toBe(403);
-  expect((await call({ "X-Code60-Management": saved.token, Origin: gateway.origin })).status).toBe(
-    403,
-  );
-  expect((await call({ "X-Code60-Management": saved.token }, "{}")).status).toBe(400);
-  const before = await readdir(join(directory, "state/code60/gateway"));
-  expect(await managementRequest(env, "update-summary")).toMatchObject({
+  expect((await request({})).status).toBe(403);
+  expect(
+    (await request({ "X-Code60-Management": metadata.token, Origin: gateway.origin })).status,
+  ).toBe(403);
+  expect((await request({ "X-Code60-Management": metadata.token }, "{}")).status).toBe(400);
+  expect((await managementRequest(env, "status")).uninstallPrepared).toBe(false);
+  expect((await fetch(`${gateway.origin}/api/connection`)).status).toBe(200);
+  expect(await managementRequest(env, "prepare-uninstall")).toEqual({
+    quiescent: true,
     pid: process.pid,
-    interactiveActive: false,
-    scheduledActive: false,
-    schedulerAvailable: true,
+    enginePids: [],
   });
-  expect(await readdir(join(directory, "state/code60/gateway"))).toEqual(before);
-  expect((await managementRequest(env, "status")).database).toEqual({ state: "not-selected" });
+  expect((await fetch(`${gateway.origin}/api/connection`)).status).toBe(503);
+  expect(await managementRequest(env, "status")).toMatchObject({
+    pid: process.pid,
+    uninstallPrepared: true,
+  });
+  await expect(managementRequest(env, "prepare-database")).rejects.toThrow("app is stopping");
+  expect(await managementRequest(env, "prepare-uninstall")).toEqual({
+    quiescent: true,
+    pid: process.pid,
+    enginePids: [],
+  });
+  expect(await managementRequest(env, "shutdown")).toEqual({ stopped: true });
+});
+
+it("releases all idle reservations when native state is uncertain, preserving a usable backend", async () => {
+  const { env, directory, gateway } = await fixture();
+  const state = join(directory, "state/code60/workflows/transmission-0.1.0-staging.20");
+  await mkdir(state, { recursive: true, mode: 0o700 });
+  await writeFile(join(state, "evidence.txt"), "retained fixture evidence", { mode: 0o600 });
+  await expect(managementRequest(env, "prepare-uninstall")).rejects.toThrow(
+    /uncertain|cannot be verified/,
+  );
+  expect(await readFile(join(state, "evidence.txt"), "utf8")).toBe("retained fixture evidence");
+  expect(await readdir(state)).toEqual(["evidence.txt"]);
+  expect((await fetch(`${gateway.origin}/api/connection`)).status).toBe(200);
+  expect((await managementRequest(env, "status")).uninstallPrepared).toBe(false);
+  expect(await managementRequest(env, "prepare-database")).toEqual({ state: "ready" });
+});
+
+it("refuses simultaneous uninstall preparation and returns an immutable completed proof on explicit retry", async () => {
+  const f = await fixture();
+  let enter: () => void = () => {};
+  let resume: () => void = () => {};
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
+  const proceed = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  const original = f.gateway.application.reserveIdleForUninstall.bind(f.gateway.application);
+  const spy = vi
+    .spyOn(f.gateway.application, "reserveIdleForUninstall")
+    .mockImplementation(async (signal) => {
+      enter();
+      await proceed;
+      return original(signal);
+    });
+  const preparing = managementRequest(f.env, "prepare-uninstall");
+  try {
+    await entered;
+    await expect(managementRequest(f.env, "prepare-uninstall")).rejects.toThrow("Backend is busy");
+    expect((await managementRequest(f.env, "status")).uninstallPrepared).toBe(false);
+  } finally {
+    resume();
+  }
+  const first = await preparing;
+  try {
+    expect(await managementRequest(f.env, "prepare-uninstall")).toEqual(first);
+    (first.enginePids as number[]).push(123);
+    expect((await managementRequest(f.env, "prepare-uninstall")).enginePids).toEqual([]);
+    expect(spy).toHaveBeenCalledOnce();
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+it("does not mark ordinary shutdown or failed reservation cleanup as completed uninstall preparation", async () => {
+  const ordinary = await fixture();
+  await managementRequest(ordinary.env, "shutdown");
+  expect((await managementRequest(ordinary.env, "status")).uninstallPrepared).toBe(false);
+  const f = await fixture();
+  const reserve = f.gateway.application.reserveIdleForUninstall.bind(f.gateway.application);
+  const injected = vi
+    .spyOn(f.gateway.application, "reserveIdleForUninstall")
+    .mockImplementation(async (signal) => {
+      const release = await reserve(signal);
+      return async () => {
+        await release();
+        throw Error("Test-owned release failure");
+      };
+    });
+  try {
+    await expect(managementRequest(f.env, "prepare-uninstall")).rejects.toThrow(
+      "reservation cleanup is uncertain",
+    );
+    expect((await managementRequest(f.env, "status")).uninstallPrepared).toBe(false);
+    expect((await fetch(`${f.gateway.origin}/api/connection`)).status).toBe(503);
+  } finally {
+    injected.mockRestore();
+  }
 });
 
 it("prepares a database only through authenticated payload-free private management", async () => {

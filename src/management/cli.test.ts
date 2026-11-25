@@ -111,3 +111,20 @@ it("parses update arguments before filesystem/registry/service effects", async (
     await expect(runManagement(args, env)).rejects.toThrow("Use code60 update");
   expect(await readdir(directory)).toEqual([]);
 });
+
+it("parses uninstall flags before effects and leaves a fresh HOME untouched", async () => {
+  const { env, directory } = await environment();
+  for (const args of [
+    ["uninstall", "--purge"],
+    ["uninstall", "--yes", "--yes"],
+    ["uninstall", "extra"],
+  ])
+    await expect(runManagement(args, env)).rejects.toThrow("Use code60 uninstall");
+  const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  await runManagement(["uninstall", "--yes"], env);
+  expect(String(output.mock.calls[0]?.[0])).toContain("No managed Code60 installation");
+  expect(await readdir(directory)).toEqual([]);
+  output.mockClear();
+  await runManagement(["--help"], env);
+  expect(String(output.mock.calls[0]?.[0])).toContain("code60 uninstall [--yes]");
+});

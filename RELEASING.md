@@ -28,6 +28,12 @@ repair its service registration, start the backend and pair the browser again.
 Preserve the old package for inspection. Never downgrade application data or
 erase locks/history to make an older package start.
 
+Managed `code60 uninstall` removes owned application resources while retaining
+data, configuration and engine evidence; see [uninstall recovery](docs/distribution/uninstall.md).
+Release acceptance must cover the installed golden journey, actual guarded process
+exit, interrupted cleanup through the standalone launcher and retained-data
+reinstallation. Component/native-engine smoke results cannot satisfy those gates.
+
 ## Platform payload and bootstrap candidates
 
 The [artifact workflow](docs/distribution/artifacts.md) adds private platform
@@ -75,8 +81,26 @@ across app replacement; never delete workflow state to force a new runtime.
 The native update journey requires the freshly built macOS payload and retains
 the approved engine/worker processes through an actual managed update before
 completing the original workflow and comparing its source Git state.
-The [native workflow](.github/workflows/native-tests.yml) runs existing regressions
-and each complete update journey in separate, sequential single-worker batches.
-This preserves their original per-journey and suite deadlines on the slower hosted
-runner; all batches are required and retain separate trace directories.
+The [native workflow](.github/workflows/native-tests.yml) builds and tests one
+payload, then hands it to separate jobs for managed update, retained/restart
+regressions and each complete application update journey. Each consumer verifies
+the exact artifact against its source checkout before execution. At most two
+workflow jobs run concurrently, each with one browser worker and separate evidence.
+All jobs are required; their original journey and suite deadlines remain in place.
+Native update file preparation uses a separately bounded fixture before visible
+onboarding and approval begin. It records candidate/install timings and forwards
+cancellation without starting a backend or engine. The update journey retains its
+six-minute limit and the whole suite retains its ten-minute limit.
+Uninstall and idle-engine removal run in a separate dependent Apple Silicon job,
+using that same tested payload. `npm run verify:artifact` checks its clean commit,
+version, platform, byte count and SHA-256 against the consumer's source checkout
+before installation. Every native job must pass. The baseline job retains its
+45-minute limit; consumer jobs have separate 35-minute limits and always upload
+their handoff and acceptance evidence.
 This validation installs no real login service and uses no live provider.
+
+Linux concurrent uninstall acceptance runs in its own 30-minute job after baseline
+payload acceptance. It verifies the downloaded producer artifact against the exact
+checkout before running both complete journeys. `CI passed` and manual bootstrap
+assembly require this job as well as the baseline. The existing 20-minute runner,
+nine-minute maintenance and 90-second cleanup bounds remain unchanged.

@@ -44,6 +44,8 @@
     "test/clean-install/install-setup.mjs",
     "test/fixtures/update-command.mjs",
     "test/update.config.ts",
+    "test/uninstall.config.ts",
+    "test/clean-install/uninstall.mjs",
     "src/platform/index.bootstrap.ts",
     "test/fixtures/carbon-tables.tsx"
   ],
