@@ -185,6 +185,15 @@ Code60 protects the browser interface, local API, orchestration gateway, files, 
 - **Provider setup and updates:** In-app provider setup checks release integrity, disables npm lifecycle scripts, and accepts only exact official HTTPS login domains. Code60 updates verify SHA-512 digests and complete file inventories before replacing a release, without running registry bootstrap code.
 - **Repository security scans:** Security workflows run CodeQL, lockfile dependency audits, and Gitleaks secret scans on pull requests, pushes to `main`, and a weekly schedule.
 
+### How does Code60 handle secrets?
+
+Code60 keeps secrets out of configuration files, browser storage, diagnostic logs, and agent tool payloads, with different boundaries for each secret type.
+
+- **Agent Provider credentials:** Code60 never asks for provider passwords or stores provider API keys. Each **Agent Provider** keeps credentials in its own backend-user storage. Temporary device codes and OAuth links stay inside the active setup dialog and never enter snapshots, browser storage, or logs.
+- **MCP secrets and OAuth:** `mcp.json` files hold credential references and contain no raw secret values. Users save secrets into macOS Keychain, Linux Secret Service, or explicit temporary **Code60 Gateway** memory (which clears on restart or sign-out). Unavailable keychains never fall back silently, and no browser endpoint can read secrets back.
+- **Session and management tokens:** Browser session tokens stay in per-tab session storage outside URLs and cookies. Local CLI management tokens stay in private local files outside browser reach, and single-use pairing codes expire after 60 seconds.
+- **Redaction and transcript limits:** Diagnostic logs exclude prompts, transcripts, paths, and secrets, while error messages and `stderr` tails apply best-effort credential redaction. Code60 does not encrypt or automatically scrub conversation transcripts (`events.jsonl`), so users must keep secrets out of prompts and command arguments.
+
 ## Licensing and Pricing
 
 ### Can I use Code60 for commercial purposes?
