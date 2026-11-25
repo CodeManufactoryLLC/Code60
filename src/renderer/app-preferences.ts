@@ -60,6 +60,12 @@ export function useAppPreferences() {
   const [focusHighlight, setFocusHighlight] = useState(
     () => localStorage.getItem("code60.focusHighlight") === "on",
   );
+  const [showRelayDot, setShowRelayDot] = useState(
+    () => localStorage.getItem("code60.showRelayDot") === "on",
+  );
+  useEffect(() => {
+    localStorage.setItem("code60.showRelayDot", showRelayDot ? "on" : "off");
+  }, [showRelayDot]);
   const [signals, setSignals] = useState(() => localStorage.getItem("code60.signals") === "on");
   const [charts, setCharts] = useState(() => localStorage.getItem("code60.gridCharts") !== "off");
   const [lines, setLines] = useState<TableLines>(() =>
@@ -123,6 +129,8 @@ export function useAppPreferences() {
     setAccentColor,
     textStyles,
     setTextStyles,
+    showRelayDot,
+    setShowRelayDot,
     focusHighlight,
     setFocusHighlight,
     signals,

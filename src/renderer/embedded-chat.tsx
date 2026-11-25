@@ -22,6 +22,7 @@ export interface EmbeddedChatProps {
   canSend: boolean;
   hideInput?: boolean;
   stop?: (() => unknown) | undefined;
+  onInputFocusChange?: ((focused: boolean) => void) | undefined;
   onEdit(text: string): void;
   onSend(text: string): Promise<boolean>;
   commands?: readonly Command[] | undefined;

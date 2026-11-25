@@ -194,6 +194,17 @@ export default function CarbonConversation(props: EmbeddedChatProps) {
         .updateContent(() => textToDoc(props.draft))
         .catch(() => setError("Could not restore the draft."));
   }, [chat, props.draft]);
+  const reportFocus = props.onInputFocusChange;
+  useEffect(() => {
+    if (!reportFocus || !chat || !props.active || props.disabled) return;
+    reportFocus(chat.state.get().input.focused);
+    const unsubscribe = chat.state.select((state) => state.input.focused, reportFocus);
+    return () => {
+      unsubscribe();
+      reportFocus(false);
+    };
+  }, [chat, props.active, props.disabled, reportFocus]);
+
   const focused = useRef<number | boolean>(false);
   useEffect(() => {
     const intent = props.focus;

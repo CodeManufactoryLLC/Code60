@@ -22,6 +22,8 @@ function navigation(
   });
   return renderToStaticMarkup(
     <PageTabBar
+      showRelayDot={false}
+      onShowRelayDotChange={() => {}}
       theme="system"
       onThemeChange={() => {}}
       {...history}
@@ -109,7 +111,7 @@ describe("database connection navigation", () => {
     const html = navigation(null);
     expect(html).toContain('aria-label="Open product navigation"');
     expect(html).toContain('aria-controls="navigation-sidebar"');
-    expect(html).toContain(">Commands</button>");
+    expect(html).toContain('aria-label="Commands"');
     expect(html).toContain(">Workspace</button>");
   });
   it("leaves the separate database action to the application footer", () => {

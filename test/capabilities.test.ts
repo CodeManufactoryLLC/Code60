@@ -162,6 +162,9 @@ describe("browser capability catalog", () => {
     expect(jobs?.limitations).toContain("Delete requires browser confirmation");
   });
   it("uses the Custom Assistants name with the existing stable capability ID", () => {
+    expect(APPLICATION_CAPABILITIES.find((c) => c.id === "relay")?.purpose).toContain(
+      "relay animation checkbox beside Forward",
+    );
     expect(APPLICATION_CAPABILITIES.find((c) => c.id === "relay")?.access).toContain(
       "Sidebar → Chat → Relay",
     );

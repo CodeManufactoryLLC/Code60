@@ -1,5 +1,6 @@
 import {
   type ReactNode,
+  useContext,
   useEffect,
   useId,
   useLayoutEffect,
@@ -37,6 +38,7 @@ import { TurnTimer } from "./message-controls.js";
 import { useOrchestratorActions } from "./orchestrator-actions.js";
 import { PageTitle } from "./page-title.js";
 import { PendingApprovals } from "./pending-approvals.js";
+import { RelayInputFocus } from "./relay-pulse.js";
 import type { ReviewPreview } from "./review-actions.js";
 import { SessionExtras, SessionInfo } from "./session-info.js";
 import { statusSpec } from "./session-presentation.js";
@@ -99,6 +101,7 @@ export function ChatPage({
   notice?: ReactNode;
   request?: OpenChat | undefined;
 }) {
+  const reportRelayFocus = useContext(RelayInputFocus);
   const [renaming, setRenaming] = useState(false);
   const id = useId();
   const run = chat?.run;
@@ -621,6 +624,7 @@ export function ChatPage({
             promptControls={promptControls}
             key={JSON.stringify([key, chat?.conversationId, chat?.generation])}
             active={shown}
+            onInputFocusChange={relay && !chat?.customAgentId ? reportRelayFocus : undefined}
             label="Message to orchestrator"
             draft={draft}
             canSend={!!ready && !busy}

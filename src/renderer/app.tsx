@@ -40,6 +40,7 @@ import { useProjectConnection } from "./project-connection.js";
 import { useProjectWorkspace } from "./project-workspace.js";
 import { useProviderManagement } from "./provider-management.js";
 
+import { RelayInputFocus } from "./relay-pulse.js";
 import { useResumeDestination } from "./resume-destination.js";
 import { useScopeLifetime } from "./scope-lifetime.js";
 import { useScopedDetails } from "./scoped-details.js";
@@ -82,6 +83,7 @@ export function App({
   );
   const providerManagement = useProviderManagement(api, snapshot);
 
+  const [relayListening, setRelayListening] = useState(false);
   const [palette, setPalette] = useState(false);
   const [notifications, setNotifications] = useState<ToastMessage[]>([]);
   const notificationId = useRef(0);
@@ -393,6 +395,9 @@ export function App({
       >
         {!splash && (
           <PageTabBar
+            relayListening={relayListening}
+            showRelayDot={preferences.showRelayDot}
+            onShowRelayDotChange={preferences.setShowRelayDot}
             commands={() => setPalette(true)}
             workspace={(close) => (
               <>
@@ -494,5 +499,5 @@ export function App({
       />
     </div>
   );
-  return content;
+  return <RelayInputFocus.Provider value={setRelayListening}>{content}</RelayInputFocus.Provider>;
 }

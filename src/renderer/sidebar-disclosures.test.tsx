@@ -149,6 +149,8 @@ afterEach(() => {
 
 function tabList(overrides: Partial<ComponentProps<typeof PageTabBar>> = {}) {
   const props: ComponentProps<typeof PageTabBar> = {
+    showRelayDot: false,
+    onShowRelayDotChange: vi.fn(),
     theme: "system",
     onThemeChange: vi.fn(),
     ...chatProps,

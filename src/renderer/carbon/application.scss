@@ -487,15 +487,17 @@
     .sidebar-history {position:static; translate:none; display:flex; justify-content:start; gap:0;}
     .sidebar-history button, .product-utilities button {color:var(--cds-text-primary);background:transparent;}
     .sidebar-history button:disabled {opacity:.4;}
+    .relay-dot-toggle {flex:0 0 auto; margin:0 .5rem; align-self:center;}
     .product-utilities {display:flex;align-items:center;margin-inline-start:auto;}
-    .product-utilities span { @include type.type-style('label-01'); margin-inline:1rem;}
+    .product-utilities .commands-icon {display:none;}
+    .product-utilities > span { @include type.type-style('label-01'); margin-inline:1rem;}
   }
   .carbon-app .product-navigation {
     background:var(--cds-layer-01);
     --nav-step: 1rem; --nav-action-width: 1.5rem; --nav-row-height: 2rem; --nav-action-height:1.5rem;
     --nav-action-glyph:1rem; --nav-inset:0px; --nav-item-padding:1rem; --nav-borderless-offset:0px; --nav-indent:0px;
     overflow-y:auto; border-inline-end:1px solid var(--cds-border-subtle-01);
-    #navigation-sidebar-content {padding-block:.5rem 2rem;}
+    #navigation-sidebar-content {padding-block-end:2rem;}
     .cds--side-nav__item {inline-size:100%;list-style:none;}
     .page-tabs {overflow:visible;margin:0;}
     .sidebar-navigation-card {position:relative;}
@@ -550,8 +552,17 @@
   @media(min-width:66rem) {
     .app[data-product-screen] > :is(.app-workspace,.database-notice) {margin-inline-start:16rem;}
   }
+  @media(max-width:26rem) {
+    .carbon-app .product-header {
+      .cds--header__name {padding-inline:.25rem;}
+      .product-utilities button {padding-inline:.375rem;}
+      .product-utilities .commands-label {display:none;}
+      .product-utilities .commands-icon {display:block;width:1rem;height:1rem;}
+    }
+  }
   @media(max-width:42rem) {
-    .product-header .product-utilities span {position:absolute;clip-path:inset(50%);}
+    .carbon-app .product-header .relay-dot-toggle {margin-inline:.25rem;}
+    .product-header .product-utilities > span {position:absolute;clip-path:inset(50%);}
     .product-header .product-utilities button {min-width:0;padding-inline:.5rem;}
     .app[data-product-screen] .chat-workspace-body[data-file-panel-open=true] {
       .chat-conversations { flex:0 0 auto; min-height:0; }

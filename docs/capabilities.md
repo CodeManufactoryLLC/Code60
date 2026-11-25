@@ -64,7 +64,7 @@ Schema version: 1
 
 - ID: `relay`
 - Status: shipped
-- Purpose: Application-wide orchestration across explicit targets. The embedded Carbon prompt line opens the selected Code60 thread. Enter sends and Shift+Enter adds a line. Stop targets the current turn.
+- Purpose: Application-wide orchestration across explicit targets. Select the relay animation checkbox beside Forward to show the dot above Chat. It defaults to off and remembers your choice in this browser. The dot shows Relay activity across pages: Idle, Listening, Thinking, Speaking, Complete or Attention. The embedded Carbon prompt line opens the selected Code60 thread. Enter sends and Shift+Enter adds a line. Stop targets the current turn.
 - Access: Sidebar → Chat → Relay (also available from Home)
 - Prerequisite: provider
 - Agent access: existing-tools

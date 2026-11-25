@@ -20,6 +20,7 @@ import type { DesktopRun, OpenProject, OrchestrationChat } from "../bridge/index
 import type { RunEvent } from "../core/index.js";
 import type { Theme } from "./appearance.js";
 import { Button as AppButton } from "./carbon/button.js";
+import { Checkbox } from "./carbon/choices.js";
 import { Select as CarbonSelect } from "./carbon/fields.js";
 import { Surface as Card } from "./carbon/surfaces.js";
 import { ChatSidebar } from "./chat-sidebar.js";
@@ -37,10 +38,14 @@ import type { NavigationActions } from "./navigation-actions.js";
 import { NavigationIcon } from "./navigation-icons.js";
 import { sidebarPageElementId } from "./navigation-tree.js";
 import { ProjectChatSidebar } from "./project-chat-sidebar.js";
+import { RelayPulse } from "./relay-pulse.js";
 
 import type { PageId, PageTabs, SettingsSectionId } from "./tabs.js";
 
 export function PageTabBar({
+  relayListening = false,
+  showRelayDot,
+  onShowRelayDotChange,
   commands,
   workspace,
   connected,
@@ -68,6 +73,9 @@ export function PageTabBar({
   onBack = () => {},
   onForward = () => {},
 }: {
+  relayListening?: boolean;
+  showRelayDot: boolean;
+  onShowRelayDotChange(show: boolean): void;
   commands?(): void;
   workspace?(close: () => void): import("react").ReactNode;
   connected?: boolean | undefined;
@@ -140,14 +148,23 @@ export function PageTabBar({
           onBack={onBack}
           onForward={onForward}
         />
+        <Checkbox
+          className="relay-dot-toggle"
+          labelText="relay animation"
+          hideLabel
+          title="relay animation"
+          checked={showRelayDot}
+          onChange={(_event, { checked }) => onShowRelayDotChange(checked)}
+        />
         <div className="product-utilities">
           {connected !== undefined && (
             <span role="status">
               {connected ? "Backend connected" : "Reconnecting to backend…"}
             </span>
           )}
-          <Button size="md" kind="ghost" onClick={commands}>
-            Commands
+          <Button size="md" kind="ghost" onClick={commands} title="Commands" aria-label="Commands">
+            <Icon name="terminal" className="commands-icon" />
+            <span className="commands-label">Commands</span>
           </Button>
           <Button size="md" kind="ghost" aria-haspopup="dialog" onClick={() => setUtilities(true)}>
             Workspace
@@ -172,6 +189,13 @@ export function PageTabBar({
         }}
       >
         <div id="navigation-sidebar-content">
+          {showRelayDot && (
+            <RelayPulse
+              chat={chats.find((chat) => chat.kind === "relay" && !chat.customAgentId)}
+              connected={!!connected}
+              listening={relayListening}
+            />
+          )}
           <PageTabList
             onOpenProject={database ? onOpenProject : (onConnectDatabase ?? onOpenProject)}
             projectDisabled={projectDisabled}

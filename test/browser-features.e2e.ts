@@ -100,6 +100,72 @@ test("browser: approved conversation continues with no browser and reattaches wi
       name: "Message to orchestrator",
       exact: true,
     });
+    const pulse = first.page.locator("#navigation-sidebar .relay-pulse");
+    const toggle = first.page.getByRole("checkbox", { name: "relay animation", exact: true });
+    await expect(toggle).not.toBeChecked();
+    await expect(first.page.locator(".relay-pulse-row")).toHaveCount(0);
+    await toggle.focus();
+    await toggle.press("Space");
+    await expect(toggle).toBeChecked();
+    await pulse.focus();
+    await expect(first.page.locator(".relay-pulse-label")).toHaveText("Relay: Idle");
+    await expect(first.page.locator(".relay-pulse-label")).toBeVisible();
+    for (const width of [320, 375, 1440]) {
+      await first.page.setViewportSize({ width, height: width < 1440 ? 667 : 900 });
+      const forward = await first.page.getByRole("button", { name: "Forward" }).boundingBox();
+      const label = first.page.locator(".relay-dot-toggle label");
+      const workspace = first.page.getByRole("button", { name: "Workspace", exact: true });
+      await expect(workspace).toBeInViewport({ ratio: 1 });
+      await expect(label.getByText("relay animation", { exact: true })).toHaveClass(
+        /cds--visually-hidden/,
+      );
+      await label.hover();
+      await expect(label).toHaveAttribute("title", "relay animation");
+      const bounds = await label.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(forward!.x + forward!.width);
+      await label.click();
+      await expect(toggle).not.toBeChecked();
+      await expect(first.page.locator(".relay-pulse-row")).toHaveCount(0);
+      await label.click();
+      await expect(toggle).toBeChecked();
+      if (width < 1440)
+        await first.page.getByRole("button", { name: "Open product navigation" }).click();
+      await pulse.focus();
+      await pulse.click({ trial: true }); // Measure after the mobile drawer finishes opening.
+      const header = first.page.locator("#navigation-sidebar-content");
+      const layout = await header.evaluate((content) => {
+        const top = content.getBoundingClientRect();
+        const dot = content.querySelector(".relay-pulse")?.getBoundingClientRect();
+        const chat = content.querySelector("#nav-group-Chat")?.getBoundingClientRect();
+        if (!dot || !chat) throw new Error("Relay and Chat must be present");
+        return [
+          chat.top - top.top,
+          dot.x + dot.width / 2 - (top.x + top.width / 2),
+          dot.y + dot.height / 2 - (top.top + chat.top) / 2,
+        ];
+      });
+      expect(layout).toEqual([96, 0, 0]);
+      const scene = header.locator(".relay-pulse-row");
+      const room = scene.locator("svg.relay-pulse-room");
+      await expect(room).toBeVisible();
+      const scale = await room.evaluate((svg: SVGSVGElement) => {
+        const matrix = svg.getScreenCTM();
+        return matrix && [matrix.a, matrix.d];
+      });
+      expect(scale?.[0]).toBeGreaterThan(0);
+      expect(scale?.[0]).toEqual(scale?.[1]);
+      const surfaces = room.locator("path, rect");
+      await expect(surfaces).toHaveCount(5);
+      for (const surface of await surfaces.all()) {
+        await expect(surface).toHaveCSS("stroke", "none");
+        await expect(surface).toHaveCSS("fill", /url\(/);
+      }
+      await scene.screenshot({ path: test.info().outputPath(`relay-room-${width}.png`) });
+      if (width < 1440)
+        await first.page.getByRole("button", { name: "Close product navigation" }).click();
+    }
+    await composer.focus();
+    await expect(pulse).toHaveAccessibleName("Relay: Listening");
     await composer.fill(
       JSON.stringify([
         { waitForFile: startReply },
@@ -112,6 +178,8 @@ test("browser: approved conversation continues with no browser and reattaches wi
     const chat = first.page.locator(".orchestration-chat-page:visible");
     const status = chat.locator(".activity-display");
     const circle = status.locator(".cds--loading--small");
+    await expect(pulse).toHaveAccessibleName("Relay: Thinking");
+    await expect(pulse.locator(".relay-orbit")).not.toHaveCSS("animation-name", "none");
     await expect(circle).toBeVisible();
     await expect(circle).not.toHaveCSS("animation-name", "none");
     await expect(status).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
@@ -121,6 +189,9 @@ test("browser: approved conversation continues with no browser and reattaches wi
     await status.hover();
     await expect(circle.locator(".cds--loading__svg")).toHaveCSS("fill", "none");
     await expect(status).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await first.page
+      .locator(".relay-pulse-row")
+      .screenshot({ path: test.info().outputPath("relay-room-dark.png") });
     await first.page.screenshot({ path: test.info().outputPath("chat-activity-circle-dark.png") });
     await status.press("Enter");
     await expect(status).toHaveAttribute("aria-expanded", "true");
@@ -128,7 +199,14 @@ test("browser: approved conversation continues with no browser and reattaches wi
     await expect(status).toHaveAttribute("aria-expanded", "false");
     await first.page.emulateMedia({ reducedMotion: "reduce" });
     await expect(circle).toHaveCSS("animation-name", "none");
+    await expect(pulse.locator(".relay-orbit")).toHaveCSS("animation-name", "none");
+    await first.page.emulateMedia({ forcedColors: "active" });
+    await expect(pulse.locator(".relay-pulse-core")).toHaveCSS("background-image", "none");
+    await expect(first.page.locator(".relay-pulse-room")).toBeHidden();
+    await expect(pulse.locator(".relay-orbit")).toBeVisible();
+    await first.page.emulateMedia({ forcedColors: "none" });
     await writeFile(startReply, "release");
+    await expect(pulse).toHaveAccessibleName("Relay: Speaking");
     await expect(chat.getByRole("article", { name: "Assistant" })).toContainText(
       "Before tab closed",
     );
@@ -876,12 +954,22 @@ test("browser: pending agent permission survives refresh and cancellation preven
     );
     await composer.press("Enter");
     await expect(chat.getByRole("button", { name: "Deny", exact: true })).toBeVisible();
+    const toggle = page.getByRole("checkbox", { name: "relay animation", exact: true });
+    await page.locator(".relay-dot-toggle label").click();
+    const pulse = page.locator("#navigation-sidebar .relay-pulse");
+    await expect(pulse).toHaveAccessibleName("Relay: Attention");
+    await app(page, "Appearance");
+    await expect(pulse).toHaveAccessibleName("Relay: Attention");
     await page.reload();
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     await expect(
       chat.getByRole("region", { name: "Pending approvals", exact: true }),
     ).toContainText("Run fixture command");
+    await expect(toggle).toBeChecked();
+    await expect(pulse).toHaveAccessibleName("Relay: Attention");
     await chat.getByRole("button", { name: "Deny", exact: true }).click();
+    await expect(pulse).toHaveAccessibleName("Relay: Complete");
+    await expect(pulse).toHaveAccessibleName("Relay: Idle");
     await expect(chat).toContainText("permission browser-deny: opt-reject_once");
     await expect(chat.getByRole("button", { name: "Send", exact: true })).toBeDisabled();
     await composer.fill(

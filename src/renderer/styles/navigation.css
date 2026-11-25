@@ -1120,3 +1120,157 @@
     --nav-borderless-offset: 0px;
   }
 }
+
+/* Relay's six expressions share one footprint above the navigation groups. */
+.relay-pulse-row {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-block-size: 6rem;
+}
+.relay-pulse-room {
+  --room-shadow: color-mix(in srgb, var(--cds-layer-01), black 23%);
+  --room-depth: color-mix(in srgb, var(--cds-layer-01), black 14%);
+  --room-highlight: color-mix(in srgb, var(--cds-layer-01), white 8%);
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  stroke: none;
+}
+.relay-pulse {
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 40px;
+  color: var(--cds-link-primary);
+}
+.relay-pulse-label {
+  position: absolute;
+  inset-block-start: calc(50% + 20px);
+  text-align: center;
+  visibility: hidden;
+  color: var(--cds-text-secondary);
+  font-size: 0.75rem;
+}
+.relay-pulse:is(:hover, :focus) + .relay-pulse-label {
+  visibility: visible;
+}
+.relay-pulse-core,
+.relay-pulse svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.relay-pulse-core {
+  border-radius: 50%;
+  background: radial-gradient(
+    circle closest-side,
+    currentColor 22%,
+    color-mix(in srgb, var(--code60-accent) 85%, transparent) 39%,
+    color-mix(in srgb, var(--code60-accent) 25%, transparent) 69%,
+    transparent
+  );
+}
+.relay-pulse svg {
+  z-index: 2;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.relay-mark {
+  stroke: var(--cds-layer-01);
+  stroke-width: 2.6;
+}
+.relay-pulse:is([data-state="Attention"], [data-state="Complete"])::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 11px;
+  background: currentColor;
+  border-radius: 50%;
+}
+.relay-pulse:is([data-state="Unavailable"], [data-state="Disconnected"]) .relay-pulse-core {
+  inset: 15px;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--cds-text-secondary);
+  background: transparent;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .relay-pulse[data-state="Idle"] .relay-pulse-core {
+    animation: relay-breathe 2s ease-in-out infinite alternate;
+  }
+  .relay-arcs,
+  .relay-orbit,
+  .relay-wave {
+    transform-origin: 20px 20px;
+  }
+  .relay-arcs {
+    animation: relay-listen 3.6s ease-in-out infinite;
+  }
+  .relay-orbit {
+    animation: relay-orbit 5s linear infinite;
+  }
+  .relay-wave {
+    animation: relay-speak 3.2s linear infinite;
+  }
+  .relay-wave-next {
+    r: 13px;
+    animation-delay: -1.6s;
+  }
+}
+@keyframes relay-breathe {
+  to {
+    opacity: 0.78;
+    transform: scale(0.87);
+  }
+}
+@keyframes relay-listen {
+  50% {
+    transform: scale(0.83);
+  }
+}
+@keyframes relay-orbit {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@keyframes relay-speak {
+  from {
+    transform: scale(0.52);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+@media (forced-colors: active) {
+  .relay-pulse-room {
+    display: none;
+  }
+  .relay-pulse {
+    color: CanvasText;
+  }
+  .relay-pulse .relay-pulse-core {
+    inset: 14px;
+    width: auto;
+    height: auto;
+    background: CanvasText;
+  }
+  .relay-mark {
+    stroke: Canvas;
+  }
+  .relay-pulse,
+  .relay-pulse * {
+    forced-color-adjust: none;
+  }
+}
