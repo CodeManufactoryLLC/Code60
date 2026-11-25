@@ -89,6 +89,7 @@ it("generates isolated amd64 mounts and keeps root initialization away from the 
     "/home/node/.npm",
     "/home/node/.cache/ms-playwright",
     "/source with spaces/models",
+    "/source with spaces/test-results/dev",
   ]);
   expect(compose.services["cache-init"].volumes.every((mount) => mount.type === "volume")).toBe(
     true,
@@ -103,10 +104,18 @@ it("generates isolated amd64 mounts and keeps root initialization away from the 
   expect(service.environment.PATH.split(":")[0]).toBe("/home/node/.local/bin");
   expect(compose.volumes.home.name).toBe(`code60-dev-${id}-home`);
   expect(compose.volumes.home.labels["com.code60.kind"]).toBe("provider-state");
+  expect(compose.volumes.dev.name).toBe(`code60-dev-${id}-dev`);
+  expect(compose.volumes.dev.labels["com.code60.kind"]).toBe("dev-state");
   expect(compose.services["cache-init"].volumes).toContainEqual({
     type: "volume",
     source: "home",
     target: "/cache/home",
+    volume: { nocopy: true },
+  });
+  expect(compose.services["cache-init"].volumes).toContainEqual({
+    type: "volume",
+    source: "dev",
+    target: "/cache/dev",
     volume: { nocopy: true },
   });
   expect(JSON.stringify(compose)).not.toContain("docker.sock");
@@ -252,6 +261,14 @@ it("refuses redirected output directories", async () => {
     /symlink|redirect/i,
   );
   expect(await readFile(join(target, "compose.json"), "utf8")).toBe("preserve");
+
+  const linkedResults = await checkout();
+  const externalResults = join(linkedResults, "external-results");
+  await mkdir(externalResults);
+  await symlink(externalResults, join(linkedResults, "test-results"));
+  await expect(manageContainer(linkedResults, "prepare", [], control())).rejects.toThrow(
+    /symlink|redirect/i,
+  );
 });
 
 it("prepares concurrent linked worktrees with matching, distinct container and editor ports", async () => {

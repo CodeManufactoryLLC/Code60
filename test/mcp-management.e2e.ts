@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
@@ -284,6 +284,31 @@ test("MCP management: malformed files and interrupted transactions block guided 
       ),
     ).toBe(true);
     expect(await readFile(config(fixture.directory), "utf8")).toBe('{"version":1,"servers":{}}\n');
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("MCP management: initial unsafe storage surfaces MCP_CONFIG_UNSAFE and recovers on explicit reload", async ({
+  browser,
+}) => {
+  const fixture = await browserApp(browser);
+  try {
+    await writeFile(config(fixture.directory), '{"version":1,"servers":{}}\n', { mode: 0o644 });
+    await chmod(config(fixture.directory), 0o644);
+    const { page } = await fixture.open();
+    await onboard(page);
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
+    await app(page);
+    const panel = page.locator("#panel-mcp-servers");
+    await expect(panel).toContainText("MCP_CONFIG_UNSAFE:");
+    const reload = panel.getByRole("button", { name: "Reload configuration", exact: true });
+    await expect(reload).toBeVisible();
+    await chmod(config(fixture.directory), 0o600);
+    await reload.click();
+    await expect(panel).not.toContainText("MCP_CONFIG_UNSAFE:");
+    await expect(panel).toContainText("No servers configured.");
+    await expect(page.getByRole("button", { name: "Add server", exact: true })).toBeEnabled();
   } finally {
     await fixture.close();
   }

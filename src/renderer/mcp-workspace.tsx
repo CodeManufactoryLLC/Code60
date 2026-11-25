@@ -33,7 +33,7 @@ import { PageTitle } from "./page-title.js";
 
 const JsonEditor = lazy(() => import("./mcp-json-editor.js"));
 const Diff = lazy(() => import("./monaco-diff.js"));
-const failure = (cause: unknown) => {
+export const mcpWorkspaceFailure = (cause: unknown) => {
   const explain = (code: string, detail: string) =>
     `MCP_CONFIG_${code}: ${detail} Other application features and available tools remain usable.`;
   const text = cause instanceof Error ? cause.message : "";
@@ -57,11 +57,17 @@ const failure = (cause: unknown) => {
       "STORAGE_LIMIT",
       "Storage limit reached. Preserve pending evidence and review backups.",
     );
+  if (text.includes("unsafe"))
+    return explain(
+      "UNSAFE",
+      "MCP configuration storage identity or permissions are unsafe. Your draft is retained. Review storage ownership and permissions, then explicitly reload or compare before saving.",
+    );
   return explain(
     "UNAVAILABLE",
-    "MCP configuration storage is unavailable or unsafe. Your draft is retained. Review storage ownership, permissions and free space, then explicitly reload or compare before saving.",
+    "MCP configuration storage is unavailable. Your draft is retained. Review storage availability, locks and free space, then explicitly reload or compare before saving.",
   );
 };
+const failure = mcpWorkspaceFailure;
 export function McpWorkspace({
   api,
   active,
@@ -82,6 +88,7 @@ export function McpWorkspace({
   const [formDirty, setFormDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [retryKey, setRetryKey] = useState(0);
   const [compare, setCompare] = useState(false);
   const [issueLocation, setIssueLocation] = useState<{ issue: McpTextIssue; key: string }>();
   const [guard, setGuard] = useState<{ title: string; proceed(): void }>();
@@ -108,33 +115,37 @@ export function McpWorkspace({
   );
   const context = useRef(contextKey);
   context.current = contextKey;
-  const load = useCallback(async () => {
-    if (!awake.current || reloadToken.current !== undefined) return;
-    const token = ++sequence.current;
-    try {
-      const list = await api.mcpTargets();
-      if (!awake.current || token !== sequence.current || contextKey !== context.current) return;
-      setTargets(list);
-      const selected = list.targets.find((t) =>
-        scope === "user" ? t.address.scope === "user" : t.address.targetId === scope,
-      );
-      if (!selected) {
-        setDraft((v) => (v ? { ...v, ownerLost: true } : v));
-        setError(
-          "This configuration owner is unavailable. Reopen the project and explicitly reload or select its new configuration.",
+  const load = useCallback(
+    async (clearError = false) => {
+      if (!awake.current || reloadToken.current !== undefined) return;
+      const token = ++sequence.current;
+      try {
+        const list = await api.mcpTargets();
+        if (!awake.current || token !== sequence.current || contextKey !== context.current) return;
+        setTargets(list);
+        const selected = list.targets.find((t) =>
+          scope === "user" ? t.address.scope === "user" : t.address.targetId === scope,
         );
-        return;
+        if (!selected) {
+          setDraft((v) => (v ? { ...v, ownerLost: true } : v));
+          setError(
+            "This configuration owner is unavailable. Reopen the project and explicitly reload or select its new configuration.",
+          );
+          return;
+        }
+        const value = await api.mcpReadText(selected.address);
+        if (!awake.current || token !== sequence.current || contextKey !== context.current) return;
+        setDraft((v) => (v ? observeMcpDraft(v, value) : newMcpDraft(value)));
+        if (clearError) setError("");
+      } catch (cause) {
+        if (awake.current && token === sequence.current) {
+          setDraft((v) => (v ? { ...v, ownerLost: true } : v));
+          setError(failure(cause));
+        }
       }
-      const value = await api.mcpReadText(selected.address);
-      if (!awake.current || token !== sequence.current || contextKey !== context.current) return;
-      setDraft((v) => (v ? observeMcpDraft(v, value) : newMcpDraft(value)));
-    } catch (cause) {
-      if (awake.current && token === sequence.current) {
-        setDraft((v) => (v ? { ...v, ownerLost: true } : v));
-        setError(failure(cause));
-      }
-    }
-  }, [api, scope, contextKey]);
+    },
+    [api, scope, contextKey],
+  );
   useEffect(() => {
     const change = () => setVisible(document.visibilityState !== "hidden");
     document.addEventListener("visibilitychange", change);
@@ -330,12 +341,18 @@ export function McpWorkspace({
             hideCloseButton
           />
         )}
-        {draft?.ownerLost && (
+        {(draft?.ownerLost || (!draft && error)) && (
           <Button
             variant="quiet"
             type="button"
             disabled={busy}
-            onClick={() => setGuard({ title: "Reload MCP configuration?", proceed: () => {} })}
+            onClick={() => {
+              if (draft) setGuard({ title: "Reload MCP configuration?", proceed: () => {} });
+              else {
+                setRetryKey((n) => n + 1);
+                void load(true);
+              }
+            }}
           >
             Reload configuration
           </Button>
@@ -344,11 +361,11 @@ export function McpWorkspace({
           <TabPanel>
             {mode === "servers" && (
               <McpServersPage
-                key={scope}
+                key={`${scope}:${retryKey}`}
                 api={api}
                 active={active && visible}
                 contextKey={contextKey}
-                configuration={{ scope, select, reload: load }}
+                configuration={{ scope, select, reload: () => void load(true) }}
                 onFormDirty={setFormDirty}
                 readOnly={draft?.ownerLost ?? false}
                 {...table}

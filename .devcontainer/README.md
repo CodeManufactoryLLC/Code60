@@ -113,8 +113,10 @@ Sign in inside the container; no host home, credential files or authentication
 sockets are mounted or imported. Each worktree's provider home is independent.
 Normal `down` and test cleanup retain it. Removing that named volume explicitly
 also removes its stored provider tools and logins; it is private state, not a
-rebuildable dependency cache. Development Code60 settings/history remain under
-this checkout's ignored `test-results/dev` directory.
+rebuildable dependency cache. Development Code60 settings, MCP configuration,
+private locks, Vite cache and history live in this worktree's separate Linux
+`dev-state` volume mounted at `test-results/dev` (mode `0700`), keeping them on
+native Linux storage instead of a macOS host bind mount.
 
 When upgrading an older container that has no home volume, preserve any provider
 files from that container before running `down`; a new mount cannot recover files
@@ -139,10 +141,12 @@ When upgrading an existing fixed-port container, run `npm run devcontainer -- do
 first, then prepare and start it again.
 
 Only the checkout and, for a linked worktree, its common Git directory are bound
-into the container. The container home uses a private named volume. Dependencies, build output,
-npm cache, Chromium and model assets use separate named Linux-only caches. Host `node_modules`, `dist` and models
-are hidden by those mounts and remain untouched. Test evidence under
-`test-results` stays visible on the host.
+into the container. The container home and `test-results/dev` development state
+use private named Linux volumes. Dependencies, build output, npm cache, Chromium
+and model assets use separate named Linux-only caches. Host `node_modules`,
+`dist`, `models` and `test-results/dev` are hidden by those mounts and remain
+untouched. Other test evidence under `test-results` (such as `browser` and `qa`)
+stays visible on the host.
 
 The root cache-initialization service sees only those named volumes. The
 development service and editor run as the non-root `node` user, with Linux host
@@ -269,9 +273,10 @@ npm run devcontainer -- down
 
 The helper stops and removes this checkout's labelled containers, removes its
 exported build/UID-adjusted images and verifies both inventories. It never prunes
-Docker globally or force-removes an image used elsewhere. The private provider-home volume and npm, dependency,
-Chromium, model and compiled-output cache volumes are intentionally retained;
-BuildKit caches and host evidence are also retained. No custom network is created.
+Docker globally or force-removes an image used elsewhere. The private provider-home
+and development-state volumes and npm, dependency, Chromium, model and
+compiled-output cache volumes are intentionally retained; BuildKit caches and
+host evidence are also retained. No custom network is created.
 
 Failed startup attempts cleanup automatically. Cancelling a helper-driven `exec`
 also attempts cleanup. Failed commands otherwise leave the container available
