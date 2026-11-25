@@ -28,7 +28,7 @@ A Windows device can still open Code60's browser interface over a private local 
 
 No. Code60 installs, runs, and supports local development without Docker.
 
-Code60 runs natively on macOS Apple Silicon and Linux x64. It uses a local Node.js 24 backend, a browser interface, and separate Git worktrees for coding agents.
+Code60 runs natively on macOS Apple Silicon and Linux x64. It uses [Code60 Gateway](terminology-draft.md#gateway) (a local Node.js 24 backend), a browser interface, and separate Git worktrees for coding agents.
 
 Only optional contributor workflows require a local Linux Docker engine with Compose v2. Docker Desktop remains optional.
 
@@ -42,12 +42,12 @@ Optional Docker agent workers for stricter filesystem and network boundaries app
 Yes, for local lifecycle management only. The `code60` command-line interface (CLI) cannot submit prompts or run coding agents.
 
 - **Opening and pairing:** `code60 open` opens the browser interface, and `code60 pairing on|off|status` controls local pairing codes.
-- **Installation and backend service:** `code60 setup`, `code60 status`, `code60 update`, `code60 uninstall`, and `code60 service` manage installation and the per-user backend service.
+- **Installation and backend service:** `code60 setup`, `code60 status`, `code60 update`, `code60 uninstall`, and `code60 service` manage installation and the per-user Code60 Gateway service.
 - **Workflow sign-in:** `code60 workflows login` opens the internal Codex login flow for **Transmission Workflows**.
 
 ### Does Code60 have a native desktop app?
 
-No. Code60 runs as a local Node.js 24 backend with a React browser interface.
+No. Code60 runs [Code60 Gateway](terminology-draft.md#gateway) (a local Node.js 24 backend) with a React browser interface.
 
 There is no Electron wrapper, native window application, or DMG, DEB, or AppImage installer. Closing or refreshing the browser keeps active agents, **Scheduled Jobs**, and **Transmission Workflows** running in the background.
 
@@ -63,7 +63,7 @@ A phone or tablet on the same private local network can open Code60's browser in
 
 No. Code60 never deletes Git worktrees automatically.
 
-- **Normal lifecycle events:** Finishing, cancelling, or stopping a run leaves existing worktrees intact. Closing the browser, stopping or restarting the backend, updating Code60, or running `code60 uninstall` or `code60 service uninstall` also keeps them on disk.
+- **Normal lifecycle events:** Finishing, cancelling, or stopping a run leaves existing worktrees intact. Closing the browser, stopping or restarting Code60 Gateway, updating Code60, or running `code60 uninstall` or `code60 service uninstall` also keeps them on disk.
 - **Scheduled Jobs and Transmission Workflows:** Worktrees from **Scheduled Jobs** and **Transmission Workflows** stay on disk. A user can inspect changes and diffs with normal Git tools.
 - **Manual removal:** For an inactive run, open its actions menu (for example, in **Apps → Data Viewer**) and choose **Delete worktree**. Code60 blocks removal while the run or its agent process remains active.
 - **Confirmation and history:** Before removing a worktree and its run branch, Code60 shows a confirmation dialog. That dialog lists the worktree path, branch, and every file with edits that removal erases. After removal, the session record stays visible as inactive.
@@ -121,9 +121,9 @@ Code60 protects the browser interface, local API, orchestration gateway, files, 
 
 #### Browser, local network, and API boundaries
 
-- **Localhost interface:** The backend listens on `127.0.0.1` by default and enforces Host, Origin, and Content Security Policy (CSP) checks. Browser tabs use per-tab session tokens, explicit **Take control** transfers, and optional `code60 pairing on` codes.
+- **Localhost interface:** Code60 Gateway listens on `127.0.0.1` by default and enforces Host, Origin, and Content Security Policy (CSP) checks. Browser tabs use per-tab session tokens, explicit **Take control** transfers, and optional `code60 pairing on` codes.
 - **Web Server (Beta) limits:** Optional local-network access starts off and uses only the primary private IPv4 address. It enforces single-use 60-second pairing codes with rate limits, separates local and network sessions, serves only static release assets, and blocks management routes.
-- **Narrow application API:** The gateway validates every request against a strict operation map and exposes no generic shell or filesystem interface. File choosers accept only opaque IDs inside local workspace roots, and human confirmations stay browser-only.
+- **Narrow application API:** Code60 Gateway validates every request against a strict operation map and exposes no generic shell or filesystem interface. File choosers accept only opaque IDs inside local workspace roots, and human confirmations stay browser-only.
 
 #### Process, filesystem, and storage safeguards
 
@@ -209,15 +209,15 @@ Yes. Code60 supports [MCP](terminology-draft.md#mcp) for both its own orchestrat
 
 **Scheduled Jobs** run locally on the host computer inside a mandatory separate Git worktree. There is no cloud runner or remote service.
 
-- **Local backend service:** The per-user Code60 backend (`launchd` on macOS or user `systemd` without linger on Linux) runs each job directly on the host machine. The machine must stay awake with an active user login session.
+- **Local backend service:** The per-user [Code60 Gateway](terminology-draft.md#gateway) service (`launchd` on macOS or user `systemd` without linger on Linux) runs each job directly on the host machine. The machine must stay awake with an active user login session.
 - **Separate Git worktree:** Each run creates a separate Git worktree from the job's local repository and base branch. It runs one headless turn under an explicit deny-by-default permission allowlist, without external MCP servers or implicit memory.
 - **Manual review:** Code60 keeps the worktree, transcript, and diff on disk and never automatically applies, merges, commits, or pushes changes.
 
 ### Do Scheduled Jobs automatically resume when I restart my computer?
 
-Future occurrences resume automatically when the per-user backend service is active, while incomplete runs and occurrences during downtime never replay.
+Future occurrences resume automatically when the per-user Code60 Gateway service is active, while incomplete runs and occurrences during downtime never replay.
 
-- **Automatic service startup:** After `code60 service install`, `launchd` (macOS) or user `systemd` without linger (Linux) starts the backend again when the user logs in. Future occurrences from **Scheduled Jobs** continue on their normal cadence.
+- **Automatic service startup:** After `code60 service install`, `launchd` (macOS) or user `systemd` without linger (Linux) starts Code60 Gateway again when the user logs in. Future occurrences from **Scheduled Jobs** continue on their normal cadence.
 - **No catch-up or replay:** Code60 never replays a run that stops during a reboot and never catches up on occurrences from sleep or downtime.
 - **Uncertain leftover processes:** If a reboot leaves uncertain process ownership behind, Code60 pauses new launches. A user must confirm the old process no longer runs and clear the block in **Apps → System Manager**.
 
@@ -242,7 +242,7 @@ Code60 includes broad keyboard, screen-reader, contrast, and motion accessibilit
 
 ### What programming language does Code60 use?
 
-Code60 uses **TypeScript** for both its local Node.js 24 backend and its React browser interface.
+Code60 uses **TypeScript** for both Code60 Gateway (its local Node.js 24 backend) and its React browser interface.
 
 - **Application code:** Core logic, gateway services, management commands, and the React user interface use TypeScript (`.ts`, `.tsx`, and `.mts`).
 - **Styling and markup:** The browser interface uses Cascading Style Sheets (CSS), Sass (`SCSS`), and HyperText Markup Language (HTML) with IBM Carbon Design System styles.

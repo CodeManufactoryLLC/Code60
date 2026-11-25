@@ -18,6 +18,12 @@ Agent Providers supply the underlying coding agents for both layers of Code60's 
 
 Code60 does not provide native desktop Computer Use. For web tasks, Code60 provides browser automation (`code60_browser`), which controls web pages in Chrome without operating native desktop applications.
 
+## Gateway
+
+**Code60 Gateway** is Code60's local Node.js 24 backend service. It serves the browser interface, enforces browser and network security boundaries, manages agent sessions, and runs **Scheduled Jobs**.
+
+Code60 Gateway runs in the background as a per-user service. Active agents and **Scheduled Jobs** continue running after closing or refreshing the browser.
+
 ## Internal Prompts
 
 **Internal Prompts** are the system prompt templates under **Customize → Internal Prompts** that guide project orchestration and session handoffs in Code60. They cover the **Operating Contract**, handoff summary, handoff turn, and worker-update templates.
@@ -36,6 +42,12 @@ The Operating Contract is the instruction set that defines how a project orchest
 
 A user can edit its clauses under **Customize → Internal Prompts**. It guides assistant behavior and does not act as a security boundary.
 
+## Orchestration
+
+**Orchestration** is the high-level coordination work in the top layer of Code60's [Two-Layer Architecture](#two-layer-architecture). It covers planning, task delegation, worker supervision, and result review across **Relay**, **Custom Assistants**, and project chats.
+
+An orchestrator breaks requests into standalone tasks, dispatches worker agents into separate Git worktrees, and tracks their progress with human oversight. Direct repository edits stay in the worker layer.
+
 ## Relay
 
 **Relay** is Code60's always-on, application-wide assistant under **Chat → Relay**. It keeps its own persistent workspace and history, separate from any single project or database.
@@ -44,9 +56,9 @@ Relay operates in the orchestration layer of Code60's [Two-Layer Architecture](#
 
 ## Transmission Server
 
-**Transmission Server** is the local execution engine that runs **Workflow** tasks independently from the Code60 backend.
+**Code60 Transmission Server** is the local execution engine that runs **Workflow** tasks independently from [Code60 Gateway](#gateway).
 
-Because it operates as its own local process, active workflows continue running even after closing the browser or stopping the Code60 backend.
+Because Code60 Transmission Server operates as its own local process, active workflows continue running even after closing the browser or stopping Code60 Gateway.
 
 ## Two-Layer Architecture
 
