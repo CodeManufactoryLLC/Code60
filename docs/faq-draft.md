@@ -2,6 +2,21 @@
 
 ## Requirements and Setup
 
+### Which platforms does Code60 support?
+
+Code60 supports **macOS Apple Silicon** (`arm64`) and **Linux `x64`**.
+
+- **macOS:** Requires Apple Silicon (`arm64`).
+- **Linux:** Requires `x64` with `glibc` and `libgomp1`. Per-user background service setup also requires an active user `systemd` session. Alpine (`musl`) and Linux `arm64` remain outside current support.
+- **Software prerequisites:** Requires Node.js 24 (`>=24.22.0 <25` for setup, updates, uninstall, and **Transmission Workflows**), `npm`, Git, and at least one **Agent Provider**.
+- **Browser access:** Runs in a modern browser on the host machine, or from another device on a private network through **Web Server (Beta)**.
+
+### Does Code60 support Windows?
+
+No. Code60 currently supports **macOS Apple Silicon** and **Linux `x64`** only and blocks startup on Windows hosts.
+
+A Windows device can still open Code60's browser interface over a private local network through **Web Server (Beta)**. Code60 must still run on a macOS or Linux host for that setup.
+
 ### Do I need Docker to run Code60?
 
 No. Code60 installs, runs, and supports local development without Docker.
@@ -123,6 +138,17 @@ No. Code60 does not call or manage an [Agent Provider's](terminology-draft.md#ag
 In Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture), orchestrators delegate coding tasks by starting Code60 worker sessions through ACP. Each project worker runs in its own Git worktree with its own transcript and lifecycle controls.
 
 Code60 does not block a provider's internal subagents. If a harness spawns its own subagents during a turn, they run inside that session's directory or worktree under that provider's control.
+
+## Accessibility
+
+### Is Code60 accessible?
+
+Code60 includes broad keyboard, screen-reader, contrast, and motion accessibility support, though formal accessibility certification remains future work on the [Code60 roadmap](../ROADMAP.md).
+
+- **Keyboard and focus:** Code60 uses IBM Carbon Design System components and includes a **Skip to main content** link. Menus, tables, trees, dialogs, and the command palette (`Cmd+K` or `Ctrl+K`) support full keyboard navigation. Closing overlays restores focus to the trigger control.
+- **Screen readers and status cues:** Controls include accessible labels, Accessible Rich Internet Applications (ARIA) states, and polite or alert status announcements. Status indicators include text labels alongside color.
+- **Themes, text, and system preferences:** **Personalize** settings offer **Light**, **Dark**, and **System** themes, adjustable interface text size, and focus highlights. The interface also respects operating-system `forced-colors` (high-contrast) and `prefers-reduced-motion` settings by switching to system colors and turning off animations.
+- **Current compliance status:** Code60 makes no formal Web Content Accessibility Guidelines (WCAG) compliance claim today. Full accessibility readiness sits under the `v0.12.0` milestone in the [Code60 roadmap](../ROADMAP.md).
 
 ## Provider Support
 
