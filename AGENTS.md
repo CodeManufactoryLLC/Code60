@@ -5,6 +5,8 @@ React browser app with a unified login backend. Keep
 changes reliable in both the desktop app and automated, non-interactive
 environments.
 
+For UI work, follow [Using IBM Carbon in Code60](docs/carbon-design-system.md). Use the Carbon MCP server for design and accessibility guidance before choosing components. Record new, changed, or retired departures in the guide’s exception register in the same PR.
+
 ## Concurrent work on a shared host
 
 - Before editing, verify the canonical checkout, current branch, Git status and
