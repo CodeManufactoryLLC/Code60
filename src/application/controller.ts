@@ -968,7 +968,10 @@ export class ApplicationHost {
   private summaryListeners = new Set<(snapshot: Snapshot) => void>();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private queue: Promise<unknown> = Promise.resolve();
+  private queuedActions = 0;
   private closing = false;
+  private shutdownStarted = false;
+  private removalReservation: symbol | null = null;
   private forceClosing = false;
   private database: ProjectDatabase | undefined;
   private databaseError: string | null = null;
@@ -5199,15 +5202,46 @@ export class ApplicationHost {
     }, 40);
   }
 
+  private queueAction<T>(operation: () => Promise<T>): Promise<T> {
+    this.queuedActions++;
+    const result = this.queue.then(operation).finally(() => {
+      this.queuedActions--;
+    });
+    this.queue = result.catch(() => {});
+    return result;
+  }
   private exclusive<T>(operation: () => Promise<T>): Promise<T> {
     const owner = this.projectHost.current;
-    const result = this.queue.then(() => {
+    return this.queueAction(() => {
       if (this.closing) throw new Error("The app is stopping");
       this.projectHost.assertCurrent(owner);
       return this.projectHost.run(owner, operation);
     });
-    this.queue = result.catch(() => {});
-    return result;
+  }
+
+  /** Reserve the idle lifecycle on the action queue before a consented uninstall shutdown. */
+  async reserveIdleForUninstall(signal?: AbortSignal): Promise<() => Promise<void>> {
+    signal?.throwIfAborted();
+    if (this.queuedActions)
+      throw Error("Application operation is pending; finish it before uninstalling.");
+    return this.exclusive(async () => {
+      signal?.throwIfAborted();
+      if (this.hasActiveWork || this.taskOperation || this.providerMutation)
+        throw Error("Application work is active or changing; finish it before uninstalling.");
+      const token = Symbol("uninstall reservation");
+      this.removalReservation = token;
+      this.closing = true;
+      let released = false;
+      return () =>
+        this.queueAction(async () => {
+          if (released) return;
+          if (this.removalReservation !== token)
+            throw Error("Application uninstall reservation changed.");
+          this.removalReservation = null;
+          if (!this.shutdownStarted) this.closing = false;
+          released = true;
+        });
+    });
   }
 
   /** Reconnects to the database remembered from the previous launch, if any. */
@@ -7002,6 +7036,7 @@ export class ApplicationHost {
 
   async shutdown(force = false): Promise<void> {
     this.details.clear();
+    this.shutdownStarted = true;
     this.closing = true;
     this.authentication?.beginShutdown();
     const results = await Promise.allSettled([

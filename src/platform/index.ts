@@ -37,6 +37,23 @@ export {
   writeInstallationFile,
 } from "./installation-files.js";
 export { installationPrerequisite, runInstallationCommand } from "./installation-process.js";
+export {
+  type InstallationRemovalEntry,
+  type InstallationRemovalInventory,
+  type InstallationRemovalLink,
+  inventoryInstallationRemoval,
+  removeInstallationInventory,
+  removeRecordedInstallationLink,
+  snapshotRemovalLink,
+  validateInstallationRemovalInventory,
+  verifyInstallationRemovalRemainder,
+} from "./installation-removal.js";
+export {
+  captureRemovalServiceProof,
+  type RemovalServiceProof,
+  reserveRemovedBackend,
+  validateRemovalServiceProof,
+} from "./installation-removal-service.js";
 export { isPrivateIPv4, primaryPrivateIPv4 } from "./lan-address.js";
 export {
   type GuardedNetworkOptions,
@@ -61,6 +78,19 @@ export {
 } from "./private-state.js";
 export { type OwnedProcess, spawnOwnedProcess } from "./process.js";
 export {
+  type RuntimeProcessIdentity,
+  runtimeProcessExists,
+  waitForRuntimeExit,
+} from "./process-identity.js";
+export {
+  findRuntimeProcesses,
+  inspectRuntimeProcess,
+  runtimeFileProcesses,
+  runtimeInspectionSupported,
+  runtimeProcessFamily,
+  verifyRuntimeInspection,
+} from "./runtime-process.js";
+export {
   appendPrivateFile,
   atomicReplace,
   createPrivateDirectory,
@@ -76,6 +106,7 @@ export {
   installedEngineVersions,
   preserveTransmissionBundle,
   resolveTransmissionRuntime,
+  type TransmissionVersion,
   workflowHostSupported,
 } from "./transmission-bundle.js";
 export {

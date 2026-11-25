@@ -226,6 +226,29 @@ describe("DesktopKnowledge", () => {
     );
     expect(reads).toEqual([]);
   });
+  it("describes terminal-only uninstall with unknown ownership and no service or filesystem probes", async () => {
+    const { knowledge, reads } = setup({ database: null, providers: [] });
+    const response = result(
+      await knowledge.call("code60_get_capabilities", { query: "Uninstall Code60" }, relay),
+    );
+    expect(response.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "uninstall",
+          prerequisite: "none",
+          agentAccess: "human-only",
+          tools: [],
+          availability: expect.objectContaining({
+            status: "unknown",
+            reason: expect.stringContaining("cannot verify managed installation"),
+            action: expect.stringContaining("local terminal"),
+          }),
+        }),
+      ]),
+    );
+    expect(JSON.stringify(response)).toContain("Linux procfs");
+    expect(reads).toEqual([]);
+  });
   it("exposes approval settings as human-only even without a provider or database", async () => {
     const { knowledge } = setup({ database: null, providers: [] });
     const capabilities = result(

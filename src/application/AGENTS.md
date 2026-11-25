@@ -397,6 +397,29 @@ npx or a compiler at execution time. A missing bundle may be cached from prepare
 local assets only on explicit start/reconnect; damaged bindings require recovery,
 never fallback. Keep Transmission provider authentication separate from Code60's
 verified provider membership. Backend shutdown does not cancel approved workflows.
+Uninstall inspection reads strict saved workflow evidence without acquiring a
+writer, connecting an engine or creating storage. Pending stops, uncertain starts,
+inconsistent terminal snapshots and duplicate ownership cannot authorize removal.
+Saved terminal state does not establish process quiescence.
+Idle uninstall reservations share the application action queue and closing gate;
+refuse live work before reserving. Releasing a refused overall preparation may
+reopen an idle owner, but must never reopen one whose shutdown has begun.
+Workflow reservations also fence draft admission and queued starts; an active
+draft or another writer cannot be treated as idle.
+Refuse reservations promptly while application/workflow actions await completion;
+never wait behind a human operation whose answer an uninstall gate would block.
+Native uninstall preparation reads the pinned engine SQLite schema read-only and
+matches terminal runs to strict saved Code60 ownership before any stop. Never import
+the engine constructor for inspection: it reconciles and wakes stored work. Inspect
+all recorded supported versions first, then use authenticated fixed health/stop with verified Node,
+native process identity and private endpoint identity. Require positive process
+and open-file absence without an endpoint; preserve uncertain evidence. Only this
+explicit uninstall path may stop idle independent engines, never ordinary close.
+Stopped-backend uninstall preparation is called only while gateway owns the
+service-operation lock and has proved backend absence. Reserve an existing
+workflow writer without reclaiming stale evidence; refuse active/uncertain history
+before any engine stop. A fresh missing workflow root needs no creation. Release
+the writer afterward, preserving every registry, database and engine binding.
 Pin CODEX_PATH to the verified cached native Codex for new engines; application
 provider overrides must not replace this runtime. Preserve healthy existing engines.
 

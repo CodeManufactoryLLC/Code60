@@ -1,5 +1,40 @@
 # User workflow cards
 
+## State-preserving uninstall
+
+- Start with a real managed installation, retained customer database/preferences,
+  fake verified provider and synthetic Git work. Complete the shared golden
+  journey before removal; capture data, Git/index/HEAD/worktrees and process IDs.
+- Decline service removal and verify no backend interruption or installation
+  changes. With explicit consent, inspect active/uncertain workflow ownership
+  before quiescence, unregister only the owned service and verify exact process
+  exit before removing application files. Inspecting engines must not start them.
+- Interrupt cleanup and resume using durable support after temporary caches are
+  gone. Modified files/directories/links and foreign launchers remain intact with
+  recovery guidance. Repeated uninstall and reinstall preserve and validate data;
+  there is no purge or uncertain-work replay.
+- Approve profile removal separately in an interactive terminal; check real
+  Bash/zsh/fish startup, declined/non-TTY behavior, CRLF/permissions, outside edits
+  and partial completion. Preserve modified or ambiguous blocks and unrelated
+  bytes. Do not install host fish or touch real host profiles/services.
+- Retain full Linux/native evidence and independently verify owned process and
+  Docker resource cleanup. Unit tests establish supporting behavior only; native
+  login/reboot certification remains separate Phase 9 work.
+- Supporting native engine preparation can run with
+  `npm run test:uninstall:engines -- release/payloads/darwin-arm64.json` after a
+  build. It verifies/extracts that artifact, starts both empty engines from their
+  independent cache in isolated state, exercises production ownership/stop checks,
+  compares saved rows and verifies process exit. It calls no provider or real
+  login service and does not substitute for complete installed uninstall acceptance.
+  It also removes a deliberately inert synthetic application through durable
+  support, preserves the actual engine cache/history, and refuses a late engine
+  restart before deleting files. Record that fixture distinction in the report.
+- Exercise the actual recovery launcher from another directory after entrypoint
+  and temporary cache deletion. Changed HOME/XDG must not select another service
+  scope. Verify SIGINT/SIGTERM results and helper-process exit independently;
+  release failures remain failures even after completed deletion. Preserve
+  completed receipts and prove an old recovery cannot remove a reinstallation.
+
 ## Explicit update and recovery
 
 - Start from a real isolated managed installation with a valid custom database,
@@ -150,6 +185,24 @@ and supported controls before extending tests. Retain evidence under ignored
   claims/history, worktree diff and absence of checkout/index mutation.
 - **Cleanup:** explicitly stop the isolated service and its children, uninstall
   only a registration created for this run with authorization. Otherwise BLOCKED.
+
+## State-preserving uninstall and retained-data reinstall
+
+- **Start:** exact platform payload, isolated setup-created/custom database and
+  fake provider, complete shared golden journey through confirmed Undo. Retain
+  the original backend PID, independent SQLite/preferences and Git/worktree state.
+- **Actions:** reject invalid options, missing non-TTY consent and unowned release
+  additions; approve application/service removal separately from shell changes.
+  Repeat standalone recovery, reinstall the same verified artifact and reopen data.
+- **Invariants:** no interruption before consent/ownership proof; original backend
+  and providers exit; only receipted installation files disappear. Databases,
+  configuration, engine bindings/history, profiles and worktrees remain. Old
+  recovery cannot remove the new activation or stop its backend.
+- **Evidence/cleanup:** full traces, logical SQLite and file/Git hashes, original
+  process absence, completed receipts and independently inspected Docker inventory.
+  Writable maintenance shares only this run's PID/loopback namespaces and volumes;
+  the browser journey retains read-only application trees. Never count test-only
+  supervisor coverage as native login/reboot certification.
 
 ## Memory and context handoff
 

@@ -44,6 +44,7 @@
     "test:packaged": "node scripts/test-package.mjs",
     "test:mcp:native": "node scripts/test-mcp-native.mjs",
     "test:packaged:clean": "node scripts/test-clean-install.mjs",
+    "test:packaged:concurrent": "node scripts/test-concurrent-clean-install.mjs",
     "test:memory:performance": "npm run build && node scripts/benchmark-memory.mjs",
     "service": "node dist/management/main.js service",
     "test:browser": "npm run build && playwright test",
@@ -56,7 +57,10 @@
     "build:distribution": "node scripts/build-distribution.mjs",
     "test:installation": "npm run build:distribution && node scripts/test-installation.mjs",
     "test:setup": "node scripts/test-setup.mjs",
+    "test:uninstall": "node scripts/test-uninstall.mjs",
+    "verify:artifact": "node scripts/verify-artifact-handoff.mjs",
     "test:update": "node scripts/test-update.mjs",
+    "test:uninstall:engines": "node scripts/test-uninstall-engines.mjs",
     "prepare:engines": "node scripts/prepare-engines.mjs",
     "test:transmission": "playwright test --config test/transmission-native.config.ts"
   },

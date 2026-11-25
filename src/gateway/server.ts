@@ -10,10 +10,12 @@ import {
   DesktopLogStore,
   DesktopWorkflows,
   filePreferences,
+  inspectWorkflowRecordsForUninstall,
   openProjectDatabase,
   prepareCodexEnvironment,
   providerAgents,
   type TransmissionClient,
+  type TransmissionRemovalPorts,
 } from "../application/index.js";
 import { startSchedulerRuntime } from "../automation/index.js";
 import {
@@ -75,6 +77,7 @@ export interface GatewayOptions {
   /** Trusted host composition only; browser/CLI requests cannot select a PATH. */
   refreshPath?: (signal: AbortSignal) => Promise<void>;
   workflowClients?: { current: TransmissionClient; legacy: TransmissionClient };
+  workflowRemoval?: TransmissionRemovalPorts;
 }
 const json = (value: unknown) => JSON.stringify(value ?? null);
 async function body(request: IncomingMessage): Promise<unknown> {
@@ -157,6 +160,9 @@ export async function startGateway(options: GatewayOptions = {}) {
   let settingWrites: Promise<unknown> = Promise.resolve();
   let closing = false;
   let quiescing = false;
+  let preparingUninstall = false;
+  let uninstallPrepared = false;
+  let uninstallProof: { quiescent: true; pid: number; enginePids: number[] } | undefined;
   let stopped: Promise<void> | undefined;
   let shutdownRequested = false;
   let transferring = false;
@@ -283,6 +289,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     (input, signal) => application.draftWorkflow(input, signal),
     options.workflowClients?.current,
     options.workflowClients?.legacy,
+    options.workflowRemoval,
   );
   const operations = applicationOperations(
     application,
@@ -454,7 +461,7 @@ export async function startGateway(options: GatewayOptions = {}) {
           else if (path === "/management/pairing") {
             const value = await body(request);
             if (value !== null) {
-              if (changingPairing || transferring || quiescing)
+              if (changingPairing || transferring || quiescing || preparingUninstall)
                 throw new Error("Backend is busy. Try again.");
               const next = pairingPolicySchema.parse(value).requirePairing;
               if (next !== requirePairing || settings?.requirePairing !== next) {
@@ -492,6 +499,23 @@ export async function startGateway(options: GatewayOptions = {}) {
               scheduledActive: scheduled ? scheduled.activeExecutionId !== null : null,
               schedulerAvailable: !!scheduled && !schedulerError,
             });
+          } else if (path === "/management/uninstall-summary") {
+            for await (const chunk of request)
+              if (chunk.length) throw new Error("Uninstall inspection accepts no payload");
+            const workflows = await inspectWorkflowRecordsForUninstall(env);
+            const scheduled = scheduler?.scheduler.status();
+            respond(response, {
+              pid: process.pid,
+              interactiveActive: application.hasActiveWork,
+              scheduledActive: scheduled ? scheduled.activeExecutionId !== null : null,
+              schedulerAvailable: !!scheduled && !schedulerError,
+              scheduledUncertain: scheduled ? scheduled.block !== null : null,
+              workflows,
+            });
+          } else if (path === "/management/prepare-uninstall") {
+            for await (const chunk of request)
+              if (chunk.length) throw new Error("Uninstall preparation accepts no payload");
+            respond(response, await prepareUninstall());
           } else if (path === "/management/prepare-database") {
             for await (const chunk of request)
               if (chunk.length) throw new Error("Database preparation accepts no payload");
@@ -499,6 +523,7 @@ export async function startGateway(options: GatewayOptions = {}) {
           } else if (path === "/management/status")
             respond(response, {
               pid: process.pid,
+              uninstallPrepared,
               appVersion: CODE60_VERSION,
               version: GATEWAY_VERSION,
               requirePairing,
@@ -511,6 +536,8 @@ export async function startGateway(options: GatewayOptions = {}) {
               },
             });
           else if (path === "/management/shutdown") {
+            if (preparingUninstall)
+              throw new Error("Backend is preparing to uninstall. Try again.");
             await quiesce();
             respond(response, { stopped: true });
           } else respond(response, { error: "Unknown management operation." }, 404);
@@ -573,7 +600,8 @@ export async function startGateway(options: GatewayOptions = {}) {
             return;
           }
           if (path === "/api/control" && request.method === "POST") {
-            if (transferring) throw new Error("Control is being transferred. Try again.");
+            if (transferring || preparingUninstall)
+              throw new Error("Backend control is busy. Try again.");
             transferring = true;
             try {
               const previous = sessions.controlling;
@@ -781,6 +809,54 @@ export async function startGateway(options: GatewayOptions = {}) {
   const server = createServer(handle(false, () => origin));
   server.requestTimeout = 30_000;
   server.headersTimeout = 10_000;
+  async function prepareUninstall() {
+    if (uninstallPrepared && uninstallProof)
+      return { ...uninstallProof, enginePids: [...uninstallProof.enginePids] };
+    if (preparingUninstall || quiescing || changingPairing || transferring)
+      throw Error("Backend is busy; finish current changes before uninstalling");
+    preparingUninstall = true;
+    const signal = AbortSignal.timeout(85_000);
+    const releases: (() => Promise<void>)[] = [];
+    let shutdownStarted = false;
+    let failure: unknown;
+    let result: { quiescent: true; pid: number; enginePids: number[] } | undefined;
+    try {
+      if (!scheduler || schedulerError)
+        throw Error("Scheduler ownership is unavailable; preserve state before uninstalling");
+      releases.push(await scheduler.scheduler.reserveIdleForUninstall(signal));
+      releases.push(await application.reserveIdleForUninstall(signal));
+      releases.push(await workflows.reserveIdleForUninstall(signal));
+      // Existing human operations can settle before reservation; new browser
+      // requests are blocked only once all execution owners have granted it.
+      quiescing = true;
+      const engines = await workflows.prepareUninstall(signal);
+      for (const engine of engines) await engine.stop(signal);
+      signal.throwIfAborted();
+      shutdownStarted = true;
+      await quiesce();
+      result = {
+        quiescent: true,
+        pid: process.pid,
+        enginePids: [...new Set(engines.flatMap((engine) => [...engine.pids]))],
+      };
+    } catch (error) {
+      failure = error;
+    } finally {
+      const released = await Promise.allSettled(releases.reverse().map((release) => release()));
+      preparingUninstall = false;
+      if (released.some((entry) => entry.status === "rejected")) {
+        quiescing = true;
+        failure = Error(
+          "Uninstall reservation cleanup is uncertain; inspect the backend before continuing",
+        );
+      } else if (failure) quiescing = shutdownStarted;
+    }
+    if (failure) throw failure;
+    if (!result) throw Error("Uninstall preparation is uncertain; preserve the installation");
+    uninstallProof = result;
+    uninstallPrepared = true;
+    return result;
+  }
   async function quiesce() {
     quiescing = true;
     await pairingChange?.catch(() => {});
@@ -890,11 +966,17 @@ export async function startGateway(options: GatewayOptions = {}) {
 }
 
 async function readGatewayConnection(env: Readonly<NodeJS.ProcessEnv>): Promise<GatewayConnection> {
-  const value = (await readPrivateJson(
-    join(gatewayRoot(env), "connection.json"),
-    4096,
+  const value = (await readPrivateJson(join(gatewayRoot(env), "connection.json"), 4096).catch(
+    (error: unknown) => {
+      if (fileCode(error) === "ENOENT") throw error;
+      throw Error(
+        "Backend connection metadata is unavailable or invalid. Existing state was preserved.",
+      );
+    },
   )) as GatewayConnection;
   if (
+    !value ||
+    typeof value !== "object" ||
     value.version !== GATEWAY_VERSION ||
     !/^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(value.origin) ||
     !/^[a-f0-9]{64}$/.test(value.token) ||
@@ -906,7 +988,15 @@ async function readGatewayConnection(env: Readonly<NodeJS.ProcessEnv>): Promise<
 }
 export async function managementRequest(
   env: Readonly<NodeJS.ProcessEnv>,
-  action: "pair" | "status" | "shutdown" | "pairing" | "prepare-database" | "update-summary",
+  action:
+    | "pair"
+    | "status"
+    | "shutdown"
+    | "pairing"
+    | "prepare-database"
+    | "update-summary"
+    | "uninstall-summary"
+    | "prepare-uninstall",
   value?: { requirePairing: boolean },
 ) {
   const connection = await readGatewayConnection(env);
@@ -918,7 +1008,7 @@ export async function managementRequest(
       ...(action === "pairing" ? { "Content-Type": "application/json" } : {}),
     },
     ...(action === "pairing" ? { body: JSON.stringify(value ?? null) } : {}),
-    signal: AbortSignal.timeout(action === "shutdown" ? 90_000 : 5000),
+    signal: AbortSignal.timeout(["shutdown", "prepare-uninstall"].includes(action) ? 90_000 : 5000),
   });
   const result = (await response.json()) as Record<string, unknown>;
   if (!response.ok)

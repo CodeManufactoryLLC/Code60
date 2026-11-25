@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   realpath,
   rename,
@@ -26,7 +27,11 @@ import type {
 import { defaultDeps } from "../core/index.js";
 import type { TransmissionClient } from "./transmission.js";
 import { workflowContext } from "./workflow-context.js";
-import { DesktopWorkflows } from "./workflows.js";
+import {
+  DesktopWorkflows,
+  inspectWorkflowRecordsForUninstall,
+  prepareOfflineWorkflowsForUninstall,
+} from "./workflows.js";
 
 const roots: string[] = [];
 const services: DesktopWorkflows[] = [];
@@ -99,16 +104,10 @@ async function fixture() {
     }),
   );
   const env = { XDG_STATE_HOME: join(root, "state") };
+  const pick = vi.fn(async () => repo);
   const deps = defaultDeps();
   const open = (legacyClient?: TransmissionClient) => {
-    const service = new DesktopWorkflows(
-      env,
-      deps,
-      async () => repo,
-      generate,
-      client,
-      legacyClient,
-    );
+    const service = new DesktopWorkflows(env, deps, pick, generate, client, legacyClient);
     services.push(service);
     return service;
   };
@@ -150,6 +149,7 @@ async function fixture() {
     approve,
     start,
     generate,
+    pick,
     open,
     offline: () => {
       fail = true;
@@ -457,3 +457,231 @@ it("retains a pending stop after a lost acknowledgement until cleanup is confirm
   await expect(f.service.request({ action: "resume", id })).rejects.toThrow("acknowledgement");
   expect(await f.service.request({ action: "cancel", id })).not.toHaveProperty("stopPending");
 });
+
+it("inspects active and terminal saved workflows without connecting engines or changing history", async () => {
+  const f = await fixture();
+  const { id } = await f.start();
+  const env = { XDG_STATE_HOME: join(f.root, "state") };
+  const path = join(f.service.root, "registry.json");
+  const before = await readFile(path);
+  const calls = f.call.mock.calls.length;
+  const connections = vi.mocked(f.client.connect).mock.calls.length;
+  expect(await inspectWorkflowRecordsForUninstall(env)).toEqual({
+    completed: 0,
+    active: 1,
+    uncertain: 0,
+  });
+  expect(await readFile(path)).toEqual(before);
+  expect(f.call).toHaveBeenCalledTimes(calls);
+  expect(f.client.connect).toHaveBeenCalledTimes(connections);
+  await f.service.request({ action: "cancel", id });
+  expect(await inspectWorkflowRecordsForUninstall(env)).toEqual({
+    completed: 1,
+    active: 0,
+    uncertain: 0,
+  });
+});
+
+it("fences idle workflow requests, leaves approved active work alone and does not reopen after close", async () => {
+  const f = await fixture();
+  const release = await f.service.reserveIdleForUninstall();
+  await expect(f.service.request({ action: "list" })).rejects.toThrow("closing");
+  expect(f.call).not.toHaveBeenCalled();
+  await release();
+  const { id } = await f.start();
+  const before = f.call.mock.calls.length;
+  await expect(f.service.reserveIdleForUninstall()).rejects.toThrow("Workflows are active");
+  expect(f.call).toHaveBeenCalledTimes(before);
+  await f.service.request({ action: "cancel", id });
+  const pending = await f.service.reserveIdleForUninstall();
+  await f.service.close();
+  await pending();
+  await expect(f.service.request({ action: "list" })).rejects.toThrow("closing");
+});
+
+it("refuses an active draft without cancelling or applying it and releases a cancelled idle reservation", async () => {
+  const f = await fixture();
+  let resolve: (value: WorkflowDraftReply) => void = () => {};
+  f.generate.mockImplementationOnce(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  const draft = f.service.request({
+    action: "draft",
+    formId: f.formId,
+    revision: 0,
+    requestId: randomUUID(),
+    fields: { name: "", tasks: [] },
+    messages: [{ role: "user", text: "Plan the change" }],
+  });
+  await vi.waitFor(() => expect(f.generate).toHaveBeenCalled());
+  await expect(f.service.reserveIdleForUninstall()).rejects.toThrow("preparation is active");
+  resolve({ message: "Ready" });
+  expect(await draft).toEqual({ message: "Ready" });
+  await expect(
+    f.service.reserveIdleForUninstall(AbortSignal.abort(Error("cancelled"))),
+  ).rejects.toThrow("cancelled");
+  const release = await f.service.reserveIdleForUninstall();
+  await release();
+  expect(await f.service.request({ action: "list" })).toMatchObject({ entries: [] });
+});
+
+it("refuses another workflow writer without reclaiming its lock or connecting engines", async () => {
+  const f = await fixture();
+  const second = f.open();
+  await expect(second.reserveIdleForUninstall()).rejects.toThrow("writer ownership is uncertain");
+  expect(f.call).not.toHaveBeenCalled();
+  expect(f.client.connect).not.toHaveBeenCalled();
+  expect(await f.service.request({ action: "list" })).toMatchObject({ entries: [] });
+  await f.service.close();
+  const release = await second.reserveIdleForUninstall();
+  await release();
+});
+
+it("refuses a pending human repository choice promptly instead of blocking its answer", async () => {
+  const f = await fixture();
+  let resolve: (value: string) => void = () => {};
+  f.pick.mockImplementationOnce(
+    () =>
+      new Promise<string>((done) => {
+        resolve = done;
+      }),
+  );
+  const choice = f.service.request({ action: "pickRepository", formId: randomUUID() });
+  await vi.waitFor(() => expect(f.pick).toHaveBeenCalledTimes(2));
+  try {
+    await expect(f.service.reserveIdleForUninstall()).rejects.toThrow("preparation is pending");
+  } finally {
+    resolve(f.repo);
+    await choice;
+  }
+  expect(f.call).not.toHaveBeenCalled();
+  const release = await f.service.reserveIdleForUninstall();
+  await release();
+});
+
+it("never mistakes uncertain or pending-stop terminal snapshots for uninstall readiness", async () => {
+  const f = await fixture();
+  const { id } = await f.start();
+  await f.service.request({ action: "cancel", id });
+  await f.service.close();
+  const path = join(f.service.root, "registry.json");
+  const saved = JSON.parse(await readFile(path, "utf8"));
+  const env = { XDG_STATE_HOME: join(f.root, "state") };
+  for (const patch of [
+    { state: "uncertain" },
+    { stopPending: true },
+    { state: "preparation_failed" },
+  ]) {
+    const changed = structuredClone(saved);
+    Object.assign(changed.entries[0], patch);
+    const text = JSON.stringify(changed);
+    await writeFile(path, text);
+    const calls = f.call.mock.calls.length;
+    expect(await inspectWorkflowRecordsForUninstall(env)).toEqual({
+      completed: 0,
+      active: 0,
+      uncertain: 1,
+    });
+    expect(await readFile(path, "utf8")).toBe(text);
+    expect(f.call).toHaveBeenCalledTimes(calls);
+  }
+});
+
+it("refuses damaged or duplicate workflow evidence and creates no state on a fresh inspection", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "code60 inspect workflows ")));
+  roots.push(root);
+  const env = { XDG_STATE_HOME: join(root, "empty-state") };
+  expect(await inspectWorkflowRecordsForUninstall(env)).toEqual({
+    completed: 0,
+    active: 0,
+    uncertain: 0,
+  });
+  expect(await readdir(root)).toEqual([]);
+  const f = await fixture();
+  await f.start();
+  await f.service.close();
+  const path = join(f.service.root, "registry.json");
+  const saved = JSON.parse(await readFile(path, "utf8"));
+  saved.entries.push(saved.entries[0]);
+  await writeFile(path, JSON.stringify(saved));
+  await expect(
+    inspectWorkflowRecordsForUninstall({ XDG_STATE_HOME: join(f.root, "state") }),
+  ).rejects.toThrow("duplicate ownership");
+  const damaged = "private draft fixture that must never appear in errors";
+  await writeFile(path, damaged);
+  await expect(
+    inspectWorkflowRecordsForUninstall({ XDG_STATE_HOME: join(f.root, "state") }),
+  ).rejects.toThrow("Workflow history is unavailable; preserve state before uninstalling");
+  expect(await readFile(path, "utf8")).toBe(damaged);
+});
+
+it("prepares a fresh offline uninstall without creating workflow state or connecting an engine", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "code60 offline removal ")));
+  roots.push(root);
+  const env = { XDG_STATE_HOME: join(root, "state") };
+  expect(await prepareOfflineWorkflowsForUninstall(env, new AbortController().signal)).toEqual({
+    enginePids: [],
+  });
+  expect(await readdir(root)).toEqual([]);
+  await expect(
+    prepareOfflineWorkflowsForUninstall(env, AbortSignal.abort(Error("cancelled"))),
+  ).rejects.toThrow("cancelled");
+  expect(await readdir(root)).toEqual([]);
+});
+
+it("reserves an existing offline workflow writer without changing its empty registry or starting an engine", async () => {
+  const f = await fixture();
+  const env = { XDG_STATE_HOME: join(f.root, "state") };
+  await expect(
+    prepareOfflineWorkflowsForUninstall(env, new AbortController().signal),
+  ).rejects.toThrow("No lock was reclaimed");
+  await f.service.close();
+  const before = await readFile(join(f.service.root, "registry.json")).catch(() => null);
+  const names = await readdir(f.service.root);
+  expect(await prepareOfflineWorkflowsForUninstall(env, new AbortController().signal)).toEqual({
+    enginePids: [],
+  });
+  expect(await readdir(f.service.root)).toEqual(names);
+  expect(await readFile(join(f.service.root, "registry.json")).catch(() => null)).toEqual(before);
+  expect(f.call).not.toHaveBeenCalled();
+  expect(f.client.connect).not.toHaveBeenCalled();
+});
+
+it.each(["active", "uncertain", "stale-writer"] as const)(
+  "refuses offline uninstall with %s evidence before any engine or history mutation",
+  async (fault) => {
+    const f = await fixture();
+    const { id } = await f.start();
+    if (fault !== "active") await f.service.request({ action: "cancel", id });
+    await f.service.close();
+    const path = join(f.service.root, "registry.json");
+    if (fault === "uncertain") {
+      const record = JSON.parse(await readFile(path, "utf8"));
+      record.entries[0].stopPending = true;
+      await writeFile(path, JSON.stringify(record));
+    }
+    if (fault === "stale-writer") {
+      await mkdir(join(f.service.root, ".writer"), { mode: 0o700 });
+      await writeFile(
+        join(f.service.root, ".writer/owner-1000000000-00000000-0000-4000-8000-000000000001"),
+        "",
+        { mode: 0o600 },
+      );
+    }
+    const before = await readFile(path);
+    const names = await readdir(f.service.root);
+    const calls = f.call.mock.calls.length;
+    await expect(
+      prepareOfflineWorkflowsForUninstall(
+        { XDG_STATE_HOME: join(f.root, "state") },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow(fault === "stale-writer" ? "No lock was reclaimed" : "active or uncertain");
+    expect(await readFile(path)).toEqual(before);
+    expect(await readdir(f.service.root)).toEqual(names);
+    expect(f.call).toHaveBeenCalledTimes(calls);
+  },
+);

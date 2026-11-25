@@ -20,8 +20,25 @@ export {
 } from "./installation-files.js";
 export { installationPrerequisite, runInstallationCommand } from "./installation-process.js";
 export {
+  type InstallationRemovalInventory,
+  type InstallationRemovalLink,
+  inventoryInstallationRemoval,
+  removeInstallationInventory,
+  removeRecordedInstallationLink,
+  snapshotRemovalLink,
+  validateInstallationRemovalInventory,
+  verifyInstallationRemovalRemainder,
+} from "./installation-removal.js";
+export {
+  type RemovalServiceProof,
+  reserveRemovedBackend,
+  validateRemovalServiceProof,
+} from "./installation-removal-service.js";
+export { findRuntimeProcesses, runtimeFileProcesses } from "./runtime-process.js";
+export {
   installedEngineVersions,
   preserveTransmissionBundle,
   resolveTransmissionRuntime,
+  type TransmissionVersion,
 } from "./transmission-bundle.js";
 export { newerStableRelease } from "./update-registry.js";

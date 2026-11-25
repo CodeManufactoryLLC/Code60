@@ -58,6 +58,14 @@ content before atomic replacement. Preserve permissions, newline style and unrel
 bytes. An installation-specific marked block and private shell receipt record
 ownership. Modified/unknown blocks receive manual instructions.
 
+The internal removal planner returns only each exact owned addition to remove.
+New receipts retain that addition so unrelated later profile edits can survive
+removal byte for byte. A receipt without its addition fingerprint requires an
+unchanged whole-file hash. Removal also requires separate interactive approval;
+service consent never grants permission to edit profiles. An edit made after the
+preview is preserved, and partial completion is reported. This planner alone does
+not unregister services or uninstall the application.
+
 Bash uses its first existing login profile and `.bashrc`; zsh uses `.zprofile` and
 `.zshrc` under absolute ZDOTDIR or HOME; fish uses XDG_CONFIG_HOME/fish/config.fish
 or its default. No discovery runs user profiles. Unsupported shells, startup
@@ -114,3 +122,25 @@ prune releases or kill an unverified process to make another attempt succeed.
 Repair requires establishing ownership and an explicit operator decision; there is
 no automatic stale-lock recovery command in Phase 4. Failed shell edits leave
 manual continuation instructions and identify any blocks already applied.
+
+## Uninstall recovery internals
+
+Phase 8's installed uninstall command is implemented and undergoing acceptance;
+see [uninstall and recovery](uninstall.md). Its internal cleanup publishes private
+support under `removals/<attempt>` before deleting any
+application files. The printed absolute recovery launcher uses recorded Node and
+remains usable after the application entrypoint or temporary bootstrap cache is gone.
+The original `current` pointer is retained until its owned files have been removed.
+
+Recovery uses immutable inventory/support hashes and durable `removal.json` progress.
+It rechecks the original service directory and registration identity under the same
+non-reclaiming operation lock used for guarded removal. It never selects a different
+state directory from a changed environment or stops an uncertain process. Changed
+files and replaced links remain intact; cleanup failures are reported even after
+application deletion has completed.
+
+Databases, configuration, run records, engine evidence/cache and worktrees are
+retained. Reinstall refuses unfinished cleanup, then validates completed removal
+and retained installation ownership. A completed old recovery command refuses a
+later activation. Full packaged uninstall, recovery and real database reinstallation
+acceptance are still required before Phase 8 delivery.

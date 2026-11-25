@@ -17,6 +17,22 @@ import {
 const ids = new Set(APPLICATION_CAPABILITIES.map((capability) => capability.id));
 
 describe("browser capability catalog", () => {
+  it("describes consented state-preserving uninstall without granting agent or browser authority", () => {
+    const capability = APPLICATION_CAPABILITIES.find((cap) => cap.id === "uninstall");
+    expect(capability).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      access: expect.stringContaining("code60 uninstall [--yes]"),
+    });
+    expect(capability?.limitations).toContain("No data-purge option");
+    expect(capability?.limitations).toContain("readable native procfs ownership evidence");
+    expect(capability?.limitations).toContain(
+      "unverifiable emulated process mappings refuse removal",
+    );
+    expect(capability?.limitations).toContain("engine cache/evidence");
+    expect(capability?.limitations).toContain("absolute recovery launcher");
+    expect(capability?.confirmation).toContain("--yes never approves profiles");
+  });
   it("describes bounded human-only JSON editing and recovery choices without runtime authority", () => {
     const mcp = APPLICATION_CAPABILITIES.find((cap) => cap.id === "mcp-servers");
     expect(mcp).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });

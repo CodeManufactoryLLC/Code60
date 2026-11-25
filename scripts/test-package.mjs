@@ -40,6 +40,14 @@ try {
   );
   const runtime = createUpdatePorts({ HOME: prefix, PATH: "/usr/bin:/bin" }).runtimeDirectory;
   assert.equal(await realpath(runtime), await realpath(join(root, "dist/bootstrap")));
+  const { createUninstallPorts } = await import(
+    pathToFileURL(join(root, "dist/management/uninstall.js")).href
+  );
+  assert.equal(
+    await realpath(createUninstallPorts({ HOME: prefix, PATH: "/usr/bin:/bin" }).runtimeDirectory),
+    await realpath(runtime),
+  );
+  await stat(join(runtime, "management/removal-support.js"));
   const support = await readdir(runtime, { recursive: true });
   for (const name of support.filter((name) => /\.(?:js|mjs)$/.test(name)))
     assert.match(name, /^(?:management|platform)\/[a-z0-9-]+\.(?:js|mjs)$/);

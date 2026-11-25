@@ -9,8 +9,22 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
   Keep them Node-only, include them in both builds and validate them with the same
   archive attack tests. Registry bootstrap metadata is data, never executable
   update logic. Production registry/release origins have no public override.
+  When payload metadata declares directories, verify the complete unique list
+  against actual extracted directory entries. Preserve acceptance of older
+  descriptors without that field; never infer ownership of additional empty dirs.
 
 - Never use blanket `shell: true` or unverified PID kills.
+- Native Transmission process adoption follows supported engine targets: macOS
+  Apple Silicon and Linux x64. Verify the canonical Node text mapping, exact argv, UID and
+  stable start identity. macOS uses fixed system inspection commands; Linux uses
+  bounded kernel procfs reads, exact NUL-separated argv, executable device/inode
+  and boot/start ticks. All four UID fields must match for attributed processes
+  and descendants. Unrelated mixed-UID services do not become family members;
+  file-holder enumeration covers the caller's effective UID and refuses mixed
+  credentials within that scope. Permission or identity uncertainty refuses removal;
+  do not fall back to argv alone under emulation. Return hashes,
+  never raw argv. Portable PID-existence/exit checks do not establish ownership;
+  callers must first prove it through their service, gateway or owned-child boundary.
 - Reject unsupported hosts before process launch; macOS and Linux are the only supported operating systems.
 - Enforce finite startup/cleanup deadlines.
 - Preserve POSIX process groups and grace periods.
@@ -85,6 +99,28 @@ HTTPS policy unchanged.
   lockPrivateState's stale-owner cleanup for distribution. Preserve uncertain
   locks and possibly published activations. Validate private receipts, directory
   containment and file identities; never repair by chmod/chown or sudo.
+  Removal may coordinate with backend service operations only through the
+  compatible private-state lock with reclaimStale:false. Never use its default
+  stale-writer reclamation as distribution ownership. Release checks pin both
+  the lock directory and unique owner-file identities; preserve changed locks.
+  Removal callers must establish receipt ownership before capturing an inventory.
+  Compare the complete remainder before deletion, then recheck each entry and its
+  parent identities. Missing entries may represent prior cleanup; new or changed
+  contents never become owned just because they are in a managed directory.
+  Inventory reads may inspect four siblings concurrently; drain them on failure
+  and retain deterministic tree order. Deletion stays sequential with a fresh
+  root-first physical/receipted ancestor proof, same-handle hash and per-entry sync.
+  Never cache parent proofs across mutations or weaken checks to meet a test budget.
+  Removal service proofs retain the original runtime, private registration file
+  identity and observed PID set. Under the compatible operation lock, recheck
+  installed:false, native absence and process exit before file cleanup. Proofs
+  authorize no termination, registration repair or new environment-selected scope.
+  Cleanup must also hold the original gateway runtime writer with reclaimStale:false,
+  preventing a direct foreground backend from starting during deletion. Preserve
+  any existing/uncertain writer; never treat service absence alone as runtime ownership.
+  File publication keeps its ordinary 1 MiB bound. Large private removal receipts
+  must request the explicit bounded limit (at most 64 MiB), including CAS reads
+  and the final identity snapshot; reject oversized content before publication.
 
 - Transmission bundle storage is a Node-only filesystem boundary. Validate exact
   supported artifact identities and the complete regular-file inventory before
@@ -94,6 +130,6 @@ HTTPS policy unchanged.
   engines during inspection. Remove only verified staging owned by the attempt.
 
 - `index.bootstrap.ts` is the Node-only distribution variant of the public index.
-  Keep its installation-only closure free of credential schemas, native keyring
+  Keep its installation/removal-recovery closure free of credential schemas, native keyring
   loading and application initialization. The distribution compiler selects it
   via module suffixes and publishes it as index.js; retain closure verification.

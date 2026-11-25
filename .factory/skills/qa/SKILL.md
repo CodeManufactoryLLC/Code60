@@ -110,8 +110,41 @@ Use the existing harness, not a new QA plugin or a live agent.
   Exercise the shared golden journey after source caches are removed and while
   release/activation trees are read-only. On native macOS additionally verify
   approved workflows survive the actual update on their original engine/runtime.
+  Native update file preparation is an independently bounded fixture, before
+  visible onboarding, provider verification and approval. It creates no live
+  backend or engine authority. Candidate generation and initial installation may
+  run concurrently into separate owned destinations, with serialized evidence
+  writes and both operations drained before cleanup. Keep its recorded timing/cleanup evidence and the
+  existing six-minute user journey and ten-minute suite limits.
 
 ## Report what actually happened
+
+Uninstall changes additionally require clean-install `--uninstall` mode and
+`npm run test:uninstall` on the native supported target. Begin with the full shared
+golden journey, then verify missing-consent/unowned-file refusal without backend
+interruption, original backend/provider exit, exact owned file/service removal,
+standalone repeated recovery and retained-data reinstall. Compare logical SQLite,
+selection/configuration bytes, profiles and complete Git/index/HEAD/worktree state.
+Keep read-only golden mounts; inspect the separate maintenance customer's shared
+PID/loopback namespace and exact owned writable volumes. Real shell removal uses
+`npm run test:installation`; report missing native/fish coverage explicitly.
+Bounded supervisor fixtures are not native login/reboot certification.
+For supported Linux workflow engines also run `npm run test:uninstall:engines`
+against the Linux descriptor in the pinned container or native Linux runner. Keep
+actual idle-engine, late-restart, retained-history and process-exit evidence.
+An emulated kernel that cannot prove the recorded Node executable is BLOCKED
+for native adoption; do not weaken identity checks or count it as native evidence.
+Linux host checks can also report file-holder inspection BLOCKED on a kernel
+permission refusal. The required native Linux container runs these process tests
+with `CODE60_REQUIRE_NATIVE_PROCESS_INSPECTION=1`: that test-only setting forbids
+permission-based skips and rejects unverifiable emulation. It does not change
+application inspection or authorize native adoption.
+Linux delivery also requires `npm run test:packaged:concurrent -- --uninstall release/payloads/linux-x64.json`:
+CI runs it in a separately bounded required job after verifying the baseline
+producer's exact artifact; do not append it to a nearly exhausted baseline job.
+two complete journeys, with independent owner-labelled inventories and a real
+survivor readiness/assets probe after the first cleanup. Retain both run reports
+and the orchestration summary; injected gate tests alone are supporting evidence.
 
 Write `test-results/qa/<run>/report.md` from the template, and summarize locally.
 For each selected journey use PASS, FAIL or BLOCKED, exact command, starting state,

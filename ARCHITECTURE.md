@@ -94,7 +94,7 @@ Code60-managed user storage; it cannot select packages, commands or destinations
   serves assets, owns client interactions and private local service management.
   It may also import agents through its index to compose MCP connector transports
   and inject them into application. Application does not depend on agents.
-- management parses the narrow code60 setup/status/update/open/service/pairing CLI and calls gateway/platform APIs.
+- management parses the narrow code60 setup/status/update/uninstall/open/service/pairing CLI and calls gateway/platform APIs.
   Its fixed workflows login command delegates provider authentication to the
   preserved Codex CLI in an interactive terminal, without starting an engine.
   It offers no run, prompt or agent-command execution interface.
@@ -179,6 +179,69 @@ recovery. Existing database selections, scheduler evidence and independently pin
 engine bindings remain outside application replacement. Setup does not update.
 The browser reports the installed version and terminal action only; it cannot
 download, activate, repair or schedule application updates.
+
+Phase 8 work adds Node-only installation removal primitives in platform and
+receipt-owned shell removal planning in management. Removal inventories pin file
+contents, directory identities and contained links; interrupted cleanup may remove
+only the recorded remainder. Read-only inventory scans inspect at most four siblings
+at once and drain all reads before returning a failure. Deletion remains sequential:
+each leaf gets a fresh root-first physical/receipted parent walk, same-handle content
+verification and directory sync. No parent proof is cached across deletions.
+Shell removal has its own exact preview and explicit
+interactive approval, preserving unrelated profile bytes and changed blocks.
+Installed management composes these primitives into the human-only uninstall command.
+Private uninstall inspection adds bounded interactive/scheduled availability and
+strict saved workflow counts. It rejects a payload and browser Origin, never
+starts an engine or creates workflow storage, and cannot alone prove process exit.
+Temporary idle reservations fence application actions, workflow preparation and
+scheduler claims on their owning queues without changing saved schedules or pause
+state. Releasing a reservation never reopens an owner that has begun shutdown.
+The private, payload-free `prepare-uninstall` operation composes all three idle
+reservations before stopping engines and quiescing the backend. Pending application
+or workflow actions refuse preparation promptly, including human dialogs. Native
+engine inspection uses the pinned SQLite schema read-only, never the restart-capable
+engine constructor. The two macOS versions and Linux 0.1.1 must have terminal, matching saved ownership;
+fixed authenticated health/stop operations and native process/file inspection prove
+exit. Inspection never starts an engine. Ordinary shutdown and application updates
+continue to preserve independent engines. This private operation grants no file
+removal authority; installed management separately verifies consent and installation ownership.
+Linux proves process identity and open-file absence through bounded kernel procfs
+reads, binding exact NUL-separated argv to the canonical Node inode, UID and boot/start
+identity. macOS retains fixed ps/lsof inspection.
+All four UID fields must match for an attributed process or descendant. Unrelated
+mixed-UID services are not adopted or allowed to invalidate a proven family;
+file-holder scans cover this user's effective UID and reject mixed credentials
+within that scope. Unavailable native evidence,
+including an unverifiable emulator text mapping, refuses removal rather than
+adopting by argv alone. See [Linux procfs](https://www.kernel.org/doc/html/latest/filesystems/proc.html).
+Guarded service removal additionally checks the original runtime and prepared PID
+under a compatible, non-reclaiming service-operation lock. Completed private
+preparation is distinct from ordinary shutdown. Restarted backends, uncertain exit
+or native absence stop removal. An already stopped backend uses strict offline
+workflow preparation without constructing an ApplicationHost or starting engines.
+Partial unregistration can finish its metadata only after positive native and HTTP
+absence. Successful private preparation returns its saved non-secret proof on
+retry; simultaneous and failed preparations remain refused.
+
+Internal removal support lives outside application releases and activations under
+removals/<attempt>. A private immutable receipt pins the original installation,
+inventories, current/launcher identities, canonical Node and original service scope;
+CAS progress records preparation, removal and completion. Its standalone recovery
+launcher survives partial entrypoint deletion and removal of temporary npm/bootstrap
+files. Cleanup holds compatible service-operation and gateway-runtime writer ownership, verifies process and
+engine absence, and deletes only the recorded remainder. Unknown/changed files,
+registrations and links fail closed or remain explicit residuals. Data, configuration,
+engine caches/evidence and worktrees remain outside these inventories. Reinstall
+refuses unfinished removal and validates retained ownership; old recovery cannot
+remove a later activation. The installed `code60 uninstall [--yes]` command uses
+default-no service/application consent and separate interactive profile approval;
+non-TTY calls need trailing Code60 --yes and never edit profiles. The bootstrap
+does not acquire gateway dependencies or expose uninstall. Isolated installed
+acceptance covers actual removal, standalone recovery and retained-data reinstall.
+Same-host Linux acceptance additionally verifies one run's cleanup leaves the
+other's exact backend and browser assets usable before both finish their fault
+checks and cleanup. Native login/reboot certification remains a separate release
+gate; these distribution candidates are not published.
 
 ## Application-wide Carbon migration
 

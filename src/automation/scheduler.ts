@@ -29,6 +29,7 @@ export class Scheduler {
   private tail: Promise<unknown> = Promise.resolve();
   private active: Active | null = null;
   private stopped = false;
+  private removalReservation: symbol | null = null;
   private failed = false;
   private lastTick: number;
   private readonly listeners = new Set<(revision: number) => void>();
@@ -95,6 +96,36 @@ export class Scheduler {
         : this.store.state.block,
       activeExecutionId: this.active?.executionId ?? null,
     };
+  }
+  /** Fence new claims without changing saved pause state or cancelling approved work. */
+  async reserveIdleForUninstall(signal?: AbortSignal): Promise<() => Promise<void>> {
+    signal?.throwIfAborted();
+    return this.serial(async () => {
+      signal?.throwIfAborted();
+      if (
+        this.removalReservation ||
+        this.stopped ||
+        this.failed ||
+        this.active ||
+        this.store.state.block ||
+        this.store.state.executions.some(unfinished)
+      )
+        throw new AutomationError(
+          "refused",
+          "Scheduled work is active or its ownership is uncertain; resolve it before uninstalling.",
+        );
+      const token = Symbol("uninstall reservation");
+      this.removalReservation = token;
+      let released = false;
+      return () =>
+        this.serial(async () => {
+          if (released) return;
+          if (this.removalReservation !== token)
+            throw new AutomationError("refused", "Uninstall reservation ownership changed.");
+          this.removalReservation = null;
+          released = true;
+        });
+    });
   }
   /** Restart always advances to future occurrences, even if downtime was brief. */
   async initialize(): Promise<void> {
@@ -315,6 +346,7 @@ export class Scheduler {
 
   async tick(): Promise<void> {
     await this.serial(async () => {
+      if (this.removalReservation) return;
       const gap = this.now().getTime() - this.lastTick;
       this.lastTick = this.now().getTime();
       if (this.stopped || this.failed || this.store.state.pausedAll || this.store.state.block)
@@ -344,6 +376,14 @@ export class Scheduler {
 
   async request(request: AutomationRequest): Promise<unknown> {
     return this.serial(async () => {
+      if (
+        this.removalReservation &&
+        !["status", "list", "get", "history", "subscribe"].includes(request.action)
+      )
+        throw new AutomationError(
+          "refused",
+          "The backend is preparing to uninstall; scheduled changes are unavailable.",
+        );
       const state = structuredClone(this.store.state);
       switch (request.action) {
         case "status":

@@ -144,6 +144,7 @@ async function stage(
   managed,
   setup = false,
   update = false,
+  uninstall = false,
 ) {
   await mkdir(join(context, "driver/test/fixtures"), { recursive: true });
   await mkdir(join(context, "driver/test/clean-install"), { recursive: true });
@@ -161,6 +162,7 @@ async function stage(
       application,
       setup,
       update,
+      uninstall,
       fakeAgent: managed
         ? "/installation/fixtures/fake-agent.mjs"
         : `${application}/fixtures/fake-agent.mjs`,
@@ -238,7 +240,14 @@ async function stage(
   }
   for (const name of ["Customer.Dockerfile", "Driver.Dockerfile"])
     await cp(join(repository, "test/clean-install", name), join(context, name));
-  for (const name of ["support.mjs", "install.mjs", "runtime.mjs", "probe.mjs", "supervisor.mjs"])
+  for (const name of [
+    "support.mjs",
+    "install.mjs",
+    "runtime.mjs",
+    "probe.mjs",
+    "supervisor.mjs",
+    "supervisor-calls.mjs",
+  ])
     await cp(join(repository, "test/clean-install", name), join(harness, name));
   if (setup) {
     for (const name of ["backend-supervisor.mjs", "backend-supervisor-command.mjs"])
@@ -246,6 +255,17 @@ async function stage(
     await cp(
       join(repository, "test/clean-install/runtime-setup.mjs"),
       join(harness, "runtime-setup.mjs"),
+    );
+  }
+  if (uninstall) {
+    await mkdir(join(harness, "test/fixtures"), { recursive: true });
+    await cp(
+      join(repository, "test/clean-install/uninstall.mjs"),
+      join(harness, "test/clean-install/uninstall.mjs"),
+    );
+    await cp(
+      join(repository, "test/fixtures/uninstall-journey.mjs"),
+      join(harness, "test/fixtures/uninstall-journey.mjs"),
     );
   }
   await chmod(join(harness, setup ? "backend-supervisor-command.mjs" : "supervisor.mjs"), 0o755);
@@ -284,12 +304,13 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
   let payload;
   let archive;
   const update = args[0] === "--update";
-  const setup = args[0] === "--setup" || update;
+  const uninstall = args[0] === "--uninstall";
+  const setup = args[0] === "--setup" || update || uninstall;
   const managed = args[0] === "--managed" || setup;
   if (args[0] === "--payload" || managed) {
     if (args.length !== 2)
       throw new Error(
-        "Use npm run test:packaged:clean -- --payload|--managed|--setup|--update <descriptor.json>",
+        "Use npm run test:packaged:clean -- --payload|--managed|--setup|--update|--uninstall <descriptor.json>",
       );
     const path = resolve(root, args[1]);
     payload = descriptor(JSON.parse(await readFile(path, "utf8")));
@@ -321,6 +342,7 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
         const result = await execute(file, argv, {
           env: commandEnvironment(process.env),
           timeout: options.timeout ?? 60_000,
+          killSignal: "SIGKILL",
           signal: options.signal,
           maxBuffer: 16 * 1024 * 1024,
         });
@@ -396,6 +418,7 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
       managed,
       setup,
       update,
+      uninstall,
     );
     summary.playwright = version;
     const uid = process.platform === "linux" ? process.getuid() || 1000 : 1000;
@@ -650,6 +673,105 @@ export async function runCleanInstall(directory, args = [], ports = {}) {
         190_000,
       );
     });
+    if (uninstall) {
+      await checked("owned uninstall and retained-data reinstall", async () => {
+        const maintenance = `${name}-maintenance`;
+        await docker([
+          "create",
+          "--name",
+          maintenance,
+          ...common,
+          "--network",
+          `container:${runtime}`,
+          "--pid",
+          `container:${runtime}`,
+          ...fixtures,
+          ...mount("volume", installation, "/installation"),
+          ...mount("volume", state, "/work"),
+          "--entrypoint",
+          "node",
+          image,
+          "/harness/test/clean-install/uninstall.mjs",
+        ]);
+        const observed = JSON.parse(
+          await docker([
+            "inspect",
+            "--format",
+            '{"network":{{json .HostConfig.NetworkMode}},"pid":{{json .HostConfig.PidMode}},"user":{{json .Config.User}},"mounts":{{json .Mounts}},"ports":{{json .HostConfig.PortBindings}}}',
+            maintenance,
+          ]),
+        );
+        const namespaces = new Set([
+          `container:${runtime}`,
+          `container:${summary.runtimeContainer.identity}`,
+        ]);
+        const allowed = new Map([
+          ["/input", input],
+          ["/harness", harness],
+          ["/evidence", output],
+        ]);
+        if (
+          !namespaces.has(observed.network) ||
+          !namespaces.has(observed.pid) ||
+          observed.user !== `${uid}:${gid}` ||
+          Object.keys(observed.ports ?? {}).length ||
+          observed.mounts.length !== 5
+        )
+          throw Error("Maintenance customer namespace isolation inspection failed");
+        for (const item of observed.mounts) {
+          if (item.Type === "bind") {
+            if (
+              allowed.get(item.Destination) !== item.Source ||
+              (item.Destination !== "/evidence" && item.RW)
+            )
+              throw Error("Unexpected maintenance customer bind mount");
+          } else if (
+            item.Type !== "volume" ||
+            !item.RW ||
+            !new Map([
+              ["/installation", installation],
+              ["/work", state],
+            ]).has(item.Destination) ||
+            item.Name !==
+              new Map([
+                ["/installation", installation],
+                ["/work", state],
+              ]).get(item.Destination)
+          )
+            throw Error("Unexpected maintenance customer volume mount");
+        }
+        summary.maintenanceIsolation = observed;
+        await docker(["start", "--attach", maintenance], 9 * 60_000);
+        const exit = (
+          await docker(["inspect", "--format", "{{.State.ExitCode}}", maintenance])
+        ).trim();
+        if (exit !== "0") throw Error("Installed uninstall/reinstall maintenance failed");
+        await probe(runtime, "ready");
+        await probe(runtime, "model");
+      });
+      await checked("reinstalled browser preserves project and database", async () => {
+        await docker(
+          [
+            "run",
+            "--name",
+            `${name}-reinstalled-browser`,
+            ...common,
+            "--network",
+            `container:${runtime}`,
+            "-e",
+            "HOME=/work/driver-home",
+            "-e",
+            "ACCEPTANCE_REINSTALLED=1",
+            ...mount("volume", state, "/work"),
+            "--mount",
+            `type=volume,source=${installation},target=/installation/code60/databases,volume-subpath=code60/databases,readonly,volume-nocopy`,
+            ...mount("bind", output, "/evidence"),
+            driver,
+          ],
+          190_000,
+        );
+      });
+    }
     await checked("backend/provider/helper process shutdown", async () => {
       await probe(runtime, "request-stop");
       await probe(runtime, "stopped");

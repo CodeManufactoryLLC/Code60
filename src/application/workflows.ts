@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, realpath } from "node:fs/promises";
+import { lstat, mkdir, realpath } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import {
@@ -21,11 +21,16 @@ import {
 import { type CoreDeps, stateHome } from "../core/index.js";
 import {
   fileCode,
+  installationDirectory,
   lockPrivateState,
   readPrivateJson,
   writePrivateJson,
 } from "../platform/index.js";
 import { LocalTransmission, type TransmissionClient } from "./transmission.js";
+import {
+  prepareTransmissionRemoval,
+  type TransmissionRemovalPorts,
+} from "./transmission-removal.js";
 import { workflowContext, workflowDirectoryIdentity } from "./workflow-context.js";
 
 const maximum = 8 * 1024 * 1024;
@@ -58,6 +63,112 @@ const ended = (record: WorkflowRecord) =>
   (!record.stopPending &&
     record.snapshot &&
     ["completed", "failed", "cancelled"].includes(record.snapshot.status));
+
+/** Saved-work inspection only: process ownership must be verified separately before removal. */
+export async function inspectWorkflowRecordsForUninstall(env: Readonly<NodeJS.ProcessEnv>) {
+  return inspectWorkflowRecordRoot(join(stateHome(env), "code60", "workflows"));
+}
+async function readWorkflowRemovalRecords(root: string): Promise<WorkflowRecord[]> {
+  const exists = await lstat(root).catch((error: unknown) => {
+    if (fileCode(error) !== "ENOENT") throw error;
+    return null;
+  });
+  if (!exists) return [];
+  await installationDirectory(root, false, true);
+  const raw = await readPrivateJson(join(root, "registry.json"), maximum).catch(
+    (error: unknown) => {
+      if (fileCode(error) !== "ENOENT")
+        throw Error("Workflow history is unavailable; preserve state before uninstalling");
+      return undefined;
+    },
+  );
+  if (raw === undefined) return [];
+  const parsed = registrySchema.safeParse(raw);
+  if (!parsed.success)
+    throw Error("Workflow history is invalid; preserve state and recover it before uninstalling");
+  const records = parsed.data.entries;
+  if (
+    new Set(records.map((record) => record.id)).size !== records.length ||
+    new Set(records.map((record) => record.key)).size !== records.length
+  )
+    throw Error("Workflow history has duplicate ownership; preserve state before uninstalling");
+  return records as WorkflowRecord[];
+}
+async function inspectWorkflowRecordRoot(root: string) {
+  return workflowRemovalCounts(await readWorkflowRemovalRecords(root));
+}
+function workflowRemovalCounts(records: readonly WorkflowRecord[]) {
+  const counts = { completed: 0, active: 0, uncertain: 0 };
+  for (const record of records) {
+    const snapshot = record.snapshot;
+    if (
+      record.stopPending ||
+      ["preparing", "starting", "uncertain"].includes(record.state) ||
+      (record.state === "preparation_failed" && snapshot) ||
+      (record.state === "submitted" && !snapshot)
+    ) {
+      counts.uncertain++;
+      continue;
+    }
+    if (record.state === "preparation_failed") {
+      counts.completed++;
+      continue;
+    }
+    if (!snapshot) {
+      counts.uncertain++;
+      continue;
+    }
+    const terminal = ["completed", "failed", "cancelled"].includes(snapshot.status);
+    if (
+      terminal !== (snapshot.activeTaskIndex === null) ||
+      snapshot.tasks.length !== record.definition.tasks.length ||
+      snapshot.tasks.some(
+        (task, index) => task.index !== index || task.name !== record.definition.tasks[index]?.name,
+      ) ||
+      (snapshot.activeTaskIndex !== null && snapshot.activeTaskIndex >= snapshot.tasks.length) ||
+      snapshot.accepted.length > snapshot.tasks.length ||
+      (snapshot.status === "completed" && snapshot.accepted.length !== snapshot.tasks.length) ||
+      snapshot.accepted.some(
+        (task, index) =>
+          task.name !== record.definition.tasks[index]?.name ||
+          snapshot.tasks[index]?.state !== "accepted",
+      )
+    )
+      counts.uncertain++;
+    else if (terminal) counts.completed++;
+    else counts.active++;
+  }
+  return counts;
+}
+
+/** The caller holds service-operation ownership and has proved the backend absent. */
+export async function prepareOfflineWorkflowsForUninstall(
+  env: Readonly<NodeJS.ProcessEnv>,
+  signal: AbortSignal,
+  ports?: TransmissionRemovalPorts,
+) {
+  signal.throwIfAborted();
+  const root = join(stateHome(env), "code60", "workflows");
+  const present = await lstat(root).catch((error: unknown) => {
+    if (fileCode(error) !== "ENOENT") throw error;
+    return null;
+  });
+  if (!present) return { enginePids: [] as number[] };
+  await installationDirectory(root, false, true);
+  // Never reclaim a dead/uncertain backend's writer as authority to uninstall.
+  const release = await lockPrivateState(root, { reclaimStale: false });
+  try {
+    const records = await readWorkflowRemovalRecords(root);
+    const counts = workflowRemovalCounts(records);
+    if (counts.active || counts.uncertain)
+      throw Error("Workflows are active or uncertain; recover them before uninstalling");
+    const prepared = await prepareTransmissionRemoval(root, env, records, signal, ports);
+    for (const engine of prepared) await engine.stop(signal);
+    return { enginePids: [...new Set(prepared.flatMap((engine) => [...engine.pids]))] };
+  } finally {
+    await release();
+  }
+}
 type Choice = {
   path: string;
   identity: string;
@@ -93,8 +204,12 @@ export class DesktopWorkflows {
   private loading: Promise<void> | undefined;
   private release: (() => Promise<void>) | undefined;
   private queue: Promise<unknown> = Promise.resolve();
+  private queuedActions = 0;
+  private readonly environment: Readonly<NodeJS.ProcessEnv>;
   private generation = 0;
   private closed = false;
+  private removalReservation: symbol | null = null;
+  private pendingDrafts = 0;
   private startup = new AbortController();
   private provider = "";
   constructor(
@@ -104,7 +219,9 @@ export class DesktopWorkflows {
     private readonly generate: (input: string, signal: AbortSignal) => Promise<WorkflowDraftReply>,
     client?: TransmissionClient,
     legacyClient?: TransmissionClient,
+    private readonly removalPorts?: TransmissionRemovalPorts,
   ) {
+    this.environment = { ...env };
     this.root = join(stateHome(env), "code60", "workflows");
     this.client =
       client ?? new LocalTransmission(join(this.root, `transmission-${this.newVersion}`), env);
@@ -154,6 +271,71 @@ export class DesktopWorkflows {
     await this.loading?.catch(() => {});
     await this.release?.();
     this.release = undefined;
+  }
+  private queueAction<T>(operation: () => Promise<T>) {
+    this.queuedActions++;
+    const result = this.queue.then(operation).finally(() => {
+      this.queuedActions--;
+    });
+    this.queue = result.catch(() => {});
+    return result;
+  }
+  async reserveIdleForUninstall(signal?: AbortSignal): Promise<() => Promise<void>> {
+    signal?.throwIfAborted();
+    if (this.queuedActions)
+      throw Error("Workflow preparation is pending; finish it before uninstalling.");
+    const run = this.queueAction(async () => {
+      signal?.throwIfAborted();
+      if (this.closed || this.removalReservation || this.pendingDrafts || this.drafts.size)
+        throw Error("Workflow preparation is active or closing; finish it before uninstalling.");
+      const token = Symbol("uninstall reservation");
+      this.removalReservation = token;
+      try {
+        await this.loading;
+        const writer = await lstat(join(this.root, ".writer")).catch((error: unknown) => {
+          if (fileCode(error) !== "ENOENT") throw error;
+          return null;
+        });
+        if (writer && !this.release)
+          throw Error("Workflow writer ownership is uncertain; inspect it before uninstalling.");
+        const counts = await inspectWorkflowRecordRoot(this.root);
+        signal?.throwIfAborted();
+        if (this.closed || counts.active || counts.uncertain)
+          throw Error(
+            "Workflows are active or their ownership is uncertain; resolve them before uninstalling.",
+          );
+        let released = false;
+        return () => {
+          const done = this.queueAction(async () => {
+            if (released) return;
+            if (this.removalReservation !== token)
+              throw Error("Workflow uninstall reservation changed.");
+            this.removalReservation = null;
+            released = true;
+          });
+          return done;
+        };
+      } catch (error) {
+        if (this.removalReservation === token) this.removalReservation = null;
+        throw error;
+      }
+    });
+    return run;
+  }
+  prepareUninstall(signal: AbortSignal) {
+    return this.queueAction(async () => {
+      signal.throwIfAborted();
+      if (!this.removalReservation || this.closed)
+        throw Error("Reserve idle workflows before preparing uninstall");
+      const records = await readWorkflowRemovalRecords(this.root);
+      return prepareTransmissionRemoval(
+        this.root,
+        this.environment,
+        records,
+        signal,
+        this.removalPorts,
+      );
+    });
   }
   private async load() {
     this.loading ??= (async () => {
@@ -291,7 +473,7 @@ export class DesktopWorkflows {
   }
   async request(value: unknown): Promise<unknown> {
     const request = parseWorkflowRequest(value);
-    if (this.closed) throw new Error("Workflows is closing");
+    if (this.closed || this.removalReservation) throw new Error("Workflows is closing");
     if (request.action === "disposeForm") {
       const draft = this.drafts.get(request.formId);
       draft?.abort.abort();
@@ -319,7 +501,14 @@ export class DesktopWorkflows {
           this.approvals.delete(key);
       return null;
     }
-    if (request.action === "draft") return this.draft(request);
+    if (request.action === "draft") {
+      this.pendingDrafts++;
+      try {
+        return await this.draft(request);
+      } finally {
+        this.pendingDrafts--;
+      }
+    }
     if (request.action === "list") {
       await this.load();
       return {
@@ -329,12 +518,12 @@ export class DesktopWorkflows {
       };
     }
     const generation = this.generation;
-    const run = this.queue.then(async () => {
-      if (generation !== this.generation || this.closed) throw new Error("Workflow view changed");
+    const run = this.queueAction(async () => {
+      if (generation !== this.generation || this.closed || this.removalReservation)
+        throw new Error("Workflow view changed");
       await this.load();
       return this.handle(request, generation);
     });
-    this.queue = run.catch(() => {});
     return run;
   }
   private async handle(

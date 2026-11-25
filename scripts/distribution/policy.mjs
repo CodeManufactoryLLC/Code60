@@ -40,6 +40,21 @@ export async function inventory(root) {
   await walk(root);
   return files;
 }
+export async function inventoryDirectories(root) {
+  const directories = [];
+  async function walk(directory) {
+    for (const item of (await readdir(directory, { withFileTypes: true })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )) {
+      if (!item.isDirectory()) continue;
+      const path = join(directory, item.name);
+      directories.push(relative(root, path).split(sep).join("/"));
+      await walk(path);
+    }
+  }
+  await walk(root);
+  return directories.sort();
+}
 export async function notices(directory, output, prefix = "") {
   for (const item of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, item.name);

@@ -15,6 +15,7 @@ import {
   launcher,
   publicConnection,
   setupDatabase,
+  uninstall,
   updated,
 } from "./support.mjs";
 
@@ -22,6 +23,7 @@ process.umask(0o077);
 const env = { ...environment("/work/home"), SHELL: "/bin/bash", XDG_DATA_HOME: "/installation" };
 await mkdir("/work/control", { recursive: true });
 await mkdir("/work/processes");
+await mkdir("/work/prompts");
 await mkdir("/work/driver-home", { mode: 0o700 });
 const selection = `${env.XDG_STATE_HOME}/code60/desktop.json`,
   database = setupDatabase ?? "/installation/code60/databases/default.sqlite";
@@ -44,6 +46,8 @@ await writeFile(
           "--session-info",
           "--process-log",
           "/work/processes",
+          "--prompt-log",
+          "/work/prompts",
         ],
       },
     },
@@ -54,6 +58,7 @@ const supervisor = await backendSupervisor({
   application,
   env,
   log: "/evidence/backend.log",
+  allowUninstall: uninstall,
 });
 env.CODE60_TEST_BACKEND_SOCKET = supervisor.socket;
 let stopping;

@@ -60,6 +60,7 @@ function docker({
     if (args[0] === "image" && args[1] === "inspect")
       return `sha256:${"1".repeat(64)} ${imageArchitecture}`;
     if (args[0] === "inspect") {
+      if (args.includes("{{.State.ExitCode}}")) return "0";
       const start = starts.get(args.at(-1));
       const mounts = start.flatMap((value, index) => {
         if (value !== "--mount") return [];
@@ -69,13 +70,15 @@ function docker({
           {
             Type: fields.type,
             Source: fields.source,
+            Name: fields.type === "volume" ? fields.source : undefined,
             Destination: fields.target,
             RW: !spec.includes(",readonly"),
           },
         ];
       });
       return JSON.stringify({
-        network: "none",
+        network: start[start.indexOf("--network") + 1],
+        pid: start.includes("--pid") ? start[start.indexOf("--pid") + 1] : "",
         user: start[start.indexOf("--user") + 1],
         ports: null,
         mounts,
@@ -83,7 +86,7 @@ function docker({
     }
     if (args[0] === "build") resources.image.add(args[args.indexOf("-t") + 1]);
     if (args[0] === "volume" && args[1] === "create") resources.volume.add(args.at(-1));
-    if (args[0] === "run" && args.includes("--name")) {
+    if (["run", "create"].includes(args[0]) && args.includes("--name")) {
       resources.container.add(args[args.indexOf("--name") + 1]);
       starts.set(args[args.indexOf("--name") + 1], args);
     }
@@ -449,4 +452,47 @@ it("setup mode keeps installed subtrees read-only and retains separate writable 
     ),
   ).toBe(true);
   await expect(runCleanInstall(root, ["--setup"], ports)).rejects.toThrow("--setup");
+  const uninstallPorts = docker();
+  const removed = await runCleanInstall(root, ["--uninstall", path], uninstallPorts);
+  expect(removed.status).toBe("passed");
+  expect(removed.phases).toContain("owned uninstall and retained-data reinstall");
+  expect(removed.phases).toContain("reinstalled browser preserves project and database");
+  expect(removed.maintenanceIsolation.pid).toBe(removed.maintenanceIsolation.network);
+  const calls = uninstallPorts.run.mock.calls.map(([, args]) => args);
+  const maintenance = calls.find((args) => args[0] === "create");
+  expect(maintenance).toContain("/harness/test/clean-install/uninstall.mjs");
+  expect(maintenance[maintenance.indexOf("--pid") + 1]).toBe(
+    `container:${removed.runtimeContainer.name}`,
+  );
+  expect(
+    removed.isolation.mounts
+      .filter(
+        (item) =>
+          item.Destination.endsWith("/releases") || item.Destination.endsWith("/activations"),
+      )
+      .every((item) => !item.RW),
+  ).toBe(true);
+  expect(removed.cleanup).toEqual({ containers: [], images: [], volumes: [] });
+  for (const invalid of ["pid", "mounts"]) {
+    const bad = docker();
+    const run = async (file, args, options) => {
+      const value = await bad.run(file, args, options);
+      if (
+        args[0] !== "inspect" ||
+        !args.at(-1).endsWith("-maintenance") ||
+        args.includes("{{.State.ExitCode}}")
+      )
+        return value;
+      const observed = JSON.parse(value);
+      if (invalid === "pid") observed.pid = "host";
+      else observed.mounts.find((item) => item.Type === "volume").Name = "foreign-volume";
+      return JSON.stringify(observed);
+    };
+    await expect(runCleanInstall(root, ["--uninstall", path], { ...bad, run })).rejects.toThrow(
+      /isolation|volume mount/,
+    );
+    expect([...bad.resources.container, ...bad.resources.image, ...bad.resources.volume]).toEqual(
+      [],
+    );
+  }
 });

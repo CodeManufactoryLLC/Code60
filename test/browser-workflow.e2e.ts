@@ -1,13 +1,134 @@
-import { readdir } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { managementRequest } from "../src/gateway/index.js";
+import { runtimeProcessExists } from "../src/platform/index.js";
+import { reopenRetainedProject } from "./fixtures/browser-actions.js";
 import { browserApp, onboard } from "./fixtures/browser-app.js";
 import { goldenJourney } from "./fixtures/golden-journey.js";
 
 test("browser: first use through accepted plan, automatic edits, diff, attachment and Undo", async ({
   browser,
 }) => {
-  await goldenJourney(await browserApp(browser));
+  const fixture = await browserApp(browser);
+  await goldenJourney({
+    directory: fixture.directory,
+    open: fixture.open,
+    close: async () => {
+      try {
+        const before = await readdir(join(fixture.directory, "state/code60"));
+        expect(await managementRequest(fixture.env, "uninstall-summary")).toMatchObject({
+          interactiveActive: false,
+          scheduledActive: false,
+          schedulerAvailable: true,
+          scheduledUncertain: false,
+          workflows: { completed: 0, active: 0, uncertain: 0 },
+        });
+        expect(await readdir(join(fixture.directory, "state/code60"))).toEqual(before);
+        const audit = JSON.parse(
+          await readFile(test.info().outputPath("golden-filesystem.json"), "utf8"),
+        );
+        // A failed earlier checkpoint must retain its original failure, rather
+        // than attempting destructive lifecycle preparation in a partial journey.
+        if (audit.observations.length === 4) {
+          const repo = join(fixture.directory, "project with spaces");
+          const git = (...args: string[]) =>
+            execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 10_000 });
+          const capture = async () => {
+            const trees = git("worktree", "list", "--porcelain");
+            return {
+              head: git("rev-parse", "HEAD"),
+              index: createHash("sha256")
+                .update(await readFile(join(repo, ".git/index")))
+                .digest("hex"),
+              workingNotes: await readFile(join(repo, "notes.txt"), "utf8"),
+              stagedNotes: git("show", ":notes.txt"),
+              trees,
+              results: await Promise.all(
+                trees
+                  .split("\n")
+                  .filter((line) => line.startsWith("worktree "))
+                  .map((line) => readFile(join(line.slice(9), "result.txt"), "utf8")),
+              ),
+            };
+          };
+          const original = await capture();
+          const providers = await Promise.all(
+            (await readdir(fixture.processLog)).map(async (name) =>
+              JSON.parse(await readFile(join(fixture.processLog, name), "utf8")),
+            ),
+          );
+          expect(providers.length).toBeGreaterThan(0);
+          for (const provider of providers) {
+            expect(Number.isInteger(provider.pid) && provider.pid > 0).toBe(true);
+            expect(provider.pid).not.toBe(process.pid);
+          }
+          expect(await managementRequest(fixture.env, "prepare-uninstall")).toEqual({
+            quiescent: true,
+            pid: process.pid,
+            enginePids: [],
+          });
+          await expect
+            .poll(() => providers.map(({ pid }) => runtimeProcessExists(pid)), {
+              timeout: 10_000,
+            })
+            .toEqual(providers.map(() => false));
+          const after = await capture();
+          expect(after).toEqual(original);
+          await writeFile(
+            test.info().outputPath("uninstall-quiescence.json"),
+            JSON.stringify(
+              {
+                classification: "in-process backend quiescence; no OS service exit claim",
+                providers: providers.map(({ pid, parent }) => ({ pid, parent, exited: true })),
+                before: original,
+                after,
+              },
+              null,
+              2,
+            ),
+          );
+        }
+      } finally {
+        await fixture.close();
+      }
+    },
+  });
+});
+
+test("browser: completed work remains selectable after backend restart", async ({ browser }) => {
+  const fixture = await browserApp(browser);
+  let view: Awaited<ReturnType<typeof fixture.open>> | undefined;
+  try {
+    await goldenJourney({
+      directory: fixture.directory,
+      async open() {
+        view = await fixture.open();
+        return view;
+      },
+      async close() {
+        await view?.context.close();
+      },
+    });
+    const repo = join(fixture.directory, "project with spaces");
+    const index = await readFile(join(repo, ".git/index"));
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" });
+    await fixture.restart();
+    const { page } = await fixture.open();
+    await reopenRetainedProject(
+      page,
+      fixture.directory,
+      join(fixture.directory, "projects.sqlite"),
+    );
+    expect(await readFile(join(repo, ".git/index"))).toEqual(index);
+    expect(execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" })).toBe(head);
+    expect(await readFile(join(repo, "result.txt"), "utf8")).toBe("original\n");
+    await page.screenshot({ path: test.info().outputPath("retained-project.png") });
+  } finally {
+    await fixture.close();
+  }
 });
 
 test("browser: setup-prepared database through provider verification and accepted work", async ({

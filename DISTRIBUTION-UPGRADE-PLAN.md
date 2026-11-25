@@ -380,10 +380,9 @@ this phase; they are not grounds to change engine APIs silently.
 
 ## Phase 7 — Explicit updates and installation recovery
 
-**Status:** implemented on `codex/explicit-updates-and-recovery`; local Linux
-installation/update acceptance, native macOS workflow continuity and browser
-regressions pass. Required CI, clean exact-commit native artifacts and paired
-bootstrap verification remain delivery gates before merge.
+**Status:** implemented and merged in PR #324. Required Linux CI, exact-commit
+Apple Silicon validation, native workflow continuity and a private bootstrap
+assembled from both real platform artifacts passed at commit `1ada312`.
 
 **PR outcome:** `code60 update` replaces the manual stop/install/repair/start sequence.
 
@@ -412,6 +411,26 @@ Verify the prior release remains available and recovery never replays work.
 **Depends on:** Phase 6.
 
 ## Phase 8 — State-preserving uninstall
+
+**Status:** implemented on `codex/state-preserving-uninstall`. At `62e24560`,
+Linux concurrent uninstall exceeded the maintenance deadline after both golden
+journeys. At `f68998e7`, both installed journeys completed and the survivor's
+backend and assets remained usable after the first cleanup. All Linux jobs passed.
+[Linux validation at f68998e7](https://github.com/CodeManufactoryLLC/Code60/actions/runs/45506864645)
+
+On Apple Silicon, installed uninstall/reinstall and idle-engine cleanup passed
+at `62e24560`. At `f68998e7`, the browser navigation test sent Escape while
+the sidebar was still inert after a viewport change. That stopped the producer
+before packaging and skipped the installed journeys.
+[Native validation at 62e24560](https://github.com/CodeManufactoryLLC/Code60/actions/runs/45497968747)
+and [at f68998e7](https://github.com/CodeManufactoryLLC/Code60/actions/runs/45506867368).
+
+Delivery requires Linux concurrency and all native installed journeys on the
+same final commit, a tested bootstrap assembled from its two verified platform
+payloads, and independently checked cleanup. The run links and artifact identities
+belong in [PR #325](https://github.com/CodeManufactoryLLC/Code60/pull/325).
+Linux process ownership requires a genuine Linux x64 runner. Real login-service
+lifecycle certification belongs to Phase 9.
 
 **PR outcome:** `code60 uninstall` removes owned installation resources predictably.
 

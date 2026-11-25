@@ -1,9 +1,10 @@
-import { open, readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { expandNavigation } from "./fixtures/browser-actions.js";
 import { browserApp } from "./fixtures/browser-app.js";
 import { syntheticProviderDownload } from "./fixtures/provider-artifacts.js";
+import { assertProviderStateSecretFree } from "./fixtures/provider-state-scan.js";
 
 async function stopped(log: string, relayWorkspace?: string) {
   const records = await Promise.all(
@@ -110,22 +111,7 @@ for (const [id, name] of [
       const saved = await readFile(join(fixture.directory, "state/code60/desktop.json"), "utf8");
       expect(JSON.parse(saved).agentSetup.version).toBe(1);
       expect(saved).not.toMatch(/QA60|PRIVATE-STATE/);
-      for (const entry of await readdir(join(fixture.directory, "state"), { recursive: true })) {
-        // A live diagnostic writer may release its transient ownership lock after enumeration.
-        const file = await open(join(fixture.directory, "state", entry), "r").catch(
-          (error: NodeJS.ErrnoException) => {
-            if (error.code === "ENOENT" && entry.endsWith("/.lock")) return null;
-            throw error;
-          },
-        );
-        if (!file) continue;
-        try {
-          if ((await file.stat()).isFile())
-            expect(await file.readFile("utf8")).not.toMatch(/QA60-1234|QA60-PASTE|PRIVATE-STATE/);
-        } finally {
-          await file.close();
-        }
-      }
+      await assertProviderStateSecretFree(join(fixture.directory, "state"), { live: true });
       await stopped(fixture.processLog, join(fixture.directory, "state/code60/relay/workspace"));
       await wizard.getByRole("button", { name: "Close provider setup", exact: true }).click();
       await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
@@ -136,6 +122,7 @@ for (const [id, name] of [
       expect(fixture.gateway.application.snapshot().agentSetup?.enabled).toEqual([id]);
       await fixture.gateway.stop();
       await stopped(fixture.processLog);
+      await assertProviderStateSecretFree(join(fixture.directory, "state"));
     } finally {
       await fixture.close();
     }
@@ -184,8 +171,8 @@ test("browser: paired HTTP LAN browser installs and signs in without a secure-co
     await local.page.getByRole("button", { name: "Close provider setup", exact: true }).click();
     await local.page.getByRole("button", { name: "Web Server Beta", exact: true }).click();
     const settings = local.page.getByRole("main", { name: "Web Server Beta", exact: true });
-    await settings.getByRole("switch").focus();
-    await local.page.keyboard.press("Space");
+    await expect(settings.getByRole("switch")).toBeEnabled();
+    await settings.getByRole("switch").press("Space");
     await expect(settings.locator("p[role=status]")).toHaveText("Listening");
     const url = await settings.getByRole("link").getAttribute("href");
     const pairing = await settings.getByLabel("LAN pairing code", { exact: true }).textContent();
@@ -226,8 +213,8 @@ test("browser: paired HTTP LAN browser installs and signs in without a secure-co
     await expandNavigation(local.page, "Manage");
     await local.page.locator("#advanced-toggle").click();
     await local.page.locator("#tab-web-server").click();
-    await settings.getByRole("switch").focus();
-    await local.page.keyboard.press("Space");
+    await expect(settings.getByRole("switch")).toBeEnabled();
+    await settings.getByRole("switch").press("Space");
     await expect(settings.locator("p[role=status]")).toHaveText("Off");
     expect(fixture.gateway.application.snapshot().agentSetup?.enabled).toEqual(["kiro"]);
     expect((await fetch(fixture.gateway.origin)).status).toBe(200);
