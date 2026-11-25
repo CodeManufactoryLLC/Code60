@@ -1,5 +1,13 @@
 # Code60 FAQ (Draft)
 
+## Overview
+
+### Is Code60 an agent?
+
+No. Code60 is a local [orchestration](terminology-draft.md#orchestration) application for coding agents. External [Agent Providers](terminology-draft.md#agent-provider) supply the underlying models and coding agents.
+
+Code60 connects to those providers through [Agent Client Protocol (ACP)](terminology-draft.md#acp) and coordinates them using its [Two-Layer Architecture](terminology-draft.md#two-layer-architecture). Code60 provides the browser interface, [Code60 Gateway](terminology-draft.md#gateway), separate Git worktrees, plans, reviews, **Scheduled Jobs**, **Workflows**, and Model Context Protocol (MCP) management.
+
 ## Requirements and Setup
 
 ### Which platforms does Code60 support?
@@ -24,6 +32,14 @@ A Windows device can still open Code60's browser interface over a private local 
 - **Hardware and power:** Code60 runs local embeddings on the CPU and requires no graphics card. Background scheduling requires an awake machine with an active user login session.
 - **Browser and optional tools:** A modern desktop browser for the interface. Browser automation (`code60_browser`) also requires Chrome on the host machine, plus Microsoft's Playwright Chrome extension for existing-browser mode.
 
+### What software do I need to run Code60?
+
+- **Core software:** Node.js 24 (`>=24.22.0 <25` for setup, updates, uninstall, and **Transmission Workflows**), `npm`, Git, and a modern web browser.
+- **Agent Provider:** At least one [Agent Provider](terminology-draft.md#agent-provider). A user can connect an existing command-line interface (CLI) or install a private copy for catalog providers from **Connect → Providers**.
+- **Optional software:** Chrome on the host machine for `code60_browser` web automation (plus Microsoft's Playwright Chrome extension for existing-browser mode). Docker with Compose v2 is only for optional contributor container workflows.
+
+See [What are the system requirements for running Code60?](#what-are-the-system-requirements-for-running-code60) for operating-system and hardware details.
+
 ### Do I need Docker to run Code60?
 
 No. Code60 installs, runs, and supports local development without Docker.
@@ -39,7 +55,7 @@ Optional Docker agent workers for stricter filesystem and network boundaries app
 
 ### Does Code60 have a CLI?
 
-Yes, for local lifecycle management only. The `code60` command-line interface (CLI) cannot submit prompts or run coding agents.
+Yes, for local lifecycle management only. The `code60` CLI cannot submit prompts or run coding agents.
 
 - **Opening and pairing:** `code60 open` opens the browser interface, and `code60 pairing on|off|status` controls local pairing codes.
 - **Installation and backend service:** `code60 setup`, `code60 status`, `code60 update`, `code60 uninstall`, and `code60 service` manage installation and the per-user Code60 Gateway service.
@@ -59,6 +75,13 @@ A phone or tablet on the same private local network can open Code60's browser in
 
 ## Workspaces and Worktrees
 
+### Do I need to update my repository to use Code60?
+
+No. Code60 requires no special configuration files, scripts, or dependencies inside a repository. Opening a project never initializes Git or edits repository files automatically.
+
+- **Git repository:** Separate Git worktrees for project workers, **Scheduled Jobs**, and **Transmission Workflows** require a Git repository with at least one commit. Without Git, **Relay** can still target a direct folder explicitly, or a user can run **Set up Git** in Chat.
+- **Optional project config:** A user can optionally create `.code60/mcp.json` inside a repository for project-scope MCP servers. Git run records stay inside `<git-common-dir>/code60/runs/` without touching repository source files.
+
 ### Does Code60 automatically delete worktrees?
 
 No. Code60 never deletes Git worktrees automatically.
@@ -76,7 +99,7 @@ Code60 keeps all application data locally on the host machine. New run directori
 
 - **Databases:** Project history, configurations, **Internal Prompts** edits, and `$` commands live in SQLite (default `$XDG_DATA_HOME/code60/databases/default.sqlite`). Application memory uses a separate private `memory.sqlite`.
 - **Run records and transcripts:** Runs write `run.json` and `events.jsonl` under `<git-common-dir>/code60/runs/`, `$XDG_STATE_HOME/code60/dirs/<key>/runs/`, or `.code60_workspace/` beside the database. Code60 does not automatically scrub or expire transcripts.
-- **Configuration, workflows, and logs:** Model Context Protocol (MCP) files live at `$XDG_CONFIG_HOME/code60/mcp.json` and `<project>/.code60/mcp.json`, and **Transmission Workflows** state lives under `$XDG_STATE_HOME/code60/workflows`. Diagnostic logs under `$XDG_STATE_HOME/code60/logs` carry a 7-day, 20 MiB cap.
+- **Configuration, workflows, and logs:** MCP files live at `$XDG_CONFIG_HOME/code60/mcp.json` and `<project>/.code60/mcp.json`, and **Transmission Workflows** state lives under `$XDG_STATE_HOME/code60/workflows`. Diagnostic logs under `$XDG_STATE_HOME/code60/logs` carry a 7-day, 20 MiB cap.
 - **Credentials:** Provider logins stay in each provider's own backend-user storage. MCP secrets stay in macOS Keychain, Linux Secret Service, or explicit temporary backend memory.
 
 ## Security and Permissions
@@ -85,7 +108,7 @@ Code60 keeps all application data locally on the host machine. New run directori
 
 **Code60 auto-approval** sets one application-wide permission policy across both layers of Code60's [Two-Layer Architecture](terminology-draft.md#two-layer-architecture). It covers orchestrators (**Relay**, **Custom Assistants**, and project chats) and their workers. The toggle sits beside **Harness mode** in the composer, starts on, and persists across restarts.
 
-- **When on:** Code60 answers each new Agent Client Protocol (ACP) permission request with a once-only allow option and never grants an always-allow rule. If the agent offers no matching once-only option, Code60 cancels the request.
+- **When on:** Code60 answers each new ACP permission request with a once-only allow option and never grants an always-allow rule. If the agent offers no matching once-only option, Code60 cancels the request.
 - **When off:** Each new ACP request waits in the requesting conversation for a human to choose **Allow once** or **Deny**. The **Workspace** approval count opens a waiting conversation, including a project chat in the archive.
 - **Live changes:** The toggle remains available during a turn and applies to new ACP requests in live and future sessions. Any request already waiting for review still needs a human answer after switching auto-approval back on.
 - **Harness mode:** **Code60 auto-approval** operates separately from **Harness mode**. Choosing an Ask mode on a provider harness leaves **Code60 auto-approval** on. Any sandboxing depends on that provider harness.
