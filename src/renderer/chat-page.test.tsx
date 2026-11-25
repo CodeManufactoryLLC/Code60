@@ -11,6 +11,28 @@ import type { RunEvent, RunStatus, RunView } from "../core/index.js";
 import { ChatPage } from "./chat-page.js";
 import type { PageAction } from "./content-page-header.js";
 
+const capturedInput = vi.hoisted(() => ({ disabled: false, canSend: false, canStop: false }));
+vi.mock("./embedded-chat.js", async (original) => {
+  const actual = await original<typeof import("./embedded-chat.js")>();
+  return {
+    ...actual,
+    EmbeddedChat(props: Parameters<typeof actual.EmbeddedChat>[0]) {
+      Object.assign(capturedInput, {
+        disabled: props.disabled,
+        canSend: props.canSend,
+        canStop: !!props.stop,
+      });
+      return (
+        <>
+          <div className="transcript">{props.children}</div>
+          {props.promptControls}
+          {props.footer}
+        </>
+      );
+    },
+  };
+});
+
 const capturedHeader = vi.hoisted(() => ({ actions: [] as readonly PageAction[] }));
 vi.mock("./content-page-header.js", async (original) => {
   const actual = await original<typeof import("./content-page-header.js")>();
@@ -164,9 +186,7 @@ describe("orchestration activity presentation", () => {
         expect(html).not.toContain("Continue task");
         expect(html).not.toContain("Saved chat is stopped");
         expect(html).not.toContain("Previous workers are history only");
-        expect(html.match(/<textarea[^>]*>/)?.[0]).not.toContain("disabled");
-        expect(html).toMatch(/class="[^"]*primary composer-send[^"]*"/);
-        expect(html).toContain(">Send ");
+        expect(capturedInput).toEqual({ disabled: false, canSend: true, canStop: false });
       }
     },
   );
@@ -326,11 +346,10 @@ describe("orchestration activity presentation", () => {
   it("disables chat controls without a database even when a run is still reported", () => {
     for (const status of ["idle", "running"] as const) {
       const html = render(status, [], [], [], [], null);
-      expect(html.match(/<textarea[^>]*>/)?.[0]).toContain("disabled");
+      expect(capturedInput.disabled).toBe(true);
       expect(html).not.toContain("page-selector-rename");
       expect(html).toContain('aria-haspopup="menu"');
-      const action = html.match(/<button[^>]*class="[^"]*composer-send[^"]*"[^>]*>/)?.[0];
-      expect(action).toContain("disabled");
+      expect(capturedInput.canSend).toBe(false);
       expect(html).not.toContain(">Connect to database</button>");
       expect(capturedHeader.actions.find((action) => action.id === "rename")?.disabled).toBe(true);
       expect(capturedHeader.actions.find((action) => action.id === "connect")?.label).toBe(
@@ -397,6 +416,59 @@ describe("orchestration activity presentation", () => {
     expect(completed).toContain("Worked for 12s (finished)");
     expect(completed).toContain('<hr class="turn-separator"/>');
     expect(completed).not.toContain('class="activity-timer');
+  });
+  it("keeps a streamed reply free of status bubbles and still exposes its tool details", () => {
+    const events: RunEvent[] = [
+      {
+        type: "prompt",
+        runId: "orchestrator",
+        turn: 1,
+        at: "2026-11-08T12:00:00Z",
+        text: "Inspect",
+      },
+      { type: "message", runId: "orchestrator", at: "2026-11-08T12:00:02Z", text: "Reply so far" },
+    ];
+    const responding = (events: RunEvent[]) =>
+      render(
+        "running",
+        [],
+        [],
+        events,
+        [],
+        "/db",
+        1,
+        {},
+        {
+          activity: {
+            state: "responding",
+            label: "Responding",
+            source: "observed",
+            declaration: null,
+            otherOperations: 0,
+            workerCount: 0,
+            active: true,
+            urgent: false,
+          },
+        },
+      );
+    const html = responding(events);
+    expect(html).toContain("Reply so far");
+    expect(html).not.toContain('class="activity-timer');
+    expect(html).not.toContain('class="activity-details');
+    expect(capturedInput.canStop).toBe(true);
+    const details = responding([
+      events[0]!,
+      {
+        type: "thought",
+        runId: "orchestrator",
+        at: "2026-11-08T12:00:01Z",
+        text: "Checking evidence",
+      },
+      events[1]!,
+    ]);
+    expect(details).toContain(">Activity details</button>");
+    expect(details.indexOf("Checking evidence")).toBeLessThan(details.indexOf("Reply so far"));
+    expect(details).not.toContain('class="activity-timer');
   });
   it("uses the status as the live disclosure and timing as the historical disclosure", () => {
     const events: RunEvent[] = [
@@ -498,7 +570,7 @@ describe("orchestration activity presentation", () => {
     expect(html).not.toContain("Automatic worker updates are paused");
     expect(html).not.toContain("Resume updates");
     expect(html).not.toContain(">Stop<");
-    expect(html).toMatch(/<textarea(?![^>]*disabled)[^>]*>/);
+    expect(capturedInput.disabled).toBe(false);
   });
   it("removes delegated activity after failure, cancellation or idle, and isolates selection", () => {
     const runs = [worker("one", "failed"), worker("two", "cancelled"), worker("three", "idle")];
@@ -511,7 +583,7 @@ describe("orchestration activity presentation", () => {
     const html = render("waiting", [], []);
     expect(html).not.toContain('class="chat-loader');
     expect(html).toContain("Waiting for approval");
-    expect(html).toContain("Stop</button>");
+    expect(capturedInput.canStop).toBe(true);
   });
   it("does not offer text Copy for empty or attachment-only source", () => {
     expect(renderToStaticMarkup(<MessageCopy text="" />)).toBe("");
@@ -575,7 +647,7 @@ describe("orchestration activity presentation", () => {
   it("places provider metadata inside the main composer", () => {
     const html = render("idle", [], []);
     expect(html).toContain('aria-label="Current provider: fake"');
-    expect(html).toContain('class="composer-footer session-info');
+    expect(html).toContain('class="chat-prompt-controls');
     expect(html).not.toContain('class="chat-provider');
     expect(html.slice(0, html.indexOf("</header>"))).not.toContain("fake");
   });

@@ -13,6 +13,28 @@ import { Icon } from "./icons.js";
 import { ProjectChatSidebar } from "./project-chat-sidebar.js";
 import { WorkerChat } from "./worker-chat.js";
 
+const capturedInput = vi.hoisted(() => ({ disabled: false, canSend: false, canStop: false }));
+vi.mock("./embedded-chat.js", async (original) => {
+  const actual = await original<typeof import("./embedded-chat.js")>();
+  return {
+    ...actual,
+    EmbeddedChat(props: Parameters<typeof actual.EmbeddedChat>[0]) {
+      Object.assign(capturedInput, {
+        disabled: props.disabled,
+        canSend: props.canSend,
+        canStop: !!props.stop,
+      });
+      return (
+        <>
+          <div className="transcript">{props.children}</div>
+          {props.promptControls}
+          {props.footer}
+        </>
+      );
+    },
+  };
+});
+
 const view = (id: string, status: RunStatus = "idle"): RunView => ({
   id,
   agent: "fake",
@@ -88,7 +110,7 @@ describe("conversation hierarchy", () => {
   );
 
   it.each(["project", "relay", "custom"] as const)(
-    "stops %s spotlight and exposes stopping before its provider finishes",
+    "removes the %s loading circle and exposes stopping before its provider finishes",
     (kind) => {
       const owner = activityChat(kind, "running", "stopping");
       expect(owner.run?.stopping).toBe(false);
@@ -119,7 +141,7 @@ describe("conversation hierarchy", () => {
     "cancelled",
     "timed_out",
     "interrupted",
-  ])("spotlights only live active sidebar entries (%s)", (status) => {
+  ])("shows loading circles only for live active sidebar entries (%s)", (status) => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const ownerRun = view("owner", status);
     const owner: OrchestrationChat = {
@@ -159,7 +181,7 @@ describe("conversation hierarchy", () => {
           onSelect={() => {}}
         />,
       );
-    const working = () => (render().match(/data-working="true"/g) ?? []).length;
+    const working = () => (render().match(/cds--loading__stroke/g) ?? []).length;
     expect(working()).toBe(status === "running" || status === "queued" ? 3 : 0);
     if (status !== "running") return;
     ownerRun.stopping = true;
@@ -699,7 +721,7 @@ describe("embedded worker chat", () => {
       { type: "message", text: "reply" },
     ].map((event) => ({ runId: "one", at: "2026-01-01T00:00:00Z", ...event })) as RunEvent[];
     const html = render(worker, events);
-    expect(html).toContain(">Stop</button>");
+    expect(capturedInput.canStop).toBe(true);
     expect(html).toContain(">Allow once</button>");
     expect(html).toContain('class="chat-activity');
     expect(html).toContain('class="turn-timer');

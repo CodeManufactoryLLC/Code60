@@ -152,6 +152,12 @@ transaction recovery and safe troubleshooting reports. Configuration validity,
 authentication and observed connection health are separate. See
 [MCP configuration](MCP.md) and the [recovery runbook](docs/runbooks/mcp-configuration.md).
 
+### Chat
+
+Relay, project chats, custom assistants and interactive workers open their Code60 thread in IBM Carbon AI Chat. Enter sends and Shift+Enter adds a line. Stop acts on the current conversation. You can switch chats while a turn is running and return to its messages, draft and pending approvals.
+
+In a project chat, type `/` or `$` to browse commands. Select a suggestion and add arguments, or type the full `$name` directly. Use the adjacent Files and Changes panels to attach code. Workflows → Create with prompt uses the same prompt line to draft editable fields.
+
 ### Scheduled Jobs Carbon trial
 
 Apps → Scheduled Jobs opens on Schedules. Scan schedule status, next run and live run status. Expand a row to read the saved prompt and settings. Use Run or Stop directly, or open the row menu to edit, pause, enable, inspect history or delete the job. New scheduled job opens a dedicated form.
@@ -160,7 +166,7 @@ Execution history shows all schedules by default. View history on a job applies 
 
 ### Application-wide Carbon migration
 
-Code60 uses upstream Carbon controls and White/G100 themes across its browser UI. Home, Apps, Settings and project/provider homes
+Code60 uses upstream Carbon controls and White/G100 themes across its browser UI. Under **Personalize → Appearance**, use **Accent color** to change the default verdigris. The browser remembers your choice across themes. Home, Apps, Settings and project/provider homes
 use destination rows with direct creation buttons. Backend operations, retained
 conversations and saved appearance records are preserved. See the
 [migration ledger](docs/carbon-migration.md) for implementation, validation and explicit QA limits.

@@ -28,10 +28,10 @@
   --card-radius: 0px;
   --navigation-card-radius: 5px;
   --settings-card-radius: 0px;
-  --card-header-fill: #5494fd;
+  --card-header-fill: #27706c;
   --card-header-text: #ffffff;
-  --card-header-muted: #e8eefb;
-  --card-header-hover: #73a7fd;
+  --card-header-muted: #e5f1f0;
+  --card-header-hover: #215e5b;
   --panel-border: var(--border);
   --card-shadow: 4px 4px 0 var(--shadow-color);
   --shadow-color: #111111;
@@ -85,8 +85,8 @@
   --scrollbar-thumb-hover: color-mix(in srgb, var(--surface) 60%, var(--muted));
   --overlay-shadow: 4px 4px 0 var(--shadow-color);
   color-scheme: light;
-  --bg: #f4f8fe;
-  --workspace-background: #f4f8fe;
+  --bg: #f3f9f8;
+  --workspace-background: #f3f9f8;
   --sidebar-background: var(--workspace-background);
   --content-background: #ffffff;
   --content-grid-line: rgb(0 0 0 / 7%);
@@ -97,11 +97,11 @@
   --muted: #303848;
   --border: #111111;
   --control-border: #111111;
-  --accent: #1e40af;
-  --accent-bg: #dbeafe;
-  --hover-bg: #e8eefb;
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
+  --accent: #27706c;
+  --accent-bg: #d4eeec;
+  --hover-bg: #e5f1f0;
+  --primary: #27706c;
+  --primary-hover: #215e5b;
   --primary-text: #ffffff;
   --danger: var(--text);
   --change-additions: #42603a;
@@ -116,17 +116,17 @@
   --chat-neutral: var(--surface);
   --composer-bg: var(--content-background);
   --composer-focus-bg: var(--content-background);
-  --user-bubble: #dbeafe;
+  --user-bubble: #d4eeec;
   --on-user-bubble: #111111;
   --agent-bubble: #f1f0e8;
   --on-agent-bubble: #111111;
-  --human-text: #1d4ed8;
+  --human-text: #215e5b;
   --project-stop-color: #b91c1c;
   --destructive: #a03d31;
   --destructive-hover: #873327;
   --on-destructive: #ffffff;
-  --focus-line: #1e40af;
-  --focus-band: #dbeafe;
+  --focus-line: #27706c;
+  --focus-band: #d4eeec;
 }
 
 :root[data-color-scheme="dark"] {
@@ -146,7 +146,7 @@
   --footer-bg: var(--bg);
   --overlay-shadow: 4px 4px 0 var(--shadow-color);
   --card-shadow: 4px 4px 0 var(--shadow-color);
-  /* Near-black reading planes and deep plum bands keep Dark dark; blue marks actions. */
+  /* Near-black reading planes and deep plum bands keep Dark dark; the accent marks actions. */
   --surface-band: #282828;
   --group-fill: #282828;
   --bg: #111111;
@@ -161,11 +161,11 @@
   --muted: #c8c8c0;
   --border: #727272;
   --control-border: #aaaaaa;
-  --accent: #7db7ff;
+  --accent: #76c0bc;
   --accent-bg: #464646;
   --hover-bg: #3b3b3b;
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
+  --primary: #27706c;
+  --primary-hover: #215e5b;
   --primary-text: #ffffff;
   --danger: var(--text);
   --change-additions: #afc59d;

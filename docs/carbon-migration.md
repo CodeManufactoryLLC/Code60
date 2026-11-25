@@ -1,6 +1,6 @@
 # Code60 product interface
 
-The full-app worktree integrates the approved Scheduled Jobs design at `656b0ae` with upstream `f0f7e5a`. The reference worktree can still run independently. The renderer uses `@carbon/react` 1.121.0, standard blue, locally bundled Plex Sans and White/G100. The product header and navigation belong to the application. Scheduled Jobs owns its task tabs, forms and evidence.
+The full-app worktree integrates the approved Scheduled Jobs design at `656b0ae` with upstream `f0f7e5a`. The reference worktree can still run independently. The renderer uses `@carbon/react` 1.121.0, a customizable verdigris accent, locally bundled Plex Sans and White/G100. The product header and navigation belong to the application. Scheduled Jobs owns its task tabs, forms and evidence.
 
 ## Route inventory and interaction decisions
 

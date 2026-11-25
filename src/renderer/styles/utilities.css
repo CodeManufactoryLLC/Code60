@@ -101,32 +101,3 @@
   border-color: var(--border);
   border-width: 0;
 }
-
-@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
-  .activity-display[data-animate="true"] .activity-name,
-  .chat-connecting[data-animate="true"] .activity-name,
-  .chat-sidebar-label[data-working="true"]:not([inert] *, [hidden] *, [aria-hidden="true"] *),
-  .search-loading-label {
-    background-image: linear-gradient(
-      100deg,
-      var(--muted) 35%,
-      var(--text) 45%,
-      var(--accent) 50%,
-      var(--text) 55%,
-      var(--muted) 65%
-    );
-    background-size: 250% 100%;
-    background-clip: text;
-    color: transparent;
-    animation: activity-spotlight 2.8s linear infinite;
-  }
-}
-
-@keyframes activity-spotlight {
-  from {
-    background-position: 150% 0;
-  }
-  to {
-    background-position: -50% 0;
-  }
-}

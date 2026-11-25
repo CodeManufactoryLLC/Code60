@@ -436,9 +436,7 @@ kbd {
 }
 
 .status-label[data-status="waiting"] {
-  color: var(--bg);
-  background: var(--text);
-  border-color: var(--text);
+  color: var(--text);
   font-weight: inherit;
 }
 

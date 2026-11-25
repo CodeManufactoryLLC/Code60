@@ -88,7 +88,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
       .toBe(before + 1);
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const chat = page.locator(".orchestration-chat-page:visible");
-    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const composer = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
     await composer.fill(
       JSON.stringify([{ message: "MCP turn is active" }, { hang: "cancellable" }]),
     );

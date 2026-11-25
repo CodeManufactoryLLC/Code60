@@ -77,7 +77,7 @@ export async function goldenJourney(fixture: GoldenApplication, setupDatabase?: 
     await openProject(page, fixture.directory, "project with spaces");
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const chat = page.locator(".orchestration-chat-page:visible");
-    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const composer = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
     const request = `Plan a change in ${repo}\nCreate result.txt containing "human accepted target" followed by a newline. Use an isolated worktree and wait for my approval.`;
     await composer.fill(request);
     await composer.press("Enter");

@@ -1,0 +1,55 @@
+@use 'sass:color';
+@use 'sass:map';
+@use 'sass:meta';
+@use '@carbon/react/scss/colors';
+
+// Keep Carbon's shade relationships for actions, links, selection and AI surfaces.
+// The ink and bright endpoints are contrast-adjusted versions of the user's swatch.
+$tones: (
+  colors.$blue-10: color-mix(in srgb, var(--code60-accent) 9%, white),
+  colors.$blue-20: color-mix(in srgb, var(--code60-accent) 23%, white),
+  colors.$blue-30: color-mix(in srgb, var(--code60-accent-bright) 65%, white),
+  colors.$blue-40: var(--code60-accent-bright),
+  colors.$blue-50: color-mix(in srgb, var(--code60-accent-bright) 75%, var(--code60-accent-ink)),
+  colors.$blue-60: var(--code60-accent-ink),
+  colors.$blue-60-hover: color-mix(in srgb, var(--code60-accent-ink) 84%, black),
+  colors.$blue-70: color-mix(in srgb, var(--code60-accent-ink) 74%, black),
+  colors.$blue-80: color-mix(in srgb, var(--code60-accent-ink) 62%, black),
+  colors.$blue-90: color-mix(in srgb, var(--code60-accent-ink) 44%, black),
+  colors.$blue-100: color-mix(in srgb, var(--code60-accent-ink) 25%, black),
+);
+
+@mixin theme($base, $dark: false) {
+  @media (forced-colors: none) {
+    @each $token, $value in $base {
+      @if meta.type-of($value) == color {
+        $tone: map.get($tones, color.change($value, $alpha: 1));
+        @if $tone {
+          $alpha: color.channel($value, 'alpha');
+          @if $alpha < 1 {
+            --cds-#{$token}: color-mix(in srgb, #{$tone} #{$alpha * 100%}, transparent);
+          } @else {
+            --cds-#{$token}: #{$tone};
+          }
+        }
+      }
+    }
+    // Carbon registers these component tokens separately from its base theme.
+    --cds-button-primary: var(--code60-accent-ink);
+    --cds-button-primary-hover: #{map.get($tones, colors.$blue-60-hover)};
+    --cds-button-primary-active: #{map.get($tones, colors.$blue-80)};
+    @if not $dark {
+      --cds-button-tertiary: var(--cds-button-primary);
+      --cds-button-tertiary-hover: var(--cds-button-primary-hover);
+      --cds-button-tertiary-active: var(--cds-button-primary-active);
+      --cds-tag-background-blue: #{map.get($tones, colors.$blue-20)};
+      --cds-tag-color-blue: #{map.get($tones, colors.$blue-80)};
+    } @else {
+      --cds-tag-background-blue: #{map.get($tones, colors.$blue-70)};
+      --cds-tag-color-blue: #{map.get($tones, colors.$blue-20)};
+    }
+    --cds-tag-border-blue: var(--cds-border-interactive);
+    --cds-tag-hover-blue: color-mix(in srgb, var(--cds-tag-background-blue) 85%, var(--cds-tag-color-blue));
+    accent-color: var(--cds-interactive);
+  }
+}

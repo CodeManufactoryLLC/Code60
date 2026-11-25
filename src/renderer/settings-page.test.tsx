@@ -16,6 +16,8 @@ const props: ComponentProps<typeof SettingsPage> = {
   pollingControls: <SettingsHeader page="polling-settings" />,
   theme: "dark",
   onTheme: unchanged,
+  accentColor: "#43b3ae",
+  onAccentColor: unchanged,
   textStyles: defaultTextStyles,
   onTextStyles: unchanged,
   lines: parseTableLines(null),

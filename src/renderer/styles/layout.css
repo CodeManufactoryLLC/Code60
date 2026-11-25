@@ -248,7 +248,7 @@ dialog::backdrop {
     --card-header-fill: var(--content-background);
     --card-header-text: #111111;
     --card-header-muted: #303848;
-    --card-header-hover: #e8eefb;
+    --card-header-hover: var(--cds-layer-hover-01);
   }
 }
 

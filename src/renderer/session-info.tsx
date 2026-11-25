@@ -120,6 +120,7 @@ export function SessionOptionPicker({
         ref={trigger}
         type="button"
         className="mode-trigger"
+        variant="quiet"
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -237,20 +238,51 @@ function AutoApprovalToggle({
   );
 }
 
+export function SessionExtras({
+  harness,
+  ended,
+  active,
+  autoApproval,
+  onAutoApprovalChange,
+  children,
+}: {
+  harness: string;
+  ended: boolean;
+  active: boolean;
+  autoApproval: boolean;
+  onAutoApprovalChange?: ((value: boolean) => Promise<void>) | undefined;
+  children?: ReactNode;
+}) {
+  const name = harnessNames[harness.toLowerCase()] ?? harness;
+  return (
+    <div className="composer-footer session-extras">
+      {children}
+      {onAutoApprovalChange && (
+        <AutoApprovalToggle enabled={autoApproval} active={active} save={onAutoApprovalChange} />
+      )}
+      <span
+        className="composer-harness"
+        role="img"
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard access exposes the identifying tooltip.
+        tabIndex={0}
+        aria-label={`Current provider: ${name}`}
+        data-tooltip={`${ended ? "Last reported · " : ""}${name}`}
+      >
+        <AgentLogo id={harness} size={20} />
+      </span>
+    </div>
+  );
+}
+
 /** Shared between all orchestrator and worker composers. Choices are connector-owned. */
 export function SessionInfo({
   state,
   ended,
   editable,
   changing,
-  autoApproval,
-  onAutoApprovalChange,
   onMode,
-  harness,
   sessionId,
   active = true,
-  children,
-  leading,
   onSaveDefault,
   sessionRole = "worker",
 }: {
@@ -258,15 +290,10 @@ export function SessionInfo({
   ended: boolean;
   editable: boolean;
   changing: boolean;
-  autoApproval: boolean;
-  onAutoApprovalChange?: ((value: boolean) => Promise<void>) | undefined;
   onMode(change: ModeChange): void;
-  harness: string;
   sessionId: string;
   active?: boolean;
-  children?: ReactNode;
-  leading?: ReactNode;
-  onSaveDefault?: () => void;
+  onSaveDefault?: (() => void) | undefined;
   sessionRole?: "orchestrator" | "worker";
 }) {
   const modes = state?.modes;
@@ -281,7 +308,6 @@ export function SessionInfo({
   const historical = ended ? "Last reported · " : "";
   const model =
     settings && !settings.confirmed ? "Model unconfirmed" : (state?.model?.name ?? "N/A");
-  const name = harnessNames[harness.toLowerCase()] ?? harness;
   const usage = state?.usage;
   const fraction = usage && usage.size > 0 ? Math.min(1, Math.max(0, usage.used / usage.size)) : 0;
   const contextTip = `${historical}Context: ${contextUsage(usage ?? null)}`;
@@ -289,72 +315,53 @@ export function SessionInfo({
   const canSave =
     !!onSaveDefault && defaultableSelections(state).some((c) => c.category === "model");
   return (
-    <section className="composer-footer session-info" aria-label="Session information">
-      <div className="composer-mode">
-        {leading}
-        <SessionOptionPicker
-          controls={modes?.controls ?? []}
-          source={modes?.source ?? "config"}
-          confirmed={modes?.confirmed ?? false}
-          label="Harness mode"
-          menuLabel="Harness modes"
-          selected={selected}
-          tip={`${historical}Harness mode: ${selected}${unavailable}`}
-          {...{ ended, editable, changing, onMode, sessionId, active }}
-        />
-        {onAutoApprovalChange && (
-          <AutoApprovalToggle enabled={autoApproval} active={active} save={onAutoApprovalChange} />
-        )}
-      </div>
-      <div className="composer-session-summary">
-        <span
-          className="context-donut"
-          role="img"
-          // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard access exposes the identifying tooltip.
-          tabIndex={0}
-          aria-label={contextTip}
-          data-tooltip={contextTip}
-          data-reported={!!usage}
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-            <circle className="context-track" cx="10" cy="10" r="7" fill="none" strokeWidth="4" />
-            <circle
-              className="context-used"
-              cx="10"
-              cy="10"
-              r="7"
-              fill="none"
-              strokeWidth="4"
-              pathLength="100"
-              strokeDasharray={`${fraction * 100} 100`}
-              transform="rotate(-90 10 10)"
-            />
-          </svg>
-        </span>
-        <SessionOptionPicker
-          controls={settings?.controls ?? []}
-          source="config"
-          confirmed={settings?.confirmed ?? false}
-          label="Model"
-          menuLabel="Model settings"
-          selected={model}
-          tip={`${historical}Model: ${model}${settings?.controls.length ? unavailable : " · Not advertised by this connector"}${changing ? " · Changing session option…" : ""}`}
-          {...{ ended, editable, changing, onMode, sessionId, active }}
-          onSave={canSave ? onSaveDefault : undefined}
-          saveLabel={`Save as default for new ${sessionRole} sessions`}
-        />
-        <span
-          className="composer-harness"
-          role="img"
-          // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard access exposes the identifying tooltip.
-          tabIndex={0}
-          aria-label={`Current provider: ${name}`}
-          data-tooltip={`${historical}${name}`}
-        >
-          <AgentLogo id={harness} size={20} />
-        </span>
-        {children}
-      </div>
+    <section className="chat-prompt-controls" aria-label="Session information">
+      <SessionOptionPicker
+        controls={settings?.controls ?? []}
+        source="config"
+        confirmed={settings?.confirmed ?? false}
+        label="Model"
+        menuLabel="Model settings"
+        selected={model}
+        tip={`${historical}Model: ${model}${settings?.controls.length ? unavailable : " · Not advertised by this connector"}${changing ? " · Changing session option…" : ""}`}
+        {...{ ended, editable, changing, onMode, sessionId, active }}
+        onSave={canSave ? onSaveDefault : undefined}
+        saveLabel={`Save as default for new ${sessionRole} sessions`}
+      />
+      <span
+        className="context-donut"
+        role="img"
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard access exposes the identifying tooltip.
+        tabIndex={0}
+        aria-label={contextTip}
+        data-tooltip={contextTip}
+        data-reported={!!usage}
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+          <circle className="context-track" cx="10" cy="10" r="7" fill="none" strokeWidth="4" />
+          <circle
+            className="context-used"
+            cx="10"
+            cy="10"
+            r="7"
+            fill="none"
+            strokeWidth="4"
+            pathLength="100"
+            strokeDasharray={`${fraction * 100} 100`}
+            transform="rotate(-90 10 10)"
+          />
+        </svg>
+      </span>
+      <SessionOptionPicker
+        controls={modes?.controls ?? []}
+        source={modes?.source ?? "config"}
+        confirmed={modes?.confirmed ?? false}
+        label="Harness mode"
+        menuLabel="Harness modes"
+        selected={selected}
+        tip={`${historical}Harness mode: ${selected}${unavailable}`}
+        {...{ ended, editable, changing, onMode, sessionId, active }}
+      />
     </section>
   );
 }

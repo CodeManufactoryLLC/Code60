@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ActivitySnapshot, ActivityState } from "../bridge/index.js";
+import { ActivityLoading } from "./carbon/activity-loading.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { durationText } from "./chat-presentation.js";
 import { Icon, type IconName } from "./icons.js";
@@ -53,10 +54,10 @@ export function activityLabel(state: ActivityState): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-function ActivityArtwork({ state }: { state: ActivityState }) {
+function ActivityArtwork({ state, loading }: { state: ActivityState; loading: boolean }) {
   return (
     <span className="activity-visual" aria-hidden="true">
-      <Icon name={activityIcon(state)} />
+      {loading ? <ActivityLoading /> : <Icon name={activityIcon(state)} />}
     </span>
   );
 }
@@ -183,7 +184,8 @@ export function ActivityDisplay({
   if (state === "idle") return null;
   const active =
     value?.active === true || state === "waiting_for_workers" || state === "connecting";
-  const animate = active && !hidden && documentVisible && !reducedMotion && state !== "stopping";
+  const loading = (active && state !== "stopping") || state === "waiting_for_approval";
+  const animate = loading && !hidden && documentVisible && !reducedMotion;
   const name = value || override ? activityLabel(state) : fallback;
   const label = `${name}${active ? "..." : ""}`;
   const source = value?.source ?? "host";
@@ -209,12 +211,13 @@ export function ActivityDisplay({
         data-exiting={!immediate && exiting}
         data-immediate={immediate}
       >
-        <ActivityArtwork key={state} state={state} />
+        <ActivityArtwork state={state} loading={loading} />
         <span className="activity-name">{label}</span>
       </div>
     );
   return (
     <AppButton
+      variant="quiet"
       type="button"
       id={id}
       className="chat-progress activity-display"
@@ -237,7 +240,7 @@ export function ActivityDisplay({
       aria-live="off"
       data-immediate={immediate}
     >
-      <ActivityArtwork key={state} state={state} />
+      <ActivityArtwork state={state} loading={loading} />
       <span className="activity-name">
         <span role="status" aria-live="polite" aria-atomic="true">
           {label}

@@ -1,7 +1,7 @@
 # Carbon application migration — current direction
 
 The user approved extending the Scheduled Jobs Carbon trial across the rest of
-the application. Upstream Carbon React components, White/G100, standard blue,
+the application. Upstream Carbon React components, White/G100, a customizable verdigris accent,
 productive typography and locally bundled IBM Plex Sans now supersede historical
 Neobrutalism colors, artwork sizing, shadows, rounded cards, custom control
 presentation and role-typography requirements below. Preserve stored appearance
@@ -33,6 +33,7 @@ No comparison destination, preference or feature flag is introduced.
 - Use upstream Carbon controls through the small native-prop adapters in `carbon/`.
   Keep specialist tree, Monaco, telemetry SVG and native transcript/scroll logic.
   Color inputs use the browser's accessible native chooser.
+- Interactive conversations and workflow prompt drafting use the lazy embedded Carbon AI Chat and its prompt line. The conversation workspace fills the area between the navigation and inspector, from behind the page title to the viewport bottom. Place model, context usage and harness approval mode beside Send inside the expanded prompt line. Keep supplementary session controls in the after-input slot and keep standard page gutters on other destinations. Keep Code60's authenticated thread and draft ownership, render rich actions as user-defined responses, and keep Carbon history and session persistence off. Project command suggestions accept / or $ and insert the existing $name token with arguments.
 - Shared tables use HTML Carbon tables with ID selection, sort, bounded loaded-row
   paging and search; preserve backend cursors, retained-log submissions and filters.
   Table settings use visible column switches, width selects and Earlier/Later actions.
@@ -169,7 +170,7 @@ keyboard controls, drafts and domain ownership. Never put authentication in link
   same scrollable content. Do not add this greeting to other navigation homes.
   Show exactly six clickable, title-only feature cards in this order:
   Relay, Custom Assistants, Search, Projects, Apps and Sessions. Use theme-aware
-  artwork, restrained blue accents, shared focus styles and responsive stacking. Relay selects the
+  artwork, the configured accent, shared focus styles and responsive stacking. Relay selects the
   application conversation and clears worker selection. Search and Sessions retain
   database gating; Custom Assistants, Projects and Apps remain available without a database.
   The Custom Assistants card opens management without opening a chat or connecting an agent.
@@ -563,8 +564,9 @@ worker artwork disclosure and independent Rename/Archive targets without clippin
 
 - Keep the left sidebar borderless from the drag strip through the footer; do not
   replace the removed border with a full-height divider overlay.
-- New chat connections use a centered, non-interactive animated icon above
-  spotlight “Connecting...” text, without a timer or duplicate inline status.
+- New chat connections use a centered, non-interactive Carbon loading circle above
+  a steady “Connecting...” label. Live chat status disclosures use a transparent background
+  and the same small loading circle. Active sidebar entries keep their labels steady.
   Reuse activity fade timing for gentle entrance/exit. Hide the empty task prompt
   until the session is ready and the loader has faded out. Preserve Cancel, errors,
   drafts, transcript layout and scroll; stop animation in hidden/reduced-motion/

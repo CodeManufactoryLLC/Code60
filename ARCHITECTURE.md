@@ -186,7 +186,7 @@ The user-approved extension of the Scheduled Jobs trial replaces the remaining
 browser presentation with upstream Carbon React. This direction supersedes
 historical visual-only Neobrutalism/card/artwork/typography rules below. Carbon
 White/G100 follows the existing resolved scheme, with local IBM Plex Sans,
-productive controls and standard blue. No appearance records are erased. Domain
+productive controls and a customizable verdigris accent. No appearance records are erased. Domain
 operations, backend confirmations, visibility ownership and retained state remain
 authoritative. Standard controls and dialogs use Carbon; specialist code/diff/tree
 widgets keep their functional integration. See the [migration ledger](docs/carbon-migration.md)

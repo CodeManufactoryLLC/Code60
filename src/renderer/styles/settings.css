@@ -140,6 +140,28 @@
   padding-inline: 0;
 }
 
+.accent-color-setting,
+.accent-color-controls {
+  flex-wrap: wrap;
+}
+.accent-color-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.accent-color-controls input[type="color"] {
+  width: 3rem;
+  height: 2rem;
+  padding: 2px;
+  background: var(--cds-field);
+  border: 1px solid var(--cds-border-strong);
+  cursor: pointer;
+}
+.accent-color-controls span {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.875rem;
+}
+
 .settings-row + .settings-row {
   border-top: 1px solid var(--border);
 }

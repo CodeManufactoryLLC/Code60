@@ -130,6 +130,8 @@ export function AppPages(props: AppPagesProps) {
     setFit,
     focusHighlight,
     setFocusHighlight,
+    accentColor,
+    setAccentColor,
     signals,
     setSignals,
     charts,
@@ -351,6 +353,8 @@ export function AppPages(props: AppPagesProps) {
           }
           theme={theme}
           onTheme={setTheme}
+          accentColor={accentColor}
+          onAccentColor={setAccentColor}
           textStyles={textStyles}
           onTextStyles={setTextStyles}
           lines={lines}
@@ -678,7 +682,11 @@ export function AppPages(props: AppPagesProps) {
   } satisfies Record<RenderedPageId, ReactNode>;
   return (
     <PageTitleNavigationContext.Provider value={titleNavigation}>
-      <Grid fullWidth className="product-page-grid">
+      <Grid
+        fullWidth
+        className="product-page-grid"
+        data-chat-active={tabs.active === "chat" || undefined}
+      >
         {renderedPages.map(({ id }) => {
           const Shell = id === "chat" ? "div" : Card;
           return (

@@ -272,7 +272,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
     "relay",
     "Relay",
-    "Application-wide orchestration across explicit targets.",
+    "Application-wide orchestration across explicit targets. The embedded Carbon prompt line opens the selected Code60 thread. Enter sends and Shift+Enter adds a line. Stop targets the current turn.",
     "Sidebar → Chat → Relay (also available from Home)",
     "provider",
     "existing-tools",
@@ -368,10 +368,10 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "commands",
     "Commands",
     `Use bundled or saved reusable prompts with a leading $name. Bundled commands: ${BUILTIN_COMMANDS.map((command) => `$${command.name}: ${command.description}`).join(" ")}`,
-    "Customize → Commands (also Apps → Commands); project composer $ command picker",
+    "Customize → Commands (also Apps → Commands); project composer / or $ command picker",
     "database",
     "existing-tools",
-    "Saved names override bundled names; /name is plain text, not a command. Commands expand only in project orchestrator chats, not Relay or worker chats. Conversation commands do not grant new execution authority. Relay has no command creation tool; reading never executes.",
+    "Choose a slash suggestion to insert its $name token, then add arguments. An unselected /name is plain text. Saved names override bundled names. Commands expand only in project orchestrator chats, not Relay or worker chats. Conversation commands do not grant new execution authority. Relay has no command creation tool; reading never executes.",
   ),
   feature(
     "tactics",
@@ -475,7 +475,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Develop → Workflows (also Apps → Workflows)",
     "runtime",
     "human-only",
-    "The player shows run activity with tool calls collapsed until expanded, recorded execution time, accepted-task progress and ordered task configuration/results. Pause and resume are available for new Transmission 0.1.0-staging.20 workflows. Existing staging.18 records use their original engine. Choose Stop workflow to stop permanently. Cancel has initial focus. Execution runs on macOS Apple Silicon or Linux x64 with glibc using recorded Node >=24.22 <25 and platform-specific bundled engines, locked dependencies and native Codex. Engine launch uses bundled dependencies without downloading or compiling them. Workflow Codex login/configuration is separate from Code60 provider verification; code60 workflows login explicitly opens the bundled Codex login in an interactive terminal without starting an engine. Immutable engine bindings remain outside application releases. Workflow execution selects the verified cached native Codex, independently of application CODEX_PATH overrides. Automatic permission approvals default on. Work continues after closing the browser or stopping the Code60 backend; the backend stop confirmation explains this. No login service is installed. Prompt drafting uses the verified primary provider, bounded root README/package scripts and no tools; generated fields never start work. Source files, HEAD and index stay unchanged; worktrees/evidence remain. No automatic apply or Undo integration. Read-only views never restart the engine. The staging.18 restart path can exceed retry allowances. One active or uncertain workflow per source checkout; at most 100 ordered tasks with 30 checks each, repair/retry allowances 0–30 (default two), and 200 retained workflows within 8 MiB. Activity is paginated with labelled excerpts above 32,768 characters per detail and a display window of 1,000 events within one million characters. Drafting is bounded to 20 messages, 120 seconds, and 160,000 characters each for composed context and output.",
+    "The player shows run activity with tool calls collapsed until expanded, recorded execution time, accepted-task progress and ordered task configuration/results. Pause and resume are available for new Transmission 0.1.0-staging.20 workflows. Existing staging.18 records use their original engine. Choose Stop workflow to stop permanently. Cancel has initial focus. Execution runs on macOS Apple Silicon or Linux x64 with glibc using recorded Node >=24.22 <25 and platform-specific bundled engines, locked dependencies and native Codex. Engine launch uses bundled dependencies without downloading or compiling them. Workflow Codex login/configuration is separate from Code60 provider verification; code60 workflows login explicitly opens the bundled Codex login in an interactive terminal without starting an engine. Immutable engine bindings remain outside application releases. Workflow execution selects the verified cached native Codex, independently of application CODEX_PATH overrides. Automatic permission approvals default on. Work continues after closing the browser or stopping the Code60 backend; the backend stop confirmation explains this. No login service is installed. Create with prompt uses the Carbon prompt line with Send and Stop and a 16,000-character input limit. Prompt drafting uses the verified primary provider, bounded root README/package scripts and no tools; generated fields never start work. Source files, HEAD and index stay unchanged; worktrees/evidence remain. No automatic apply or Undo integration. Read-only views never restart the engine. The staging.18 restart path can exceed retry allowances. One active or uncertain workflow per source checkout; at most 100 ordered tasks with 30 checks each, repair/retry allowances 0–30 (default two), and 200 retained workflows within 8 MiB. Activity is paginated with labelled excerpts above 32,768 characters per detail and a display window of 1,000 events within one million characters. Drafting is bounded to 20 messages, 120 seconds, and 160,000 characters each for composed context and output.",
   ),
   feature(
     "system-manager",
@@ -503,7 +503,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Personalize → Text, Table Defaults or Appearance, Manage → Polling, Workspace → Color theme",
     "none",
     "human-only",
-    "Navigation groups expand or collapse independently. Project and conversation disclosures retain their own state. System follows the operating system. Legacy decorative preferences remain stored.",
+    "Navigation groups expand or collapse independently. Project and conversation disclosures retain their own state. System follows the operating system. In Appearance, use the Accent color picker to change the default verdigris or reset it. This browser remembers the accent across light and dark themes. Legacy decorative preferences remain stored.",
   ),
   feature(
     "updates",

@@ -207,7 +207,7 @@ button.file-open-link {
   margin-inline: 0;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 42rem) {
   .chat-workspace-body {
     flex-direction: column;
     /* Let the scroller paint card shadows without shifting its contents. */
@@ -218,7 +218,7 @@ button.file-open-link {
   }
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 42rem) {
   .chat-workspace-body[data-file-panel-open="true"] > .chat-conversations {
     --stacked-transcript-min: 120px;
     flex: 1 0 auto;
@@ -243,7 +243,7 @@ button.file-open-link {
   }
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 42rem) {
   .chat-workspace-body .file-panel {
     transition:
       flex-basis var(--motion) ease,
@@ -257,7 +257,7 @@ button.file-open-link {
   }
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 42rem) {
   .chat-workspace-body .file-panel[data-minimized="true"] {
     width: 0;
     height: 0;
@@ -267,7 +267,7 @@ button.file-open-link {
   }
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 42rem) {
   .file-panel > .file-column-resize {
     display: none;
   }
@@ -1160,6 +1160,6 @@ button.file-open-link {
     --card-header-fill: var(--content-background);
     --card-header-text: #111111;
     --card-header-muted: #303848;
-    --card-header-hover: #e0eefe;
+    --card-header-hover: var(--cds-layer-hover-01);
   }
 }

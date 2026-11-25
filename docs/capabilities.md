@@ -64,7 +64,7 @@ Schema version: 1
 
 - ID: `relay`
 - Status: shipped
-- Purpose: Application-wide orchestration across explicit targets.
+- Purpose: Application-wide orchestration across explicit targets. The embedded Carbon prompt line opens the selected Code60 thread. Enter sends and Shift+Enter adds a line. Stop targets the current turn.
 - Access: Sidebar → Chat → Relay (also available from Home)
 - Prerequisite: provider
 - Agent access: existing-tools
@@ -205,11 +205,11 @@ Schema version: 1
 - ID: `commands`
 - Status: shipped
 - Purpose: Use bundled or saved reusable prompts with a leading $name. Bundled commands: $create-command: Create a reusable $ command from your instructions. $plan: Propose a plan for your request and wait for Code60 acceptance. $business-evaluation: Plan an evidence-based business evaluation, then wait for Code60 acceptance. $catch-me-up: Explain the broader context and anything I may have missed. $big-picture: Step back from the details and reassess the value and approach. $pushback: Challenge your conclusion and re-evaluate the evidence. $simplify: Explain the current topic in simple, plain language.
-- Access: Customize → Commands (also Apps → Commands); project composer $ command picker
+- Access: Customize → Commands (also Apps → Commands); project composer / or $ command picker
 - Prerequisite: database
 - Agent access: existing-tools
 - Confirmation: Existing permissions apply.
-- Limits: Saved names override bundled names; /name is plain text, not a command. Commands expand only in project orchestrator chats, not Relay or worker chats. Conversation commands do not grant new execution authority. Relay has no command creation tool; reading never executes.
+- Limits: Choose a slash suggestion to insert its $name token, then add arguments. An unselected /name is plain text. Saved names override bundled names. Commands expand only in project orchestrator chats, not Relay or worker chats. Conversation commands do not grant new execution authority. Relay has no command creation tool; reading never executes.
 - Pages: `commands`
 - Settings sections: none
 - Tools: `code60_create_command`
@@ -363,7 +363,7 @@ Schema version: 1
 - Prerequisite: runtime
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
-- Limits: The player shows run activity with tool calls collapsed until expanded, recorded execution time, accepted-task progress and ordered task configuration/results. Pause and resume are available for new Transmission 0.1.0-staging.20 workflows. Existing staging.18 records use their original engine. Choose Stop workflow to stop permanently. Cancel has initial focus. Execution runs on macOS Apple Silicon or Linux x64 with glibc using recorded Node >=24.22 <25 and platform-specific bundled engines, locked dependencies and native Codex. Engine launch uses bundled dependencies without downloading or compiling them. Workflow Codex login/configuration is separate from Code60 provider verification; code60 workflows login explicitly opens the bundled Codex login in an interactive terminal without starting an engine. Immutable engine bindings remain outside application releases. Workflow execution selects the verified cached native Codex, independently of application CODEX_PATH overrides. Automatic permission approvals default on. Work continues after closing the browser or stopping the Code60 backend; the backend stop confirmation explains this. No login service is installed. Prompt drafting uses the verified primary provider, bounded root README/package scripts and no tools; generated fields never start work. Source files, HEAD and index stay unchanged; worktrees/evidence remain. No automatic apply or Undo integration. Read-only views never restart the engine. The staging.18 restart path can exceed retry allowances. One active or uncertain workflow per source checkout; at most 100 ordered tasks with 30 checks each, repair/retry allowances 0–30 (default two), and 200 retained workflows within 8 MiB. Activity is paginated with labelled excerpts above 32,768 characters per detail and a display window of 1,000 events within one million characters. Drafting is bounded to 20 messages, 120 seconds, and 160,000 characters each for composed context and output.
+- Limits: The player shows run activity with tool calls collapsed until expanded, recorded execution time, accepted-task progress and ordered task configuration/results. Pause and resume are available for new Transmission 0.1.0-staging.20 workflows. Existing staging.18 records use their original engine. Choose Stop workflow to stop permanently. Cancel has initial focus. Execution runs on macOS Apple Silicon or Linux x64 with glibc using recorded Node >=24.22 <25 and platform-specific bundled engines, locked dependencies and native Codex. Engine launch uses bundled dependencies without downloading or compiling them. Workflow Codex login/configuration is separate from Code60 provider verification; code60 workflows login explicitly opens the bundled Codex login in an interactive terminal without starting an engine. Immutable engine bindings remain outside application releases. Workflow execution selects the verified cached native Codex, independently of application CODEX_PATH overrides. Automatic permission approvals default on. Work continues after closing the browser or stopping the Code60 backend; the backend stop confirmation explains this. No login service is installed. Create with prompt uses the Carbon prompt line with Send and Stop and a 16,000-character input limit. Prompt drafting uses the verified primary provider, bounded root README/package scripts and no tools; generated fields never start work. Source files, HEAD and index stay unchanged; worktrees/evidence remain. No automatic apply or Undo integration. Read-only views never restart the engine. The staging.18 restart path can exceed retry allowances. One active or uncertain workflow per source checkout; at most 100 ordered tasks with 30 checks each, repair/retry allowances 0–30 (default two), and 200 retained workflows within 8 MiB. Activity is paginated with labelled excerpts above 32,768 characters per detail and a display window of 1,000 events within one million characters. Drafting is bounded to 20 messages, 120 seconds, and 160,000 characters each for composed context and output.
 - Pages: `workflows`
 - Settings sections: none
 - Tools: none
@@ -405,7 +405,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
-- Limits: Navigation groups expand or collapse independently. Project and conversation disclosures retain their own state. System follows the operating system. Legacy decorative preferences remain stored.
+- Limits: Navigation groups expand or collapse independently. Project and conversation disclosures retain their own state. System follows the operating system. In Appearance, use the Accent color picker to change the default verdigris or reset it. This browser remembers the accent across light and dark themes. Legacy decorative preferences remain stored.
 - Pages: `apps`, `advanced`, `experiments`, `settings`
 - Settings sections: `appearance`, `table-defaults`, `text`, `polling-settings`, `about`
 - Tools: none

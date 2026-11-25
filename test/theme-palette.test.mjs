@@ -58,15 +58,15 @@ function contrast(a, b) {
 }
 
 describe("application palette", () => {
-  it("uses flat pale blue and charcoal canvases with separate ink panel edges", () => {
+  it("uses flat pale verdigris and charcoal canvases with separate ink panel edges", () => {
     for (const [scheme, bg, surface, text, edge, primary] of [
-      ["light", "#f4f8fe", "#ffffff", "#111111", "#111111", "#2563eb"],
-      ["dark", "#111111", "#202020", "#f7f7f2", "#727272", "#2563eb"],
+      ["light", "#f3f9f8", "#ffffff", "#111111", "#111111", "#27706c"],
+      ["dark", "#111111", "#202020", "#f7f7f2", "#727272", "#27706c"],
     ]) {
       const color = palette(scheme);
       expect(color("--bg")).toBe(bg);
       expect(color("--workspace-background")).toBe(bg);
-      expect(color("--sidebar-background")).toBe(scheme === "light" ? "#f4f8fe" : bg);
+      expect(color("--sidebar-background")).toBe(scheme === "light" ? "#f3f9f8" : bg);
       expect(color("--surface")).toBe(surface);
       expect(color("--content-background")).toBe(scheme === "light" ? "#ffffff" : surface);
       expect(color("--composer-bg")).toBe(scheme === "light" ? "#ffffff" : "#161616");
@@ -76,9 +76,9 @@ describe("application palette", () => {
       expect(color("--control-border")).toBe(scheme === "dark" ? "#aaaaaa" : edge);
       expect(color("--primary")).toBe(primary);
       if (scheme === "light") {
-        expect(color("--card-header-fill")).toBe("#5494fd");
+        expect(color("--card-header-fill")).toBe("#27706c");
         expect(color("--card-header-text")).toBe("#ffffff");
-        expect(color("--card-header-muted")).toBe("#e8eefb");
+        expect(color("--card-header-muted")).toBe("#e5f1f0");
       }
       for (const token of ["--chat-neutral", "--row-alt"])
         expect(color(token), token).toBe(surface);
@@ -108,7 +108,7 @@ describe("application palette", () => {
   });
 
   it("keeps human messages distinct and primary labels legible in both schemes", () => {
-    expect(palette("light")("--user-bubble")).toBe("#dbeafe");
+    expect(palette("light")("--user-bubble")).toBe("#d4eeec");
     expect(palette("dark")("--user-bubble")).toBe("#35263e");
     for (const scheme of ["light", "dark"]) {
       const color = palette(scheme);
@@ -146,9 +146,6 @@ describe("application palette", () => {
         ["--project-stop-color", "--surface-band"],
         ["--on-destructive", "--project-stop-color"],
       ]) {
-        // Light headers explicitly use the requested white-on-blue palette above.
-        // Keep the general contrast target for reading surfaces and Dark headers.
-        if (scheme === "light" && background === "--card-header-fill") continue;
         const ratio = contrast(color(foreground), color(background));
         expect(ratio, `${foreground} on ${background}`).toBeGreaterThanOrEqual(4.5);
         textRatios.push(ratio);

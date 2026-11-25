@@ -62,8 +62,10 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^2.4.0",
+    "@carbon/ai-chat": "1.25.0",
     "@carbon/icons-react": "11.92.0",
     "@carbon/react": "1.121.0",
+    "@carbon/web-components": "2.68.0",
     "@fontsource/ibm-plex-sans": "5.3.0",
     "@headless-tree/core": "1.8.0",
     "@headless-tree/react": "1.8.0",

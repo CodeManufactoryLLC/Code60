@@ -1,5 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { observeColorScheme, parseTheme, type Theme } from "./appearance.js";
+import {
+  accentProperties,
+  observeColorScheme,
+  parseAccentColor,
+  parseTheme,
+  type Theme,
+} from "./appearance.js";
 import {
   parseFitColumns,
   parseRowDensity,
@@ -10,8 +16,32 @@ import {
 import { parseChartTick } from "./ticker.js";
 import { defaultTextStyles, parseTextStyles, type TextStyles } from "./typography.js";
 
+const accentKey = "code60.accentColor";
+
 export function useAppPreferences() {
   const [theme, setTheme] = useState<Theme>(() => parseTheme(localStorage.getItem("code60.theme")));
+  const [accentColor, setSwatch] = useState(() =>
+    parseAccentColor(localStorage.getItem(accentKey)),
+  );
+  const setAccentColor = (value: string) => {
+    const color = parseAccentColor(value);
+    localStorage.setItem(accentKey, color);
+    setSwatch(color);
+  };
+  useEffect(() => {
+    const sync = (event: StorageEvent) => {
+      if (event.storageArea === localStorage && (event.key === accentKey || event.key === null)) {
+        setSwatch(parseAccentColor(localStorage.getItem(accentKey)));
+      }
+    };
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+  }, []);
+  useLayoutEffect(() => {
+    for (const [name, value] of Object.entries(accentProperties(accentColor))) {
+      document.documentElement.style.setProperty(name, value);
+    }
+  }, [accentColor]);
   const [storedText, setStoredText] = useState<TextStyles>(() =>
     parseTextStyles(localStorage.getItem("code60.textStyles")),
   );
@@ -89,6 +119,8 @@ export function useAppPreferences() {
   return {
     theme,
     setTheme,
+    accentColor,
+    setAccentColor,
     textStyles,
     setTextStyles,
     focusHighlight,

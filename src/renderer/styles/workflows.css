@@ -76,12 +76,8 @@
   box-sizing: border-box;
 }
 .workflow-draft-chat {
-  max-height: 35vh;
-  overflow: auto;
-  white-space: pre-wrap;
-}
-.workflow-draft-chat > div {
-  margin-block: 16px;
+  block-size: min(30rem, 58dvh);
+  overflow: hidden;
 }
 
 .workflow-history ul,

@@ -38,6 +38,14 @@ describe("browser capability catalog", () => {
     expect(mcp?.limitations).toContain("no force or lock deletion");
     expect(mcp?.confirmation).toContain("Complete/Roll back");
   });
+  it("exposes the browser accent preference under Appearance without prerequisites", () => {
+    expect(SETTINGS_CAPABILITIES.appearance).toBe("settings");
+    expect(APPLICATION_CAPABILITIES.find((cap) => cap.id === "settings")).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      limitations: expect.stringContaining("Accent color picker"),
+    });
+  });
   it("describes scheduler upgrade recovery without granting service authority", () => {
     const updates = APPLICATION_CAPABILITIES.find((cap) => cap.id === "updates");
     expect(updates).toMatchObject({ prerequisite: "none", agentAccess: "human-only" });
@@ -376,7 +384,7 @@ describe("browser capability catalog", () => {
       label: "Commands",
       prerequisite: "database",
       purpose: expect.stringContaining("$name"),
-      access: expect.stringContaining("$ command picker"),
+      access: expect.stringContaining("/ or $ command picker"),
       limitations: expect.stringContaining("/name is plain text"),
     });
     for (const command of BUILTIN_COMMANDS)

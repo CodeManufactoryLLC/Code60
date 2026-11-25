@@ -28,7 +28,7 @@ test("browser: skips pairing by default and can require or skip it again without
     await expect(page.getByLabel("Pairing code", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const chat = page.locator(".orchestration-chat-page:visible");
-    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const composer = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
     await composer.fill(
       JSON.stringify([
         { message: "Waiting during pairing policy change" },
@@ -91,25 +91,53 @@ test("browser: approved conversation continues with no browser and reattaches wi
 }) => {
   const fixture = await browserApp(browser);
   const gate = join(fixture.directory, "continue");
+  const startReply = join(fixture.directory, "start-reply");
   try {
     const first = await fixture.open();
     await start(first.page, fixture.directory);
     await first.page.getByRole("button", { name: "Relay", exact: true }).click();
-    const composer = first.page.getByRole("combobox", {
+    const composer = first.page.getByRole("textbox", {
       name: "Message to orchestrator",
       exact: true,
     });
     await composer.fill(
       JSON.stringify([
+        { waitForFile: startReply },
         { message: "Before tab closed" },
         { waitForFile: gate },
         { message: "After tab closed" },
       ]),
     );
     await composer.press("Enter");
-    await expect(first.page.locator(".orchestration-chat-page:visible")).toContainText(
+    const chat = first.page.locator(".orchestration-chat-page:visible");
+    const status = chat.locator(".activity-display");
+    const circle = status.locator(".cds--loading--small");
+    await expect(circle).toBeVisible();
+    await expect(circle).not.toHaveCSS("animation-name", "none");
+    await expect(status).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(status).toHaveCSS("border-top-width", "0px");
+    await expect(status.locator(".activity-name")).toHaveCSS("animation-name", "none");
+    await first.page.emulateMedia({ colorScheme: "dark" });
+    await status.hover();
+    await expect(circle.locator(".cds--loading__svg")).toHaveCSS("fill", "none");
+    await expect(status).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await first.page.screenshot({ path: test.info().outputPath("chat-activity-circle-dark.png") });
+    await status.press("Enter");
+    await expect(status).toHaveAttribute("aria-expanded", "true");
+    await status.press("Escape");
+    await expect(status).toHaveAttribute("aria-expanded", "false");
+    await first.page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(circle).toHaveCSS("animation-name", "none");
+    await writeFile(startReply, "release");
+    await expect(chat.getByRole("article", { name: "Assistant" })).toContainText(
       "Before tab closed",
     );
+    await expect(chat.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
+    await expect(chat.locator(".cds-aichat--message--response")).toHaveCount(2);
+    await expect(chat.locator('.activity-display[data-activity="responding"]')).toHaveCount(0);
+    await expect(
+      chat.locator(".embedded-chat .activity-details:not(.chat-turn-content *)"),
+    ).toHaveCount(0);
     const launches = await readdir(fixture.processLog);
     await first.context.close();
     await writeFile(gate, "release");
@@ -122,7 +150,7 @@ test("browser: approved conversation continues with no browser and reattaches wi
     );
     expect(await readdir(fixture.processLog)).toEqual(launches);
     await expect(
-      second.page.getByRole("combobox", { name: "Message to orchestrator", exact: true }),
+      second.page.getByRole("textbox", { name: "Message to orchestrator", exact: true }),
     ).toBeEditable();
   } finally {
     await writeFile(gate, "release").catch(() => {});
@@ -138,7 +166,7 @@ test("browser: chat links require an explicit decision and open with an isolated
     const { page, context } = await fixture.open();
     await start(page, fixture.directory);
     await page.getByRole("button", { name: "Relay", exact: true }).click();
-    const composer = page.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const composer = page.getByRole("textbox", { name: "Message to orchestrator", exact: true });
     const url = "https://example.test/fixture?view=modal";
     await context.route(url, (route) =>
       route.fulfill({ contentType: "text/html", body: "Fixture destination" }),
@@ -204,6 +232,18 @@ test("browser: custom assistant, memory settings and manual update information s
     await expect(
       page.getByRole("button", { name: "Open Browser reviewer", exact: true }),
     ).toBeVisible();
+    await page.getByRole("button", { name: "Open Browser reviewer", exact: true }).click();
+    const reviewer = page.getByRole("main", { name: "Browser reviewer", exact: true });
+    await expect(reviewer).toBeVisible();
+    const reviewerInput = reviewer.getByRole("textbox", {
+      name: "Message to orchestrator",
+      exact: true,
+    });
+    await reviewerInput.fill(JSON.stringify([{ message: "Reviewer response" }]));
+    await reviewerInput.press("Enter");
+    await expect(reviewer.getByRole("article", { name: "Assistant" })).toHaveText(
+      /Reviewer response/,
+    );
     await app(page, "Memory");
     const memory = page.getByRole("switch", { name: "Memory", exact: true });
     await memory.focus();
@@ -351,8 +391,31 @@ test("browser: Carbon application navigation, appearance controls and retained d
     await app(page, "Appearance");
     const appearance = page.locator("#panel-settings-appearance");
     await expect(appearance.getByRole("switch", { name: "Monochrome" })).toHaveCount(0);
+    const picker = appearance.getByLabel("Accent color", { exact: true });
+    const reset = appearance.getByRole("button", { name: "Reset to verdigris" });
+    await expect(picker).toHaveValue("#43b3ae");
+    await expect(reset).toBeDisabled();
+    const otherTab = await page.context().newPage();
+    await otherTab.goto(page.url());
+    await expect(otherTab.locator("html")).toHaveCSS("--code60-accent", "#43b3ae");
+    await picker.fill("#813051");
+    await expect(otherTab.locator("html")).toHaveCSS("--code60-accent", "#813051");
+    await otherTab.close();
+    await expect(reset).toHaveCSS("color", "rgb(129, 48, 81)");
+    await page.reload();
+    await expect(picker).toHaveValue("#813051");
     await appearance.getByRole("combobox", { name: "Theme", exact: true }).selectOption("dark");
     await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
+    await expect(reset).toHaveCSS("color", "rgb(194, 174, 180)");
+    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    const prompt = page.getByRole("textbox", { name: "Message to orchestrator", exact: true });
+    await expect(prompt).toHaveCSS("--cds-link-primary", "#c2aeb4");
+    await app(page, "Appearance");
+    await page.emulateMedia({ forcedColors: "active" });
+    await expect(page.locator("html")).toHaveCSS("--cds-link-primary", "LinkText");
+    await page.emulateMedia({ forcedColors: "none" });
+    await reset.click();
+    await expect(picker).toHaveValue("#43b3ae");
     await expect(page.getByRole("navigation", { name: "Product navigation" })).toBeVisible();
     await page.screenshot({
       path: test.info().outputPath("carbon-appearance-dark.png"),
@@ -370,7 +433,7 @@ test("browser: Carbon application navigation, appearance controls and retained d
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const composer = page
       .locator(".orchestration-chat-page:visible")
-      .getByRole("combobox", { name: "Message to orchestrator", exact: true });
+      .getByRole("textbox", { name: "Message to orchestrator", exact: true });
     await expect(composer).toBeEditable();
     await expect
       .poll(() =>
@@ -494,7 +557,7 @@ test("browser: Carbon scheduled jobs edit, run, evidence, cancellation and brows
     ).toHaveCount(0);
     await expect(
       pageContent.getByRole("button", { name: "New scheduled job", exact: true }),
-    ).toHaveCSS("background-color", "rgb(15, 98, 254)");
+    ).toHaveCSS("background-color", "rgb(39, 112, 108)");
     await expect(
       pageContent.getByRole("button", { name: "New scheduled job", exact: true }),
     ).toHaveCSS("height", "48px");
@@ -802,7 +865,7 @@ test("browser: pending agent permission survives refresh and cancellation preven
     await start(page, fixture.directory);
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const chat = page.locator(".orchestration-chat-page:visible");
-    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const composer = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
     const approval = chat.getByRole("button", { name: "Code60 auto-approval", exact: true });
     await expect(approval).toBeEnabled();
     if ((await approval.getAttribute("aria-pressed")) === "true") await approval.click();
@@ -995,7 +1058,7 @@ test("browser: concurrent project conversations retain their own streaming respo
     const { page } = await fixture.open();
     await start(page, fixture.directory);
     const chat = page.locator(".orchestration-chat-page:visible");
-    const composer = chat.getByRole("combobox", { name: "Message to orchestrator" });
+    const composer = chat.getByRole("textbox", { name: "Message to orchestrator" });
     const select = async (name: string) => {
       const entry = page
         .getByRole("region", { name: `Project ${join(fixture.directory, name)}`, exact: true })
@@ -1051,7 +1114,7 @@ test("browser: concurrent project conversations retain their own streaming respo
       "Completed release-client",
     );
     await select("release-server");
-    await expect(composer).toHaveValue("Server follow-up draft");
+    await expect(composer).toHaveText("Server follow-up draft");
     const rename = page
       .getByRole("region", {
         name: `Project ${join(fixture.directory, "release-server")}`,
@@ -1230,6 +1293,244 @@ test("browser: Open Project modal fits its content and keeps actions in view", a
     await expect(dialog).toHaveCount(0);
     expect(execFileSync("git", ["status", "--porcelain"], { cwd: repo, encoding: "utf8" })).toBe(
       "",
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("browser: Carbon project commands retain arguments after a rejected send and render once", async ({
+  browser,
+}) => {
+  const fixture = await browserApp(browser);
+  try {
+    const { page } = await fixture.open();
+    const external = new Set<string>();
+    const violations: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).origin !== fixture.gateway.origin) external.add(request.url());
+    });
+    await page.exposeFunction("recordChatPolicyViolation", (directive: string) =>
+      violations.push(directive),
+    );
+    await page.evaluate(() =>
+      document.addEventListener("securitypolicyviolation", (event) => {
+        (
+          window as unknown as { recordChatPolicyViolation(directive: string): void }
+        ).recordChatPolicyViolation(event.effectiveDirective);
+      }),
+    );
+    await start(page, fixture.directory);
+    await expandNavigation(page, "Customize");
+    await page.getByRole("tab", { name: "Commands", exact: true }).click();
+    const commands = page.locator(".commands-page");
+    await commands.getByRole("button", { name: "New command", exact: true }).click();
+    await commands.getByLabel("Title", { exact: true }).fill("Review fixture");
+    await commands.getByLabel("Name", { exact: true }).fill("review-fixture");
+    await commands.getByLabel("Prompt", { exact: true }).fill("Review the requested fixture.");
+    await commands.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(
+      commands.getByRole("button", { name: /review-fixture.*Review fixture/ }),
+    ).toBeVisible();
+    const repo = join(fixture.directory, "command-project");
+    await mkdir(repo);
+    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+    await writeFile(join(repo, "README.md"), "command test");
+    execFileSync("git", ["add", "README.md"], { cwd: repo });
+    commitFixture(repo);
+    await openProject(page, fixture.directory, "command-project");
+    await page
+      .getByRole("button", { name: "New Session in command-project", exact: true })
+      .first()
+      .click();
+    const chat = page.locator(".orchestration-chat-page:visible");
+    await expect(page.getByRole("tabpanel", { name: "Chat 1", exact: true })).toBeVisible();
+    await expect(chat.getByRole("button", { name: "Tactics", exact: true })).toBeEnabled();
+    const input = chat.getByRole("textbox", { name: "Message to orchestrator" });
+    await expect(input).toBeEditable();
+    const session = chat.getByRole("region", { name: "Session information" });
+    const model = session.getByRole("button", { name: "Model", exact: true });
+    const mode = session.getByRole("button", { name: "Harness mode", exact: true });
+    const usage = session.getByRole("img", { name: /Context:/ });
+    for (const [trigger, label] of [
+      [model, "Model settings"],
+      [mode, "Harness modes"],
+    ] as const) {
+      await trigger.press("ArrowDown");
+      const menu = page.getByRole("menu", { name: label, exact: true });
+      await expect(menu).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(menu).toBeHidden();
+      await expect(trigger).toBeFocused();
+    }
+    await input.click();
+    const promptFrame = chat.locator('[part~="prompt-container"]');
+    await expect(promptFrame).toHaveCSS("outline-style", "none");
+    await expect(promptFrame).toHaveCSS("box-shadow", "none");
+    const tactics = chat.getByRole("button", { name: "Tactics", exact: true });
+    await tactics.focus();
+    await expect(tactics).toBeFocused();
+    await expect(chat.getByRole("region", { name: "Chat composer" })).toHaveCSS(
+      "outline-style",
+      "none",
+    );
+    await input.click();
+    await input.pressSequentially("/review-fix");
+    const option = chat.getByRole("option").filter({ hasText: "review-fixture" });
+    await expect(option).toBeVisible();
+    await option.click();
+    await page.keyboard.type(" project arguments");
+    const attempts: { text: string; command?: string }[] = [];
+    await page.route("**/api/operation", async (route) => {
+      const body = route.request().postDataJSON();
+      if (body.operation === "orchestration-chat" && body.value.type === "send") {
+        attempts.push(body.value);
+        if (attempts.length === 1) {
+          await route.fulfill({ status: 503, json: { error: "Fixture send unavailable" } });
+          return;
+        }
+      }
+      await route.continue();
+    });
+    await input.press("Enter");
+    await expect(chat.getByRole("alert")).toContainText("Fixture send unavailable");
+    await expect(input).toContainText("project arguments");
+    await expect(chat.locator("article.event.prompt")).toHaveCount(0);
+    await chat.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(chat.locator("article.event.prompt")).toHaveCount(1);
+    expect(attempts).toHaveLength(2);
+    expect(attempts[0]?.command).toBe("review-fixture");
+    expect(attempts[0]?.text).toMatch(/^\$review-fixture\s+project arguments$/);
+    expect(attempts[1]).toEqual(attempts[0]);
+    await page.reload();
+    await expect(chat.locator("article.event.prompt")).toHaveCount(1);
+    await expect(chat.getByRole("button", { name: /open chat history/i })).toHaveCount(0);
+    for (const [name, width, height, colorScheme, forcedColors] of [
+      ["light", 1440, 900, "light", "none"],
+      ["tablet", 900, 700, "light", "none"],
+      ["dark", 375, 667, "dark", "none"],
+      ["short", 375, 300, "light", "none"],
+      ["forced", 375, 667, "dark", "active"],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await page.emulateMedia({ colorScheme, forcedColors });
+      await expect(chat.locator('.transcript-content[data-variant="agent"]').first()).toHaveCSS(
+        "background-color",
+        "rgba(0, 0, 0, 0)",
+      );
+      const closeNavigation = page.getByRole("button", { name: "Close product navigation" });
+      if (await closeNavigation.isVisible()) await closeNavigation.click();
+      await expect(input).toBeInViewport();
+      await input.click({ trial: true });
+      const frame = (await promptFrame.boundingBox())!;
+      const editor = (await input.boundingBox())!;
+      expect(frame.height).toBeGreaterThanOrEqual(96);
+      for (const control of [model, usage, mode]) {
+        const box = (await control.boundingBox())!;
+        expect(box.x).toBeGreaterThanOrEqual(frame.x);
+        expect(box.x + box.width).toBeLessThanOrEqual(frame.x + frame.width);
+        expect(box.y).toBeGreaterThanOrEqual(editor.y + editor.height - 1);
+        expect(frame.y + frame.height - box.y - box.height).toBeLessThanOrEqual(24);
+        expect(box.y + box.height).toBeLessThanOrEqual(frame.y + frame.height);
+      }
+      const lastControl = (await mode.boundingBox())!;
+      expect(frame.x + frame.width - lastControl.x - lastControl.width).toBeLessThan(72);
+      const surface = chat.locator(".embedded-chat-element");
+      const panelToggle = page.locator("#workspace-panel-actions").getByRole("button");
+      const assertChatEdges = () =>
+        expect
+          .poll(() =>
+            surface.evaluate((element) => {
+              const box = element.getBoundingClientRect();
+              const column = document.querySelector(".app-workspace")!.getBoundingClientRect();
+              const header = document.querySelector(".product-header")!.getBoundingClientRect();
+              const inspector = document.querySelector(
+                '.file-panel[data-minimized="false"]:not([inert])',
+              );
+              const right = inspector?.getBoundingClientRect().left ?? window.innerWidth;
+              return [
+                box.left - column.left,
+                box.top - header.bottom,
+                box.right - right,
+                box.bottom - window.innerHeight,
+              ].map((difference) => Math.round(difference) || 0);
+            }),
+          )
+          .toEqual([0, 0, 0, 0]);
+      await assertChatEdges();
+      if (name === "light" || name === "tablet" || name === "dark") {
+        await panelToggle.click();
+        await expect(panelToggle).toHaveAttribute("aria-expanded", "true");
+        await expect(page.locator('.file-panel[data-minimized="false"]:visible')).toBeInViewport();
+        if (width > 672) {
+          await assertChatEdges();
+          await page.screenshot({
+            animations: "disabled",
+            path: test.info().outputPath(`carbon-chat-${name}-inspector.png`),
+          });
+        } else {
+          await expect(input).toBeHidden();
+        }
+        await panelToggle.click();
+        await expect(panelToggle).toHaveAttribute("aria-expanded", "false");
+      }
+      await page.screenshot({
+        animations: "disabled",
+        path: test.info().outputPath(`carbon-chat-${name}.png`),
+      });
+    }
+    expect([...external]).toEqual([]);
+    expect(violations).toEqual([]);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("browser: the worker prompt line owns its permission decision and follow-up", async ({
+  browser,
+}) => {
+  const fixture = await browserApp(browser);
+  try {
+    const { page } = await fixture.open();
+    await start(page, fixture.directory);
+    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    const relay = page.locator(".orchestration-chat-page:visible");
+    const approval = relay.getByRole("button", { name: "Code60 auto-approval", exact: true });
+    if ((await approval.getAttribute("aria-pressed")) === "true") await approval.click();
+    const target = join(fixture.directory, "worker-target");
+    await mkdir(target);
+    const request =
+      "Relay target: " +
+      JSON.stringify({
+        cwd: target,
+        workspaceMode: "direct",
+        label: "Permission worker",
+        prompt: JSON.stringify([
+          { permission: { id: "worker-approval", title: "Write worker evidence", kind: "edit" } },
+          { write: { path: "approved.txt", content: "worker approved" } },
+        ]),
+      });
+    const parentInput = relay.getByRole("textbox", { name: "Message to orchestrator" });
+    await parentInput.fill(request);
+    await parentInput.press("Enter");
+    await page.getByRole("button", { name: /^Permission worker \[/ }).click();
+    const worker = page.locator(".worker-chat-page:visible");
+    const allow = worker.getByRole("button", { name: "Allow once", exact: true });
+    await expect(allow).toBeVisible();
+    const waiting = worker.locator('.worker-chat-subtitle[data-status="waiting"]');
+    await expect(waiting.locator(".cds--loading--small")).toBeVisible();
+    await expect(waiting).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(readFile(join(target, "approved.txt"))).rejects.toMatchObject({ code: "ENOENT" });
+    await allow.click();
+    await expect
+      .poll(() => readFile(join(target, "approved.txt"), "utf8").catch(() => ""))
+      .toBe("worker approved");
+    const input = worker.getByRole("textbox", { name: "Message", exact: true });
+    await expect(input).toBeEditable();
+    await input.fill(JSON.stringify([{ message: "Only this worker received the follow-up." }]));
+    await input.press("Enter");
+    await expect(worker.getByRole("article", { name: "Assistant" }).last()).toContainText(
+      "Only this worker received the follow-up.",
     );
   } finally {
     await fixture.close();

@@ -142,7 +142,7 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     ).toBeVisible();
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const chat = page.locator(".orchestration-chat-page:visible");
-    const composer = chat.getByRole("combobox", { name: "Message to orchestrator", exact: true });
+    const composer = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
     await composer.fill(
       JSON.stringify([
         { message: "LAN request accepted" },
