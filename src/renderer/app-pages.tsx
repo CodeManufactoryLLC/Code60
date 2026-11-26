@@ -129,8 +129,6 @@ export function AppPages(props: AppPagesProps) {
     setDensity,
     fit,
     setFit,
-    focusHighlight,
-    setFocusHighlight,
     accentColor,
     setAccentColor,
     signals,
@@ -381,8 +379,6 @@ export function AppPages(props: AppPagesProps) {
           onDensity={setDensity}
           fit={fit}
           onFit={setFit}
-          focusHighlight={focusHighlight}
-          onFocusHighlight={setFocusHighlight}
           signals={signals}
           onSignals={setSignals}
           charts={charts}

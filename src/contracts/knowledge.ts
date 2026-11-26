@@ -519,7 +519,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
     "settings",
     "Settings",
-    "Choose Light, Dark or System, interface text size, focus highlights, signal colors and table defaults. Table defaults start at Low density (Carbon 64px rows), with row, column and heading lines off. Saved table settings retain their column order, visibility and density. Apply saves the draft, including a Reset to defaults. Cancel or Escape discards it. Browser-native window management is outside Code60.",
+    "Choose Light, Dark or System, interface text size, signal colors and table defaults. Table defaults start at Low density (Carbon 64px rows), with row, column and heading lines off. Saved table settings retain their column order, visibility and density. Apply saves the draft, including a Reset to defaults. Cancel or Escape discards it. Browser-native window management is outside Code60.",
     "Personalize → Text, Table Defaults or Appearance, Manage → Polling, Workspace → Color theme",
     "none",
     "human-only",

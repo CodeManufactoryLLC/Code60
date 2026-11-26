@@ -26,8 +26,6 @@ const props: ComponentProps<typeof SettingsPage> = {
   onDensity: unchanged,
   fit: false,
   onFit: unchanged,
-  focusHighlight: false,
-  onFocusHighlight: unchanged,
   signals: false,
   onSignals: unchanged,
   charts: true,
@@ -41,6 +39,7 @@ describe("Settings page titles", () => {
     expect(html).not.toContain("Background blur</label>");
     expect(html).toContain('aria-label="Theme"');
     expect(html).not.toContain("Monochrome");
+    expect(html).not.toContain("Focus highlight border");
   });
   it.each(settingsSectionIds)(
     "uses the specific %s page name instead of a Settings heading",

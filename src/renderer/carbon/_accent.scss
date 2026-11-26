@@ -50,6 +50,12 @@ $tones: (
     }
     --cds-tag-border-blue: var(--cds-border-interactive);
     --cds-tag-hover-blue: color-mix(in srgb, var(--cds-tag-background-blue) 85%, var(--cds-tag-color-blue));
+    --cds-focus: transparent;
+    --cds-focus-inset: transparent;
+    --cds-focus-inverse: transparent;
+    --cds-button-focus-color: transparent;
+    --cds-aichat-launcher-color-focus-border: transparent;
+    --cds-ai-drop-shadow: transparent;
     accent-color: var(--cds-interactive);
   }
 }

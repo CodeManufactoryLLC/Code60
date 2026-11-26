@@ -153,24 +153,11 @@
     --hover-bg: var(--card-header-hover);
     --accent-bg: var(--card-header-fill);
     --control-hover: var(--card-header-hover);
-    --focus-line: var(--code60-accent-ink);
-    --focus-outline: var(--code60-accent-ink);
-    --focus-inset-shadow: inset 0 0 0 2px var(--code60-accent-ink);
   }
 
   .sidebar-navigation-card :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-action) {
     color: var(--primary);
     background: var(--primary-text);
-  }
-
-  :root:not([data-color-scheme="dark"])
-    .sidebar-section
-    > :is(.sidebar-card-toggle, .project-sidebar-open) {
-    --focus-outline: var(--code60-accent-ink);
-  }
-
-  :root[data-focus-highlight="on"] .sidebar-card-header {
-    --focus-inset-shadow: inset 0 0 0 5px var(--focus-line);
   }
 }
 
@@ -289,16 +276,6 @@
 .chat-sidebar-action:active:not(:disabled) .sidebar-card-action {
   translate: 1px 1px;
   box-shadow: 1px 1px 0 #000000;
-}
-
-.sidebar-card-toggle:focus-visible .sidebar-card-chevron,
-.project-sidebar-open:focus-visible .sidebar-card-add,
-.project-folder-stop:focus-visible .sidebar-card-stop,
-.project-session-add:focus-visible .sidebar-card-add,
-.project-chat-toggle:focus-visible .sidebar-card-chevron,
-.chat-sidebar-action:focus-visible .sidebar-card-action {
-  outline: 2px solid var(--focus-outline);
-  outline-offset: 2px;
 }
 
 .sidebar .sidebar-home-pages {
@@ -636,12 +613,6 @@
   background: var(--hover-bg);
 }
 
-.sidebar-resize:focus-visible {
-  outline: 2px solid var(--focus-outline);
-  outline-offset: -2px;
-  box-shadow: var(--focus-inset-shadow);
-}
-
 .chat-sidebar-row {
   container-type: inline-size;
   display: flex;
@@ -939,13 +910,6 @@
 #assistants-pages > .relay-sidebar .chat-worker-children,
 #custom-agent-pages {
   --nav-indent: var(--nav-step);
-}
-
-.sidebar :is(button, [role="tab"]):focus-visible,
-.message-copy button:focus-visible {
-  outline: 2px solid var(--focus-outline);
-  outline-offset: -2px;
-  box-shadow: var(--focus-inset-shadow);
 }
 
 .sidebar button:hover:not(:disabled, .chat-sidebar-entry, .project-chat-name) {

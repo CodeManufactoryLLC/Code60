@@ -428,7 +428,7 @@ Schema version: 1
 
 - ID: `settings`
 - Status: shipped
-- Purpose: Choose Light, Dark or System, interface text size, focus highlights, signal colors and table defaults. Table defaults start at Low density (Carbon 64px rows), with row, column and heading lines off. Saved table settings retain their column order, visibility and density. Apply saves the draft, including a Reset to defaults. Cancel or Escape discards it. Browser-native window management is outside Code60.
+- Purpose: Choose Light, Dark or System, interface text size, signal colors and table defaults. Table defaults start at Low density (Carbon 64px rows), with row, column and heading lines off. Saved table settings retain their column order, visibility and density. Apply saves the draft, including a Reset to defaults. Cancel or Escape discards it. Browser-native window management is outside Code60.
 - Access: Personalize → Text, Table Defaults or Appearance, Manage → Polling, Workspace → Color theme
 - Prerequisite: none
 - Agent access: human-only
