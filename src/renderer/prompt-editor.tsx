@@ -1,3 +1,16 @@
+import {
+  Button,
+  CodeSnippet,
+  ContentSwitcher,
+  Form,
+  InlineNotification,
+  Search,
+  Select,
+  SelectItem,
+  Switch,
+  Tag,
+  TextArea,
+} from "@carbon/react";
 import { useId, useMemo, useRef, useState } from "react";
 import {
   type InternalPromptId,
@@ -10,10 +23,8 @@ import {
   type PromptTemplate,
   type PromptTemplateState,
 } from "../bridge/index.js";
-import { Button as AppButton } from "./carbon/button.js";
-import { Select as CarbonSelect, TextInput as CarbonTextInput } from "./carbon/fields.js";
-import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
 import { Icon } from "./icons.js";
+import { ControlDescription } from "./overlays.js";
 import { PageTitle } from "./page-title.js";
 import {
   buildPromptCatalogItems,
@@ -28,19 +39,21 @@ import {
   sourceLabels,
 } from "./prompt-editor-model.js";
 
+const FILTER_MODES: readonly PromptCatalogFilter[] = ["all", "editable", "readonly"];
+
 function initialExpandedDomains(): Record<PromptDomain, boolean> {
   return {
+    command: false,
+    context: false,
     contract: true,
     handoff: true,
-    context: false,
-    task: true,
-    worker: true,
+    memory: true,
     plan: true,
     review: true,
-    memory: true,
-    utility: true,
     tactic: false,
-    command: false,
+    task: true,
+    utility: true,
+    worker: true,
   };
 }
 
@@ -65,13 +78,15 @@ export function PromptEditorPage({
   const [filterQuery, setFilterQuery] = useState("");
   const [filterMode, setFilterMode] = useState<PromptCatalogFilter>("all");
   const [previewVisible, setPreviewVisible] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
 
   const visibleItems = useMemo(
     () => filterPromptCatalog(catalog, filterQuery, filterMode),
     [catalog, filterQuery, filterMode],
   );
+  const editableCount = useMemo(() => catalog.filter((entry) => entry.editable).length, [catalog]);
+  const readonlyCount = catalog.length - editableCount;
+
   const selected =
     catalog.find((entry) => entry.id === selectedId) ?? visibleItems[0] ?? catalog[0];
   if (!selected) return null;
@@ -130,74 +145,99 @@ export function PromptEditorPage({
     });
   };
 
-  const copyId = async (value: string) => {
-    try {
-      await navigator.clipboard?.writeText(value);
-      setCopiedId(value);
-      setTimeout(() => setCopiedId((current) => (current === value ? null : current)), 1500);
-    } catch {
-      /* Clipboard may be unavailable in restricted contexts. */
-    }
-  };
-
   const toggleDomain = (domain: PromptDomain) => {
     setExpanded((current) => ({ ...current, [domain]: !current[domain] }));
   };
 
+  const clearFilters = () => {
+    setFilterQuery("");
+    setFilterMode("all");
+  };
+
   const restores = editableSelected ? sourceLabels[editableSelected.fallbackSource] : "";
+  const statusAnnouncement = editableSelected
+    ? [
+        editableSelected.source !== "built-in"
+          ? `Source: ${sourceLabels[editableSelected.source]}.`
+          : "",
+        dirty ? "Unsaved changes." : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "";
+  const requiredFieldsHelper =
+    editableSelected && editableSelected.requiredFields.length > 0
+      ? `Required merge fields: ${editableSelected.requiredFields.map((field) => `{{${field}}}`).join(", ")}`
+      : undefined;
 
   return (
-    <main className="prompt-editor" aria-labelledby={`${id}-title`}>
-      <div className="table-controls">
+    <main className="prompt-editor internal-prompts-page" aria-labelledby={`${id}-title`}>
+      <header className="table-controls">
         <PageTitle page="prompts" className="table-title" id={`${id}-title`} />
-      </div>
+        <ControlDescription>
+          Inspect all internal prompts by canonical ID and customize editable templates for this
+          project.
+        </ControlDescription>
+      </header>
       <div className="prompt-editor-body">
         <nav className="prompt-editor-list" aria-label="Prompt templates">
           <div className="prompt-editor-filter">
-            <CarbonTextInput
+            <Search
               id={`${id}-filter`}
+              size="md"
               labelText="Filter prompts"
-              hideLabel
-              placeholder="Filter by ID or name…"
+              placeholder="Filter by ID or name"
+              closeButtonLabelText="Clear prompt filter"
               value={filterQuery}
               onChange={(event) => setFilterQuery(event.target.value)}
+              onClear={() => setFilterQuery("")}
             />
-            <CarbonSelect
-              id={`${id}-mode`}
-              labelText="Visibility"
-              hideLabel
-              value={filterMode}
-              onChange={(event) => setFilterMode(event.target.value as PromptCatalogFilter)}
+            <ContentSwitcher
+              size="sm"
+              className="prompt-editor-mode-switcher"
+              selectedIndex={FILTER_MODES.indexOf(filterMode)}
+              onChange={(selection) => {
+                const next = selection.name;
+                if (next === "all" || next === "editable" || next === "readonly") {
+                  setFilterMode(next);
+                }
+              }}
+              aria-label="Prompt access filter"
             >
-              <option value="all">All ({catalog.length})</option>
-              <option value="editable">
-                Editable ({catalog.filter((entry) => entry.editable).length})
-              </option>
-              <option value="readonly">
-                Read-only ({catalog.filter((entry) => !entry.editable).length})
-              </option>
-            </CarbonSelect>
+              <Switch name="all" text={`All (${catalog.length})`} />
+              <Switch name="editable" text={`Editable (${editableCount})`} />
+              <Switch name="readonly" text={`Read-only (${readonlyCount})`} />
+            </ContentSwitcher>
           </div>
           {visibleItems.length === 0 ? (
-            <p className="prompt-editor-status">No prompts match this filter.</p>
+            <div className="prompt-editor-empty">
+              <p>No prompts match this filter.</p>
+              <Button type="button" kind="ghost" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            </div>
           ) : (
             PROMPT_DOMAINS.map((domain) => {
-              const items = visibleItems.filter((entry) => entry.domain === domain.id);
+              const items = visibleItems
+                .filter((entry) => entry.domain === domain.id)
+                .toSorted((a, b) => a.label.localeCompare(b.label));
               if (items.length === 0) return null;
               const open = filtering || expanded[domain.id];
               return (
                 <div className="prompt-domain-group" key={domain.id}>
-                  <AppButton
+                  <Button
                     type="button"
+                    kind="ghost"
+                    size="sm"
                     className="prompt-system-toggle"
-                    variant="quiet"
                     aria-expanded={open}
                     aria-controls={`${id}-domain-${domain.id}`}
                     onClick={() => toggleDomain(domain.id)}
                   >
                     <Icon name={open ? "chevron--down" : "chevron--right"} />
                     <span>{domain.label}</span>
-                  </AppButton>
+                    <span className="prompt-domain-count">{items.length}</span>
+                  </Button>
                   <div
                     className="prompt-system-list"
                     id={`${id}-domain-${domain.id}`}
@@ -206,10 +246,12 @@ export function PromptEditorPage({
                     {items.map((entry) => {
                       const changed = entry.editable && isDirty(drafts, entry.id, entry.template);
                       return (
-                        <AppButton
+                        <Button
                           key={entry.id}
-                          variant="quiet"
+                          kind="ghost"
+                          size="sm"
                           type="button"
+                          className="prompt-editor-item"
                           aria-current={entry.id === selected.id ? "true" : undefined}
                           onClick={() => {
                             setSelectedId(entry.id);
@@ -218,11 +260,15 @@ export function PromptEditorPage({
                         >
                           <span className="prompt-editor-name">{entry.label}</span>
                           <code className="prompt-editor-id">{entry.id}</code>
-                          {changed && <span className="prompt-editor-source">Unsaved changes</span>}
+                          {changed && (
+                            <span className="prompt-editor-source prompt-editor-source--dirty">
+                              Unsaved changes
+                            </span>
+                          )}
                           {!entry.editable && (
                             <span className="prompt-editor-source">Read-only</span>
                           )}
-                        </AppButton>
+                        </Button>
                       );
                     })}
                   </div>
@@ -232,33 +278,54 @@ export function PromptEditorPage({
           )}
         </nav>
         <section className="prompt-editor-main" aria-labelledby={`${id}-name`}>
-          <h2 id={`${id}-name`}>{selected.label}</h2>
-          <div className="prompt-editor-meta">
-            <code className="prompt-editor-id-badge">{selected.id}</code>
-            <AppButton type="button" variant="quiet" onClick={() => void copyId(selected.id)}>
-              {copiedId === selected.id ? "Copied" : "Copy ID"}
-            </AppButton>
-            <span className="prompt-editor-badge">{selected.scope}</span>
-            <span className="prompt-editor-badge">
-              {selected.editable ? "Editable" : "Read-only"}
-            </span>
-          </div>
-          <p className="muted">{selected.description}</p>
+          <header className="prompt-detail-header">
+            <h2 id={`${id}-name`}>{selected.label}</h2>
+            <div className="prompt-editor-meta">
+              <CodeSnippet
+                type="inline"
+                className="prompt-editor-id-badge"
+                feedback="Copied ID"
+                aria-label={`Copy prompt ID ${selected.id}`}
+              >
+                {selected.id}
+              </CodeSnippet>
+              <Tag size="sm" type={selected.editable ? "teal" : "cool-gray"}>
+                {selected.editable ? "Editable" : "Read-only"}
+              </Tag>
+              <Tag size="sm" type="gray">
+                {selected.scope}
+              </Tag>
+              {editableSelected && editableSelected.source !== "built-in" && (
+                <Tag size="sm" type="blue">
+                  {`Source: ${sourceLabels[editableSelected.source]}`}
+                </Tag>
+              )}
+              {dirty && (
+                <Tag size="sm" type="purple">
+                  Unsaved changes
+                </Tag>
+              )}
+            </div>
+            <p className="cds--visually-hidden" role="status">
+              {statusAnnouncement}
+            </p>
+            <p className="prompt-editor-description">{selected.description}</p>
+          </header>
+
           {editableSelected && text !== undefined && preview ? (
             <>
-              <p className="prompt-editor-status" role="status">
-                {editableSelected.source !== "built-in" &&
-                  `Source: ${sourceLabels[editableSelected.source]}.`}
-                {dirty ? " Unsaved changes." : ""}
-              </p>
               <div className="prompt-editor-view-toggle">
-                <AppButton
-                  type="button"
-                  aria-controls={`${id}-template-view`}
-                  onClick={() => setPreviewVisible((current) => !current)}
+                <ContentSwitcher
+                  key={editableSelected.id}
+                  size="sm"
+                  className="prompt-editor-view-switcher"
+                  selectedIndex={previewVisible ? 1 : 0}
+                  onChange={(selection) => setPreviewVisible(selection.name === "preview")}
+                  aria-label="Template view"
                 >
-                  {previewVisible ? "Edit template" : "Preview"}
-                </AppButton>
+                  <Switch name="edit" text="Edit template" />
+                  <Switch name="preview" text="Preview" />
+                </ContentSwitcher>
               </div>
               {previewVisible ? (
                 <section
@@ -266,117 +333,120 @@ export function PromptEditorPage({
                   id={`${id}-template-view`}
                   aria-labelledby={`${id}-preview-title`}
                 >
-                  <h3 className="field-label" id={`${id}-preview-title`}>
+                  <h3 className="prompt-editor-section-heading" id={`${id}-preview-title`}>
                     {editableSelected.id === "contract.operating"
                       ? "Assembled Operating Contract"
                       : "Preview with sample values"}
                   </h3>
-                  {!preview.ok && (
-                    <p className="prompt-editor-problem" role="status">
-                      {preview.error}
-                    </p>
+                  {preview.ok ? (
+                    <CodeSnippet
+                      key={`${editableSelected.id}-preview`}
+                      type="multi"
+                      wrapText
+                      feedback="Copied preview"
+                      aria-label="Copy rendered prompt preview"
+                      maxCollapsedNumberOfRows={24}
+                    >
+                      {preview.text}
+                    </CodeSnippet>
+                  ) : (
+                    <InlineNotification
+                      kind="error"
+                      lowContrast
+                      hideCloseButton
+                      title="Template error"
+                      subtitle={preview.error}
+                    />
                   )}
-                  <pre className="prompt-editor-preview">
-                    {preview.ok ? preview.text : "Fix the template to see a preview."}
-                  </pre>
                 </section>
               ) : (
-                <div className="prompt-editor-template-editor" id={`${id}-template-view`}>
+                <Form
+                  className="prompt-editor-form"
+                  id={`${id}-template-view`}
+                  onSubmit={(event) => event.preventDefault()}
+                >
                   {editableSelected.fields.length > 0 && (
-                    <div className="prompt-editor-fields">
-                      <label className="field-label" htmlFor={`${id}-fields`}>
-                        Insert merge field
-                      </label>
-                      <CarbonSelect
+                    <div className="prompt-editor-merge-field">
+                      <Select
                         id={`${id}-fields`}
+                        labelText="Insert merge field"
+                        helperText={`Available merge fields: ${editableSelected.fields.map((field) => `{{${field}}}`).join(", ")}`}
                         value=""
                         disabled={busy}
                         onChange={(event) => {
                           if (event.target.value) insert(event.target.value);
                         }}
                       >
-                        <option value="" disabled>
-                          Choose a merge field…
-                        </option>
+                        <SelectItem value="" text="Choose a merge field" disabled hidden />
                         {editableSelected.fields.map((field) => (
-                          <option key={field} value={field}>
-                            {`{{${field}}}`}
-                          </option>
+                          <SelectItem key={field} value={field} text={`{{${field}}}`} />
                         ))}
-                      </CarbonSelect>
+                      </Select>
                     </div>
                   )}
                   {typeof text !== "string" ? (
                     <div className="prompt-editor-clauses">
-                      {OPERATING_CONTRACT_CLAUSE_IDS.map((key) => (
-                        <div className="prompt-editor-clause" key={key}>
-                          <div className="prompt-editor-clause-header">
-                            <label className="field-label" htmlFor={`${id}-clause-${key}`}>
-                              {OPERATING_CONTRACT_CLAUSES[key]}
-                            </label>
-                            <code className="prompt-editor-id">
-                              {operatingContractClausePromptId(key)}
-                            </code>
-                          </div>
-                          <div
-                            className="prompt-editor-input"
-                            data-invalid={preview.ok ? undefined : "true"}
-                          >
-                            <CarbonTextArea
-                              id={`${id}-clause-${key}`}
-                              value={text[key]}
-                              disabled={busy}
-                              spellCheck={false}
-                              aria-invalid={!preview.ok}
-                              aria-describedby={`${id}-problem`}
-                              onChange={(event) => setDraft({ ...text, [key]: event.target.value })}
-                            />
-                          </div>
-                        </div>
-                      ))}
+                      {OPERATING_CONTRACT_CLAUSE_IDS.map((key) => {
+                        const clauseValue = text[key];
+                        const clauseInvalid =
+                          !preview.ok &&
+                          (clauseValue.trim().length === 0 ||
+                            clauseValue.includes("{{") ||
+                            clauseValue.includes("}}"));
+                        return (
+                          <TextArea
+                            key={key}
+                            id={`${id}-clause-${key}`}
+                            className="prompt-editor-monospace-textarea"
+                            labelText={OPERATING_CONTRACT_CLAUSES[key]}
+                            helperText={
+                              <code className="prompt-editor-id">
+                                {operatingContractClausePromptId(key)}
+                              </code>
+                            }
+                            rows={3}
+                            value={clauseValue}
+                            disabled={busy}
+                            spellCheck={false}
+                            invalid={clauseInvalid}
+                            invalidText={clauseInvalid ? preview.error : ""}
+                            onChange={(event) => setDraft({ ...text, [key]: event.target.value })}
+                          />
+                        );
+                      })}
+                      {!preview.ok && (
+                        <InlineNotification
+                          kind="error"
+                          lowContrast
+                          hideCloseButton
+                          title="Template error"
+                          subtitle={preview.error}
+                        />
+                      )}
                     </div>
                   ) : (
-                    <>
-                      <label className="field-label" htmlFor={`${id}-template`}>
-                        Template
-                      </label>
-                      <div
-                        className="prompt-editor-input"
-                        data-invalid={preview.ok ? undefined : "true"}
-                      >
-                        <CarbonTextArea
-                          id={`${id}-template`}
-                          ref={input}
-                          value={text}
-                          disabled={busy}
-                          spellCheck={false}
-                          aria-invalid={!preview.ok}
-                          aria-describedby={`${id}-problem`}
-                          onChange={(event) => setDraft(event.target.value)}
-                        />
-                      </div>
-                    </>
+                    <TextArea
+                      id={`${id}-template`}
+                      ref={input}
+                      className="prompt-editor-monospace-textarea"
+                      labelText="Template"
+                      {...(requiredFieldsHelper ? { helperText: requiredFieldsHelper } : {})}
+                      rows={12}
+                      value={text}
+                      disabled={busy}
+                      spellCheck={false}
+                      invalid={!preview.ok}
+                      invalidText={preview.ok ? "" : preview.error}
+                      onChange={(event) => setDraft(event.target.value)}
+                    />
                   )}
-                  <p className="prompt-editor-problem" id={`${id}-problem`} aria-live="polite">
-                    {preview.ok ? "" : preview.error}
-                  </p>
-                </div>
+                </Form>
               )}
-              <div className="workflow-actions">
-                <AppButton
-                  variant="primary"
-                  disabled={busy || !dirty || !preview.ok}
-                  onClick={async () => {
-                    if (await onSave(editableSelected.id, text)) setDraft(undefined);
-                  }}
-                >
-                  Save
-                </AppButton>
-                <AppButton disabled={busy || !dirty} onClick={() => setDraft(undefined)}>
-                  Discard changes
-                </AppButton>
-                <AppButton
-                  variant="quiet"
+              <div className="prompt-editor-actions">
+                <Button
+                  type="button"
+                  kind="danger--ghost"
+                  size="md"
                   title={`Reset to the ${restores} template`}
                   disabled={busy || editableSelected.source !== "database"}
                   onClick={async () => {
@@ -384,22 +454,64 @@ export function PromptEditorPage({
                   }}
                 >
                   Reset to default
-                </AppButton>
+                </Button>
+                <Button
+                  type="button"
+                  kind="secondary"
+                  size="md"
+                  disabled={busy || !dirty}
+                  onClick={() => setDraft(undefined)}
+                >
+                  Discard changes
+                </Button>
+                <Button
+                  type="button"
+                  kind="primary"
+                  size="md"
+                  disabled={busy || !dirty || !preview.ok}
+                  onClick={async () => {
+                    if (await onSave(editableSelected.id, text)) setDraft(undefined);
+                  }}
+                >
+                  Save
+                </Button>
               </div>
             </>
           ) : (
             <section className="prompt-editor-readonly" aria-label="Read-only prompt text">
-              <p className="prompt-editor-readonly-note" role="note">
-                Read-only: {selected.editable ? "" : selected.readOnlyReason}
-              </p>
+              <InlineNotification
+                kind="info"
+                lowContrast
+                hideCloseButton
+                title="Read-only prompt"
+                subtitle={selected.editable ? "" : selected.readOnlyReason}
+                className="prompt-editor-readonly-note"
+              />
               {selected.fields.length > 0 && (
-                <p className="prompt-editor-status">
-                  Merge fields: {selected.fields.map((field) => `{{${field}}}`).join(", ")}
-                </p>
+                <div className="prompt-editor-readonly-fields">
+                  <span className="prompt-editor-fields-heading">Merge fields</span>
+                  <div className="prompt-editor-tag-list">
+                    {selected.fields.map((field) => (
+                      <Tag key={field} size="sm" type="cool-gray">
+                        {`{{${field}}}`}
+                      </Tag>
+                    ))}
+                  </div>
+                </div>
               )}
-              <pre className="prompt-editor-preview">
-                {selected.editable ? "" : selected.builtInText}
-              </pre>
+              <div>
+                <h3 className="prompt-editor-section-heading">Built-in template</h3>
+                <CodeSnippet
+                  key={`${selected.id}-builtin`}
+                  type="multi"
+                  wrapText
+                  feedback="Copied template"
+                  aria-label="Copy built-in prompt template"
+                  maxCollapsedNumberOfRows={28}
+                >
+                  {selected.editable ? "" : selected.builtInText}
+                </CodeSnippet>
+              </div>
             </section>
           )}
         </section>

@@ -1,6 +1,6 @@
 /* Editors styles. Imported into its declared layer by style.css. */
 
-/* Prompt Editor */
+/* Prompt Editor & Commands shared layout */
 .prompt-editor {
   flex: 1;
   min-height: 0;
@@ -15,19 +15,6 @@
   padding: 0 var(--page-padding) var(--page-padding);
 }
 
-.prompt-editor-filter {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.prompt-domain-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .prompt-editor-list {
   display: flex;
   flex-direction: column;
@@ -35,7 +22,7 @@
   gap: 4px;
 }
 
-.prompt-editor-list button {
+.prompt-editor-list > button {
   border: 0;
   background: transparent;
   display: flex;
@@ -48,28 +35,11 @@
   white-space: normal;
 }
 
-.prompt-editor-list .prompt-system-toggle {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-}
-
-.prompt-system-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-left: 16px;
-}
-
-.prompt-system-list[hidden] {
-  display: none;
-}
-
-.prompt-editor-list button:hover:not(:disabled, [aria-current="true"]) {
+.prompt-editor-list > button:hover:not(:disabled, [aria-current="true"]) {
   background: var(--hover-bg);
 }
 
-.prompt-editor-list button[aria-current="true"] {
+.prompt-editor-list > button[aria-current="true"] {
   background: var(--accent-bg);
   color: var(--text);
 }
@@ -78,52 +48,7 @@
   font-weight: inherit;
 }
 
-.prompt-editor-id {
-  font: 11px / 1.4 var(--mono);
-  color: var(--muted);
-  word-break: break-all;
-}
-
-.prompt-editor-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 10px;
-}
-
-.prompt-editor-id-badge {
-  font: 12px / 1.4 var(--mono);
-  padding: 2px 6px;
-  background: var(--surface);
-  color: var(--text);
-}
-
-.prompt-editor-badge {
-  font-size: 12px;
-  padding: 2px 8px;
-  background: var(--surface);
-  color: var(--muted);
-}
-
-.prompt-editor-clause-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.prompt-editor-readonly-note {
-  margin: 12px 0;
-  padding: 10px 12px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.prompt-editor-source,
-.prompt-editor-status {
+.prompt-editor-source {
   font-size: 12px;
   color: var(--muted);
 }
@@ -132,86 +57,10 @@
   min-width: 0;
 }
 
-.prompt-editor-main h2 {
-  margin: 0 0 8px;
-  font-size: var(--text-size, 13px);
-}
-
-.prompt-editor-view-toggle {
-  display: flex;
-  justify-content: flex-end;
-  margin: 20px 0 8px;
-}
-
-.prompt-editor-fields {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 20px 0 16px;
-  padding: 2px;
-}
-
-.prompt-editor-fields select {
-  max-width: 100%;
-}
-
-.prompt-editor-input {
-  margin-top: 8px;
-  border: 1px solid transparent;
-  border-radius: var(--input-radius);
-  background: var(--field-fill);
-  box-shadow: inset 0 -1px var(--control-border);
-}
-
-.prompt-editor-input textarea {
-  display: block;
-  width: 100%;
-  min-height: 260px;
-  padding: 12px;
-  border: 0;
-  background: transparent;
-  resize: vertical;
-}
-
-.prompt-editor-input textarea,
-.prompt-editor-preview {
-  font: 13px / 1.65 var(--mono);
-  text-transform: none;
-  letter-spacing: normal;
-}
-
-.prompt-editor-clauses {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-:where(.prompt-editor-clause) .prompt-editor-input textarea {
-  min-height: 100px;
-}
-
-.prompt-editor-input textarea:focus-visible {
-  outline: 0;
-  box-shadow: none;
-}
-
-.prompt-editor-input[data-invalid="true"] {
-  border-bottom: 2px solid var(--danger);
-}
-
 .prompt-editor-problem {
   min-height: 1.5em;
   margin: 6px 0 16px;
   color: var(--danger);
-}
-
-.prompt-editor-preview {
-  margin: 8px 0 0;
-  padding: 12px;
-  background: var(--surface);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 @media (max-width: 800px) {
