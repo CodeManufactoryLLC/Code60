@@ -7,6 +7,7 @@ export interface PageAction {
   label: string;
   disabled?: boolean | undefined;
   reason?: string | undefined;
+  danger?: boolean | undefined;
   checked?: boolean;
   describedBy?: string;
   run(): void;

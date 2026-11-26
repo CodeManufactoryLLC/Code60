@@ -14,6 +14,7 @@ import { AnchoredMenu } from "./anchored-menu.js";
 import { randomId } from "./browser-platform.js";
 import { Button } from "./carbon/button.js";
 import { Select } from "./carbon/fields.js";
+import type { PageAction } from "./content-page-header.js";
 import { DataTable, type TableOptions } from "./data-table.js";
 import { hasMcpAuthentication, McpAuthenticationPanel } from "./mcp-authentication.js";
 import { McpForm, mcpFormFields } from "./mcp-form.js";
@@ -74,6 +75,7 @@ export function McpServersPage({
   contextKey,
   configuration,
   onEditJson,
+  extraPageActions,
   readOnly = false,
   ...table
 }: Pick<TableOptions, "lines" | "density" | "fit" | "textStyles"> & {
@@ -82,6 +84,7 @@ export function McpServersPage({
   contextKey: string;
   configuration: { scope: string; select(scope: string): void; reload(): void };
   onEditJson?(): void;
+  extraPageActions?: readonly PageAction[] | undefined;
   readOnly?: boolean | undefined;
 }) {
   const [visible, setVisible] = useState(
@@ -292,7 +295,8 @@ export function McpServersPage({
               <p>
                 Preserve configuration files, private backups and transaction evidence. Do not
                 delete writer locks or replay uncertain actions. Follow the MCP configuration
-                recovery runbook or review the affected transaction under Configuration maintenance.
+                recovery runbook or review the affected transaction from the MCP Servers actions
+                menu.
               </p>
             </AccordionItem>
           </Accordion>
@@ -362,6 +366,7 @@ export function McpServersPage({
             },
             disabled: busy,
           },
+          ...(extraPageActions ?? []),
         ]}
         onActions={(id, bounds) => setMenu({ id, x: bounds.x, y: bounds.y + bounds.height })}
       />

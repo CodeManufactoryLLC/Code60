@@ -116,10 +116,15 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
       args: ["public-argument"],
     });
     expect((await stat(mcpPath)).mode & 0o777).toBe(0o600);
-    await page.getByRole("tab", { name: "JSON", exact: true }).click();
-    await expect(page.locator(".monaco-editor")).toBeVisible();
-    await page.getByRole("tab", { name: "Servers", exact: true }).click();
-    await page.getByRole("button", { name: "Review troubleshooting report", exact: true }).click();
+    await page.getByRole("button", { name: "Edit JSON", exact: true }).click();
+    const jsonDialog = page.getByRole("dialog", { name: /^Edit JSON —/ });
+    await expect(jsonDialog.locator(".monaco-editor")).toBeVisible();
+    await jsonDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(jsonDialog).toHaveCount(0);
+    await page.getByRole("button", { name: "MCP Servers actions", exact: true }).click();
+    await page
+      .getByRole("menuitem", { name: "Review troubleshooting report", exact: true })
+      .click();
     const report = page.getByRole("dialog", {
       name: "Safe MCP troubleshooting report",
       exact: true,

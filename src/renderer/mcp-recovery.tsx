@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type {
   ApplicationClient,
   McpRecoveryRequest,
@@ -10,17 +10,25 @@ import { randomId } from "./browser-platform.js";
 import { Button } from "./carbon/button.js";
 import { Modal } from "./modal.js";
 
+export interface McpRecoveryActions {
+  open(): void;
+}
+
 /** Reviewing recovery never grants connector authority. */
 export function McpRecoveryPanel({
   api,
   target,
   active,
   onChanged,
+  actionsRef,
+  onBusyChange,
 }: {
   api: ApplicationClient;
   target: McpTargetAddress;
   active: boolean;
   onChanged(): void;
+  actionsRef?: Ref<McpRecoveryActions>;
+  onBusyChange?(busy: boolean): void;
 }) {
   const [opened, setOpened] = useState(false);
   const [pending, setPending] = useState<McpRecoveryResponse["pending"]>();
@@ -99,19 +107,18 @@ export function McpRecoveryPanel({
       if (token === epoch.current) setBusy(false);
     }
   };
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
+  useImperativeHandle(actionsRef, () => ({
+    open() {
+      if (busy || !active) return;
+      setOpened(true);
+      void act({ action: "list", target });
+    },
+  }));
   return (
     <>
-      <Button
-        variant="quiet"
-        type="button"
-        disabled={busy || !active}
-        onClick={() => {
-          setOpened(true);
-          void act({ action: "list", target });
-        }}
-      >
-        Configuration recovery
-      </Button>
       {opened && (
         <Modal
           footer={

@@ -232,7 +232,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
     "mcp-servers",
     "MCP Servers",
-    "Switch between the User and Project configuration tabs. Use Add server to open the guided form or Edit JSON to edit raw mcp.json in a modal with Save and Reset controls. Use each server row's Actions menu to edit, move, manage credentials or OAuth sign-in, enable or disable, test connection, or remove the server. Connections shows project approval and active session disconnect/reconnect controls. Configuration maintenance groups backup restoration, reset, interrupted transaction recovery, cleanup verification and the safe troubleshooting report.",
+    "Switch between the User and Project configuration tabs. Use Add server to open the guided form or Edit JSON to edit raw mcp.json in a modal with Save and Reset controls. Use each server row's Actions menu to edit, move, manage credentials or OAuth sign-in, enable or disable, test connection, or remove the server. Connections shows project approval and active session disconnect/reconnect controls. The MCP Servers actions menu groups reload, backup restoration, reset, interrupted transaction recovery, cleanup verification and the safe troubleshooting report.",
     "Connect → MCP Servers or Customize → MCP Servers",
     "none",
     "human-only",

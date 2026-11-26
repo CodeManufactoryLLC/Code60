@@ -76,7 +76,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     await mkdir(join(fixture.directory, "project"));
     await openProject(page, fixture.directory, "project");
     await apps(page);
-    await expect(page.getByLabel("MCP connection controls")).toContainText("Relay — Idle");
+    await expect(page.getByLabel("MCP connection controls")).toContainText("Relay (Idle)");
     const before = (await events()).filter((event) => event.event === "spawn").length;
     await page
       .getByRole("button", { name: "Reconnect session servers", exact: true })
@@ -115,7 +115,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
       name: `Session ${relayId}`,
       exact: true,
     });
-    await expect(liveSession.locator("legend")).toHaveText("Relay — Active");
+    await expect(liveSession.locator("legend")).toHaveText("Relay (Active)");
     await liveSession
       .getByRole("button", { name: "Reconnect session servers", exact: true })
       .click();
@@ -125,7 +125,10 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     expect((await events()).filter((event) => event.event === "spawn")).toHaveLength(before + 1);
     const savedConfiguration = await readFile(userFile);
     await writeFile(userFile, '{"version":1,"servers":', { mode: 0o600 });
-    await page.getByRole("button", { name: "Review troubleshooting report", exact: true }).click();
+    await page.getByRole("button", { name: "MCP Servers actions", exact: true }).click();
+    await page
+      .getByRole("menuitem", { name: "Review troubleshooting report", exact: true })
+      .click();
     const troubleshooting = page.getByRole("dialog", {
       name: "Safe MCP troubleshooting report",
       exact: true,

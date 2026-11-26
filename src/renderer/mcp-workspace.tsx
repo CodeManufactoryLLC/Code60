@@ -18,11 +18,12 @@ import {
 import { randomId } from "./browser-platform.js";
 import { Button } from "./carbon/button.js";
 import { Select } from "./carbon/fields.js";
+import type { PageAction } from "./content-page-header.js";
 import type { TableOptions } from "./data-table.js";
 import type { McpEditorView } from "./mcp-json-editor.js";
-import { McpRecoveryPanel } from "./mcp-recovery.js";
+import { type McpRecoveryActions, McpRecoveryPanel } from "./mcp-recovery.js";
 import { McpServersPage } from "./mcp-servers.js";
-import { McpTroubleshooting } from "./mcp-troubleshooting.js";
+import { McpTroubleshooting, type McpTroubleshootingActions } from "./mcp-troubleshooting.js";
 import { Modal } from "./modal.js";
 import { PageTitle } from "./page-title.js";
 
@@ -87,8 +88,12 @@ export function McpWorkspace({
     typeof document === "undefined" || document.visibilityState !== "hidden",
   );
   const [busy, setBusy] = useState(false);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [troubleshootingBusy, setTroubleshootingBusy] = useState(false);
   const [error, setError] = useState("");
   const [retryKey, setRetryKey] = useState(0);
+  const recoveryRef = useRef<McpRecoveryActions>(null);
+  const troubleshootingRef = useRef<McpTroubleshootingActions>(null);
   const [jsonOpen, setJsonOpen] = useState(false);
   const [jsonBase, setJsonBase] = useState<McpTextRead>();
   const [jsonText, setJsonText] = useState("");
@@ -328,6 +333,56 @@ export function McpWorkspace({
       setError(failure(cause));
     }
   }
+  const maintenanceActions: PageAction[] = noProjectOpen
+    ? []
+    : [
+        {
+          id: "mcp-restore-backup",
+          label: "Restore backup",
+          disabled: busy || !saved,
+          run: () => void openBackups(),
+        },
+        {
+          id: "mcp-reset-configuration",
+          label: "Reset this configuration",
+          danger: true,
+          disabled: busy || !saved || Boolean(saved.pendingRecovery.length) || ownerLost,
+          run: () => void openReset(false),
+        },
+        ...(target?.address.scope === "project"
+          ? [
+              {
+                id: "mcp-reset-all",
+                label: "Reset User and this project",
+                danger: true,
+                disabled: busy || !saved || Boolean(saved.pendingRecovery.length) || ownerLost,
+                run: () => void openReset(true),
+              },
+            ]
+          : []),
+        ...(target
+          ? [
+              {
+                id: "mcp-recovery",
+                label: "Configuration recovery",
+                disabled: recoveryBusy || !(active && visible),
+                run: () => recoveryRef.current?.open(),
+              },
+              {
+                id: "mcp-report",
+                label: "Review troubleshooting report",
+                disabled: troubleshootingBusy || !(active && visible),
+                run: () => troubleshootingRef.current?.reviewReport(),
+              },
+              {
+                id: "mcp-verify-cleanup",
+                label: "Verify cleanup",
+                disabled: troubleshootingBusy || !(active && visible),
+                run: () => troubleshootingRef.current?.verifyCleanup(),
+              },
+            ]
+          : []),
+      ];
   const serversView = noProjectOpen ? (
     <section className="mcp-servers-page">
       <PageTitle page="mcp-servers" />
@@ -359,6 +414,7 @@ export function McpWorkspace({
         contextKey={contextKey}
         configuration={{ scope: activeScope, select, reload: () => void load(true) }}
         onEditJson={() => void openJson()}
+        extraPageActions={maintenanceActions}
         readOnly={ownerLost}
         {...table}
       />
@@ -403,56 +459,26 @@ export function McpWorkspace({
           <TabPanel>{scope !== "user" && serversView}</TabPanel>
         </TabPanels>
       </Tabs>
-      {!noProjectOpen && (
-        <section className="mcp-maintenance" aria-label="Configuration maintenance">
-          <h2>Configuration maintenance</h2>
-          <div className="mcp-maintenance-row">
-            <h3>Backup and recovery</h3>
-            <div className="mcp-actions">
-              <Button
-                variant="quiet"
-                type="button"
-                disabled={busy || !saved}
-                onClick={() => void openBackups()}
-              >
-                Restore backup
-              </Button>
-              <Button
-                variant="quiet"
-                className="destructive"
-                type="button"
-                disabled={busy || !saved || Boolean(saved.pendingRecovery.length) || ownerLost}
-                onClick={() => void openReset(false)}
-              >
-                Reset this configuration
-              </Button>
-              {target?.address.scope === "project" && (
-                <Button
-                  variant="quiet"
-                  className="destructive"
-                  type="button"
-                  disabled={busy || !saved || Boolean(saved.pendingRecovery.length) || ownerLost}
-                  onClick={() => void openReset(true)}
-                >
-                  Reset User and this project
-                </Button>
-              )}
-              {target && (
-                <McpRecoveryPanel
-                  api={api}
-                  target={target.address}
-                  active={active && visible}
-                  onChanged={() => {
-                    void load();
-                  }}
-                />
-              )}
-            </div>
-          </div>
-          {target && (
-            <McpTroubleshooting api={api} target={target.address} active={active && visible} />
-          )}
-        </section>
+      {!noProjectOpen && target && (
+        <>
+          <McpRecoveryPanel
+            api={api}
+            target={target.address}
+            active={active && visible}
+            actionsRef={recoveryRef}
+            onBusyChange={setRecoveryBusy}
+            onChanged={() => {
+              void load();
+            }}
+          />
+          <McpTroubleshooting
+            api={api}
+            target={target.address}
+            active={active && visible}
+            actionsRef={troubleshootingRef}
+            onBusyChange={setTroubleshootingBusy}
+          />
+        </>
       )}
       {active && visible && jsonOpen && jsonBase && (
         <Modal

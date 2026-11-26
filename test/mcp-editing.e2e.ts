@@ -10,6 +10,10 @@ import { browserApp, createDatabase, onboard, openProject } from "./fixtures/bro
 const config = (directory: string) => join(directory, "config/code60/mcp.json");
 const text = (label: string, enabled = false) =>
   `{"version":1, "servers":{"docs":{"label":"${label}","enabled":${enabled},"type":"stdio","command":"never-launch"}}}\n`;
+async function mcpAction(page: Page, name: string) {
+  await page.getByRole("button", { name: "MCP Servers actions", exact: true }).click();
+  await page.getByRole("menuitem", { name, exact: true }).click();
+}
 async function app(page: Page) {
   await openMcpServers(page);
   await expect(page.getByRole("tab", { name: "User", exact: true })).toBeVisible();
@@ -137,7 +141,7 @@ test("MCP JSON: external conflict, reset and reviewed backup restoration", async
     await jsonDialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(jsonDialog).toHaveCount(0);
     const backupsBefore = await readdir(join(fixture.directory, "state/code60/mcp-configuration"));
-    await page.getByRole("button", { name: "Restore backup", exact: true }).click();
+    await mcpAction(page, "Restore backup");
     const dialog = page.getByRole("dialog", { name: "Restore MCP backup", exact: true });
     const choices = dialog.getByLabel("Backup", { exact: true });
     await choices.selectOption({ index: 1 });
@@ -147,7 +151,7 @@ test("MCP JSON: external conflict, reset and reviewed backup restoration", async
     expect(await readdir(join(fixture.directory, "state/code60/mcp-configuration"))).toEqual(
       backupsBefore,
     );
-    await page.getByRole("button", { name: "Restore backup", exact: true }).click();
+    await mcpAction(page, "Restore backup");
     await choices.selectOption({ index: 1 });
     await expect(dialog.locator("pre")).toContainText("First");
     await writeFile(config(fixture.directory), text("Newer"));
@@ -155,12 +159,12 @@ test("MCP JSON: external conflict, reset and reviewed backup restoration", async
     await expect(dialog).toContainText("MCP_CONFIG_CONFLICT");
     expect(await readFile(config(fixture.directory), "utf8")).toBe(text("Newer"));
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-    await page.getByRole("button", { name: "Restore backup", exact: true }).click();
+    await mcpAction(page, "Restore backup");
     await choices.selectOption({ index: 1 });
     await dialog.getByRole("button", { name: "Confirm restore", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     expect(await readFile(config(fixture.directory), "utf8")).toBe(text("First"));
-    await page.getByRole("button", { name: "Restore backup", exact: true }).click();
+    await mcpAction(page, "Restore backup");
     await choices.selectOption({ index: 3 });
     await expect(dialog).toContainText("Restore removes this dedicated file");
     await dialog.getByRole("button", { name: "Confirm restore", exact: true }).click();
@@ -194,18 +198,18 @@ test("MCP reset: project inheritance, cancellation, guarded empty target and com
     await page.getByRole("tab", { name: "Project", exact: true }).click();
     const file = join(project, ".code60/mcp.json");
     await saveInModal(page, file, text("Project override"));
-    await page.getByRole("button", { name: "Reset this configuration", exact: true }).click();
+    await mcpAction(page, "Reset this configuration");
     const dialog = page.getByRole("dialog", { name: "Reset MCP configuration?", exact: true });
     await expect(dialog).toContainText("User enabled");
     await expect(dialog).toContainText("Enabled: 1");
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     expect(await readFile(file, "utf8")).toBe(text("Project override"));
-    await page.getByRole("button", { name: "Reset this configuration", exact: true }).click();
+    await mcpAction(page, "Reset this configuration");
     await dialog.getByRole("button", { name: "Confirm reset", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     expect(JSON.parse(await readFile(file, "utf8")).servers).toEqual({});
     const identity = (await stat(file)).ino;
-    await page.getByRole("button", { name: "Reset User and this project", exact: true }).click();
+    await mcpAction(page, "Reset User and this project");
     await expect(dialog).toContainText("also affects other projects");
     await dialog.getByRole("button", { name: "Confirm reset", exact: true }).click();
     await expect(dialog).toHaveCount(0);
@@ -236,14 +240,14 @@ test("MCP JSON: malformed repair and confirmed malformed reset retain private ev
     await jsonDialog.getByRole("button", { name: "Save", exact: true }).click();
     await expect(jsonDialog).toHaveCount(0);
     await expect.poll(() => readFile(config(fixture.directory), "utf8")).toBe(text("Repaired"));
-    await page.getByRole("button", { name: "Restore backup", exact: true }).click();
+    await mcpAction(page, "Restore backup");
     const backups = page.getByRole("dialog", { name: "Restore MCP backup", exact: true });
     await expect(
       backups.getByRole("option", { name: /Malformed recovery evidence/ }),
     ).toHaveJSProperty("disabled", true);
     await backups.getByRole("button", { name: "Cancel", exact: true }).click();
     await writeFile(config(fixture.directory), malformed);
-    await page.getByRole("button", { name: "Reset this configuration", exact: true }).click();
+    await mcpAction(page, "Reset this configuration");
     const reset = page.getByRole("dialog", { name: "Reset MCP configuration?", exact: true });
     await expect(reset).toContainText("Malformed originals will be preserved");
     await reset.getByRole("button", { name: "Confirm reset", exact: true }).click();
@@ -311,15 +315,17 @@ test("MCP reset: interrupted publication remains blocked after restart without a
     const { page: recovered } = await fixture.open();
     await expect(recovered.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(recovered);
+    await recovered.getByRole("button", { name: "MCP Servers actions", exact: true }).click();
     await expect(
-      recovered.getByRole("button", { name: "Reset this configuration", exact: true }),
+      recovered.getByRole("menuitem", { name: "Reset this configuration", exact: true }),
     ).toBeDisabled();
+    await recovered.keyboard.press("Escape");
     const jsonDialog = await openJsonModal(recovered);
     await expect(jsonDialog).toContainText("Pending recovery blocks writes");
     await edit(recovered, text("Blocked edit"));
     await expect(jsonDialog.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await jsonDialog.getByRole("button", { name: "Cancel", exact: true }).click();
-    await recovered.getByRole("button", { name: "Restore backup", exact: true }).click();
+    await mcpAction(recovered, "Restore backup");
     const backups = recovered.getByRole("dialog", { name: "Restore MCP backup", exact: true });
     await expect(backups.getByRole("option", { name: /Pending recovery/ })).toHaveJSProperty(
       "disabled",
@@ -358,7 +364,7 @@ test("MCP JSON: invalid UTF-8 stays non-editable and a replaced project cannot r
       jsonDialog.getByRole("button", { name: "Format JSON", exact: true }),
     ).toBeDisabled();
     await jsonDialog.getByRole("button", { name: "Cancel", exact: true }).click();
-    await page.getByRole("button", { name: "Reset this configuration", exact: true }).click();
+    await mcpAction(page, "Reset this configuration");
     const reset = page.getByRole("dialog", { name: "Reset MCP configuration?", exact: true });
     await expect(reset).toContainText("Malformed originals will be preserved");
     await reset.getByRole("button", { name: "Confirm reset", exact: true }).click();

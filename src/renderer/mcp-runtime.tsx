@@ -341,7 +341,7 @@ export function McpRuntimePanel({
                 aria-label={`Session ${session.runId}`}
               >
                 <legend title={session.runId}>
-                  {sessionLabel} — {session.idle ? "Idle" : "Active"}
+                  {sessionLabel} ({session.idle ? "Idle" : "Active"})
                 </legend>
                 {!session.canReconnect && (
                   <p>

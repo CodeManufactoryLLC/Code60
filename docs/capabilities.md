@@ -8,7 +8,7 @@ Schema version: 1
 
 - ID: `mcp-servers`
 - Status: shipped
-- Purpose: Switch between the User and Project configuration tabs. Use Add server to open the guided form or Edit JSON to edit raw mcp.json in a modal with Save and Reset controls. Use each server row's Actions menu to edit, move, manage credentials or OAuth sign-in, enable or disable, test connection, or remove the server. Connections shows project approval and active session disconnect/reconnect controls. Configuration maintenance groups backup restoration, reset, interrupted transaction recovery, cleanup verification and the safe troubleshooting report.
+- Purpose: Switch between the User and Project configuration tabs. Use Add server to open the guided form or Edit JSON to edit raw mcp.json in a modal with Save and Reset controls. Use each server row's Actions menu to edit, move, manage credentials or OAuth sign-in, enable or disable, test connection, or remove the server. Connections shows project approval and active session disconnect/reconnect controls. The MCP Servers actions menu groups reload, backup restoration, reset, interrupted transaction recovery, cleanup verification and the safe troubleshooting report.
 - Access: Connect → MCP Servers or Customize → MCP Servers
 - Prerequisite: none
 - Agent access: human-only
