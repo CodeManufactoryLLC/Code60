@@ -35,11 +35,11 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
 
   const sqlite = () => process.getBuiltinModule("node:sqlite") as typeof import("node:sqlite");
 
-  it("upgrades schema 4 without resetting clause edits, then persists sorted commands", () => {
+  it("upgrades schema 4 without resetting canonical clause edits, then persists sorted commands", () => {
     const path = join(directory, "v4.sqlite");
     const db = openProjectDatabase(path, true);
     const clauses = { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, role: "Keep this role." };
-    db.savePromptTemplate("operatingContract", clauses, "a");
+    db.savePromptTemplate("contract.operating", clauses, "a");
     db.record("/repo", "a");
     db.close();
     const old = new (sqlite().DatabaseSync)(path);
@@ -47,7 +47,7 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
     old.close();
     const upgraded = openProjectDatabase(path, false);
     expect(upgraded.commands()).toEqual([]);
-    expect(upgraded.promptTemplates().templates.operatingContract).toEqual(clauses);
+    expect(upgraded.promptTemplates().templates["contract.operating"]).toEqual(clauses);
     expect(upgraded.list()).toHaveLength(1);
     const entry = {
       id: randomUUID(),
@@ -96,23 +96,25 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
     db.close();
   });
 
-  it("resets a schema 3 single-block contract once without changing other prompts", () => {
+  it("upgrades schema 5 to 6 by clearing legacy camelCase prompt rows while preserving canonical data", () => {
     const path = join(directory, "contract-reset.sqlite");
     const db = openProjectDatabase(path, true);
     db.record("/repo", "2026-01-01");
-    db.savePromptTemplate("handoffSummary", "Summary {{agent}}", "2026-01-01");
+    db.savePromptTemplate("handoff.summary", "Summary {{agent}}", "2026-01-01");
     db.close();
     const raw = new (sqlite().DatabaseSync)(path);
     raw.exec(
-      "UPDATE code60_meta SET value = '3' WHERE key = 'schema';" +
-        "DROP TABLE code60_commands;" +
-        "INSERT INTO code60_prompt_templates VALUES ('operatingContract', 'Legacy contract', 'x');",
+      "UPDATE code60_meta SET value = '5' WHERE key = 'schema';" +
+        "INSERT INTO code60_prompt_templates VALUES ('operatingContract', 'Legacy contract', 'x');" +
+        "INSERT INTO code60_prompt_templates VALUES ('handoffSummary', 'Legacy summary', 'x');" +
+        "INSERT INTO code60_prompt_templates VALUES ('handoffTurn', 'Legacy {{message}}', 'x');" +
+        "INSERT INTO code60_prompt_templates VALUES ('workerUpdates', 'Legacy {{updates}}', 'x');",
     );
     raw.close();
     const upgraded = openProjectDatabase(path, false);
     expect(upgraded.list()).toEqual([{ path: "/repo", openedAt: "2026-01-01" }]);
     expect(upgraded.promptTemplates()).toEqual({
-      templates: { handoffSummary: "Summary {{agent}}" },
+      templates: { "handoff.summary": "Summary {{agent}}" },
       skipped: [],
     });
     const clauses = {
@@ -120,12 +122,12 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
       role: "A new role.",
       planning: "Plan first.",
     };
-    upgraded.savePromptTemplate("operatingContract", clauses, "2026-02-01");
+    upgraded.savePromptTemplate("contract.operating", clauses, "2026-02-01");
     upgraded.close();
     const reopened = openProjectDatabase(path, false);
     expect(reopened.promptTemplates().templates).toEqual({
-      operatingContract: clauses,
-      handoffSummary: "Summary {{agent}}",
+      "contract.operating": clauses,
+      "handoff.summary": "Summary {{agent}}",
     });
     reopened.close();
   });
@@ -138,29 +140,29 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
       planning: "Plan.\nThen wait.",
       role: "A role.",
     };
-    db.savePromptTemplate("operatingContract", clauses, "2026-01-01");
-    db.savePromptTemplate("workerUpdates", "{{updates}}", "2026-01-01");
+    db.savePromptTemplate("contract.operating", clauses, "2026-01-01");
+    db.savePromptTemplate("worker.updates.project", "{{updates}}", "2026-01-01");
     expect(() =>
       db.savePromptTemplate(
-        "operatingContract",
+        "contract.operating",
         { ...clauses, role: "Changed.", planning: "" },
         "2026-02-01",
       ),
     ).toThrow();
-    expect(db.promptTemplates().templates.operatingContract).toEqual(clauses);
+    expect(db.promptTemplates().templates["contract.operating"]).toEqual(clauses);
     const competing = new (sqlite().DatabaseSync)(path);
     try {
       competing.exec("BEGIN EXCLUSIVE");
       expect(() =>
-        db.savePromptTemplate("operatingContract", { ...clauses, role: "Changed." }, "2026-02-01"),
+        db.savePromptTemplate("contract.operating", { ...clauses, role: "Changed." }, "2026-02-01"),
       ).toThrow(/locked/);
       competing.exec("ROLLBACK");
     } finally {
       competing.close();
     }
-    expect(db.promptTemplates().templates.operatingContract).toEqual(clauses);
-    db.deletePromptTemplate("operatingContract");
-    expect(db.promptTemplates().templates).toEqual({ workerUpdates: "{{updates}}" });
+    expect(db.promptTemplates().templates["contract.operating"]).toEqual(clauses);
+    db.deletePromptTemplate("contract.operating");
+    expect(db.promptTemplates().templates).toEqual({ "worker.updates.project": "{{updates}}" });
     db.close();
   });
 
@@ -171,7 +173,7 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
       const raw = new (sqlite().DatabaseSync)(path);
       raw
         .prepare("INSERT OR REPLACE INTO code60_prompt_templates VALUES (?, ?, ?)")
-        .run("operatingContract", value, "x");
+        .run("contract.operating", value, "x");
       raw.close();
       const db = openProjectDatabase(path, false);
       expect(db.promptTemplates().templates).toEqual({});
@@ -232,16 +234,18 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
     const db = openProjectDatabase(path, false);
     expect(db.list()).toEqual([{ path: "/repo", openedAt: "2026-01-01" }]);
     expect(db.promptTemplates()).toEqual({ templates: {}, skipped: [] });
-    db.savePromptTemplate("handoffTurn", "Hi {{message}}", "2026-02-01");
-    db.savePromptTemplate("handoffTurn", "Again {{message}}", "2026-02-02");
-    expect(() => db.savePromptTemplate("handoffTurn", "{{summary}}", "2026-02-03")).toThrow(
+    db.savePromptTemplate("handoff.first-turn", "Hi {{message}}", "2026-02-01");
+    db.savePromptTemplate("handoff.first-turn", "Again {{message}}", "2026-02-02");
+    expect(() => db.savePromptTemplate("handoff.first-turn", "{{summary}}", "2026-02-03")).toThrow(
       /must include/,
     );
     db.close();
     const again = openProjectDatabase(path, false);
-    expect(again.promptTemplates().templates).toEqual({ handoffTurn: "Again {{message}}" });
-    again.deletePromptTemplate("handoffTurn");
-    again.deletePromptTemplate("handoffSummary");
+    expect(again.promptTemplates().templates).toEqual({
+      "handoff.first-turn": "Again {{message}}",
+    });
+    again.deletePromptTemplate("handoff.first-turn");
+    again.deletePromptTemplate("handoff.summary");
     expect(again.promptTemplates().templates).toEqual({});
     again.close();
     const check = new (sqlite().DatabaseSync)(path);
@@ -256,17 +260,17 @@ describe.skipIf(!sqliteAvailable())("project database", () => {
     openProjectDatabase(path, true).close();
     const raw = new (sqlite().DatabaseSync)(path);
     raw.exec(
-      "INSERT INTO code60_prompt_templates VALUES ('handoffTurn', '{{summary}}', 'x');" +
+      "INSERT INTO code60_prompt_templates VALUES ('handoff.first-turn', '{{summary}}', 'x');" +
         "INSERT INTO code60_prompt_templates VALUES ('other', 'x', 'x');" +
-        "INSERT INTO code60_prompt_templates VALUES ('handoffSummary', 'S {{status}}', 'x');",
+        "INSERT INTO code60_prompt_templates VALUES ('handoff.summary', 'S {{status}}', 'x');",
     );
     raw.close();
     const db = openProjectDatabase(path, false);
     const saved = db.promptTemplates();
     db.close();
-    expect(saved.templates).toEqual({ handoffSummary: "S {{status}}" });
+    expect(saved.templates).toEqual({ "handoff.summary": "S {{status}}" });
     expect(saved.skipped).toEqual([
-      "Ignored the saved handoffTurn prompt template: it must include {{message}}",
+      "Ignored the saved handoff.first-turn prompt template: it must include {{message}}",
       "Ignored a saved prompt template with an unknown ID: other",
     ]);
   });

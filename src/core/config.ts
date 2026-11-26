@@ -82,8 +82,11 @@ const configSchema = z.strictObject({
 
 /** Keep CLI diagnostics concise and independent of Zod's internal error format. */
 function configError(issue: z.core.$ZodIssue): string {
-  if (issue.code === "custom") return issue.message;
   const [key, name] = issue.path;
+  if (issue.code === "custom")
+    return key === "prompts" && name === "contract.operating"
+      ? "prompts.contract.operating must contain the predefined valid clauses"
+      : issue.message;
   if (issue.code === "unrecognized_keys") {
     if (issue.keys.includes("mcpServers")) return "configuration contains unsupported fields";
     const prefix = issue.path.length ? `${issue.path.join(".")}: ` : "";
@@ -109,8 +112,8 @@ function configError(issue: z.core.$ZodIssue): string {
     case "prompts":
       return name === undefined
         ? "prompts must be an object"
-        : name === "operatingContract"
-          ? "prompts.operatingContract must contain the predefined valid clauses"
+        : name === "contract.operating"
+          ? "prompts.contract.operating must contain the predefined valid clauses"
           : `prompts.${String(name)} must be a string`;
     default:
       return "must be a JSON object";
@@ -133,11 +136,31 @@ export function parseConfig(raw: unknown, source = "config"): Config {
     permissions: { ...DEFAULT_PERMISSIONS, ...value.permissions },
     agents: { ...DEFAULT_AGENTS, ...value.agents },
     prompts: {
-      operatingContract:
-        value.prompts?.operatingContract ?? DEFAULT_PROMPT_TEMPLATES.operatingContract,
-      handoffSummary: value.prompts?.handoffSummary ?? DEFAULT_PROMPT_TEMPLATES.handoffSummary,
-      handoffTurn: value.prompts?.handoffTurn ?? DEFAULT_PROMPT_TEMPLATES.handoffTurn,
-      workerUpdates: value.prompts?.workerUpdates ?? DEFAULT_PROMPT_TEMPLATES.workerUpdates,
+      "contract.operating":
+        value.prompts?.["contract.operating"] ?? DEFAULT_PROMPT_TEMPLATES["contract.operating"],
+      "handoff.summary":
+        value.prompts?.["handoff.summary"] ?? DEFAULT_PROMPT_TEMPLATES["handoff.summary"],
+      "handoff.first-turn":
+        value.prompts?.["handoff.first-turn"] ?? DEFAULT_PROMPT_TEMPLATES["handoff.first-turn"],
+      "worker.updates.project":
+        value.prompts?.["worker.updates.project"] ??
+        DEFAULT_PROMPT_TEMPLATES["worker.updates.project"],
+      "plan.accepted.project":
+        value.prompts?.["plan.accepted.project"] ??
+        DEFAULT_PROMPT_TEMPLATES["plan.accepted.project"],
+      "task.continue":
+        value.prompts?.["task.continue"] ?? DEFAULT_PROMPT_TEMPLATES["task.continue"],
+      "review.conflict-revision.project":
+        value.prompts?.["review.conflict-revision.project"] ??
+        DEFAULT_PROMPT_TEMPLATES["review.conflict-revision.project"],
+      "utility.chat-title":
+        value.prompts?.["utility.chat-title"] ?? DEFAULT_PROMPT_TEMPLATES["utility.chat-title"],
+      "utility.search-overview":
+        value.prompts?.["utility.search-overview"] ??
+        DEFAULT_PROMPT_TEMPLATES["utility.search-overview"],
+      "memory.episodic-instructions":
+        value.prompts?.["memory.episodic-instructions"] ??
+        DEFAULT_PROMPT_TEMPLATES["memory.episodic-instructions"],
     },
   };
   if (!Object.hasOwn(config.agents, config.defaultAgent)) {

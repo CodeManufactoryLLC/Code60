@@ -224,8 +224,8 @@ describe("desktop ended-run recovery", () => {
 
   it("hands off with the prompt templates saved in the database", async () => {
     const { controller, agents, workspace, record } = await setup(false, "interrupted", {
-      handoffSummary: "Summary for {{agent}} on {{branch}}",
-      handoffTurn: "<<{{summary}}>> {{message}}",
+      "handoff.summary": "Summary for {{agent}} on {{branch}}",
+      "handoff.first-turn": "<<{{summary}}>> {{message}}",
     });
     await controller.action({ type: "continue", id: record.id, text: "Add tests" });
     await flush();

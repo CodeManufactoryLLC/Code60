@@ -30,6 +30,7 @@ export * from "./mcp-connectors.js";
 export * from "./mcp-tools.js";
 export * from "./product.js";
 export * from "./project-search.js";
+export * from "./prompt-catalog.js";
 export * from "./prompts.js";
 export * from "./provider-login.js";
 export * from "./search-summary.js";
@@ -43,19 +44,24 @@ const promptTemplateSchema = (id: PromptId) =>
   });
 export const operatingContractSchema = z
   .custom<OperatingContractClauses>(
-    (value) => validatePromptTemplate("operatingContract", value) === undefined,
+    (value) => validatePromptTemplate("contract.operating", value) === undefined,
     { error: "Invalid Operating Contract clauses" },
   )
   .transform((clauses) => ({ ...clauses }));
-/** User overrides for the built-in prompt templates, keyed by template ID. */
+/** User overrides for the editable built-in prompt templates, keyed by canonical dotted ID. */
 export const promptTemplatesSchema = z.strictObject({
-  // Old single-block overrides reset to defaults rather than being migrated.
-  operatingContract: z
-    .union([operatingContractSchema, z.string().transform(() => undefined)])
-    .optional(),
-  handoffSummary: promptTemplateSchema("handoffSummary").optional(),
-  handoffTurn: promptTemplateSchema("handoffTurn").optional(),
-  workerUpdates: promptTemplateSchema("workerUpdates").optional(),
+  "contract.operating": operatingContractSchema.optional(),
+  "handoff.summary": promptTemplateSchema("handoff.summary").optional(),
+  "handoff.first-turn": promptTemplateSchema("handoff.first-turn").optional(),
+  "worker.updates.project": promptTemplateSchema("worker.updates.project").optional(),
+  "plan.accepted.project": promptTemplateSchema("plan.accepted.project").optional(),
+  "task.continue": promptTemplateSchema("task.continue").optional(),
+  "review.conflict-revision.project": promptTemplateSchema(
+    "review.conflict-revision.project",
+  ).optional(),
+  "utility.chat-title": promptTemplateSchema("utility.chat-title").optional(),
+  "utility.search-overview": promptTemplateSchema("utility.search-overview").optional(),
+  "memory.episodic-instructions": promptTemplateSchema("memory.episodic-instructions").optional(),
 });
 
 /** IPC limits historically count UTF-16 code units, including surrogate pairs. */

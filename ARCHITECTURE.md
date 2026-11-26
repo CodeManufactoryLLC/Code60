@@ -2521,7 +2521,7 @@ Titles and hidden state live with the main-process conversation across renderer
 reloads and persist with Tactics metadata. Application restarts restore stopped
 chat history, never execution authority. No SQLite schema changes.
 
-The Prompt Builder groups its four system templates beneath an initially expanded System disclosure. Collapsing the group preserves the selected editor and unsaved drafts. Saved overrides remain in System; individual items omit source labels and show unsaved changes when present. Prompt items have no border and share neutral gray selection and blue hover with navigation.
+The Internal Prompt Editor catalogs all 44 internal prompts under canonical user-readable dotted IDs (`<domain>.<name>[.<scope-or-part>]`) grouped by collapsible domain disclosures with ID/name filtering and an All / Editable / Read-only selector. Collapsing a domain preserves the selected prompt and unsaved drafts. Ten safe project, handoff, and utility templates (`contract.operating`, `handoff.summary`, `handoff.first-turn`, `worker.updates.project`, `plan.accepted.project`, `task.continue`, `review.conflict-revision.project`, `utility.chat-title`, `utility.search-overview`, `memory.episodic-instructions`) are editable via the project database (SQLite schema 6) and `config.json`. The remaining 34 prompts—safety and structural wrappers, strict machine-parsed JSON schemas, Relay and Custom Assistant prompts, bundled tactics, and built-in `$` commands—are read-only inspectable references. Relay and Custom Assistants remain independent of project databases and continue using built-in defaults. Prompt items have no border and share neutral gray selection and blue hover with navigation.
 
 
 ### Desktop distribution

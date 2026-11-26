@@ -87,8 +87,8 @@ describe("desktop IPC validation", () => {
   });
   it("accepts only the complete predefined clauses for an Operating Contract save", () => {
     const template = { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, planning: "Review a plan first." };
-    expect(parseSavePromptTemplate({ id: "operatingContract", template })).toEqual({
-      id: "operatingContract",
+    expect(parseSavePromptTemplate({ id: "contract.operating", template })).toEqual({
+      id: "contract.operating",
       template,
     });
     for (const invalid of [
@@ -100,11 +100,11 @@ describe("desktop IPC validation", () => {
       { ...template, extra: "Unknown" },
     ])
       expect(() =>
-        parseSavePromptTemplate({ id: "operatingContract", template: invalid }),
+        parseSavePromptTemplate({ id: "contract.operating", template: invalid }),
       ).toThrow();
-    expect(() => parseSavePromptTemplate({ id: "handoffSummary", template })).toThrow();
+    expect(() => parseSavePromptTemplate({ id: "handoff.summary", template })).toThrow();
     expect(() =>
-      parseSavePromptTemplate({ id: "operatingContract", template, extra: true }),
+      parseSavePromptTemplate({ id: "contract.operating", template, extra: true }),
     ).toThrow();
   });
   it("allows only fixed update actions, never URLs, paths or commands", () => {
@@ -247,23 +247,45 @@ describe("desktop IPC validation", () => {
     ])
       expect(() => parseOrchestrationProvider(value)).toThrow();
   });
-  it("accepts only known prompt templates with valid merge fields", () => {
-    expect(parsePromptTemplateId("handoffTurn")).toBe("handoffTurn");
-    for (const value of ["other", "", null, 1])
+  it("accepts only editable canonical prompt templates and rejects read-only or legacy IDs", () => {
+    expect(parsePromptTemplateId("handoff.first-turn")).toBe("handoff.first-turn");
+    expect(parsePromptTemplateId("plan.accepted.project")).toBe("plan.accepted.project");
+    for (const value of [
+      "other",
+      "handoffTurn",
+      "contract.relay-addendum",
+      "memory.checkpoint-extract",
+      "tactic.plan-first",
+      "command.plan",
+      "",
+      null,
+      1,
+    ])
       expect(() => parsePromptTemplateId(value)).toThrow();
-    expect(parseSavePromptTemplate({ id: "handoffTurn", template: "Hi {{message}}" })).toEqual({
-      id: "handoffTurn",
+    expect(
+      parseSavePromptTemplate({ id: "handoff.first-turn", template: "Hi {{message}}" }),
+    ).toEqual({
+      id: "handoff.first-turn",
       template: "Hi {{message}}",
     });
+    expect(
+      parseSavePromptTemplate({ id: "plan.accepted.project", template: "Execute {{planId}}" }),
+    ).toEqual({
+      id: "plan.accepted.project",
+      template: "Execute {{planId}}",
+    });
     for (const value of [
-      { id: "handoffTurn", template: "{{summary}}" },
-      { id: "handoffSummary", template: "{{nope}}" },
-      { id: "handoffSummary", template: "" },
-      { id: "handoffSummary", template: "x".repeat(PROMPT_TEMPLATE_LIMIT + 1) },
-      { id: "handoffSummary", template: 5 },
+      { id: "handoff.first-turn", template: "{{summary}}" },
+      { id: "handoff.summary", template: "{{nope}}" },
+      { id: "handoff.summary", template: "" },
+      { id: "handoff.summary", template: "x".repeat(PROMPT_TEMPLATE_LIMIT + 1) },
+      { id: "handoff.summary", template: 5 },
+      { id: "contract.relay-addendum", template: "Override relay" },
+      { id: "memory.checkpoint-extract", template: "Override memory" },
+      { id: "handoffTurn", template: "{{message}}" },
       { id: "other", template: "x" },
-      { id: "handoffTurn", template: "{{message}}", extra: true },
-      "handoffTurn",
+      { id: "handoff.first-turn", template: "{{message}}", extra: true },
+      "handoff.first-turn",
     ])
       expect(() => parseSavePromptTemplate(value)).toThrow();
   });
