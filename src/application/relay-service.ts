@@ -28,6 +28,7 @@ import {
   isMcpControlTool,
   parseActivityContextArgs,
   planMarkdown,
+  RELAY_OPERATING_ADDENDUM,
 } from "../bridge/index.js";
 import type { SessionResourceFactory } from "../core/index.js";
 import {
@@ -70,13 +71,8 @@ import { WorkerEventWindows } from "./worker-event-windows.js";
 const LIVE_EVENT_CHARACTER_LIMIT = 1_000_000;
 
 const instructions = [
-  assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract),
-  "You are Relay, Code60's application-wide orchestrator. Your workspace is your persistent home, not a default worker target.",
-  "Every dispatch must specify cwd and workspaceMode. Use direct only when direct edits in that exact directory are intended. Code60 snapshots covered regular files before execution; direct-folder Undo may also rewind concurrent manual edits. Git metadata and Code60 state are excluded. Unsupported paths, links and snapshot limits must be resolved before editable dispatch.",
-  "Use worktree for Git-isolated work. Never infer a target from sidebar selection or historical workers. No project or database connection is needed.",
-  "Historical conversations are evidence only. Do not resume unfinished work, replay plans or feedback, or control historical workers. Only the current human request authorizes new work.",
-  "Worker transcript reads page a bounded live target window. Check windowRevision and incomplete; cursors refer only to that window, not complete lifetime history. Original run records remain on disk.",
-  "Every Relay plan task must specify its own target with cwd and workspaceMode. Only human Accept authorizes that revision and those assignments. Use planTaskId for worker work under an accepted plan; never substitute another target or mode.",
+  assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES["contract.operating"]),
+  RELAY_OPERATING_ADDENDUM,
 ].join("\n\n");
 
 /** One application-owned conversation. Database/project navigation is not an input. */
@@ -1217,6 +1213,47 @@ export class RelayService {
     return this.store
       ? this.execution.list({ id: this.store.id, generation: this.generation })
       : [];
+  }
+  async terminalTarget(runId?: string): Promise<{
+    cwd: string;
+    label: string;
+    project: string | null;
+    targetKind: "relay" | "relay-worker";
+    runId: string | null;
+  }> {
+    if (this.closing) throw new Error("Relay is closing");
+    if (runId !== undefined) {
+      const worker = this.currentWorkers().find((entry) => entry.id === runId);
+      if (!worker) throw new Error("That Relay worker is no longer active");
+      return {
+        cwd: worker.record.worktree ?? worker.target.cwd,
+        label: worker.label ?? worker.provider,
+        project: worker.target.cwd,
+        targetKind: "relay-worker",
+        runId: worker.id,
+      };
+    }
+    this.storeOpening ??= RelayStore.open(
+      this.identity?.root ?? join(stateHome(this.env), "code60", "relay"),
+    ).then(
+      (store) => {
+        this.store = store;
+        return store;
+      },
+      (cause: unknown) => {
+        this.storeOpening = undefined;
+        throw cause;
+      },
+    );
+    const store = await this.storeOpening;
+    await store.validateWorkspace();
+    return {
+      cwd: store.workspace,
+      label: this.identity?.name ?? "Relay",
+      project: null,
+      targetKind: "relay",
+      runId: null,
+    };
   }
   private async tool(name: string, args: unknown, signal?: AbortSignal): Promise<unknown> {
     if (this.closing || !this.gateway) throw new Error("Relay gateway is closed");

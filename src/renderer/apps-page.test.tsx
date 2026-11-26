@@ -17,6 +17,7 @@ describe("Apps home", () => {
       "Appearance",
       "Commands",
       "Data Viewer",
+      "Health Check",
       "Internal Prompts",
       "MCP Servers",
       "Memory",

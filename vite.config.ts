@@ -21,11 +21,18 @@ export default defineConfig(({ command }) => ({
         return html.replace("style-src 'self'", `style-src 'self' 'nonce-${styleNonce}'`);
       },
       transform(code, id) {
-        if (!id.includes("monaco-editor/esm/") || !id.endsWith(".js")) return;
-        return code.replaceAll(
-          "document.createElement('style')",
-          `(Object.assign(document.createElement('style'), { nonce: ${JSON.stringify(styleNonce)} }))`,
-        );
+        if (id.includes("monaco-editor/esm/") && id.endsWith(".js")) {
+          return code.replaceAll(
+            "document.createElement('style')",
+            `(Object.assign(document.createElement('style'), { nonce: ${JSON.stringify(styleNonce)} }))`,
+          );
+        }
+        if ((id.includes("@xterm/xterm") || id.includes("@xterm_xterm")) && /\.[cm]?js/.test(id)) {
+          return code.replace(
+            /([A-Za-z0-9_$.]+)\.createElement\((["'])style\2\)/g,
+            `(Object.assign($1.createElement($2style$2), { nonce: ${JSON.stringify(styleNonce)} }))`,
+          );
+        }
       },
     },
   ],

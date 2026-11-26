@@ -60,6 +60,20 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
+## Terminal
+
+- ID: `terminal`
+- Status: shipped
+- Purpose: Open an interactive shell tab in the right sidebar rooted in the selected agent's worktree or workspace directory.
+- Access: Relay, project or worker chat → right sidebar → Open Terminal (or Command Palette → Open terminal)
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Human-only; agents cannot open, read, or write interactive terminals.
+- Limits: Up to 16 concurrent PTY sessions. Each tab is pinned to the opaque target it was opened for (worker worktree, open project root, or Relay/custom assistant workspace) and keeps its shell and scrollback alive across tab, panel, and page switches. Closing a tab, closing its project, discarding its worktree, or shutting down the backend terminates owned sessions. Awareness exposes tab metadata only, never terminal I/O.
+- Pages: none
+- Settings sections: none
+- Tools: none
+
 ## Relay
 
 - ID: `relay`
@@ -228,16 +242,16 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
-## Prompt templates
+## Internal Prompts
 
 - ID: `prompts`
 - Status: shipped
-- Purpose: Customize project orchestration and handoff templates.
-- Access: Customize → Internal Prompts (also Apps → Internal Prompts) → title actions for Save, Discard changes or Reset to default
+- Purpose: Inspect all 44 internal prompts by canonical dotted ID and customize the 10 editable project, handoff, and utility templates.
+- Access: Customize → Internal Prompts (also Apps → Internal Prompts) → filter by ID/name and Save, Discard changes, or Reset to default
 - Prerequisite: database
 - Agent access: read
 - Confirmation: Existing permissions apply.
-- Limits: Database overrides precede config and built-ins; Relay uses its fixed application instructions.
+- Limits: Database overrides precede config and built-ins for the 10 editable templates. Safety wrappers, strict JSON schemas, bundled tactics, built-in commands, and Relay/Custom Assistant prompts are read-only; Relay stays independent of project databases.
 - Pages: `prompts`
 - Settings sections: none
 - Tools: none
@@ -372,13 +386,27 @@ Schema version: 1
 
 - ID: `system-manager`
 - Status: shipped
-- Purpose: Inspect Backend Service scheduling health automatically every two seconds. Jobs paused is separate from backend lifetime.
-- Access: Apps → System Manager
+- Purpose: Inspect Backend Service scheduling health on the Services tab and active right-sidebar terminal sessions with their associated project on the Terminals tab.
+- Access: Apps → System Manager (Services and Terminals tabs)
 - Prerequisite: none
 - Agent access: human-only
-- Confirmation: Human CLI consent is required for service changes; scheduled jobs retain their own explicit controls.
-- Limits: Automatic checks respect global Pause polling and back off to at most sixty seconds on failure. Manual Refresh Backend Service is available. Install, repair, start, stop and uninstall use local code60 service commands. No database is required; awareness never probes or controls the service.
+- Confirmation: Human CLI consent is required for service changes; scheduled jobs and terminal sessions retain their own explicit controls.
+- Limits: Services automatically checks scheduler health every two seconds (respecting global Pause polling and backing off to sixty seconds on failure), with manual refresh. Install, repair, start, stop and uninstall use local code60 service commands. Terminals lists all live interactive shells with their project/Relay association, working directory, shell, PID, start time, and Close terminal control. No database is required; awareness never probes or controls services or terminals.
 - Pages: `system-manager`
+- Settings sections: none
+- Tools: none
+
+## Health Check
+
+- ID: `health-check`
+- Status: shipped
+- Purpose: Inspect read-only system health across the Code60 backend, scheduler, Transmission server, providers, workspace stores, memory, MCP connectors, disk space and local machine context with granular per-check, category or full rechecks.
+- Access: Manage → Health Check (also available from Apps → Health Check)
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Read-only diagnostics; active probes run only when explicitly requested by the user.
+- Limits: No database is required. Passive local checks run on page open; active provider authentication probes, embedding checksum verification and optional registry release checks run only on explicit human request with per-check cancellation and never start engines, repair services or mutate state. Copy health report omits hostname, IP addresses, proxy hosts and filesystem paths by default unless explicitly opted in. Relay and awareness cannot run health probes or read host-identifying details.
+- Pages: `health-check`
 - Settings sections: none
 - Tools: none
 
@@ -400,7 +428,7 @@ Schema version: 1
 
 - ID: `settings`
 - Status: shipped
-- Purpose: Choose Light, Dark or System, interface text size, focus highlights, signal colors and table defaults. Table defaults start at Low density (Carbon 64px rows), with row, column and heading lines off. Saved table settings retain their column order, visibility and density. Apply saves the draft, including a Reset to defaults. Cancel or Escape discards it. Browser-native window management is outside Code60.
+- Purpose: Choose Light, Dark or System, interface text size, signal colors and table defaults. Table defaults start at Low density (Carbon 64px rows), with row, column and heading lines off. Saved table settings retain their column order, visibility and density. Apply saves the draft, including a Reset to defaults. Cancel or Escape discards it. Browser-native window management is outside Code60.
 - Access: Personalize → Text, Table Defaults or Appearance, Manage → Polling, Workspace → Color theme
 - Prerequisite: none
 - Agent access: human-only

@@ -17,6 +17,19 @@ import {
 const ids = new Set(APPLICATION_CAPABILITIES.map((capability) => capability.id));
 
 describe("browser capability catalog", () => {
+  it("classifies Health Check as database-independent and human-only with redacted exports", () => {
+    const health = APPLICATION_CAPABILITIES.find((cap) => cap.id === "health-check");
+    expect(health).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      access: expect.stringContaining("Apps → Health Check"),
+    });
+    expect(PAGE_CAPABILITIES["health-check"]).toBe("health-check");
+    expect(pages.find((page) => page.id === "health-check")?.database).toBe(false);
+    expect(health?.limitations).toContain("never start engines");
+    expect(health?.limitations).toContain("omits hostname, IP addresses");
+    expect(health?.limitations).toContain("Relay and awareness cannot run health probes");
+  });
   it("describes consented state-preserving uninstall without granting agent or browser authority", () => {
     const capability = APPLICATION_CAPABILITIES.find((cap) => cap.id === "uninstall");
     expect(capability).toMatchObject({

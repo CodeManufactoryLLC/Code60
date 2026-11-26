@@ -390,7 +390,7 @@ describe("ended run recovery", () => {
   it("sends the handoff turn through the configured template", async () => {
     const { orchestrator, agents, record } = await setup(makeRecord(), new FakeAgents(), {
       ...DEFAULT_CONFIG.prompts,
-      handoffTurn: "[{{summary}}] user: {{message}}",
+      "handoff.first-turn": "[{{summary}}] user: {{message}}",
     });
     await orchestrator.handoff(record.id, "Summary", "Next step", "Unavailable");
     await flush();

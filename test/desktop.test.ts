@@ -165,9 +165,9 @@ const openDatabase = vi.fn((path: string, create: boolean): ProjectDatabase => {
     promptTemplates: () => ({ templates: { ...shared.prompts }, skipped: [] }),
     savePromptTemplate: (id, template) => {
       if (shared.failWrites) throw new Error("disk is full");
-      if (id === "operatingContract" && typeof template !== "string")
-        shared.prompts.operatingContract = structuredClone(template);
-      else if (id !== "operatingContract" && typeof template === "string")
+      if (id === "contract.operating" && typeof template !== "string")
+        shared.prompts["contract.operating"] = structuredClone(template);
+      else if (id !== "contract.operating" && typeof template === "string")
         shared.prompts[id] = template;
     },
     deletePromptTemplate: (id) => {
@@ -1620,7 +1620,7 @@ describe("retained project runtimes", {
     const firstPath = controller.snapshot().database as string;
     const epoch = controller.snapshot().databaseEpoch as number;
     const command = { name: "epoch-check", title: "First", prompt: "Original" };
-    const template = { id: "handoffTurn" as const, template: "Edit {{message}}" };
+    const template = { id: "handoff.first-turn" as const, template: "Edit {{message}}" };
     await controller.saveCommand(command, epoch);
     await controller.saveConfiguration({ name: "First", settings: request }, epoch);
     await controller.savePromptTemplate(template, epoch);
@@ -3371,34 +3371,34 @@ describe("prompt templates", () => {
   const state = (id: string) => controller.snapshot().prompts.find((entry) => entry.id === id);
 
   it("resolves complete clause sets from the database, config, and defaults", async () => {
-    const original = DEFAULT_PROMPT_TEMPLATES.operatingContract;
+    const original = DEFAULT_PROMPT_TEMPLATES["contract.operating"];
     const configured = { ...original, planning: "Configured planning." };
     await fs.mkdir(join(directory, "config", "code60"), { recursive: true });
     await fs.writeFile(
       join(directory, "config", "code60", "config.json"),
-      JSON.stringify({ prompts: { operatingContract: configured } }),
+      JSON.stringify({ prompts: { "contract.operating": configured } }),
     );
     await controller.poll(["config"]);
-    expect(state("operatingContract")).toMatchObject({
+    expect(state("contract.operating")).toMatchObject({
       source: "config",
       template: configured,
       fallback: configured,
     });
     const edited = { ...configured, role: "Edited role.", planning: "Edited planning." };
-    await controller.savePromptTemplate({ id: "operatingContract", template: edited });
-    expect(state("operatingContract")).toMatchObject({ source: "database", template: edited });
+    await controller.savePromptTemplate({ id: "contract.operating", template: edited });
+    expect(state("contract.operating")).toMatchObject({ source: "database", template: edited });
     await expect(
       controller.savePromptTemplate({
-        id: "operatingContract",
+        id: "contract.operating",
         template: { ...edited, role: "Not saved.", planning: "" },
       }),
     ).rejects.toThrow();
-    expect(state("operatingContract")?.template).toEqual(edited);
+    expect(state("contract.operating")?.template).toEqual(edited);
     confirm.mockResolvedValueOnce(false);
-    await expect(controller.resetPromptTemplate("operatingContract")).resolves.toBe(false);
-    expect(state("operatingContract")?.template).toEqual(edited);
-    await controller.resetPromptTemplate("operatingContract");
-    expect(state("operatingContract")).toMatchObject({ source: "config", template: configured });
+    await expect(controller.resetPromptTemplate("contract.operating")).resolves.toBe(false);
+    expect(state("contract.operating")?.template).toEqual(edited);
+    await controller.resetPromptTemplate("contract.operating");
+    expect(state("contract.operating")).toMatchObject({ source: "config", template: configured });
     expect(original.planning).not.toBe(configured.planning);
   });
 
@@ -3419,53 +3419,74 @@ describe("prompt templates", () => {
   });
 
   it("layers database edits over config.json over built-in templates", async () => {
-    expect(state("handoffTurn")).toMatchObject({ source: "built-in", fallbackSource: "built-in" });
+    expect(state("handoff.first-turn")).toMatchObject({
+      source: "built-in",
+      fallbackSource: "built-in",
+    });
     await fs.mkdir(join(directory, "config", "code60"), { recursive: true });
     await fs.writeFile(
       join(directory, "config", "code60", "config.json"),
-      JSON.stringify({ prompts: { handoffTurn: "Config {{message}}" } }),
+      JSON.stringify({ prompts: { "handoff.first-turn": "Config {{message}}" } }),
     );
     await controller.poll(["config"]);
-    expect(state("handoffTurn")).toMatchObject({
+    expect(state("handoff.first-turn")).toMatchObject({
       template: "Config {{message}}",
       source: "config",
       fallbackSource: "config",
     });
 
-    await controller.savePromptTemplate({ id: "handoffTurn", template: "Edit {{message}}" });
-    expect(state("handoffTurn")).toMatchObject({
+    await controller.savePromptTemplate({
+      id: "handoff.first-turn",
+      template: "Edit {{message}}",
+    });
+    expect(state("handoff.first-turn")).toMatchObject({
       template: "Edit {{message}}",
       source: "database",
       fallback: "Config {{message}}",
     });
-    expect(state("handoffSummary")?.source).toBe("built-in");
+    expect(state("handoff.summary")?.source).toBe("built-in");
 
     confirm.mockResolvedValueOnce(false);
-    await expect(controller.resetPromptTemplate("handoffTurn")).resolves.toBe(false);
-    expect(state("handoffTurn")?.source).toBe("database");
-    await expect(controller.resetPromptTemplate("handoffTurn")).resolves.toBe(true);
+    await expect(controller.resetPromptTemplate("handoff.first-turn")).resolves.toBe(false);
+    expect(state("handoff.first-turn")?.source).toBe("database");
+    await expect(controller.resetPromptTemplate("handoff.first-turn")).resolves.toBe(true);
     expect(confirm).toHaveBeenLastCalledWith(
       "reset-prompt",
       expect.stringContaining("the template from config.json"),
     );
-    expect(state("handoffTurn")).toMatchObject({
+    expect(state("handoff.first-turn")).toMatchObject({
       template: "Config {{message}}",
       source: "config",
     });
   });
 
-  it("validates edits and keeps them with their database", async () => {
+  it("validates edits, rejects read-only prompt IDs, and keeps edits with their database", async () => {
     await expect(
-      controller.savePromptTemplate({ id: "handoffTurn", template: "{{summary}}" }),
+      controller.savePromptTemplate({ id: "handoff.first-turn", template: "{{summary}}" }),
     ).rejects.toThrow(/must include/);
     await expect(
       controller.savePromptTemplate({ id: "nope", template: "x" } as never),
     ).rejects.toThrow(/Unknown prompt template/);
-    await controller.savePromptTemplate({ id: "handoffSummary", template: "S {{status}}" });
+    await expect(
+      controller.savePromptTemplate({ id: "contract.relay-addendum", template: "x" } as never),
+    ).rejects.toThrow(/Unknown prompt template/);
+    await controller.savePromptTemplate({ id: "handoff.summary", template: "S {{status}}" });
+    await controller.savePromptTemplate({
+      id: "plan.accepted.project",
+      template: "Run accepted plan {{planId}}",
+    });
     await controller.connect(join(directory, "second.sqlite"), true);
-    expect(state("handoffSummary")?.source).toBe("built-in");
+    expect(state("handoff.summary")?.source).toBe("built-in");
+    expect(state("plan.accepted.project")?.source).toBe("built-in");
     await controller.connect(join(directory, "first.sqlite"), false);
-    expect(state("handoffSummary")).toMatchObject({ template: "S {{status}}", source: "database" });
+    expect(state("handoff.summary")).toMatchObject({
+      template: "S {{status}}",
+      source: "database",
+    });
+    expect(state("plan.accepted.project")).toMatchObject({
+      template: "Run accepted plan {{planId}}",
+      source: "database",
+    });
   });
 });
 
@@ -4150,25 +4171,25 @@ describe("app-wide orchestration chat", {
     await send("first");
     expect(agents.sessions[0]?.prompts[0]).toContain('"caller":{"kind":"project"');
     expect(withoutAwareness(agents.sessions[0]?.prompts[0])).toBe(
-      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nfirst`,
+      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES["contract.operating"])}\n\n--- User request ---\nfirst`,
     );
     const edited = {
-      ...DEFAULT_PROMPT_TEMPLATES.operatingContract,
+      ...DEFAULT_PROMPT_TEMPLATES["contract.operating"],
       role: "Edited Code60 role.",
       planning: "Make a plan before starting work.",
     };
     await controller.savePromptTemplate({
-      id: "operatingContract",
+      id: "contract.operating",
       template: edited,
     });
     await send("second");
     expect(withoutAwareness(agents.sessions[0]?.prompts[1])).toBe(
       `${assembleOperatingContract(edited)}\n\n--- User request ---\nsecond`,
     );
-    await controller.resetPromptTemplate("operatingContract");
+    await controller.resetPromptTemplate("contract.operating");
     await send("third");
     expect(agents.sessions[0]?.prompts[2]).toContain(
-      assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract),
+      assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES["contract.operating"]),
     );
     expect(
       controller
@@ -4218,7 +4239,7 @@ describe("app-wide orchestration chat", {
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     expect(agents.sessions[0]?.prompts.at(-1)).toContain("User-defined creator.");
     expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
-      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand $create-command: My creator\nUser-defined creator.`,
+      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES["contract.operating"])}\n\n--- User request ---\nCommand $create-command: My creator\nUser-defined creator.`,
     );
   });
 
@@ -4236,7 +4257,7 @@ describe("app-wide orchestration chat", {
         await controller.orchestrationChatAction({ type: "send", id, text, command: name });
         await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
         expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
-          `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nCommand $${name}: ${builtin.title}\n${builtin.prompt}${suffix ? `\n\nAdditional instructions:\n${suffix.trim()}` : ""}`,
+          `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES["contract.operating"])}\n\n--- User request ---\nCommand $${name}: ${builtin.title}\n${builtin.prompt}${suffix ? `\n\nAdditional instructions:\n${suffix.trim()}` : ""}`,
         );
         expect(controller.snapshot().commands).toEqual([]);
         expect(
@@ -4267,7 +4288,7 @@ describe("app-wide orchestration chat", {
       await controller.orchestrationChatAction({ type: "send", id, text });
       await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
       expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
-        `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\n${text}`,
+        `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES["contract.operating"])}\n\n--- User request ---\n${text}`,
       );
     }
     for (const [text, expected] of [
@@ -4285,7 +4306,7 @@ describe("app-wide orchestration chat", {
       });
       await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
       expect(withoutAwareness(agents.sessions[0]?.prompts.at(-1))).toBe(
-        `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\n${expected}`,
+        `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES["contract.operating"])}\n\n--- User request ---\n${expected}`,
       );
       const event = controller
         .snapshot()
@@ -4800,8 +4821,8 @@ describe("app-wide orchestration chat", {
     // The existing fake session retains its original hanging turn script.
     await controller.orchestrationChatAction({ type: "send", id, text: "again" });
     expect(agents.sessions[0]?.prompts.map(withoutAwareness)).toEqual([
-      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nworking`,
-      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)}\n\n--- User request ---\nagain`,
+      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES["contract.operating"])}\n\n--- User request ---\nworking`,
+      `${assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES["contract.operating"])}\n\n--- User request ---\nagain`,
     ]);
     await controller.stopAll();
     expect(controller.snapshot().chat.run?.status).toBe("cancelled");
@@ -7087,5 +7108,149 @@ describe("independent diff reads", () => {
     await expect(controller.readDiff({ requestId: randomUUID(), id })).rejects.toThrow(
       "no separate diff",
     );
+  });
+});
+
+describe("controller terminals", () => {
+  it("opens project and worker terminals, enforces lifecycle cleanup, and rejects invalid targets", async () => {
+    await expect(
+      controller.openTerminal({ target: { kind: "relay" }, cols: 80, rows: 24 }),
+    ).rejects.toThrow("Relay is unavailable");
+    await expect(
+      controller.openTerminal({ target: { kind: "project" }, cols: 80, rows: 24 }),
+    ).rejects.toThrow("Choose a folder first");
+
+    const id = await start();
+    const worktree = controller.snapshot().runs.find((entry) => entry.record.id === id)
+      ?.record.worktree;
+    if (worktree) await fs.mkdir(worktree, { recursive: true });
+    try {
+      const projectTerm = await controller.openTerminal({
+        target: { kind: "project" },
+        cols: 80,
+        rows: 24,
+      });
+      expect(projectTerm.cwd).toBe(directory);
+      expect(projectTerm.project).toBe(directory);
+      expect(projectTerm.targetKind).toBe("project");
+
+      const liveWorkerTerm = await controller.openTerminal({
+        target: { kind: "project-worker", runId: id },
+        cols: 80,
+        rows: 24,
+      });
+      expect(liveWorkerTerm.runId).toBe(id);
+      expect(liveWorkerTerm.cwd).toBe(worktree ?? directory);
+      expect(liveWorkerTerm.targetKind).toBe("project-worker");
+
+      await expect(
+        controller.openTerminal({
+          target: { kind: "project-worker", runId: "missing-run" },
+          cols: 80,
+          rows: 24,
+        }),
+      ).rejects.toThrow("Unknown worker run");
+
+      await controller.action({ type: "finish", id });
+      await vi.waitFor(() => expect(controller.active).toBe(false));
+      await controller.terminals.close({ id: liveWorkerTerm.id });
+
+      // Open again from history after run finished, then confirm discard closes it.
+      const historyWorkerTerm = await controller.openTerminal({
+        target: { kind: "project-worker", runId: id },
+        cols: 80,
+        rows: 24,
+      });
+      expect(controller.terminals.list().map((entry) => entry.id)).toContain(historyWorkerTerm.id);
+      await controller.action({ type: "discard", id });
+      expect(controller.terminals.list().map((entry) => entry.id)).not.toContain(
+        historyWorkerTerm.id,
+      );
+
+      // Replacing database closes database-owned project terminal.
+      await controller.connect(join(directory, "second.sqlite"), true);
+      expect(controller.terminals.list()).toEqual([]);
+
+      await controller.shutdown();
+      await expect(
+        controller.openTerminal({ target: { kind: "project" }, cols: 80, rows: 24 }),
+      ).rejects.toThrow("Application is closing");
+    } finally {
+      if (worktree) await fs.rm(worktree, { recursive: true, force: true });
+    }
+  });
+
+  it("opens Relay and retained-project terminals and preserves Relay across project close and database swap", async () => {
+    await controller.shutdown();
+    controller = new ApplicationHost(
+      controllerDeps(),
+      {
+        XDG_CONFIG_HOME: join(directory, "config"),
+        XDG_STATE_HOME: join(directory, "state"),
+        SHELL: "/bin/sh",
+      },
+      { confirm },
+      { openDatabase, preferences, relay: true },
+    );
+    await controller.restore();
+    await controller.connect(
+      join(directory, "relay-term.sqlite"),
+      true,
+      controller.snapshot().databaseEpoch,
+    );
+    const projectDir = join(directory, "proj");
+    await fs.mkdir(projectDir);
+    await controller.open(projectDir, controller.snapshot().databaseEpoch);
+    const snap = controller.snapshot();
+
+    const relayTerm = await controller.openTerminal({
+      target: { kind: "relay" },
+      cols: 80,
+      rows: 24,
+    });
+    expect(relayTerm.targetKind).toBe("relay");
+    expect(relayTerm.project).toBeNull();
+
+    const projectTerm = await controller.openTerminal({
+      target: {
+        kind: "project",
+        projectId: snap.projectInstanceId ?? undefined,
+        databaseEpoch: snap.databaseEpoch,
+      },
+      cols: 80,
+      rows: 24,
+    });
+    expect(projectTerm.cwd).toBe(projectDir);
+    expect(controller.terminals.list()).toHaveLength(2);
+
+    // Closing the project closes only its terminal and preserves Relay's terminal.
+    await controller.projectAction({
+      type: "close",
+      projectId: snap.projectInstanceId as string,
+    });
+    expect(controller.terminals.list().map((entry) => entry.id)).toEqual([relayTerm.id]);
+
+    // Opening project again and replacing the database preserves Relay's terminal.
+    await controller.open(projectDir, controller.snapshot().databaseEpoch);
+    const reopened = controller.snapshot();
+    const projectTerm2 = await controller.openTerminal({
+      target: {
+        kind: "project",
+        projectId: reopened.projectInstanceId ?? undefined,
+        databaseEpoch: reopened.databaseEpoch,
+      },
+      cols: 80,
+      rows: 24,
+    });
+    expect(controller.terminals.list().map((entry) => entry.id)).toContain(projectTerm2.id);
+    await controller.connect(
+      join(directory, "relay-term-2.sqlite"),
+      true,
+      controller.snapshot().databaseEpoch,
+    );
+    expect(controller.terminals.list().map((entry) => entry.id)).toEqual([relayTerm.id]);
+
+    await controller.shutdown();
+    expect(controller.terminals.list()).toEqual([]);
   });
 });

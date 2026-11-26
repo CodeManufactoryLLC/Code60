@@ -189,12 +189,6 @@ button.file-open-link {
   text-transform: none;
 }
 
-.file-panel :is(button, select):focus-visible {
-  outline: 2px solid var(--focus-outline);
-  outline-offset: -2px;
-  box-shadow: var(--focus-inset-shadow);
-}
-
 .file-panel button:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--hover-bg);
 }
@@ -432,10 +426,6 @@ button.file-open-link {
   background: var(--accent-bg);
   box-shadow: inset 3px 0 var(--accent);
 }
-.file-tree-item:focus-visible {
-  outline: 2px solid var(--focus-outline);
-  outline-offset: -2px;
-}
 @media (forced-colors: active) {
   .picker-row[data-selected],
   .file-tree-item[aria-selected="true"] {
@@ -510,15 +500,20 @@ button.file-open-link {
   touch-action: none;
 }
 
-.file-column-resize:focus-visible,
-.files-title button:focus-visible,
-.setup-dialog .files-hidden input:focus-visible {
-  outline: 2px solid var(--focus-outline);
-  outline-offset: -2px;
-  box-shadow: var(--focus-inset-shadow);
+/* Monaco writes toggle colors and focus outlines inline. Suppress focus borders across editor internals. */
+:root .monaco-editor,
+:root .monaco-diff-editor {
+  --vscode-focusBorder: transparent;
+  --vscode-list-focusOutline: transparent;
+  --vscode-editorSuggestWidget-focusOutline: transparent;
 }
 
-/* Monaco writes toggle colors inline. Color the pseudo-element glyph directly. */
+:root .monaco-editor :is(.synthetic-focus, [tabindex="0"]:focus, [tabindex="-1"]:focus),
+:root .monaco-diff-editor :is(.synthetic-focus, [tabindex="0"]:focus, [tabindex="-1"]:focus) {
+  /* biome-ignore lint/complexity/noImportantStyles: Monaco injects unlayered runtime focus outlines. */
+  outline: 0 !important;
+}
+
 :root .monaco-editor .find-widget :is(.button, .monaco-custom-toggle),
 :root .monaco-editor .find-widget :is(.button, .monaco-custom-toggle):focus {
   /* biome-ignore lint/complexity/noImportantStyles: Monaco injects unlayered runtime control styles. */
@@ -1146,8 +1141,6 @@ button.file-open-link {
   font-weight: 700;
   --text: var(--card-header-text);
   --muted: var(--card-header-muted);
-  --focus-line: var(--card-header-text);
-  --focus-outline: var(--card-header-text);
   --accent: var(--card-header-text);
   --hover-bg: var(--card-header-hover);
   --accent-bg: var(--card-header-hover);

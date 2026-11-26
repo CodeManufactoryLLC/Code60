@@ -1,6 +1,6 @@
 # Transmission workflow prototype
 
-Open **Apps → Workflows** to create and monitor ordered coding tasks. The page
+Open **Apps → Workflows** to create and monitor ordered coding tasks. For high-level definitions and how workflows compare with interactive chat Plans, see [Workflow](../TERMINOLOGY.md#workflow), [Transmission Server](../TERMINOLOGY.md#transmission-server), and the [Plans and Workflows FAQ](../FAQ.md#plans-and-workflows). The page
 and retained history work without a project database. Execution currently requires
 macOS Apple Silicon or Linux x64 with glibc, the installation's recorded Node.js >=24.22.0 <25, and
 separate Codex workflow authentication. macOS distribution candidates include

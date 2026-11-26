@@ -38,7 +38,7 @@ const tab = z.discriminatedUnion("kind", [
   z.strictObject({ id: sequence, kind: z.literal("revision"), reviewId: uuid, revisionId: uuid }),
   z.strictObject({
     id: sequence,
-    kind: z.enum(["blank", "explorer", "changes", "recall", "application"]),
+    kind: z.enum(["blank", "explorer", "changes", "recall", "application", "terminal"]),
   }),
 ]);
 const owner = z.discriminatedUnion("kind", [
@@ -270,6 +270,16 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Read-only; no retrieval or provider dispatch.",
   ),
   feature(
+    "terminal",
+    "Terminal",
+    "Open an interactive shell tab in the right sidebar rooted in the selected agent's worktree or workspace directory.",
+    "Relay, project or worker chat → right sidebar → Open Terminal (or Command Palette → Open terminal)",
+    "none",
+    "human-only",
+    "Up to 16 concurrent PTY sessions. Each tab is pinned to the opaque target it was opened for (worker worktree, open project root, or Relay/custom assistant workspace) and keeps its shell and scrollback alive across tab, panel, and page switches. Closing a tab, closing its project, discarding its worktree, or shutting down the backend terminates owned sessions. Awareness exposes tab metadata only, never terminal I/O.",
+    "Human-only; agents cannot open, read, or write interactive terminals.",
+  ),
+  feature(
     "relay",
     "Relay",
     "Application-wide orchestration across explicit targets. Select the relay animation checkbox beside Forward to show the dot above Chat. It defaults to off and remembers your choice in this browser. The dot shows Relay activity across pages: Idle, Listening, Thinking, Speaking, Complete or Attention. The embedded Carbon prompt line opens the selected Code60 thread. Enter sends and Shift+Enter adds a line. Stop targets the current turn.",
@@ -384,12 +394,12 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   ),
   feature(
     "prompts",
-    "Prompt templates",
-    "Customize project orchestration and handoff templates.",
-    "Customize → Internal Prompts (also Apps → Internal Prompts) → title actions for Save, Discard changes or Reset to default",
+    "Internal Prompts",
+    "Inspect all 44 internal prompts by canonical dotted ID and customize the 10 editable project, handoff, and utility templates.",
+    "Customize → Internal Prompts (also Apps → Internal Prompts) → filter by ID/name and Save, Discard changes, or Reset to default",
     "database",
     "read",
-    "Database overrides precede config and built-ins; Relay uses its fixed application instructions.",
+    "Database overrides precede config and built-ins for the 10 editable templates. Safety wrappers, strict JSON schemas, bundled tactics, built-in commands, and Relay/Custom Assistant prompts are read-only; Relay stays independent of project databases.",
   ),
   feature(
     "configurations",
@@ -480,12 +490,22 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
     "system-manager",
     "System Manager",
-    "Inspect Backend Service scheduling health automatically every two seconds. Jobs paused is separate from backend lifetime.",
-    "Apps → System Manager",
+    "Inspect Backend Service scheduling health on the Services tab and active right-sidebar terminal sessions with their associated project on the Terminals tab.",
+    "Apps → System Manager (Services and Terminals tabs)",
     "none",
     "human-only",
-    "Automatic checks respect global Pause polling and back off to at most sixty seconds on failure. Manual Refresh Backend Service is available. Install, repair, start, stop and uninstall use local code60 service commands. No database is required; awareness never probes or controls the service.",
-    "Human CLI consent is required for service changes; scheduled jobs retain their own explicit controls.",
+    "Services automatically checks scheduler health every two seconds (respecting global Pause polling and backing off to sixty seconds on failure), with manual refresh. Install, repair, start, stop and uninstall use local code60 service commands. Terminals lists all live interactive shells with their project/Relay association, working directory, shell, PID, start time, and Close terminal control. No database is required; awareness never probes or controls services or terminals.",
+    "Human CLI consent is required for service changes; scheduled jobs and terminal sessions retain their own explicit controls.",
+  ),
+  feature(
+    "health-check",
+    "Health Check",
+    "Inspect read-only system health across the Code60 backend, scheduler, Transmission server, providers, workspace stores, memory, MCP connectors, disk space and local machine context with granular per-check, category or full rechecks.",
+    "Manage → Health Check (also available from Apps → Health Check)",
+    "none",
+    "human-only",
+    "No database is required. Passive local checks run on page open; active provider authentication probes, embedding checksum verification and optional registry release checks run only on explicit human request with per-check cancellation and never start engines, repair services or mutate state. Copy health report omits hostname, IP addresses, proxy hosts and filesystem paths by default unless explicitly opted in. Relay and awareness cannot run health probes or read host-identifying details.",
+    "Read-only diagnostics; active probes run only when explicitly requested by the user.",
   ),
   feature(
     "data",
@@ -499,7 +519,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
     "settings",
     "Settings",
-    "Choose Light, Dark or System, interface text size, focus highlights, signal colors and table defaults. Table defaults start at Low density (Carbon 64px rows), with row, column and heading lines off. Saved table settings retain their column order, visibility and density. Apply saves the draft, including a Reset to defaults. Cancel or Escape discards it. Browser-native window management is outside Code60.",
+    "Choose Light, Dark or System, interface text size, signal colors and table defaults. Table defaults start at Low density (Carbon 64px rows), with row, column and heading lines off. Saved table settings retain their column order, visibility and density. Apply saves the draft, including a Reset to defaults. Cancel or Escape discards it. Browser-native window management is outside Code60.",
     "Personalize → Text, Table Defaults or Appearance, Manage → Polling, Workspace → Color theme",
     "none",
     "human-only",
@@ -623,6 +643,7 @@ export const PAGE_CAPABILITIES = {
   experiments: "settings",
   workflows: "workflows",
   "system-manager": "system-manager",
+  "health-check": "health-check",
   automations: "automations",
   "episodic-memory": "episodic-memory",
   rag: "rag",

@@ -42,6 +42,7 @@ export { chatReferenceSchema } from "./chat-context.js";
 export * from "./custom-agents.js";
 export * from "./database.js";
 export * from "./details.js";
+export * from "./health-check.js";
 export * from "./logs.js";
 export * from "./model-defaults.js";
 export * from "./plans.js";
@@ -51,6 +52,7 @@ export * from "./relay.js";
 export * from "./relay-files.js";
 export * from "./relay-reviews.js";
 export * from "./tactics.js";
+export * from "./terminal.js";
 export * from "./web-links.js";
 
 import { modeChangeSchema } from "../contracts/index.js";
@@ -118,6 +120,7 @@ export {
   assembleOperatingContract,
   availableCommands,
   BUILTIN_COMMANDS,
+  CHAT_TITLE_GUARDRAIL,
   CODE60_COPYRIGHT,
   COMMAND_LIMIT,
   type Command,
@@ -126,8 +129,10 @@ export {
   DEFAULT_OPERATING_CONTRACT_CLAUSES,
   DEFAULT_PROMPT_TEMPLATES,
   type DeleteCommand,
+  type EditablePromptCatalogEntry,
   expandCommand,
   findMcpTableTool,
+  type InternalPromptId,
   isActivityTool,
   isMcpControlTool,
   leadingCommand,
@@ -143,9 +148,13 @@ export {
   type McpTable,
   OPERATING_CONTRACT_CLAUSE_IDS,
   OPERATING_CONTRACT_CLAUSES,
+  operatingContractClausePromptId,
+  PROMPT_CATALOG,
+  PROMPT_DOMAINS,
   PROMPT_FIELDS,
   PROMPT_IDS,
   PROMPT_TEMPLATE_LIMIT,
+  type PromptDomain,
   type PromptFields,
   type PromptId,
   type PromptTemplate,
@@ -153,8 +162,12 @@ export {
   parseActivityContextArgs,
   parseActivityReport,
   parseValue,
+  RELAY_OPERATING_ADDENDUM,
+  type ReadOnlyPromptCatalogEntry,
+  renderEpisodicMemoryPrompt,
   renderPrompt,
   type SaveCommand,
+  SEARCH_OVERVIEW_GUARDRAIL,
   SEARCH_QUERY_LIMIT,
   SEARCH_SOURCE_LIMIT,
   type SearchSummarySource,
@@ -445,6 +458,21 @@ export interface ApplicationClient {
   ): Promise<import("./custom-agents.js").CustomAgentResponse>;
   automation(request: import("./automation.js").AutomationUiRequest): Promise<unknown>;
   onAutomationChanged(listener: () => void): () => void;
+  openTerminal?(
+    request: import("./terminal.js").TerminalOpenRequest,
+  ): Promise<import("./terminal.js").TerminalSessionInfo>;
+  writeTerminal?(request: import("./terminal.js").TerminalWriteRequest): Promise<void>;
+  resizeTerminal?(request: import("./terminal.js").TerminalResizeRequest): Promise<void>;
+  closeTerminal?(request: import("./terminal.js").TerminalCloseRequest): Promise<void>;
+  listTerminals?(): Promise<import("./terminal.js").TerminalSummary[]>;
+  onTerminalEvent?(listener: (event: import("./terminal.js").TerminalEvent) => void): () => void;
+  onTerminalsChanged?(listener: () => void): () => void;
+  healthCheck?(
+    request: import("./health-check.js").HealthCheckRequest,
+  ): Promise<import("./health-check.js").HealthSnapshot>;
+  onHealthChanged?(
+    listener: (snapshot: import("./health-check.js").HealthSnapshot) => void,
+  ): () => void;
   memorySnapshot(): Promise<import("../contracts/index.js").MemorySnapshot>;
   browseMemories(
     request: import("../contracts/index.js").MemoryBrowse,

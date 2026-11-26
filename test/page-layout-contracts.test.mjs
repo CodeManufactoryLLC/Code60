@@ -339,3 +339,22 @@ it("adds the shared header gap to content pages but excludes navigation-card and
     expect(rule(file, selector)).toContain("var(--page-header-gap)");
   expect(sheet("chat")).not.toContain("--page-header-gap");
 });
+
+it("disables focus highlight borders and removes the Focus highlight border preference", () => {
+  expect(sheet("tokens")).toContain("--focus-outline: transparent");
+  expect(sheet("tokens")).toContain("--focus-shadow: none");
+  expect(sheet("tokens")).toContain("--focus-inset-shadow: none");
+  expect(sheet("tokens")).not.toContain("data-focus-highlight");
+  expect(sheet("base")).toContain(
+    ":focus, :focus-visible { outline: none; outline-width: 0; outline-color: transparent; }",
+  );
+  expect(sheet("base")).not.toContain("data-focus-highlight");
+  const accent = readFileSync(
+    new URL("../src/renderer/carbon/_accent.scss", import.meta.url),
+    "utf8",
+  );
+  expect(accent).toContain("--cds-focus: transparent");
+  expect(accent).toContain("--cds-focus-inset: transparent");
+  expect(accent).toContain("--cds-focus-inverse: transparent");
+  expect(accent).toContain("--cds-button-focus-color: transparent");
+});

@@ -3,6 +3,7 @@ import type {
   DesktopAutomations,
   DesktopLogStore,
   DesktopWorkflows,
+  HealthCheckService,
 } from "../application/index.js";
 import { logProjectId } from "../application/index.js";
 import {
@@ -32,6 +33,7 @@ import {
   parseGitSetupCommit,
   parseGitSetupFile,
   parseGitSetupIdentity,
+  parseHealthCheckRequest,
   parseLogClear,
   parseLogDetail,
   parseLogQuery,
@@ -72,6 +74,10 @@ import {
   parseSetupSession,
   parseStart,
   parseTaskAction,
+  parseTerminalClose,
+  parseTerminalOpen,
+  parseTerminalResize,
+  parseTerminalWrite,
   parseWebLink,
 } from "../bridge/index.js";
 import type { Interactions } from "./interactions.js";
@@ -84,11 +90,17 @@ export function applicationOperations(
   interactions: Interactions,
   emit: (event: string, value?: unknown) => void,
   workflows: DesktopWorkflows,
+  healthCheck?: HealthCheckService,
 ) {
   const operations = new Map<string, (value: unknown) => unknown>();
   const handle = (name: string, action: (value: unknown) => unknown) => {
     operations.set(name, action);
   };
+  handle("health-check", (value) => {
+    const request = parseHealthCheckRequest(value);
+    if (!healthCheck) throw new Error("Health Check service is unavailable.");
+    return healthCheck.handle(request);
+  });
   handle("mcp-recovery", (value) =>
     controller.mcpRecovery(parseMcpManagement(mcpRecoveryRequestSchema, value)),
   );
@@ -125,6 +137,14 @@ export function applicationOperations(
   handle("mcp-move", (value) => controller.mcpMove(parseMcpManagement(mcpMoveSchema, value)));
   handle("workflow", (value) => workflows.request(value));
   handle("automation", (value) => automations.request(value));
+  handle("terminal-open", (value) => controller.openTerminal(parseTerminalOpen(value)));
+  handle("terminal-write", (value) => controller.terminals.write(parseTerminalWrite(value)));
+  handle("terminal-resize", (value) => controller.terminals.resize(parseTerminalResize(value)));
+  handle("terminal-close", (value) => controller.terminals.close(parseTerminalClose(value)));
+  handle("terminal-list", (value) => {
+    if (value !== undefined) throw new Error("Invalid terminal list request.");
+    return controller.terminals.list();
+  });
   handle("model-default", (value) => controller.modelDefault(parseModelDefaultAction(value)));
   handle("logs-query", (value) => {
     const query = parseLogQuery(value);

@@ -299,6 +299,12 @@ export class ApplicationAgents {
       liveIds: snapshots.flatMap((s) => s.liveIds),
     };
   }
+  terminalTarget(conversationId?: string, runId?: string) {
+    const owner = conversationId ? this.require(conversationId) : this.relay;
+    if (this.suspended.has(owner) || this.closing)
+      throw new Error("This application conversation is unavailable");
+    return owner.terminalTarget(runId);
+  }
   cancelReviewReads() {
     return this.each((a) => a.cancelReviewReads());
   }

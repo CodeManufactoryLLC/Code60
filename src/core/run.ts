@@ -304,7 +304,7 @@ export class Run {
           buildHandoffPrompt(
             this.record,
             await this.deps.store.readEvents(this.id),
-            this.settings.prompts.handoffSummary,
+            this.settings.prompts["handoff.summary"],
           ),
         );
       session = await this.startRecoveryAgent((signal) =>
@@ -369,7 +369,7 @@ export class Run {
       origin === "automatic"
         ? "--- Automatic Code60 update (not written by the user) ---"
         : "--- User request ---";
-    const sent = renderPrompt("handoffTurn", this.settings.prompts.handoffTurn, {
+    const sent = renderPrompt("handoff.first-turn", this.settings.prompts["handoff.first-turn"], {
       summary,
       message: context ? `${context}\n\n${heading}\n${deliveredText}` : deliveredText,
     });

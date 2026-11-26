@@ -147,6 +147,7 @@ import {
   parseSearchSummary,
   parseSearchSummaryRequestId,
   parseTaskAction,
+  parseTerminalOpen,
   planMarkdown,
   type RagIdentity,
   type RagQuery,
@@ -159,6 +160,7 @@ import {
   type SavedChat,
   summarizeReview,
   TACTICS,
+  type TerminalSessionInfo,
   tacticPrompt,
 } from "../bridge/index.js";
 import type { ModeChange } from "../core/index.js";
@@ -223,6 +225,7 @@ import { DiffReads, prepareUnlessAborted } from "./diff-reads.js";
 import { desktopPath } from "./environment.js";
 import { readFiles } from "./files.js";
 import { GitSetup } from "./git-setup.js";
+import { buildProviderDescriptors, type HealthProviderDescriptor } from "./health-check.js";
 import { INFERENCE_VERSIONS } from "./inference-versions.js";
 import {
   type Customization,
@@ -270,6 +273,7 @@ import { summarizeRun } from "./run-summary.js";
 import { type PollOwner, ScopedPoller } from "./scoped-poller.js";
 import { inspectSetupDatabase, prepareSetupDatabase } from "./setup-database.js";
 import { captureTask, taskDelivery } from "./tactic-context.js";
+import { ApplicationTerminals } from "./terminals.js";
 
 export interface DesktopDialogs {
   confirm(presentation: ConfirmationId, detail: string): Promise<boolean>;
@@ -364,6 +368,7 @@ interface Batch {
 /** Owns one workspace and independent batches. All history mutations are serialized. */
 export class ApplicationHost {
   readonly mcp: McpManagement;
+  readonly terminals: ApplicationTerminals;
   private readonly connectors: McpRuntime;
   private readonly authentication: McpAuthentication | undefined;
   mcpRecovery(value: McpRecoveryRequest) {
@@ -949,6 +954,11 @@ export class ApplicationHost {
   readonly modelDefaults: ModelDefaults;
   private providerMutation = false;
   private readonly agentSetup: AgentSetup;
+  private readonly healthOps: {
+    refreshPath(signal: AbortSignal): Promise<boolean>;
+    detectProvider(id: string, signal: AbortSignal): Promise<void>;
+    probeProvider(id: string, signal: AbortSignal): Promise<void>;
+  };
   private readonly diffReads = new DiffReads();
   private get workspace(): Workspace | undefined {
     return this.projectState.workspace;
@@ -1311,6 +1321,10 @@ export class ApplicationHost {
     session.historyLoaded = true;
   }
 
+  private activePrompts(): PromptTemplates {
+    return effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts);
+  }
+
   private async sendTask(
     session: ChatSession,
     text: string,
@@ -1363,12 +1377,9 @@ export class ApplicationHost {
       closing: () => this.closing,
       changed: () => this.changed(),
       formatUpdates: (updates) =>
-        renderPrompt(
-          "workerUpdates",
-          effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
-            .workerUpdates,
-          { updates: updates.map(formatWorkerUpdate).join("\n") },
-        ),
+        renderPrompt("worker.updates.project", this.activePrompts()["worker.updates.project"], {
+          updates: updates.map(formatWorkerUpdate).join("\n"),
+        }),
       deliver: (session, text, origin, deliveredText) => {
         const run = session.chat?.runs()[0];
         if (!session.chat || !run) throw new Error("No orchestration session is available");
@@ -1784,7 +1795,9 @@ export class ApplicationHost {
           deliveryAttempted = true;
           const { dispatched } = await this.sendTask(
             session,
-            `Code60: the user accepted plan ${plan.id}. Read it with code60_read_plan, inspect any previous work, and execute the remaining tasks. Report each task's progress with evidence and responsible workerIds. Do not repeat completed work.`,
+            renderPrompt("plan.accepted.project", this.activePrompts()["plan.accepted.project"], {
+              planId: plan.id,
+            }),
             "automatic",
             session.tasks.find((task) => task.planIds.includes(plan.id))?.id ?? null,
           );
@@ -2016,7 +2029,11 @@ export class ApplicationHost {
         const conflicts = proposal.conflicts.map(
           ({ path, reason }) => `${JSON.stringify(path)}: ${reason}`,
         );
-        const feedback = `Revise this task so it can be applied to the current project. Preserve the user's current project edits. Read the current project files before revising your worker copies. Conflicting paths and reasons:\n${conflicts.join("\n")}\nProject: ${JSON.stringify(request.project)}\nUse owned workers and return a new review. Do not modify the project directly.`;
+        const feedback = renderPrompt(
+          "review.conflict-revision.project",
+          this.activePrompts()["review.conflict-revision.project"],
+          { conflicts: conflicts.join("\n"), project: JSON.stringify(request.project) },
+        );
         if (feedback.length > 8_000)
           throw new Error("Too many conflicts for one request. Send feedback in smaller groups.");
         await loop.requestRevision(review.id, proposal.id);
@@ -2488,6 +2505,7 @@ export class ApplicationHost {
             : [],
         ),
     );
+    this.terminals = new ApplicationTerminals(env as NodeJS.ProcessEnv);
     this.authentication = storage.mcpAuthentication
       ? new McpAuthentication(
           join(stateHome(env), "code60", "mcp-authentication"),
@@ -2574,43 +2592,75 @@ export class ApplicationHost {
       fetch: storage.providerFetch,
       download: storage.providerDownload,
     });
+    const refreshPathForHealth = async (signal: AbortSignal): Promise<boolean> => {
+      if (this.storage.refreshPath) {
+        await this.storage.refreshPath(signal);
+        return true;
+      }
+      if (!this.storage.detectAgent) {
+        const recovered = await desktopPath({ env: this.env, signal });
+        setEnvironmentPath(this.env as NodeJS.ProcessEnv, recovered);
+        return recovered.length > 0;
+      }
+      return true;
+    };
+    const detectProviderForHealth = async (
+      id: string,
+      command: readonly [string, ...string[]],
+      signal: AbortSignal,
+    ) => {
+      if (id === "codex") {
+        const managed = await codexProvider.environment();
+        if (managed.PATH) setEnvironmentPath(this.env as NodeJS.ProcessEnv, managed.PATH);
+      }
+      await (this.storage.detectAgent ?? detectProvider)(
+        id,
+        command,
+        id === "codex" ? this.env : await providers.environment(id),
+      );
+      signal.throwIfAborted();
+    };
+    const probeProviderForHealth = (
+      id: string,
+      command: readonly [string, ...string[]],
+      signal: AbortSignal,
+    ) =>
+      probeAgent(
+        this.deps.agents,
+        {
+          name: id,
+          command,
+          env: Object.fromEntries(
+            Object.entries(this.env).filter(
+              (entry): entry is [string, string] => entry[1] !== undefined,
+            ),
+          ),
+        },
+        signal,
+      );
+    this.healthOps = {
+      refreshPath: refreshPathForHealth,
+      detectProvider: async (id, signal) => {
+        const command = this.config?.agents[id]?.command;
+        if (!command) throw new Error("Provider command unavailable.");
+        await detectProviderForHealth(id, command, signal);
+      },
+      probeProvider: async (id, signal) => {
+        const command = this.config?.agents[id]?.command;
+        if (!command) throw new Error("Provider command unavailable.");
+        await probeProviderForHealth(id, command, signal);
+      },
+    };
     this.agentSetup = new AgentSetup({
       codex: codexProvider,
       providers: providers.policies,
       command: (id) => this.config?.agents[id]?.command,
       detect: async (id, command, signal) => {
-        if (this.storage.refreshPath) await this.storage.refreshPath(signal);
-        else if (!this.storage.detectAgent)
-          setEnvironmentPath(
-            this.env as NodeJS.ProcessEnv,
-            await desktopPath({ env: this.env, signal }),
-          );
+        await refreshPathForHealth(signal);
         signal.throwIfAborted();
-        if (id === "codex") {
-          const managed = await codexProvider.environment();
-          if (managed.PATH) setEnvironmentPath(this.env as NodeJS.ProcessEnv, managed.PATH);
-        }
-        await (this.storage.detectAgent ?? detectProvider)(
-          id,
-          command,
-          id === "codex" ? this.env : await providers.environment(id),
-        );
-        signal.throwIfAborted();
+        await detectProviderForHealth(id, command, signal);
       },
-      probe: (id, command, signal) =>
-        probeAgent(
-          this.deps.agents,
-          {
-            name: id,
-            command,
-            env: Object.fromEntries(
-              Object.entries(this.env).filter(
-                (entry): entry is [string, string] => entry[1] !== undefined,
-              ),
-            ),
-          },
-          signal,
-        ),
+      probe: probeProviderForHealth,
       save: async (record) => {
         if (!this.storage.preferences.setAgentSetup) throw new Error("Agent setup cannot be saved");
         await this.storage.preferences.setAgentSetup(record);
@@ -3251,6 +3301,8 @@ export class ApplicationHost {
             evidence.query,
             evidence.sources,
             abort.signal,
+            undefined,
+            this.activePrompts()["utility.search-overview"],
           );
           abort.signal.throwIfAborted();
           if (this.database !== database) throw new Error("The database changed. Search again.");
@@ -3869,10 +3921,7 @@ export class ApplicationHost {
           orchestrationAutoApproval: this.orchestrationAutoApproval,
           initialSettings: this.modelDefaults.selections(provider, "orchestrator"),
           promptContext: () =>
-            `${assembleOperatingContract(
-              effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
-                .operatingContract,
-            )}\n\n${this.knowledgeContext(session)}`,
+            `${assembleOperatingContract(this.activePrompts()["contract.operating"])}\n\n${this.knowledgeContext(session)}`,
         },
       );
       this.attachChat(session, chat);
@@ -4039,10 +4088,7 @@ export class ApplicationHost {
           mcpServers: await this.mcpAgentServer(session),
           sessionResources: this.connectorResources("project-chat", this.workspace?.dir),
           promptContext: () =>
-            `${assembleOperatingContract(
-              effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
-                .operatingContract,
-            )}\n\n${this.knowledgeContext(session)}`,
+            `${assembleOperatingContract(this.activePrompts()["contract.operating"])}\n\n${this.knowledgeContext(session)}`,
         },
       );
       this.attachChat(session, chat);
@@ -4068,7 +4114,7 @@ export class ApplicationHost {
               }
             : record,
           events.filter((_, index) => session.checkpoints?.visible(record.id, index) !== false),
-          effectivePrompts(this.config.prompts, this.savedPrompts).handoffSummary,
+          this.activePrompts()["handoff.summary"],
         );
         await chat.handoff(
           record.id,
@@ -4331,21 +4377,10 @@ export class ApplicationHost {
         const task = session.tasks.find((task) => task.id === request.taskId);
         if (!task || task.project !== (this.workspace?.dir ?? null))
           throw new Error("Open this task's project before continuing");
+        const prompt = this.activePrompts()["task.continue"];
         if (!session.restored && session.chat && run?.status === "idle")
-          await this.sendTask(
-            session,
-            "Continue the originating task. Inspect previous evidence and report blockers; do not repeat completed work.",
-            "automatic",
-            task.id,
-          );
-        else
-          await this.continueChat(
-            session,
-            "Continue the originating task. Inspect previous evidence and report blockers; do not repeat completed work.",
-            "automatic",
-            undefined,
-            task.id,
-          );
+          await this.sendTask(session, prompt, "automatic", task.id);
+        else await this.continueChat(session, prompt, "automatic", undefined, task.id);
       } else if (request.type === "send") {
         let deliveredText: string | undefined;
         if (request.command !== undefined) {
@@ -4497,6 +4532,7 @@ export class ApplicationHost {
           first.text,
           reply,
           abort.signal,
+          this.activePrompts()["utility.chat-title"],
         );
         if (!abort.signal.aborted && !session.revoked && !session.title) {
           session.title = title;
@@ -5384,6 +5420,85 @@ export class ApplicationHost {
     });
   }
 
+  healthProviders(): HealthProviderDescriptor[] {
+    return buildProviderDescriptors(
+      this.snapshot(false, true),
+      (id) => this.config?.agents[id]?.command,
+      this.agentSetup.record?.commands,
+    );
+  }
+
+  healthRefreshPath(signal: AbortSignal): Promise<boolean> {
+    return this.healthOps.refreshPath(signal);
+  }
+
+  healthDetectProvider(id: string, signal: AbortSignal): Promise<void> {
+    return this.healthOps.detectProvider(id, signal);
+  }
+
+  healthProbeProvider(id: string, signal: AbortSignal): Promise<void> {
+    return this.healthOps.probeProvider(id, signal);
+  }
+
+  healthRagModelRoot(): string {
+    return this.storage.ragModelRoot ?? "";
+  }
+
+  async healthProjectGitStatuses(): Promise<
+    Array<{
+      id: string;
+      label: string;
+      status: "ready" | "no_commits" | "not_repository" | "error";
+    }>
+  > {
+    const open = this.snapshot(false, true).openProjects ?? [];
+    return Promise.all(
+      open.map(async (project) => {
+        try {
+          const readiness = await this.probeGit(project.path);
+          return {
+            id: project.id,
+            label: basename(project.path),
+            status:
+              readiness.status === "ready" ||
+              readiness.status === "no_commits" ||
+              readiness.status === "not_repository"
+                ? readiness.status
+                : ("error" as const),
+          };
+        } catch {
+          return { id: project.id, label: basename(project.path), status: "error" as const };
+        }
+      }),
+    );
+  }
+
+  async healthMcpSummary(): Promise<{
+    targetCount: number;
+    unavailableProjects: number;
+    recoveryPending: number;
+    issueCount: number;
+  }> {
+    const { targets, unavailableProjects } = await this.mcpTargets();
+    let recoveryPending = 0;
+    let issueCount = 0;
+    for (const target of targets) {
+      try {
+        const read = await this.mcpRead(target.address);
+        recoveryPending += read.pendingRecovery.length;
+        issueCount += read.issues.length;
+      } catch {
+        issueCount++;
+      }
+    }
+    return {
+      targetCount: targets.length,
+      unavailableProjects,
+      recoveryPending,
+      issueCount,
+    };
+  }
+
   async initialDatabaseStatus(): Promise<{ state: "ready" | "not-selected" | "unavailable" }> {
     try {
       const selected = await this.storage.preferences.selection?.();
@@ -5435,6 +5550,7 @@ export class ApplicationHost {
       previous?.close();
       await this.setConfig(config);
       if (previous?.path !== database.path) {
+        await this.terminals.closeDatabaseOwned();
         await this.clearWorkspace();
         this.savedPrompts = this.readPrompts(database);
       }
@@ -5485,9 +5601,10 @@ export class ApplicationHost {
         database.close();
         return;
       }
-      const stopped = await Promise.allSettled(
-        owners.map((owner) => this.projectHost.run(owner, () => this.stopProject())),
-      );
+      const stopped = await Promise.allSettled([
+        this.terminals.closeDatabaseOwned(),
+        ...owners.map((owner) => this.projectHost.run(owner, () => this.stopProject())),
+      ]);
       if (stopped.some((result) => result.status === "rejected"))
         throw new Error(
           "Database replacement stopped because some project work could not be stopped.",
@@ -5716,6 +5833,86 @@ export class ApplicationHost {
     this.changed();
   }
 
+  async openTerminal(value: unknown): Promise<TerminalSessionInfo> {
+    if (this.closing) throw new Error("Application is closing");
+    const request = parseTerminalOpen(value);
+    if (request.target.kind === "relay" || request.target.kind === "relay-worker") {
+      if (!this.relay) throw new Error("Relay is unavailable");
+      const resolved = await this.relay.terminalTarget(
+        request.target.conversationId,
+        request.target.kind === "relay-worker" ? request.target.runId : undefined,
+      );
+      return this.terminals.open(
+        {
+          ...resolved,
+          projectId: null,
+          databaseOwned: false,
+        },
+        request.cols,
+        request.rows,
+      );
+    }
+    if (this.relay || request.target.databaseEpoch !== undefined) {
+      this.assertDatabaseRequest(request.target.databaseEpoch);
+    }
+    const owner = request.target.projectId
+      ? this.projectHost.byId(request.target.projectId)
+      : this.projectHost.current;
+    if (owner.closed) throw new Error("This project is no longer open");
+    const workspace = owner.state.workspace;
+    if (!workspace) throw new Error("Choose a folder first");
+    if (request.target.kind === "project") {
+      return this.terminals.open(
+        {
+          cwd: workspace.dir,
+          label: basename(workspace.dir) || workspace.dir,
+          project: workspace.dir,
+          projectId: owner.id,
+          targetKind: "project",
+          runId: null,
+          databaseOwned: true,
+        },
+        request.cols,
+        request.rows,
+      );
+    }
+    const runId = request.target.runId;
+    let record: { agent: string; worktree?: string | null } | undefined;
+    for (const batch of owner.state.batches.keys()) {
+      const live = batch.runs().find((entry) => entry.id === runId);
+      if (live) {
+        record = { agent: live.agent, worktree: live.worktree };
+        break;
+      }
+    }
+    if (!record) {
+      const listed = owner.state.history.find((entry) => entry.record.id === runId);
+      if (listed) record = { agent: listed.record.agent, worktree: listed.record.worktree };
+    }
+    if (!record) {
+      try {
+        const stored = await workspace.store.read(runId);
+        record = { agent: stored.agent, worktree: stored.worktree };
+      } catch {
+        throw new Error(`Unknown worker run: ${runId}`);
+      }
+    }
+    const label = owner.state.conversations.workers.get(runId)?.label ?? record.agent;
+    return this.terminals.open(
+      {
+        cwd: record.worktree || workspace.dir,
+        label,
+        project: workspace.dir,
+        projectId: owner.id,
+        targetKind: "project-worker",
+        runId,
+        databaseOwned: true,
+      },
+      request.cols,
+      request.rows,
+    );
+  }
+
   projectAction(value: ProjectAction): Promise<void> {
     const request = parseProjectAction(value);
     const owner = this.projectHost.byId(request.projectId);
@@ -5741,6 +5938,7 @@ export class ApplicationHost {
           if (stopped.some((result) => result.status === "rejected"))
             throw new Error("Some project work could not be stopped. The project was kept open.");
           if (request.type === "close") {
+            await this.terminals.closeByProject(owner.id);
             if (this.projectHost.selected === owner) this.relaySelected = true;
             this.projectHost.remove(owner);
             this.projectSessionPaths = this.projectSessionPaths.filter((path) => path !== folder);
@@ -6223,7 +6421,7 @@ export class ApplicationHost {
     const summary = buildHandoffPrompt(
       run.record,
       priorEvents,
-      effectivePrompts(prepared.config.prompts, saved).handoffSummary,
+      effectivePrompts(prepared.config.prompts, saved)["handoff.summary"],
     );
     const emitted: RunEvent[] = [];
     const off = prepared.orchestrator.onEvent((event) => emitted.push(event));
@@ -6519,6 +6717,7 @@ export class ApplicationHost {
           return workspace.store.readEvents(action.id);
         case "discard": {
           if (this.taskOperation) throw new Error("Wait for the task operation to finish");
+          await this.terminals.closeByRun(action.id);
           await this.cancelProjectDiffReads();
           const operationId = randomUUID();
           const began = Date.now();
@@ -7077,6 +7276,7 @@ export class ApplicationHost {
     this.closing = true;
     this.authentication?.beginShutdown();
     const results = await Promise.allSettled([
+      this.terminals.closeAll(true),
       this.connectors
         .close()
         .then(() => this.authentication?.close())
