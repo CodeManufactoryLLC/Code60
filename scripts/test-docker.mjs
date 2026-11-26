@@ -283,7 +283,7 @@ export async function runDockerAcceptance(options, { signal } = {}) {
     assert.equal(JSON.parse(pairingOn).requirePairing, true);
 
     const pairOutput = await docker(["exec", containerName, "code60-gateway", "pair"], { signal });
-    assert.match(pairOutput, new RegExp(`Open ${expectedOrigin.replace(/\./g, "\\.")}`));
+    assert.ok(pairOutput.includes(`Open ${expectedOrigin}`));
     assert.match(pairOutput, /Pairing code \(valid for 60 seconds\): \S+/);
 
     // 6. Verify graceful SIGTERM shutdown exits 0.
