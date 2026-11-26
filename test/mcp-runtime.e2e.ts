@@ -76,7 +76,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     await mkdir(join(fixture.directory, "project"));
     await openProject(page, fixture.directory, "project");
     await apps(page);
-    await expect(page.getByLabel("MCP connection controls")).toContainText("Idle");
+    await expect(page.getByLabel("MCP connection controls")).toContainText("Relay — Idle");
     const before = (await events()).filter((event) => event.event === "spawn").length;
     await page
       .getByRole("button", { name: "Reconnect session servers", exact: true })
@@ -84,6 +84,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
       .click();
     let decision = page.getByRole("dialog", { name: "Reconnect session servers", exact: true });
     await expect(decision).toContainText("fixture");
+    await expect(decision).toContainText("Session: Relay");
     await decision.getByRole("button", { name: "Cancel", exact: true }).click();
     expect((await events()).filter((event) => event.event === "spawn")).toHaveLength(before);
     await page
@@ -114,7 +115,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
       name: `Session ${relayId}`,
       exact: true,
     });
-    await expect(liveSession).toContainText("Active");
+    await expect(liveSession.locator("legend")).toHaveText("Relay — Active");
     await liveSession
       .getByRole("button", { name: "Reconnect session servers", exact: true })
       .click();
@@ -129,7 +130,10 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
       name: "Safe MCP troubleshooting report",
       exact: true,
     });
-    const report = JSON.parse(await troubleshooting.locator("pre").innerText());
+    const reportText = await troubleshooting.locator("pre").innerText();
+    const report = JSON.parse(reportText);
+    expect(reportText).not.toContain("Relay");
+    expect(reportText).not.toContain("project: Chat 1");
     expect(report.configuration).toBe("invalid");
     expect(report.capturedInstances).toBeGreaterThan(0);
     expect(report.connectedInstances).toBeGreaterThan(0);

@@ -229,6 +229,7 @@ export function McpRuntimePanel({
     request: McpRuntimeRequest,
     commit: Omit<Extract<McpRuntimeRequest, { action: "disconnect" | "reconnect" }>, "previewId">,
     title: string,
+    sessionLabel?: string,
   ) => {
     try {
       const current = epoch.current;
@@ -241,9 +242,13 @@ export function McpRuntimePanel({
             previewId: result.previewId,
           },
           title,
-          details: (result.connectors ?? []).map(
-            (connector) => `${connector.id} — captured revision ${connector.revision.slice(0, 12)}`,
-          ),
+          details: [
+            ...(sessionLabel ? [`Session: ${sessionLabel}`] : []),
+            ...(result.connectors ?? []).map(
+              (connector) =>
+                `${connector.id} — captured revision ${connector.revision.slice(0, 12)}`,
+            ),
+          ],
         });
     } catch (cause) {
       setError(
@@ -327,92 +332,97 @@ export function McpRuntimePanel({
               </>
             )}
           </div>
-          {status?.sessions?.map((session) => (
-            <fieldset
-              className="mcp-session"
-              key={session.sessionGeneration}
-              aria-label={`Session ${session.runId}`}
-            >
-              <legend>
-                Session {session.runId.slice(-12)} — {session.idle ? "Idle" : "Active"}
-              </legend>
-              {!session.canReconnect && (
-                <p>
-                  MCP_PROVIDER: This provider cannot load/resume the session. Start a new session to
-                  use a changed configuration. Other available tools remain usable.
-                </p>
-              )}
-              {!session.idle && (
-                <p>
-                  Reconnect waits for an idle turn. Finish or stop the current turn before reviewing
-                  replacement.
-                </p>
-              )}
-              {session.connectors.map((connector) => (
-                <p key={`${connector.targetId}:${connector.id}`}>
-                  {connector.id}: {connector.connection}
-                  {connector.revision !== read.revision
-                    ? " (captured configuration differs from this saved revision)"
-                    : ""}
-                </p>
-              ))}
-              <div className="mcp-actions">
-                <Button
-                  type="button"
-                  disabled={
-                    busy ||
-                    !session.connectors.some(
-                      (connector) =>
-                        (!serverId || connector.id === serverId) &&
-                        connector.connection !== "disconnected",
-                    )
-                  }
-                  onClick={() => {
-                    const connection = {
-                      ...captured,
-                      sessionGeneration: session.sessionGeneration,
-                      serverIds: serverId
-                        ? [serverId]
-                        : session.connectors
-                            .filter((connector) => connector.connection !== "disconnected")
-                            .slice(0, 64)
-                            .map((connector) => connector.id),
-                    };
-                    void preview(
-                      { action: "preview-disconnect", ...connection },
-                      { action: "disconnect", ...connection, requestId: randomId() },
-                      "Disconnect server",
-                    );
-                  }}
-                >
-                  Disconnect server
-                </Button>
-                <Button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    const connection = {
-                      ...captured,
-                      sessionGeneration: session.sessionGeneration,
-                      serverIds: serverId
-                        ? [serverId]
-                        : session.connectors
-                            .filter((connector) => connector.connection !== "disconnected")
-                            .slice(0, 64)
-                            .map((connector) => connector.id),
-                    };
-                    void preview(
-                      { action: "preview-reconnect", ...connection },
-                      { action: "reconnect", ...connection, requestId: randomId() },
-                      "Reconnect session servers",
-                    );
-                  }}
-                >
-                  Reconnect session servers
-                </Button>
-              </div>
-            </fieldset>
-          ))}
+          {status?.sessions?.map((session) => {
+            const sessionLabel = session.label ?? `Session ${session.runId.slice(-12)}`;
+            return (
+              <fieldset
+                className="mcp-session"
+                key={session.sessionGeneration}
+                aria-label={`Session ${session.runId}`}
+              >
+                <legend title={session.runId}>
+                  {sessionLabel} — {session.idle ? "Idle" : "Active"}
+                </legend>
+                {!session.canReconnect && (
+                  <p>
+                    MCP_PROVIDER: This provider cannot load/resume the session. Start a new session
+                    to use a changed configuration. Other available tools remain usable.
+                  </p>
+                )}
+                {!session.idle && (
+                  <p>
+                    Reconnect waits for an idle turn. Finish or stop the current turn before
+                    reviewing replacement.
+                  </p>
+                )}
+                {session.connectors.map((connector) => (
+                  <p key={`${connector.targetId}:${connector.id}`}>
+                    {connector.id}: {connector.connection}
+                    {connector.revision !== read.revision
+                      ? " (captured configuration differs from this saved revision)"
+                      : ""}
+                  </p>
+                ))}
+                <div className="mcp-actions">
+                  <Button
+                    type="button"
+                    disabled={
+                      busy ||
+                      !session.connectors.some(
+                        (connector) =>
+                          (!serverId || connector.id === serverId) &&
+                          connector.connection !== "disconnected",
+                      )
+                    }
+                    onClick={() => {
+                      const connection = {
+                        ...captured,
+                        sessionGeneration: session.sessionGeneration,
+                        serverIds: serverId
+                          ? [serverId]
+                          : session.connectors
+                              .filter((connector) => connector.connection !== "disconnected")
+                              .slice(0, 64)
+                              .map((connector) => connector.id),
+                      };
+                      void preview(
+                        { action: "preview-disconnect", ...connection },
+                        { action: "disconnect", ...connection, requestId: randomId() },
+                        "Disconnect server",
+                        sessionLabel,
+                      );
+                    }}
+                  >
+                    Disconnect server
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      const connection = {
+                        ...captured,
+                        sessionGeneration: session.sessionGeneration,
+                        serverIds: serverId
+                          ? [serverId]
+                          : session.connectors
+                              .filter((connector) => connector.connection !== "disconnected")
+                              .slice(0, 64)
+                              .map((connector) => connector.id),
+                      };
+                      void preview(
+                        { action: "preview-reconnect", ...connection },
+                        { action: "reconnect", ...connection, requestId: randomId() },
+                        "Reconnect session servers",
+                        sessionLabel,
+                      );
+                    }}
+                  >
+                    Reconnect session servers
+                  </Button>
+                </div>
+              </fieldset>
+            );
+          })}
           {decision && (
             <Modal
               footer={

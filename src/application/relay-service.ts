@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   Action,
@@ -229,6 +229,15 @@ export class RelayService {
   }
   knowledgeLiveWorkers(): number {
     return this.task ? this.execution.liveCount(this.task) : 0;
+  }
+  sessionLabel(runId: string): string | undefined {
+    const owner = this.identity?.name ?? "Relay";
+    if (this.chat?.runs()[0]?.id === runId) return owner;
+    const worker = this.currentWorkers().find((entry) => entry.id === runId);
+    if (!worker) return undefined;
+    const name = worker.label?.trim() || worker.provider;
+    const target = basename(worker.target.cwd);
+    return target ? `${owner} worker: ${name} (${target})` : `${owner} worker: ${name}`;
   }
   detailVersion(targetId?: string): number {
     return targetId === undefined

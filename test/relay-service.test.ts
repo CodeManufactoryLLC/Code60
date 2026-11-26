@@ -1262,3 +1262,24 @@ it.each(["stop all", "shutdown"])(
     expect(relay.snapshot().run).toBeNull();
   },
 );
+
+it("labels Relay chat and worker sessions without leaking full filesystem paths", async () => {
+  await connect();
+  const id = required(relay.snapshot().run).id;
+  expect(relay.sessionLabel(id)).toBe("Relay");
+  expect(relay.sessionLabel("unknown-run")).toBeUndefined();
+  await relay.action({ type: "send", id, text: "Check labels" });
+  await vi.waitFor(() => expect(relay.snapshot().run?.status).toBe("idle"));
+  const context = await tool("code60_get_context");
+  const dispatched = await tool("code60_dispatch_agent", {
+    scope: context.scope,
+    requestId: "label-worker",
+    cwd: join(root, "target"),
+    workspaceMode: "direct",
+    label: "Parser fix",
+    prompt: "Check labels",
+  });
+  const workerId = String(dispatched.runId);
+  expect(relay.sessionLabel(workerId)).toBe("Relay worker: Parser fix (target)");
+  expect(relay.sessionLabel(workerId)).not.toContain(root);
+});
