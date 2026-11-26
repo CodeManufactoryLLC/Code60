@@ -37,6 +37,10 @@ it("builds Carbon themes and control foundations without global reset/fonts or e
     "side-nav",
     "icon-indicator",
     "structured-list",
+    "popover",
+    "tooltip",
+    "snippet",
+    "content-switcher",
   ])
     expect(css).toContain(`.carbon-app .cds--${component}`);
   expect(css.indexOf(".carbon-app [hidden]")).toBeGreaterThan(

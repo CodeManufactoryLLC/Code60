@@ -19,7 +19,7 @@ const prompt: PromptTemplateState = {
   fallbackSource: "built-in",
 };
 
-it("starts in the editor with canonical IDs, domain groups, 13 clause sub-IDs, and preview behind a toggle", () => {
+it("renders Carbon controls, alphabetical domain sections, canonical IDs, and 13 clause sub-IDs", () => {
   const html = renderToStaticMarkup(
     <PromptEditorPage
       prompts={[prompt]}
@@ -29,14 +29,40 @@ it("starts in the editor with canonical IDs, domain groups, 13 clause sub-IDs, a
     />,
   );
 
-  expect(html).toContain(">Preview</button>");
+  expect(html).toContain("cds--search");
+  expect(html).toContain("cds--content-switcher");
+  expect(html).toContain("cds--snippet--inline");
+  expect(html).toContain("cds--tag");
+  expect(html).toContain("cds--form");
+  expect(html).toContain("Edit template");
+  expect(html).toContain("Preview");
   expect(html).toContain("<textarea");
   expect(html.match(/<textarea/g)).toHaveLength(13);
   expect(html).toContain("contract.operating");
   expect(html).toContain("All (44)");
   expect(html).toContain("Editable (10)");
   expect(html).toContain("Read-only (34)");
-  for (const domain of PROMPT_DOMAINS) expect(html).toContain(`<span>${domain.label}</span>`);
+  let previousDomainIndex = -1;
+  for (const domain of PROMPT_DOMAINS) {
+    const marker = `<span>${domain.label}</span>`;
+    const index = html.indexOf(marker);
+    expect(index).toBeGreaterThan(previousDomainIndex);
+    previousDomainIndex = index;
+  }
+  const customAssistantIndex = html.indexOf("Custom Assistant wrapper");
+  const operatingContractIndex = html.indexOf(">Operating Contract<");
+  const relayAddendumIndex = html.indexOf("Relay operating addendum");
+  expect(customAssistantIndex).toBeGreaterThan(-1);
+  expect(operatingContractIndex).toBeGreaterThan(customAssistantIndex);
+  expect(relayAddendumIndex).toBeGreaterThan(operatingContractIndex);
+
+  const resetIndex = html.indexOf("Reset to default");
+  const discardIndex = html.indexOf("Discard changes");
+  const saveIndex = html.indexOf(">Save</button>");
+  expect(resetIndex).toBeGreaterThan(-1);
+  expect(discardIndex).toBeGreaterThan(resetIndex);
+  expect(saveIndex).toBeGreaterThan(discardIndex);
+
   for (const clause of OPERATING_CONTRACT_CLAUSE_IDS) {
     expect(html).toContain(`>${OPERATING_CONTRACT_CLAUSES[clause]}</label>`);
     expect(html).toContain(`>${operatingContractClausePromptId(clause)}</code>`);
