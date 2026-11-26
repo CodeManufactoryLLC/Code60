@@ -51,6 +51,8 @@ describe("prompt catalog and canonical IDs", () => {
     expect(new Set(readonly)).toEqual(new Set(READONLY_PROMPT_IDS));
 
     const domains = new Set(PROMPT_DOMAINS.map((domain) => domain.id));
+    const domainLabels = PROMPT_DOMAINS.map((domain) => domain.label);
+    expect(domainLabels).toEqual([...domainLabels].sort((a, b) => a.localeCompare(b)));
     for (const entry of PROMPT_CATALOG) {
       expect(domains.has(entry.domain)).toBe(true);
       expect(entry.id.startsWith(`${entry.domain}.`)).toBe(true);

@@ -15,17 +15,17 @@ import {
 import { TACTIC_SHARED_INSTRUCTIONS, TACTICS } from "./tactics.js";
 
 export const PROMPT_DOMAINS = [
+  { id: "command", label: "Command" },
+  { id: "context", label: "Context" },
   { id: "contract", label: "Contract" },
   { id: "handoff", label: "Handoff" },
-  { id: "context", label: "Context" },
-  { id: "task", label: "Task" },
-  { id: "worker", label: "Worker" },
+  { id: "memory", label: "Memory" },
   { id: "plan", label: "Plan" },
   { id: "review", label: "Review" },
-  { id: "memory", label: "Memory" },
-  { id: "utility", label: "Utility" },
   { id: "tactic", label: "Tactic" },
-  { id: "command", label: "Command" },
+  { id: "task", label: "Task" },
+  { id: "utility", label: "Utility" },
+  { id: "worker", label: "Worker" },
 ] as const;
 
 export type PromptDomain = (typeof PROMPT_DOMAINS)[number]["id"];

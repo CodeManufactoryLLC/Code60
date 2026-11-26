@@ -125,6 +125,10 @@
     @include meta.load-css('@carbon/react/scss/components/modal');
     @include meta.load-css('@carbon/react/scss/components/dialog');
     @include meta.load-css('@carbon/react/scss/components/ui-shell');
+    @include meta.load-css('@carbon/react/scss/components/popover');
+    @include meta.load-css('@carbon/react/scss/components/tooltip');
+    @include meta.load-css('@carbon/react/scss/components/code-snippet');
+    @include meta.load-css('@carbon/react/scss/components/content-switcher');
 
     body { @include type.type-style('body-01'); font-family: inherit; }
     .cds--btn { translate: none; box-shadow: none; white-space: normal; }
@@ -599,6 +603,217 @@
       background: var(--cds-layer-selected-01);
       box-shadow: inset 3px 0 var(--cds-border-interactive);
     }
+    .internal-prompts-page {
+      .prompt-editor-body {
+        grid-template-columns: minmax(19rem, 22rem) minmax(0, 1fr);
+        gap: space.$spacing-07;
+        align-items: start;
+      }
+      @media (min-width: 56.01rem) {
+        .prompt-editor-list {
+          border-inline-end: 1px solid var(--cds-border-subtle-01);
+          padding-inline-end: space.$spacing-05;
+        }
+      }
+      @media (max-width: 56rem) {
+        .prompt-editor-body {
+          grid-template-columns: minmax(0, 1fr);
+          gap: space.$spacing-06;
+        }
+      }
+      .prompt-editor-list {
+        gap: space.$spacing-03;
+      }
+      .prompt-editor-filter {
+        display: flex;
+        flex-direction: column;
+        gap: space.$spacing-03;
+        margin-block-end: space.$spacing-02;
+      }
+      .prompt-editor-mode-switcher .cds--content-switcher-btn {
+        padding-inline: space.$spacing-03;
+      }
+      .prompt-editor-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: space.$spacing-03;
+        padding: space.$spacing-05;
+        background: var(--cds-layer-01);
+        border-block-end: 1px solid var(--cds-border-subtle-01);
+      }
+      .prompt-editor-empty p {
+        @include type.type-style('body-01');
+        color: var(--cds-text-secondary);
+        margin: 0;
+      }
+      .prompt-editor-empty .cds--btn {
+        inline-size: auto;
+      }
+      .prompt-domain-group {
+        display: flex;
+        flex-direction: column;
+        border-block-start: 1px solid var(--cds-border-subtle-01);
+      }
+      .prompt-system-toggle.cds--btn {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        gap: space.$spacing-03;
+        min-block-size: 2.5rem;
+        padding: space.$spacing-03;
+        color: var(--cds-text-primary);
+        @include type.type-style('heading-compact-01');
+      }
+      .prompt-system-toggle svg {
+        inline-size: 1rem;
+        block-size: 1rem;
+        flex: none;
+        color: var(--cds-icon-primary);
+      }
+      .prompt-domain-count {
+        margin-inline-start: auto;
+        @include type.type-style('label-01');
+        color: var(--cds-text-secondary);
+      }
+      .prompt-system-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        padding-inline-start: 0;
+        padding-block-end: space.$spacing-03;
+      }
+      .prompt-system-list[hidden] {
+        display: none;
+      }
+      .prompt-editor-item.cds--btn {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-start;
+        gap: space.$spacing-01;
+        min-block-size: auto;
+        padding: space.$spacing-03 space.$spacing-04 space.$spacing-03 space.$spacing-07;
+        text-align: start;
+        color: var(--cds-text-primary);
+      }
+      .prompt-editor-name {
+        @include type.type-style('body-compact-01');
+        color: var(--cds-text-primary);
+      }
+      .prompt-editor-id {
+        @include type.type-style('code-01');
+        color: var(--cds-text-secondary);
+        word-break: break-all;
+      }
+      .prompt-editor-source {
+        @include type.type-style('label-01');
+        color: var(--cds-text-secondary);
+      }
+      .prompt-editor-source--dirty {
+        color: var(--cds-link-primary);
+      }
+      .prompt-editor-main {
+        max-inline-size: 56rem;
+      }
+      .prompt-detail-header {
+        padding-block-end: space.$spacing-05;
+        margin-block-end: space.$spacing-06;
+        border-block-end: 1px solid var(--cds-border-subtle-01);
+      }
+      .prompt-detail-header h2 {
+        @include type.type-style('heading-03');
+        color: var(--cds-text-primary);
+        margin: 0 0 space.$spacing-03;
+      }
+      .prompt-editor-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: space.$spacing-03;
+        margin: 0;
+      }
+      .prompt-editor-meta .cds--tag {
+        margin: 0;
+      }
+      .prompt-editor-description {
+        @include type.type-style('body-01');
+        color: var(--cds-text-secondary);
+        margin: space.$spacing-04 0 0;
+        max-inline-size: 75ch;
+      }
+      .prompt-editor-view-toggle {
+        display: flex;
+        justify-content: flex-start;
+        margin-block-end: space.$spacing-06;
+      }
+      .prompt-editor-view-switcher {
+        max-inline-size: 18rem;
+      }
+      .prompt-editor-section-heading {
+        @include type.type-style('heading-compact-01');
+        color: var(--cds-text-primary);
+        margin: 0 0 space.$spacing-04;
+      }
+      .prompt-editor-form {
+        display: flex;
+        flex-direction: column;
+        gap: space.$spacing-06;
+      }
+      .prompt-editor-merge-field {
+        max-inline-size: 24rem;
+      }
+      .prompt-editor-clauses {
+        display: flex;
+        flex-direction: column;
+        gap: space.$spacing-06;
+      }
+      .prompt-editor-monospace-textarea .cds--text-area {
+        @include type.type-style('code-02');
+        font-family: var(--mono);
+      }
+      .prompt-editor-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: space.$spacing-04;
+        margin-block-start: space.$spacing-07;
+        padding-block-start: space.$spacing-05;
+        border-block-start: 1px solid var(--cds-border-subtle-01);
+      }
+      .prompt-editor-readonly {
+        display: flex;
+        flex-direction: column;
+        gap: space.$spacing-05;
+      }
+      .prompt-editor-readonly-fields {
+        display: flex;
+        flex-direction: column;
+        gap: space.$spacing-02;
+      }
+      .prompt-editor-fields-heading {
+        @include type.type-style('label-01');
+        color: var(--cds-text-secondary);
+      }
+      .prompt-editor-tag-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: space.$spacing-02;
+      }
+      .prompt-editor-tag-list .cds--tag {
+        margin: 0;
+      }
+      .cds--inline-notification {
+        max-inline-size: 100%;
+      }
+      .cds--snippet--multi {
+        max-inline-size: 100%;
+      }
+      .cds--snippet--multi pre code {
+        font-family: var(--mono);
+      }
+    }
     .search-query-action .cds--search { flex: 1; min-inline-size: 0; }
     .search-page mark { background: var(--cds-highlight); color: var(--cds-text-primary); }
   }
@@ -679,7 +894,12 @@
         .cds--toast-notification__close-button,
         .cds--actionable-notification__close-button,
         .cds--accordion__heading,
-        .cds--accordion__arrow
+        .cds--accordion__arrow,
+        .cds--content-switcher-btn,
+        .cds--snippet--inline,
+        .cds--snippet-container,
+        .cds--copy-btn,
+        .cds--snippet-btn--expand
       ):not([data-invalid], .cds--text-input--invalid, .cds--text-area--invalid) {
       outline: none;
       outline-width: 0;
@@ -724,7 +944,12 @@
     .cds--inline-notification__action-button.cds--btn--ghost:is(:focus, :focus-visible, :active),
     .cds--actionable-notification__action-button.cds--btn--ghost:is(:focus, :focus-visible, :active),
     .cds--action-list .cds--btn--primary:is(:focus, :focus-visible, :active),
-    .cds--batch-summary .cds--btn--primary:is(:focus, :focus-visible, :active) {
+    .cds--batch-summary .cds--btn--primary:is(:focus, :focus-visible, :active),
+    .cds--content-switcher-btn:is(:focus, :focus-visible, :active),
+    .cds--snippet--inline:is(:focus, :focus-visible, :active),
+    .cds--snippet-container:is(:focus, :focus-visible, :focus-within, :active),
+    .cds--copy-btn:is(:focus, :focus-visible, :active),
+    .cds--snippet-btn--expand:is(:focus, :focus-visible, :active) {
       outline: none;
       outline-width: 0;
       outline-color: transparent;
@@ -767,7 +992,8 @@
     a.cds--header__menu-item:is(:focus, :focus-visible, :active),
     a.cds--header__menu-item[aria-current='page']:is(:focus, :focus-visible, :active),
     a.cds--header__menu-item.cds--header__menu-item--current:is(:focus, :focus-visible, :active),
-    .cds--skip-to-content:is(:focus, :focus-visible, :active) {
+    .cds--skip-to-content:is(:focus, :focus-visible, :active),
+    .cds--snippet--inline:is(:focus, :focus-visible, :active) {
       outline: none;
       outline-width: 0;
       outline-color: transparent;
