@@ -36,7 +36,7 @@ Code60 supports **macOS Apple Silicon** (`arm64`) and **Linux `x64`**.
 
 - **macOS:** Requires Apple Silicon (`arm64`).
 - **Linux:** Requires `x64` with `glibc` and `libgomp1`. Per-user background service setup also requires an active user `systemd` session. Alpine (`musl`) and Linux `arm64` remain outside current support.
-- **Software prerequisites:** Requires Node.js 24 (`>=24.22.0 <25` for setup, updates, uninstall, and **Transmission Workflows**), `npm`, Git, and at least one **Agent Provider**.
+- **Software prerequisites:** Requires Node.js 24 (`>=24.22.0 <25` for setup, updates, and uninstall), `npm`, Git, and at least one **Agent Provider**.
 - **Browser access:** Runs in a modern browser on the host machine, or from another device on a private network through **Web Server (Beta)**.
 
 ### Does Code60 support Windows?
@@ -48,13 +48,13 @@ A Windows device can still open Code60's browser interface over a private local 
 ### What are the system requirements for running Code60?
 
 - **Operating system:** **macOS Apple Silicon** (`arm64`) or **Linux `x64`** with `glibc` and `libgomp1`. Linux service enrollment also requires an active user `systemd` session.
-- **Runtime and tools:** Node.js 24 (`>=24.22.0 <25` for setup, updates, uninstall, and **Transmission Workflows**), `npm`, Git, and at least one **Agent Provider**.
+- **Runtime and tools:** Node.js 24 (`>=24.22.0 <25` for setup, updates, and uninstall), `npm`, Git, and at least one **Agent Provider**.
 - **Hardware and power:** Code60 runs local embeddings on the CPU and requires no graphics card. Background scheduling requires an awake machine with an active user login session.
 - **Browser and optional tools:** A modern desktop browser for the interface. Browser automation (`code60_browser`) also requires Chrome on the host machine, plus Microsoft's Playwright Chrome extension for existing-browser mode.
 
 ### What software do I need to run Code60?
 
-- **Core software:** Node.js 24 (`>=24.22.0 <25` for setup, updates, uninstall, and **Transmission Workflows**), `npm`, Git, and a modern web browser.
+- **Core software:** Node.js 24 (`>=24.22.0 <25` for setup, updates, and uninstall), `npm`, Git, and a modern web browser.
 - **Agent Provider:** At least one [Agent Provider](TERMINOLOGY.md#agent-provider). A user can connect an existing command-line interface (CLI) or install a private copy for catalog providers from **Connect → Providers**.
 - **Optional software:** Chrome on the host machine for `code60_browser` web automation (plus Microsoft's Playwright Chrome extension for existing-browser mode). Docker with Compose v2 is only for optional contributor container workflows.
 
@@ -79,13 +79,12 @@ Yes, for local lifecycle management only. The `code60` CLI cannot submit prompts
 
 - **Opening and pairing:** `code60 open` opens the browser interface, and `code60 pairing on|off|status` controls local pairing codes.
 - **Installation and backend service:** `code60 setup`, `code60 status`, `code60 update`, `code60 uninstall`, and `code60 service` manage installation and the per-user Code60 Gateway service.
-- **Workflow sign-in:** `code60 workflows login` opens the internal Codex login flow for **Transmission Workflows**.
 
 ### Does Code60 have a native desktop app?
 
 No. Code60 runs [Code60 Gateway](TERMINOLOGY.md#gateway) (a local Node.js 24 backend) with a React browser interface.
 
-There is no Electron wrapper, native window application, or DMG, DEB, or AppImage installer. Closing or refreshing the browser keeps active agents, **Scheduled Jobs**, and **Transmission Workflows** running in the background.
+There is no Electron wrapper, native window application, or DMG, DEB, or AppImage installer. Closing or refreshing the browser keeps active agents, **Scheduled Jobs**, and **Workflows** running in the background.
 
 ### Does Code60 have a native mobile app?
 
@@ -99,7 +98,7 @@ A phone or tablet on the same private local network can open Code60's browser in
 
 No. Code60 requires no special configuration files, scripts, or dependencies inside a repository. Opening a project never initializes Git or edits repository files automatically.
 
-- **Git repository:** Separate Git worktrees for project workers, **Scheduled Jobs**, and **Transmission Workflows** require a Git repository with at least one commit. Without Git, **Relay** can still target a direct folder explicitly, or a user can run **Set up Git** in Chat.
+- **Git repository:** Separate Git worktrees for project workers, **Scheduled Jobs**, and **Workflows** require a Git repository with at least one commit. Without Git, **Relay** can still target a direct folder explicitly, or a user can run **Set up Git** in Chat.
 - **Optional project config:** A user can optionally create `.code60/mcp.json` inside a repository for project-scope MCP servers. Git run records stay inside `<git-common-dir>/code60/runs/` without touching repository source files.
 
 ### Does Code60 automatically delete worktrees?
@@ -107,7 +106,7 @@ No. Code60 requires no special configuration files, scripts, or dependencies ins
 No. Code60 never deletes Git worktrees automatically.
 
 - **Normal lifecycle events:** Finishing, cancelling, or stopping a run leaves existing worktrees intact. Closing the browser, stopping or restarting Code60 Gateway, updating Code60, or running `code60 uninstall` or `code60 service uninstall` also keeps them on disk.
-- **Scheduled Jobs and Transmission Workflows:** Worktrees from **Scheduled Jobs** and **Transmission Workflows** stay on disk. A user can inspect changes and diffs with normal Git tools.
+- **Scheduled Jobs and Workflows:** Worktrees from **Scheduled Jobs** and **Workflows** stay on disk. A user can inspect changes and diffs with normal Git tools.
 - **Manual removal:** For an inactive run, open its actions menu (for example, in **Apps → Data Viewer**) and choose **Delete worktree**. Code60 blocks removal while the run or its agent process remains active.
 - **Confirmation and history:** Before removing a worktree and its run branch, Code60 shows a confirmation dialog. That dialog lists the worktree path, branch, and every file with edits that removal erases. After removal, the session record stays visible as inactive.
 
@@ -119,19 +118,19 @@ Code60 keeps all application data locally on the host machine. New run directori
 
 - **Databases:** Project history, configurations, **Internal Prompts** edits, and `$` commands live in SQLite (default `$XDG_DATA_HOME/code60/databases/default.sqlite`). Application memory uses a separate private `memory.sqlite`.
 - **Run records and transcripts:** Runs write `run.json` and `events.jsonl` under `<git-common-dir>/code60/runs/`, `$XDG_STATE_HOME/code60/dirs/<key>/runs/`, or `.code60_workspace/` beside the database. Code60 does not automatically scrub or expire transcripts.
-- **Configuration, workflows, and logs:** MCP files live at `$XDG_CONFIG_HOME/code60/mcp.json` and `<project>/.code60/mcp.json`, and **Transmission Workflows** state lives under `$XDG_STATE_HOME/code60/workflows`. Diagnostic logs under `$XDG_STATE_HOME/code60/logs` carry a 7-day, 20 MiB cap.
+- **Configuration, workflows, and logs:** MCP files live at `$XDG_CONFIG_HOME/code60/mcp.json` and `<project>/.code60/mcp.json`, and **Workflows** state lives under `$XDG_STATE_HOME/code60/workflows`. Diagnostic logs under `$XDG_STATE_HOME/code60/logs` carry a 7-day, 20 MiB cap.
 - **Credentials:** Provider logins stay in each provider's own backend-user storage. MCP secrets stay in macOS Keychain, Linux Secret Service, or explicit temporary backend memory.
 
 ### How much disk space does a Code60 installation use?
 
-A base installation typically uses about **400 MB to 1 GB**, depending on platform, private provider installs, and workflow engines. Total usage grows over time with Git worktrees and local transcripts.
+A base installation typically uses about **400 MB to 1 GB**, depending on platform and private provider installs. Total usage grows over time with Git worktrees and local transcripts.
 
 | Component | Typical size or limit | Notes |
 | --- | --- | --- |
-| **Typical base total** | **About 400 MB to 1 GB** | Covers app files, local embeddings, and optional private providers or engines. |
+| **Typical base total** | **About 400 MB to 1 GB** | Covers app files, local embeddings, and optional private providers. |
 | Local embedding model | About 164 MB | Local INT8 weights for offline embeddings. |
 | Embedding runtime dependencies | About 125 MB (macOS Apple Silicon) | Total with model is about 290 MB before other app files. |
-| Private provider installs and workflow engines | Varies by provider | Lives under `~/.local/share/code60/providers/` and `$XDG_DATA_HOME/code60/engines`. |
+| Private provider installs | Varies by provider | Lives under `~/.local/share/code60/providers/`. |
 | Git worktrees | Varies by repository | Code60 never deletes worktrees automatically. |
 | Conversation transcripts | No automatic limit | Local `events.jsonl` and **Relay** journals never expire automatically. |
 | Request checkpoints | Up to 256 MiB per chat | Keeps up to 100 prior requests per chat. |
@@ -151,7 +150,7 @@ Size figures reflect macOS Apple Silicon measurements for Code60 `v0.4.1` on `20
 - **When off:** Each new ACP request waits in the requesting conversation for a human to choose **Allow once** or **Deny**. The **Workspace** approval count opens a waiting conversation, including a project chat in the archive.
 - **Live changes:** The toggle remains available during a turn and applies to new ACP requests in live and future sessions. Any request already waiting for review still needs a human answer after switching auto-approval back on.
 - **Harness mode:** **Code60 auto-approval** operates separately from **Harness mode**. Choosing an Ask mode on a provider harness leaves **Code60 auto-approval** on. Any sandboxing depends on that provider harness.
-- **Other run types and limits:** Manual runs, **Scheduled Jobs**, and **Transmission Workflows** keep separate permission policies. ACP permissions do not create an operating-system sandbox and cannot block actions an agent takes without requesting approval.
+- **Other run types and limits:** Manual runs, **Scheduled Jobs**, and **Workflows** keep separate permission policies. ACP permissions do not create an operating-system sandbox and cannot block actions an agent takes without requesting approval.
 
 ### Does Code60 provide a sandbox for my agents?
 
@@ -175,7 +174,7 @@ Code60 leaves sandbox rules and enforcement to each [Agent Provider](TERMINOLOGY
 
 - **Harness mode forwarding:** Code60 shows any **Harness mode** options an **Agent Provider** offers over ACP and forwards the user's choice. The harness determines what each mode does, including any sandbox behavior.
 - **Separate from Code60 auto-approval:** **Code60 auto-approval** only answers ACP permission requests. Switching it on or off does not change a provider's operating-system sandbox. Choosing an Ask mode on the harness also leaves **Code60 auto-approval** on.
-- **Transmission Workflows:** In **Transmission Workflows**, the internal Codex harness owns execution permissions and any sandbox rules it applies.
+- **Workflows:** Each **Workflow** runs on the active **Agent Provider** the user selects, and that provider's harness owns any sandbox rules it applies.
 
 ### What security measures does Code60 take?
 
@@ -233,7 +232,7 @@ Code60 is free and open-source under the [Apache License, Version 2.0](LICENSE).
 Code60 does not bill for tokens, and actual usage depends on the active **Agent Provider** and models. Total token usage balances extra upfront coordination against potential net savings on complex, multi-step tasks.
 
 - **Upfront cost versus net savings:** Running an orchestrator alongside workers in Code60's [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture) adds upfront tokens for instructions, tools, and updates. On complex, long-trajectory tasks, narrow worker contexts, plan review, and independent verification can reduce drift and rework. That higher reliability may reduce net token usage across the full task.
-- **Parallel runs and workflows:** Running multiple workers in parallel increases immediate token usage. **Transmission Workflows** also spend tokens on independent verification, repair passes, and fresh-session retries.
+- **Parallel runs and workflows:** Running multiple workers in parallel increases immediate token usage. **Workflows** also spend tokens on independent verification, repair passes, and fresh-session retries.
 - **Optional helper features:** Active **Memory** extraction, **Search** overviews, **Create with prompt** drafting, and automatic context handoffs send relevant context to the active provider. Turning **Memory** off stops memory extraction and recall.
 - **Cost control and visibility:** The composer footer shows live context usage whenever the provider reports it. The **Model** picker lets a user set separate model and reasoning defaults for orchestrators and workers.
 
@@ -281,7 +280,7 @@ Yes. Code60 applies per-feature concurrency limits alongside the host machine's 
 - **Interactive workers:** Each orchestration conversation (such as **Relay**, a **Custom Assistant**, or a project chat) defaults to **4** simultaneous workers (`maxParallel` in `config.json`). Idle workers still hold a slot while their process stays alive. Finishing or stopping an idle worker frees its slot.
 - **Adjusting worker slots:** A user can raise `maxParallel` to any positive integer in `config.json`. Manual multi-copy runs cap at **32** copies per batch.
 - **Scheduled Jobs:** At most **1** job from **Scheduled Jobs** runs globally at a time.
-- **Workflows:** **Code60 Transmission Server** allows at most **1** active **Workflow** per source repository checkout at a time. A workflow whose start or stop still awaits confirmation also holds that slot until a user resolves it.
+- **Workflows:** **Code60 Gateway** allows at most **1** active **Workflow** per source repository checkout at a time. A workflow whose start or stop still awaits confirmation also holds that slot until a user resolves it.
 - **Custom Assistants:** Code60 supports up to **64** **Custom Assistants** application-wide.
 - **Hardware and provider limits:** Running many agents at once still depends on local CPU, memory, and each **Agent Provider's** own rate limits.
 
@@ -328,11 +327,11 @@ Code60 neither triggers nor blocks an [Agent Provider's](TERMINOLOGY.md#agent-pr
 
 ### What is the difference between Plans and Workflows?
 
-**Plans** guide interactive chat orchestration on [Code60 Gateway](TERMINOLOGY.md#gateway), while [Workflows](TERMINOLOGY.md#workflow) run standalone multi-task coding runs on [Code60 Transmission Server](TERMINOLOGY.md#transmission-server).
+**Plans** guide interactive chat orchestration in [Code60 Gateway](TERMINOLOGY.md#gateway), while [Workflows](TERMINOLOGY.md#workflow) run standalone multi-task coding runs inside **Code60 Gateway**.
 
-- **Execution engine and providers:** **Plans** run inside chat (**Relay**, **Custom Assistants**, or project chats) with any active **Agent Provider**. **Workflows** run on **Code60 Transmission Server** using Code60's internal Codex runtime and separate `code60 workflows login` authentication.
+- **Execution and providers:** Both **Plans** and **Workflows** run on any active **Agent Provider** through ACP. **Plans** run inside chat (**Relay**, **Custom Assistants**, or project chats), while **Workflows** run under **Develop → Workflows** with a per-workflow provider choice.
 - **Structure and verification:** A **Plan** is an optional task list that an orchestrator revises in chat and executes by dispatching interactive Code60 workers. A **Workflow** defines up to 100 sequential tasks with independent verification criteria, optional check commands, and automatic repair and retry limits.
-- **Changes and lifecycle:** **Plans** integrate worker edits with message-level **Undo** and stop if **Code60 Gateway** stops. **Workflows** keep all edits inside a separate Git worktree without automatic apply or **Undo**, and continue running even after stopping **Code60 Gateway**.
+- **Changes and lifecycle:** **Plans** integrate worker edits with message-level **Undo**, while **Workflows** keep all edits inside a separate Git worktree without automatic apply or **Undo**. Both continue running after closing the browser and pause or stop when **Code60 Gateway** stops.
 
 ### Do Plans use my Agent Provider's planning feature?
 
@@ -441,7 +440,7 @@ Yes, through any agent that supports local models. Code60 does not run local lan
 
 - **Through a harness:** A user can run local models when an ACP harness, such as **OpenCode**, points to a local model server. Code60's **Model** picker shows the models that active harness reports.
 - **External setup:** Code60's in-app setup flows cover official cloud sign-ins only. Configuring a harness to call a local model server happens outside Code60 in that harness's own configuration.
-- **Transmission Workflows:** **Transmission Workflows** run only on their Codex runtime and do not support alternate or local model providers.
+- **Workflows:** **Workflows** support any active **Agent Provider** from **Connect → Providers**, including harnesses that call local model servers.
 - **Local embeddings:** Separately from coding agents, Code60 runs its own embedding model offline on the CPU without a graphics card or external service.
 
 ### Does Code60 use my Agent Provider's existing repository skills?
@@ -456,7 +455,7 @@ Yes in the worker layer, **Scheduled Jobs**, and **Workflows**, where each **Age
 Yes, through each **Agent Provider**. Code60 does not read provider skill files directly, and it does not disable user-level skills during normal sessions.
 
 - **Host environment:** Code60 launches **Agent Providers** with the backend user's normal home directory (`HOME`). Both orchestrators and workers receive whatever user-level skills and configuration that provider normally loads from the user's home directory.
-- **Containers and custom paths:** The optional Linux development container gives each worktree its own private provider home volume separate from the host home directory. **Workflows** use the backend user's Codex home (or an explicit `CODEX_HOME` path).
+- **Containers and custom paths:** The optional Linux development container gives each worktree its own private provider home volume separate from the host home directory. **Workflows** use the same provider environment as interactive sessions.
 
 ---
 
@@ -479,7 +478,6 @@ Code60 connects to Codex through ACP. It never asks for a ChatGPT password and n
 - **Existing CLI:** If Codex already exists on the machine with an active login, select **Codex** under **Connect → Providers** to verify and connect it.
 - **In-app installation:** Choose **Install Codex and sign in** or **Sign in to Codex**. Installation puts `@openai/codex@0.171.0` in `~/.local/share/code60/providers/codex/0.171.0` without replacing an existing CLI.
 - **Device-code sign-in:** Copy the device code on screen, open `https://auth.openai.com/codex/device`, and authorize with a ChatGPT account. ChatGPT security settings must allow device-code login. Keep setup open until ACP verification finishes and shows "Connected."
-- **Transmission Workflows:** Workflows use a separate Codex runtime that ships with Code60. Run `code60 workflows login` in an interactive terminal to authenticate workflows separately.
 - **Storage and limits:** Codex keeps credentials in its normal backend-user storage. Users manage API keys, account switching, logout, and custom launch commands outside Code60.
 
 ## Kiro

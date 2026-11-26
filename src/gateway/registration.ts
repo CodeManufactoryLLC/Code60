@@ -1,7 +1,7 @@
 import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { prepareOfflineWorkflowsForUninstall } from "../application/index.js";
+import { verifyOfflineWorkflowsIdleForUninstall } from "../application/index.js";
 import { automationClient, schedulerControl } from "../automation/index.js";
 import { CODE60_VERSION } from "../core/index.js";
 import {
@@ -196,7 +196,6 @@ export async function backendControl(
     join(root, "registration-operation"),
     removal ? { reclaimStale: false } : {},
   );
-  let enginePids: number[] = [];
   try {
     if (JSON.stringify(await registration(env)) !== JSON.stringify(saved))
       throw new Error("Backend registration changed. Check status before retrying.");
@@ -211,10 +210,7 @@ export async function backendControl(
         throw new Error("Backend absence could not be verified; preserve the installation");
       await requireNoResponder(env);
       if (removal.pid !== null) await waitForRuntimeExit([removal.pid]);
-      ({ enginePids } = await prepareOfflineWorkflowsForUninstall(
-        env,
-        AbortSignal.timeout(85_000),
-      ));
+      await verifyOfflineWorkflowsIdleForUninstall(env, AbortSignal.timeout(85_000));
       const stillAbsent = await inspectUserService(existing);
       if (
         stillAbsent.state !== "stopped" ||
@@ -225,12 +221,11 @@ export async function backendControl(
       await requireNoResponder(env);
       return {
         installed: false,
-        enginePids,
         removal: await captureRemovalServiceProof(
           userHome(env),
           root,
           runtime,
-          [...enginePids, ...(removal.pid === null ? [] : [removal.pid])],
+          removal.pid === null ? [] : [removal.pid],
           { inspect: inspectUserService, exited: waitForRuntimeExit },
         ),
       };
@@ -314,10 +309,7 @@ export async function backendControl(
           throw new Error("Backend stop is uncertain; preserve the installation");
         await requireNoResponder(env);
         if (removal.pid === null) {
-          ({ enginePids } = await prepareOfflineWorkflowsForUninstall(
-            env,
-            AbortSignal.timeout(85_000),
-          ));
+          await verifyOfflineWorkflowsIdleForUninstall(env, AbortSignal.timeout(85_000));
           const stillStopped = await inspectUserService(existing);
           if (stillStopped.state !== "stopped" || stillStopped.pid)
             throw new Error(
@@ -366,12 +358,11 @@ export async function backendControl(
       installed: action !== "uninstall",
       ...(removal
         ? {
-            enginePids,
             removal: await captureRemovalServiceProof(
               userHome(env),
               root,
               runtime,
-              [...enginePids, ...(removal.pid === null ? [] : [removal.pid])],
+              removal.pid === null ? [] : [removal.pid],
               { inspect: inspectUserService, exited: waitForRuntimeExit },
             ),
           }

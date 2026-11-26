@@ -15,7 +15,6 @@ import {
   parseKnowledge,
   parseValue,
 } from "../bridge/index.js";
-import { workflowHostSupported } from "../platform/index.js";
 
 export type KnowledgeCaller =
   | { kind: "relay"; conversationId: string; generation: number }
@@ -320,11 +319,12 @@ export class DesktopKnowledge {
       reason = "Project workers require Git readiness with an initial commit.";
       action = "Set up Git from Chat, then continue explicitly.";
     } else if (cap.id === "workflows") {
-      status = "available";
-      reason = workflowHostSupported()
-        ? "New workflows support pause and resume; staging.18 history stays on its original engine. Workflow engine launch uses bundled pinned engines with recorded Node >=24.22 <25 and separate Codex login/configuration (code60 workflows login), without runtime npm downloads or compilation; prompt drafting requires a verified primary provider."
-        : "Workflow history is readable; Transmission execution requires macOS Apple Silicon or Linux x64 with glibc. Prompt drafting requires a verified primary provider.";
-      action = "Open Apps → Workflows.";
+      status = state.providers.length > 0 ? "available" : "blocked";
+      reason =
+        state.providers.length > 0
+          ? "Ordered multi-task workflows run natively inside the Code60 backend using your verified providers in isolated Git worktrees, with pause, resume, steering, and diff inspection."
+          : "Verify at least one provider before starting or drafting workflows; saved history remains readable.";
+      action = state.providers.length > 0 ? "Open Apps → Workflows." : "Open Apps → Providers.";
     } else if (cap.id === "system-manager") {
       reason =
         "The browser shows scheduler health on Services and active interactive terminal sessions with their associated project on Terminals. Local code60 service commands manage the unified macOS/Linux login backend; awareness never probes or controls services or terminals.";

@@ -292,13 +292,10 @@ describe("FAQ and Terminology freshness", () => {
     expect(contextSection).toContain(MEMORY_LIMITS.capacity.toLocaleString("en-US"));
   });
 
-  it("uses short headings and Code60-prefixed body names for Gateway and Transmission Server", () => {
+  it("uses a short heading and Code60-prefixed body name for Gateway", () => {
     const gateway = sectionBody(terminology, "## Gateway");
-    const transmission = sectionBody(terminology, "## Transmission Server");
     expect(terminology).not.toContain("## Code60 Gateway");
-    expect(terminology).not.toContain("## Code60 Transmission Server");
     expect(gateway).toContain("Code60 Gateway");
-    expect(transmission).toContain("Code60 Transmission Server");
   });
 
   it("enforces Refreshingly Simple English mechanical hygiene in FAQ.md and TERMINOLOGY.md", () => {

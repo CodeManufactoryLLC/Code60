@@ -63,25 +63,11 @@ same commit and verify bootstrap size/integrity. Keep release visibility private
 this phase neither uploads release assets nor publishes npm packages. Real native
 login lifecycle validation remains a later, separately isolated release gate.
 
-## Bundled workflow validation
+## Native workflow validation
 
-macOS packaging must use the committed Transmission dependency lock and its exact
-staging.18/staging.20 artifacts. Review recorded engine integrities, native Codex
-hash/version, Node and dependency inventory alongside the payload descriptor.
-Keep native helpers from incompatible Transmission checkouts out of this build.
-Linux payload validation must reject unsupported engine components.
-
-After native packaging, run `npm run test:transmission`. The manual Apple Silicon
-workflow retains its traces, screenshots, original-key/run recovery and process
-cleanup evidence with the ordinary browser, setup and package checks. It uses
-real pinned engines/ACP/Codex and a fake external model endpoint, with runtime
-npm/npx/compiler traps. The isolated model fixture disables unrelated remote
-plugin discovery; product runtime defaults are unchanged. Retain published engine
-bindings and old executable caches
-across app replacement; never delete workflow state to force a new runtime.
-The native update journey requires the freshly built macOS payload and retains
-the approved engine/worker processes through an actual managed update before
-completing the original workflow and comparing its source Git state.
+Workflows run natively inside Code60 Gateway using Code60's verified ACP providers
+and local `node:sqlite`; payloads must not contain any bundled external engine
+directory under `dist/engines/`.
 The [native workflow](.github/workflows/native-tests.yml) builds and tests one
 payload, then hands it to separate jobs for managed update, retained/restart
 regressions and each complete application update journey. Each consumer verifies

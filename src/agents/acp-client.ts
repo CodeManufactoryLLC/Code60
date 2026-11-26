@@ -14,6 +14,7 @@ import { SessionStateTracker } from "./session-state.js";
 import type { AgentMcpServer } from "./types.js";
 import {
   type AgentUpdate,
+  type PermissionAnswer,
   type PermissionHandler,
   type RawAcpUpdate,
   type StopReason,
@@ -151,8 +152,14 @@ export function mapUpdate(
     case "agent_message_chunk":
     case "agent_thought_chunk": {
       if (update.content.type !== "text") return undefined;
-      const type = update.sessionUpdate === "agent_message_chunk" ? "message" : "thought";
-      return { type, text: update.content.text };
+      if (update.sessionUpdate === "agent_message_chunk") {
+        return {
+          type: "message",
+          text: update.content.text,
+          ...(update.messageId !== undefined ? { messageId: update.messageId } : {}),
+        };
+      }
+      return { type: "thought", text: update.content.text };
     }
     case "tool_call": {
       const call: KnownToolCall = {
@@ -321,7 +328,7 @@ async function connectSession(
       pendingPermissions.add(controller);
       try {
         const { toolCall } = params;
-        const answer = await new Promise<"allow" | "deny" | undefined>((resolve, reject) => {
+        const answer = await new Promise<PermissionAnswer | undefined>((resolve, reject) => {
           controller.signal.addEventListener("abort", () => resolve(undefined), { once: true });
           (permissionHandler as PermissionHandler)(
             {
@@ -339,8 +346,12 @@ async function connectSession(
           ).then(resolve, reject);
         });
         if (answer === undefined || controller.signal.aborted) return CANCELLED;
-        const wanted = answer === "allow" ? "allow_once" : "reject_once";
-        const option = params.options.find((o) => o.kind === wanted);
+        const option =
+          typeof answer === "object"
+            ? params.options.find((o) => o.optionId === answer.optionId)
+            : params.options.find(
+                (o) => o.kind === (answer === "allow" ? "allow_once" : "reject_once"),
+              );
         if (option === undefined) return CANCELLED;
         return { outcome: { outcome: "selected" as const, optionId: option.optionId } };
       } finally {

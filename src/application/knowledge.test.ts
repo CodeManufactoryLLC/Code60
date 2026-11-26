@@ -755,37 +755,39 @@ it("invalidates a discovered file view when its panel subscription or visibility
   }
 });
 
-it("describes workflow drafting and execution prerequisites without starting the engine", async () => {
-  const { knowledge, reads } = setup({ database: null, providers: [] });
-  const capabilities = result(
-    await knowledge.call("code60_get_capabilities", { query: "Workflows" }, relay),
+it("describes workflow drafting and execution prerequisites without starting execution", async () => {
+  const { knowledge: blocked, reads: blockedReads } = setup({ database: null, providers: [] });
+  const blockedCaps = result(
+    await blocked.call("code60_get_capabilities", { query: "Workflows" }, relay),
   );
-  expect(capabilities.entries).toContainEqual(
+  expect(blockedCaps.entries).toContainEqual(
+    expect.objectContaining({
+      id: "workflows",
+      availability: expect.objectContaining({
+        status: "blocked",
+        reason: expect.stringContaining("Verify at least one provider"),
+      }),
+    }),
+  );
+  expect(blockedReads).toEqual([]);
+
+  const { knowledge: ready, reads: readyReads } = setup({
+    database: null,
+    providers: ["claude"],
+  });
+  const readyCaps = result(
+    await ready.call("code60_get_capabilities", { query: "Workflows" }, relay),
+  );
+  expect(readyCaps.entries).toContainEqual(
     expect.objectContaining({
       id: "workflows",
       availability: expect.objectContaining({
         status: "available",
-        reason: expect.stringContaining(
-          ["darwin-arm64", "linux-x64"].includes(`${process.platform}-${process.arch}`)
-            ? "support pause and resume"
-            : "history is readable",
-        ),
+        reason: expect.stringContaining("pause, resume, steering, and diff inspection"),
       }),
     }),
   );
-  if (["darwin-arm64", "linux-x64"].includes(`${process.platform}-${process.arch}`)) {
-    expect(capabilities.entries).toContainEqual(
-      expect.objectContaining({
-        id: "workflows",
-        availability: expect.objectContaining({
-          reason: expect.stringMatching(
-            /bundled pinned engines.*separate Codex login\/configuration.*without runtime npm downloads/,
-          ),
-        }),
-      }),
-    );
-  }
-  expect(reads).toEqual([]);
+  expect(readyReads).toEqual([]);
 });
 
 it("describes human MCP authentication prerequisites without exposing definitions or credentials", async () => {

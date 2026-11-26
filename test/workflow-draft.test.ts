@@ -4,7 +4,7 @@ import { FakeAgents } from "./fakes.js";
 
 const spec = { name: "fake", command: ["fake"] as [string], cwd: "/private-workflow" };
 it("generates a validated clarification without tools or execution authority", async () => {
-  let permission: Promise<string> | undefined;
+  let permission: Promise<unknown> | undefined;
   const agents = new FakeAgents((_, session) => {
     permission = session.requestPermission({ toolCallId: "edit", title: "Edit", kind: "edit" });
     session.update({ type: "thought", text: "not draft content" });

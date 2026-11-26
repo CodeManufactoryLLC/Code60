@@ -15,8 +15,6 @@ import {
   openProjectDatabase,
   prepareCodexEnvironment,
   providerAgents,
-  type TransmissionClient,
-  type TransmissionRemovalPorts,
 } from "../application/index.js";
 import { startSchedulerRuntime } from "../automation/index.js";
 import {
@@ -77,8 +75,6 @@ export interface GatewayOptions {
   providerDownload?: typeof import("../application/index.js").ProviderDownload;
   /** Trusted host composition only; browser/CLI requests cannot select a PATH. */
   refreshPath?: (signal: AbortSignal) => Promise<void>;
-  workflowClients?: { current: TransmissionClient; legacy: TransmissionClient };
-  workflowRemoval?: TransmissionRemovalPorts;
 }
 const json = (value: unknown) => JSON.stringify(value ?? null);
 async function body(request: IncomingMessage): Promise<unknown> {
@@ -163,7 +159,7 @@ export async function startGateway(options: GatewayOptions = {}) {
   let quiescing = false;
   let preparingUninstall = false;
   let uninstallPrepared = false;
-  let uninstallProof: { quiescent: true; pid: number; enginePids: number[] } | undefined;
+  let uninstallProof: { quiescent: true; pid: number } | undefined;
   let stopped: Promise<void> | undefined;
   let shutdownRequested = false;
   let transferring = false;
@@ -283,14 +279,16 @@ export async function startGateway(options: GatewayOptions = {}) {
       },
     },
   );
+  const workflowBaseDeps = options.deps ?? defaultDeps();
   const workflows = new DesktopWorkflows(
     env,
-    options.deps ?? defaultDeps(),
+    { ...workflowBaseDeps, agents: providerAgents(workflowBaseDeps.agents, env) },
     () => interactions.pick("folder"),
     (input, signal) => application.draftWorkflow(input, signal),
-    options.workflowClients?.current,
-    options.workflowClients?.legacy,
-    options.workflowRemoval,
+    {
+      list: () => application.workflowProviders(),
+      resolve: (providerId, cwd) => application.resolveWorkflowProvider(providerId, cwd),
+    },
   );
   const startedAt = new Date().toISOString();
   const healthCheck = new HealthCheckService({
@@ -339,7 +337,6 @@ export async function startGateway(options: GatewayOptions = {}) {
         recentFailedCount,
       };
     },
-    transmissionHealth: (signal) => workflows.inspectTransmissionHealth(signal),
     providers: () => application.healthProviders(),
     refreshPath: (signal) => application.healthRefreshPath(signal),
     detectProvider: (id, signal) => application.healthDetectProvider(id, signal),
@@ -366,7 +363,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     if (
       await interactions.confirm(
         "stop-backend",
-        "Interactive agents and scheduled jobs will stop. Approved Transmission workflows keep running; use Apps → Workflows to stop them. History and worktrees are kept. Start Code60 again with code60 service start.",
+        "Interactive agents, scheduled jobs, and active workflows will stop. Unfinished workflows resume when Code60 restarts. History and worktrees are kept. Start Code60 again with code60 service start.",
       )
     )
       shutdownRequested = true;
@@ -880,8 +877,7 @@ export async function startGateway(options: GatewayOptions = {}) {
   server.requestTimeout = 30_000;
   server.headersTimeout = 10_000;
   async function prepareUninstall() {
-    if (uninstallPrepared && uninstallProof)
-      return { ...uninstallProof, enginePids: [...uninstallProof.enginePids] };
+    if (uninstallPrepared && uninstallProof) return { ...uninstallProof };
     if (preparingUninstall || quiescing || changingPairing || transferring)
       throw Error("Backend is busy; finish current changes before uninstalling");
     preparingUninstall = true;
@@ -889,7 +885,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     const releases: (() => Promise<void>)[] = [];
     let shutdownStarted = false;
     let failure: unknown;
-    let result: { quiescent: true; pid: number; enginePids: number[] } | undefined;
+    let result: { quiescent: true; pid: number } | undefined;
     try {
       if (!scheduler || schedulerError)
         throw Error("Scheduler ownership is unavailable; preserve state before uninstalling");
@@ -899,15 +895,12 @@ export async function startGateway(options: GatewayOptions = {}) {
       // Existing human operations can settle before reservation; new browser
       // requests are blocked only once all execution owners have granted it.
       quiescing = true;
-      const engines = await workflows.prepareUninstall(signal);
-      for (const engine of engines) await engine.stop(signal);
       signal.throwIfAborted();
       shutdownStarted = true;
       await quiesce();
       result = {
         quiescent: true,
         pid: process.pid,
-        enginePids: [...new Set(engines.flatMap((engine) => [...engine.pids]))],
       };
     } catch (error) {
       failure = error;

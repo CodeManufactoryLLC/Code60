@@ -95,8 +95,6 @@ Code60-managed user storage; it cannot select packages, commands or destinations
   It may also import agents through its index to compose MCP connector transports
   and inject them into application. Application does not depend on agents.
 - management parses the narrow code60 setup/status/update/uninstall/open/service/pairing CLI and calls gateway/platform APIs.
-  Its fixed workflows login command delegates provider authentication to the
-  preserved Codex CLI in an interactive terminal, without starting an engine.
   It offers no run, prompt or agent-command execution interface.
 - automation retains its separate scheduler policy/store and an internal legacy protocol
   adapter. Only the gateway is installed as a production service.
@@ -197,14 +195,11 @@ Temporary idle reservations fence application actions, workflow preparation and
 scheduler claims on their owning queues without changing saved schedules or pause
 state. Releasing a reservation never reopens an owner that has begun shutdown.
 The private, payload-free `prepare-uninstall` operation composes all three idle
-reservations before stopping engines and quiescing the backend. Pending application
-or workflow actions refuse preparation promptly, including human dialogs. Native
-engine inspection uses the pinned SQLite schema read-only, never the restart-capable
-engine constructor. The two macOS versions and Linux 0.1.1 must have terminal, matching saved ownership;
-fixed authenticated health/stop operations and native process/file inspection prove
-exit. Inspection never starts an engine. Ordinary shutdown and application updates
-continue to preserve independent engines. This private operation grants no file
-removal authority; installed management separately verifies consent and installation ownership.
+reservations before quiescing the backend. Pending application or workflow
+actions refuse preparation promptly, including human dialogs. Offline uninstall
+inspection reads strict saved workflow registry evidence without mutating state
+or launching agents. This private operation grants no file removal authority;
+installed management separately verifies consent and installation ownership.
 Linux proves process identity and open-file absence through bounded kernel procfs
 reads, binding exact NUL-separated argv to the canonical Node inode, UID and boot/start
 identity. macOS retains fixed ps/lsof inspection.
@@ -656,49 +651,36 @@ imports are permitted.
 
 ## Non-goals
 
-### Approved Transmission workflows
+### Approved native workflows
 
-Apps → Workflows is a database-independent execution interface using
-`code60-transmission-server@0.1.0-staging.20` for new macOS approvals or `0.1.1` for new Linux x64 approvals and recorded Node >=24.22 <25.
-macOS payloads bundle that artifact and staging.18 with a separate committed
-production lockfile, verified prebuilt Codex runtime and dependency notices. The
-supported artifacts contain no engine-native helper sources; helpers from the
-newer, incompatible Transmission checkout are not substituted. Linux payloads include their own engine, lockfile and native x64 Codex runtime. Build-time npm acquisition is separate from execution;
-workflow start/reconnect never runs npm, npx or a compiler.
+Apps → Workflows is a database-independent execution interface backed by the
+in-process `WorkflowEngine` in `src/core/workflow-engine.ts` and managed by
+`DesktopWorkflows` in `src/application/workflows.ts`. It runs directly inside
+Code60 Gateway using Code60's verified ACP providers (`src/agents`), local
+`node:sqlite` persistence (`$XDG_STATE_HOME/code60/workflows/engine/workflows.sqlite`),
+and private temporary-index Git snapshots. No external engine daemon, loopback
+HTTP server, MCP wrapper, bundled runtime, or separate workflow login command is
+used.
 
-Managed installation preserves the bundle under XDG_DATA_HOME/code60/engines,
-outside application releases/activations. Private immutable version bindings pin
-its inventory and canonical Node. New engines and workflow login select the
-verified cached native Codex through an explicit CODEX_PATH, independently of
-application provider executable overrides. Healthy running engines retain their
-original environment. Source development explicitly prepares local
-assets; the first approved start may cache those verified local files. Existing
-bindings, state roots, run IDs, start keys and legacy npm caches are preserved.
-Application provider verification does not authorize Transmission: its bundled
-Codex harness uses its own external provider configuration/login.
-The human-only `code60 workflows login` command uses its verified cached Node and
-Codex wrapper, inherits the terminal, strips Node/npm injection settings, bounds
-authentication and retains child ownership through interruption. It accepts no
-provider command or credential flags and grants no Code60 provider verification.
-A human reviews and starts ordered tasks with independent verification. Automatic
-permission approvals default on and are shown before approval. A dedicated Git
-worktree starts from current saved files using existing private task snapshots;
-source HEAD, index and files remain unchanged. No automatic apply, merge, push,
-worktree deletion or message Undo is provided. One active workflow owns each source
-checkout. Approved intent and idempotency keys precede dispatch in a private,
-locked, bounded registry; uncertain starts never become replacement workflows.
+A human selects a repository and verified provider (defaulting to the primary
+verified provider), reviews and explicitly starts ordered tasks with independent
+verification. Automatic permission approvals default on and are shown before
+approval. A dedicated Git worktree starts from current saved files using private
+task snapshots; source HEAD, index and files remain unchanged. No automatic
+apply, merge, push, worktree deletion or message Undo is provided. One active
+workflow owns each source checkout. Approved intent and idempotency keys precede
+dispatch in a private, locked, bounded registry; uncertain starts never become
+replacement workflows.
 
-Transmission owns background execution, verification, repairs and recovery. These
-are explicit exceptions to the retry/recovery non-goals, not new Relay authority.
-Closing the browser, stopping the backend or closing a project does not cancel these workflows. Stop all retains its
-interactive application scope. Explicit workflow cancellation retains partial files/evidence.
-A versioned TRANSMISSION_STATE_DIR suppresses login registration. Read-only UI
-operations never start/restart the engine; explicit reconnect can resume approved
-work. The player routes pause, resume, guidance and stop by saved run and engine identity.
-Unversioned records retain their staging.18 engine, state directory and original start key.
-Execution time is reconstructed from server events, including across backend restarts.
-The staging.18 engine can exceed its fresh-session retry allowance across
-restarts; server fixes are outside this prototype and no exactly-once claim is made.
+The native workflow engine owns task execution, independent verification,
+same-worker repair loops, fresh-session retries, steering, pause/resume, and
+crash/restart reconciliation. These are explicit exceptions to the retry/recovery
+non-goals, not new Relay authority. Closing the browser or closing a project
+does not cancel these workflows while the backend stays running; stopping the
+backend pauses or ends in-process runs. Stop all retains its interactive
+application scope. Explicit workflow cancellation retains partial files/evidence.
+Read-only UI operations never start or resume execution. Execution time is
+reconstructed from persisted workflow events across backend restarts.
 
 Create with prompt opens a transient drafting chat, separate from Relay. A verified
 primary provider receives bounded conversation/current fields and optional root
@@ -707,8 +689,8 @@ permissions and has bounded runtime/output. Structured drafts can change only na
 and tasks. They never approve or start execution. Form/repository/provider revisions
 reject stale output. Helpers stop on cancellation, disposal, provider replacement,
 renderer loss and shutdown. No prompt/transcript is stored as execution history.
-Main owns repository picker tokens, identities, service credentials, all I/O and
-bounded typed HTTP requests. The renderer receives no execution configuration.
+Main owns repository picker tokens, identities, all I/O and provider resolution.
+The renderer receives no execution configuration.
 
 ### Approved scheduled automations
 
@@ -750,10 +732,9 @@ service notices and preserve native consent for service changes.
 Apps → Health Check (also listed in the Manage sidebar group) provides a
 database-independent, human-only diagnostic view covering Backend/Gateway
 connectivity and version compatibility, Scheduler status/version/registration,
-read-only Transmission engine status and bundled version checks, installed and
-actively probed provider authentication, Git readiness, Relay/database/private
-storage safety, Memory/embeddings/RAG, MCP connector health, machine disk space
-and quotas, and local OS/IP environment context. Passive local checks run on
+installed and actively probed provider authentication, Git readiness,
+Relay/database/private storage safety, Memory/embeddings/RAG, MCP connector
+health, machine disk space and quotas, and local OS/IP environment context. Passive local checks run on
 page open; active provider authentication probes, checksum verification and
 optional registry checks run only on explicit human request with granular
 per-item, per-section and full cancellation. Health Check never starts engines,

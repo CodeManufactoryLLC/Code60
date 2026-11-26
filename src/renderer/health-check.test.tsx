@@ -65,7 +65,7 @@ describe("HealthCheckPage", () => {
     );
     expect(html).toContain('<span class="page-title-text">Health Check</span>');
     expect(html).toContain('role="progressbar"');
-    expect(html).toContain("0 of 20");
+    expect(html).toContain("0 of 18");
     expect(html).toContain("0%");
     expect(html).toContain("System health");
     expect(html).toContain("Last completed:");

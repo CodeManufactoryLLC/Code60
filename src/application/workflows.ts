@@ -3,52 +3,44 @@ import { lstat, mkdir, realpath } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import {
-  defaultWorkflowEngine,
-  LEGACY_TRANSMISSION_VERSION,
   parseWorkflowRequest,
-  supportsWorkflowPause,
   type WorkflowDraft,
   type WorkflowDraftReply,
+  type WorkflowList,
+  type WorkflowProviderOption,
+  type WorkflowRead,
   type WorkflowRecord,
   type WorkflowRequest,
   workflowDiffSchema,
   workflowDraftReplySchema,
   workflowDraftSchema,
-  workflowEngineVersion,
   workflowEventsSchema,
   workflowSnapshotSchema,
 } from "../bridge/index.js";
-import { type CoreDeps, stateHome } from "../core/index.js";
+import {
+  type CoreDeps,
+  stateHome,
+  WorkflowEngine,
+  WorkflowProviderError,
+  type WorkflowProviderResolver,
+} from "../core/index.js";
 import {
   fileCode,
   installationDirectory,
-  installedEngineVersions,
   lockPrivateState,
   readPrivateJson,
-  workflowHostSupported,
   writePrivateJson,
 } from "../platform/index.js";
-import {
-  inspectDefaultTransmissionRuntime,
-  type TransmissionHealthInspection,
-  type TransmissionHealthSlot,
-} from "./health-check.js";
-import { LocalTransmission, type TransmissionClient } from "./transmission.js";
-import {
-  prepareTransmissionRemoval,
-  type TransmissionRemovalPorts,
-} from "./transmission-removal.js";
 import { workflowContext, workflowDirectoryIdentity } from "./workflow-context.js";
 
 const maximum = 8 * 1024 * 1024;
 const recordSchema = z.strictObject({
-  engineVersion: workflowEngineVersion.optional(),
   stopPending: z.boolean().optional(),
   id: z.uuid(),
   name: z.string().max(160),
   repository: z.string().max(32_768),
   worktree: z.string().max(32_768),
-  branch: z.string().regex(/^code60\/transmission-[a-f0-9-]{36}$/),
+  branch: z.string().regex(/^code60\/workflow-[a-f0-9-]{36}$/),
   baseline: z.string().regex(/^[a-f0-9]{40,64}$/),
   repositoryIdentity: z.string().max(40_000),
   repositoryGitIdentity: z.string().max(40_000),
@@ -61,8 +53,7 @@ const recordSchema = z.strictObject({
   state: z.enum(["preparing", "preparation_failed", "starting", "submitted", "uncertain"]),
 });
 const registrySchema = z.strictObject({
-  format: z.literal(1),
-  version: workflowEngineVersion,
+  format: z.literal(2),
   entries: z.array(recordSchema).max(200),
 });
 const ended = (record: WorkflowRecord) =>
@@ -71,10 +62,11 @@ const ended = (record: WorkflowRecord) =>
     record.snapshot &&
     ["completed", "failed", "cancelled"].includes(record.snapshot.status));
 
-/** Saved-work inspection only: process ownership must be verified separately before removal. */
+/** Saved-work inspection only: never launches agents or acquires a writer lock. */
 export async function inspectWorkflowRecordsForUninstall(env: Readonly<NodeJS.ProcessEnv>) {
   return inspectWorkflowRecordRoot(join(stateHome(env), "code60", "workflows"));
 }
+
 async function readWorkflowRemovalRecords(root: string): Promise<WorkflowRecord[]> {
   const exists = await lstat(root).catch((error: unknown) => {
     if (fileCode(error) !== "ENOENT") throw error;
@@ -101,9 +93,11 @@ async function readWorkflowRemovalRecords(root: string): Promise<WorkflowRecord[
     throw Error("Workflow history has duplicate ownership; preserve state before uninstalling");
   return records as WorkflowRecord[];
 }
+
 async function inspectWorkflowRecordRoot(root: string) {
   return workflowRemovalCounts(await readWorkflowRemovalRecords(root));
 }
+
 function workflowRemovalCounts(records: readonly WorkflowRecord[]) {
   const counts = { completed: 0, active: 0, uncertain: 0 };
   for (const record of records) {
@@ -148,34 +142,36 @@ function workflowRemovalCounts(records: readonly WorkflowRecord[]) {
   return counts;
 }
 
-/** The caller holds service-operation ownership and has proved the backend absent. */
-export async function prepareOfflineWorkflowsForUninstall(
+/** Verifies offline workflow history is idle before uninstalling the backend. */
+export async function verifyOfflineWorkflowsIdleForUninstall(
   env: Readonly<NodeJS.ProcessEnv>,
   signal: AbortSignal,
-  ports?: TransmissionRemovalPorts,
-) {
+): Promise<void> {
   signal.throwIfAborted();
   const root = join(stateHome(env), "code60", "workflows");
-  const present = await lstat(root).catch((error: unknown) => {
+  const exists = await lstat(root).catch((error: unknown) => {
     if (fileCode(error) !== "ENOENT") throw error;
     return null;
   });
-  if (!present) return { enginePids: [] as number[] };
+  if (!exists) return;
   await installationDirectory(root, false, true);
-  // Never reclaim a dead/uncertain backend's writer as authority to uninstall.
   const release = await lockPrivateState(root, { reclaimStale: false });
   try {
     const records = await readWorkflowRemovalRecords(root);
     const counts = workflowRemovalCounts(records);
-    if (counts.active || counts.uncertain)
-      throw Error("Workflows are active or uncertain; recover them before uninstalling");
-    const prepared = await prepareTransmissionRemoval(root, env, records, signal, ports);
-    for (const engine of prepared) await engine.stop(signal);
-    return { enginePids: [...new Set(prepared.flatMap((engine) => [...engine.pids]))] };
+    if (counts.active || counts.uncertain) {
+      throw Error("Workflows are active or uncertain; resolve them before uninstalling");
+    }
   } finally {
     await release();
   }
 }
+
+export interface WorkflowProviderPorts {
+  list(): { providers: WorkflowProviderOption[]; defaultProvider: string | null };
+  resolve: WorkflowProviderResolver;
+}
+
 type Choice = {
   path: string;
   identity: string;
@@ -192,13 +188,10 @@ type Approval = {
   recordId?: string;
 };
 
-/** Human-approved external work owns its checkout independently of desktop conversations. */
+/** Human-approved ordered workflows running natively in-process through Code60's ACP agents. */
 export class DesktopWorkflows {
   readonly root: string;
-  private readonly client: TransmissionClient;
-  private readonly newVersion = defaultWorkflowEngine(process.platform);
-  private readonly otherPlatformClient: TransmissionClient;
-  private readonly legacyClient: TransmissionClient;
+  private engine: WorkflowEngine | undefined;
   private choices = new Map<string, Choice>();
   private approvals = new Map<string, Approval>();
   private forms = new Map<string, number>();
@@ -212,56 +205,45 @@ export class DesktopWorkflows {
   private release: (() => Promise<void>) | undefined;
   private queue: Promise<unknown> = Promise.resolve();
   private queuedActions = 0;
-  private readonly environment: Readonly<NodeJS.ProcessEnv>;
+  private pendingDrafts = 0;
+  private removalReservation: symbol | null = null;
   private generation = 0;
   private closed = false;
-  private removalReservation: symbol | null = null;
-  private pendingDrafts = 0;
   private startup = new AbortController();
   private provider = "";
+
   constructor(
     env: Readonly<NodeJS.ProcessEnv>,
     private readonly deps: CoreDeps,
     private readonly pick: () => Promise<string | null>,
     private readonly generate: (input: string, signal: AbortSignal) => Promise<WorkflowDraftReply>,
-    client?: TransmissionClient,
-    legacyClient?: TransmissionClient,
-    private readonly removalPorts?: TransmissionRemovalPorts,
+    private readonly providers: WorkflowProviderPorts,
   ) {
-    this.environment = { ...env };
     this.root = join(stateHome(env), "code60", "workflows");
-    this.client =
-      client ?? new LocalTransmission(join(this.root, `transmission-${this.newVersion}`), env);
-    const otherVersion = defaultWorkflowEngine(process.platform === "linux" ? "darwin" : "linux");
-    this.otherPlatformClient = new LocalTransmission(
-      join(this.root, `transmission-${otherVersion}`),
-      env,
-      otherVersion,
-    );
-    this.legacyClient =
-      legacyClient ??
-      new LocalTransmission(
-        join(this.root, `transmission-${LEGACY_TRANSMISSION_VERSION}`),
-        env,
-        LEGACY_TRANSMISSION_VERSION,
+  }
+
+  private ensureEngine(): WorkflowEngine {
+    if (!this.engine) {
+      this.engine = new WorkflowEngine(
+        join(this.root, "engine"),
+        this.deps.agents,
+        (providerId, cwd) => this.providers.resolve(providerId, cwd),
       );
+    }
+    return this.engine;
   }
-  private engine(record: WorkflowRecord) {
-    return record.engineVersion === this.newVersion
-      ? this.client
-      : supportsWorkflowPause(record.engineVersion)
-        ? this.otherPlatformClient
-        : this.legacyClient;
-  }
+
   observeProvider(identity: string) {
     if (this.provider !== identity) {
       this.provider = identity;
       this.cancelDrafts();
     }
   }
+
   private cancelDrafts() {
     for (const draft of this.drafts.values()) draft.abort.abort();
   }
+
   async reset() {
     this.generation++;
     this.choices.clear();
@@ -270,15 +252,19 @@ export class DesktopWorkflows {
     this.cancelDrafts();
     await Promise.all([...this.drafts.values()].map((draft) => draft.done.catch(() => {})));
   }
+
   async close() {
     this.closed = true;
     this.startup.abort();
     await this.reset();
     await this.queue.catch(() => {});
     await this.loading?.catch(() => {});
+    await this.engine?.close().catch(() => {});
+    this.engine = undefined;
     await this.release?.();
     this.release = undefined;
   }
+
   private queueAction<T>(operation: () => Promise<T>) {
     this.queuedActions++;
     const result = this.queue.then(operation).finally(() => {
@@ -287,6 +273,7 @@ export class DesktopWorkflows {
     this.queue = result.catch(() => {});
     return result;
   }
+
   async reserveIdleForUninstall(signal?: AbortSignal): Promise<() => Promise<void>> {
     signal?.throwIfAborted();
     if (this.queuedActions)
@@ -329,21 +316,7 @@ export class DesktopWorkflows {
     });
     return run;
   }
-  prepareUninstall(signal: AbortSignal) {
-    return this.queueAction(async () => {
-      signal.throwIfAborted();
-      if (!this.removalReservation || this.closed)
-        throw Error("Reserve idle workflows before preparing uninstall");
-      const records = await readWorkflowRemovalRecords(this.root);
-      return prepareTransmissionRemoval(
-        this.root,
-        this.environment,
-        records,
-        signal,
-        this.removalPorts,
-      );
-    });
-  }
+
   private async load() {
     this.loading ??= (async () => {
       this.release = await lockPrivateState(this.root);
@@ -360,6 +333,10 @@ export class DesktopWorkflows {
             throw new Error("Duplicate workflow registry identities");
           this.previous = raw;
         }
+        // Reconcile any active/paused runs persisted in workflows.sqlite on first load.
+        if (this.entries.some((entry) => entry.snapshot && !ended(entry))) {
+          this.ensureEngine();
+        }
       } catch (error) {
         await this.release?.();
         this.release = undefined;
@@ -368,12 +345,14 @@ export class DesktopWorkflows {
     })();
     await this.loading;
   }
+
   private async save() {
-    const next = { format: 1, version: this.newVersion, entries: this.entries };
+    const next = { format: 2 as const, entries: this.entries };
     registrySchema.parse(next);
     await writePrivateJson(join(this.root, "registry.json"), next, this.previous, maximum);
     this.previous = structuredClone(next);
   }
+
   private form(formId: string, revision: number) {
     if (this.forms.size >= 32 && !this.forms.has(formId))
       throw new Error("Too many open workflow forms");
@@ -381,12 +360,14 @@ export class DesktopWorkflows {
     if (current > revision) throw new Error("Workflow form changed");
     this.forms.set(formId, revision);
   }
+
   private choice(token: string, formId: string) {
     const choice = this.choices.get(token);
     if (!choice || choice.formId !== formId || choice.expires < Date.now())
       throw new Error("Choose the workflow repository again");
     return choice;
   }
+
   private async identity(choice: Choice) {
     const repo = await this.deps.git.repoInfo(choice.path);
     if ((await workflowDirectoryIdentity(repo.commonDir)) !== choice.gitIdentity)
@@ -394,11 +375,13 @@ export class DesktopWorkflows {
     if ((await workflowDirectoryIdentity(choice.path)) !== choice.identity)
       throw new Error("Workflow repository changed");
   }
+
   private record(id: string) {
     const record = this.entries.find((entry) => entry.id === id);
     if (!record) throw new Error("Unknown workflow");
     return record;
   }
+
   private async target(record: WorkflowRecord) {
     if ((await workflowDirectoryIdentity(record.repository)) !== record.repositoryIdentity)
       throw new Error("Source repository identity changed");
@@ -421,6 +404,7 @@ export class DesktopWorkflows {
     )
       throw new Error("Execution branch changed");
   }
+
   private snapshot(record: WorkflowRecord, raw: unknown) {
     const snapshot = workflowSnapshotSchema.parse(raw);
     const terminal = ["completed", "failed", "cancelled"].includes(snapshot.status);
@@ -451,26 +435,33 @@ export class DesktopWorkflows {
       record.state = "submitted";
     }
   }
+
   private async submit(record: WorkflowRecord) {
     await this.target(record);
+    const providerId = record.definition.provider ?? this.providers.list().defaultProvider;
+    if (!providerId) {
+      throw new WorkflowProviderError("Connect a verified provider first.");
+    }
     try {
-      const result = await this.engine(record).call(
-        "start_workflow",
-        {
-          repository: record.worktree,
-          tasks: record.definition.tasks,
-          confirmed: true,
-          idempotencyKey: record.key,
-          repairs: record.definition.repairs,
-          retries: record.definition.retries,
-          autoApprove: record.definition.autoApprove,
-        },
-        this.startup.signal,
-      );
+      const result = this.ensureEngine().start({
+        repository: record.worktree,
+        provider: providerId,
+        tasks: record.definition.tasks,
+        confirmed: true,
+        idempotencyKey: record.key,
+        repairs: record.definition.repairs,
+        retries: record.definition.retries,
+        autoApprove: record.definition.autoApprove,
+      });
       this.snapshot(record, result);
       await this.save();
       return structuredClone(record);
-    } catch {
+    } catch (error) {
+      if (error instanceof WorkflowProviderError) {
+        record.state = "uncertain";
+        await this.save();
+        throw error;
+      }
       record.state = "uncertain";
       await this.save();
       throw new Error(
@@ -478,6 +469,7 @@ export class DesktopWorkflows {
       );
     }
   }
+
   async request(value: unknown): Promise<unknown> {
     const request = parseWorkflowRequest(value);
     if (this.closed || this.removalReservation) throw new Error("Workflows is closing");
@@ -518,11 +510,30 @@ export class DesktopWorkflows {
     }
     if (request.action === "list") {
       await this.load();
-      return {
-        supported: this.client.supported,
-        version: this.newVersion,
+      // Sync live snapshots for any non-terminal runs so list badges stay fresh.
+      if (this.engine) {
+        let dirty = false;
+        for (const entry of this.entries) {
+          if (!entry.snapshot || ended(entry)) continue;
+          try {
+            const latest = this.engine.status(entry.snapshot.runId);
+            if (latest.eventCursor > entry.snapshot.eventCursor) {
+              this.snapshot(entry, latest);
+              dirty = true;
+            }
+          } catch {
+            /* Retain last saved snapshot if engine lookup fails. */
+          }
+        }
+        if (dirty) await this.save();
+      }
+      const { providers, defaultProvider } = this.providers.list();
+      const response: WorkflowList = {
         entries: structuredClone(this.entries),
+        providers,
+        defaultProvider,
       };
+      return response;
     }
     const generation = this.generation;
     const run = this.queueAction(async () => {
@@ -533,6 +544,7 @@ export class DesktopWorkflows {
     });
     return run;
   }
+
   private async handle(
     request: Exclude<
       WorkflowRequest,
@@ -565,24 +577,26 @@ export class DesktopWorkflows {
     }
     if (request.action === "review") {
       this.form(request.formId, request.revision);
-      if (!this.client.supported)
-        throw new Error(`Transmission ${this.newVersion} is unavailable on this platform`);
       if (JSON.stringify(request.draft).length > 1_000_000)
         throw new Error("Workflow definition exceeds its limit");
       const choice = this.choice(request.draft.repositoryToken, request.formId);
       await this.identity(choice);
+      const providerId = request.draft.provider ?? this.providers.list().defaultProvider;
+      if (!providerId) throw new Error("Connect a verified provider first");
+      this.providers.resolve(providerId, choice.path);
+      const normalizedDraft: WorkflowDraft = { ...request.draft, provider: providerId };
       for (const [key, approval] of this.approvals)
         if (approval.formId === request.formId || approval.expires < Date.now())
           this.approvals.delete(key);
       const approvalId = randomUUID();
       this.approvals.set(approvalId, {
-        draft: structuredClone(request.draft),
+        draft: structuredClone(normalizedDraft),
         choice,
         formId: request.formId,
         revision: request.revision,
         expires: Date.now() + 10 * 60_000,
       });
-      return { approvalId, repository: choice.path, draft: request.draft };
+      return { approvalId, repository: choice.path, draft: normalizedDraft };
     }
     if (request.action === "start") {
       const approval = this.approvals.get(request.approvalId);
@@ -608,14 +622,13 @@ export class DesktopWorkflows {
       const record: WorkflowRecord = {
         id,
         name: definition.name,
-        engineVersion: this.newVersion,
         repository: approval.choice.path,
         repositoryIdentity: approval.choice.identity,
         repositoryGitIdentity: approval.choice.gitIdentity,
         definition,
-        worktree: join(`${approval.choice.path}.worktrees`, `transmission-${id}`),
+        worktree: join(`${approval.choice.path}.worktrees`, `workflow-${id}`),
         worktreeIdentity: "",
-        branch: `code60/transmission-${id}`,
+        branch: `code60/workflow-${id}`,
         baseline: "0".repeat(40),
         key: randomUUID(),
         createdAt: new Date().toISOString(),
@@ -649,71 +662,41 @@ export class DesktopWorkflows {
           "Worktree preparation failed before workflow dispatch. Evidence and any partial worktree were retained.",
         );
       }
-      // Only the explicit human start/reconnect path may bootstrap the external engine.
-      await this.client.connect(this.startup.signal);
       return this.submit(record);
     }
+
     const record = this.record(request.id);
-    const client = this.engine(record);
-    if (request.action === "reconnect") {
-      await client.connect(this.startup.signal);
-      return { connected: true };
-    }
     if (request.action === "recover") {
-      if (!client.supported)
-        throw new Error(
-          `Transmission ${record.engineVersion ?? LEGACY_TRANSMISSION_VERSION} is unavailable on this platform`,
-        );
       if (record.snapshot || !["starting", "uncertain"].includes(record.state))
         throw new Error("Only an unconfirmed dispatch can be recovered");
       return this.submit(record);
     }
     if (request.action === "read") {
-      if (!client.supported)
-        return {
-          record: structuredClone(record),
-          connected: false,
-          error: `Transmission ${record.engineVersion ?? LEGACY_TRANSMISSION_VERSION} is unavailable on this platform`,
-        };
-      if (!record.snapshot)
-        return {
-          record: structuredClone(record),
-          connected: false,
-          error:
-            "Start is unconfirmed. Recover the same request after checking engine availability.",
-        };
+      if (!record.snapshot) {
+        const res: WorkflowRead = { record: structuredClone(record) };
+        return res;
+      }
       try {
         await this.target(record);
-        this.snapshot(
-          record,
-          await client.call("get_workflow", { runId: record.snapshot.runId }, this.startup.signal),
-        );
+        const latest = this.ensureEngine().status(record.snapshot.runId);
+        this.snapshot(record, latest);
         await this.save();
-        return { record: structuredClone(record), connected: true };
-      } catch {
-        return {
+        const res: WorkflowRead = { record: structuredClone(record) };
+        return res;
+      } catch (error) {
+        const res: WorkflowRead = {
           record: structuredClone(record),
-          connected: false,
-          error:
-            "Status unavailable. The workflow may still be running; the last verified state is retained.",
+          error: error instanceof Error ? error.message : String(error),
         };
+        return res;
       }
     }
     if (!record.snapshot) throw new Error("Recover the workflow start first");
-    if (!client.supported)
-      throw new Error(
-        `Transmission ${record.engineVersion ?? LEGACY_TRANSMISSION_VERSION} is unavailable on this platform`,
-      );
     await this.target(record);
+    const engine = this.ensureEngine();
     const runId = record.snapshot.runId;
     if (request.action === "events") {
-      const page = workflowEventsSchema.parse(
-        await client.call(
-          "get_workflow_events",
-          { runId, after: request.after },
-          this.startup.signal,
-        ),
-      );
+      const page = workflowEventsSchema.parse({ events: engine.events(runId, request.after) });
       let sequence = request.after;
       for (const event of page.events) {
         if (event.sequence <= sequence) throw new Error("Invalid workflow event ordering");
@@ -725,13 +708,7 @@ export class DesktopWorkflows {
       return page;
     }
     if (request.action === "diff") {
-      const page = workflowDiffSchema.parse(
-        await client.call(
-          "get_workflow_diff",
-          { runId, offset: request.offset },
-          this.startup.signal,
-        ),
-      );
+      const page = workflowDiffSchema.parse(engine.diff(runId, request.offset));
       if (
         (page.nextOffset !== null && page.nextOffset <= request.offset) ||
         Buffer.from(page.content, "base64").toString("base64") !== page.content
@@ -739,31 +716,31 @@ export class DesktopWorkflows {
         throw new Error("Invalid accepted diff page");
       return page;
     }
-    if (
-      (request.action === "pause" || request.action === "resume") &&
-      !supportsWorkflowPause(record.engineVersion)
-    )
-      throw new Error("Pause and resume require Transmission staging.20");
     if (record.stopPending && request.action !== "cancel")
       throw new Error("Stop acknowledgement is pending");
     if (request.action === "cancel" && !record.stopPending) {
       record.stopPending = true;
       await this.save();
     }
-    const operation = {
-      pause: "pause_workflow",
-      resume: "resume_workflow",
-      cancel: "cancel_workflow",
-      answer: "answer_workflow_question",
-      message: "send_workflow_message",
-    }[request.action];
-    const args =
-      request.action === "answer"
-        ? { runId, questionId: request.questionId, answer: request.answer }
-        : request.action === "message"
-          ? { runId, message: request.message }
-          : { runId };
-    this.snapshot(record, await client.call(operation, args, this.startup.signal));
+    let nextSnapshot: unknown;
+    switch (request.action) {
+      case "pause":
+        nextSnapshot = await engine.pause(runId);
+        break;
+      case "resume":
+        nextSnapshot = engine.resume(runId);
+        break;
+      case "cancel":
+        nextSnapshot = await engine.cancel(runId);
+        break;
+      case "answer":
+        nextSnapshot = engine.answer(runId, request.questionId, request.answer);
+        break;
+      case "message":
+        nextSnapshot = engine.message(runId, request.message);
+        break;
+    }
+    this.snapshot(record, nextSnapshot);
     if (
       request.action === "cancel" &&
       ["cancelled", "completed", "failed"].includes(record.snapshot.status)
@@ -772,6 +749,7 @@ export class DesktopWorkflows {
     await this.save();
     return structuredClone(record);
   }
+
   private async draft(request: Extract<WorkflowRequest, { action: "draft" }>) {
     this.form(request.formId, request.revision);
     const previous = this.drafts.get(request.formId);
@@ -815,63 +793,5 @@ export class DesktopWorkflows {
     });
     this.drafts.set(request.formId, task);
     return task.done;
-  }
-
-  /** Read-only Transmission health inspection; never launches or mutates engines. */
-  async inspectTransmissionHealth(signal: AbortSignal): Promise<TransmissionHealthInspection> {
-    const hostSupported = workflowHostSupported();
-    const bundledVersions = hostSupported ? installedEngineVersions() : [];
-    const probeSlot = async (
-      slot: "current" | "legacy",
-      version: "0.1.0-staging.18" | "0.1.0-staging.20" | "0.1.1",
-      client: TransmissionClient,
-    ): Promise<TransmissionHealthSlot> => {
-      let running = false;
-      let pid: number | null = null;
-      let error: string | undefined;
-      if (client.supported) {
-        try {
-          const result = (await client.call("health", {}, signal)) as {
-            ready?: unknown;
-            pid?: unknown;
-          };
-          if (result && typeof result === "object" && result.ready === true) {
-            running = true;
-            if (typeof result.pid === "number" && Number.isInteger(result.pid) && result.pid > 0) {
-              pid = result.pid;
-            }
-          }
-        } catch {
-          /* Idle or unavailable; never start the engine during a health check. */
-        }
-      }
-      const runtimeAvailable = hostSupported
-        ? await inspectDefaultTransmissionRuntime(this.environment, version, signal)
-        : false;
-      return {
-        slot,
-        version,
-        supported: client.supported,
-        running,
-        pid,
-        runtimeAvailable,
-        ...(error ? { error } : {}),
-      };
-    };
-    const slots: TransmissionHealthSlot[] = hostSupported
-      ? await Promise.all([
-          probeSlot("current", this.newVersion, this.client),
-          ...(process.platform === "darwin"
-            ? [probeSlot("legacy", LEGACY_TRANSMISSION_VERSION, this.legacyClient)]
-            : []),
-        ])
-      : [];
-    return {
-      hostSupported,
-      defaultVersion: this.newVersion,
-      legacyVersion: LEGACY_TRANSMISSION_VERSION,
-      bundledVersions,
-      slots,
-    };
   }
 }

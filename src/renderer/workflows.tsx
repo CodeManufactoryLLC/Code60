@@ -21,7 +21,6 @@ import type {
   WorkflowRequest,
 } from "../bridge/index.js";
 import { Button as AppButton } from "./carbon/button.js";
-import { Modal } from "./modal.js";
 import { PageTitle } from "./page-title.js";
 import { observeServiceStatusPolling } from "./service-status-polling.js";
 import {
@@ -49,10 +48,6 @@ export function WorkflowsPage({
   const [view, setView] = useState(0);
   const [template, setTemplate] = useState<WorkflowRecord>();
   const [creating, setCreating] = useState(false);
-  const [showLogin, setShowLogin] = useState(false);
-  useEffect(() => {
-    if (!active) setShowLogin(false);
-  }, [active]);
   const [list, setList] = useState<WorkflowList | null>(null);
   const [detail, setDetail] = useState<WorkflowRead | null>(null);
   const [error, setError] = useState("");
@@ -65,7 +60,6 @@ export function WorkflowsPage({
   });
   const retained = useRef(activity);
   const owner = useRef(0);
-  const [reconnect, setReconnect] = useState<string>();
   const delay = useRef(2000);
   const refresh = useRef<(fresh?: boolean) => Promise<void>>(async () => {});
   const record = detail?.record.id === selected ? detail.record : null;
@@ -93,7 +87,7 @@ export function WorkflowsPage({
           : null;
         if (!owns()) return;
         setDetail(next);
-        if (next?.connected && next.record.snapshot && selected) {
+        if (next?.record.snapshot && selected) {
           const snapshot = next.record.snapshot;
           for (
             let page = 0;
@@ -121,7 +115,7 @@ export function WorkflowsPage({
           }
         }
         setError("");
-        delay.current = next?.connected === false ? Math.min(60000, delay.current * 2) : 2000;
+        delay.current = 2000;
       } catch (cause) {
         if (owns()) {
           setError(cause instanceof Error ? cause.message : "Workflow refresh failed");
@@ -142,8 +136,8 @@ export function WorkflowsPage({
       owner.current++;
     };
   }, [api, active, selected]);
+
   useEffect(() => {
-    if (!active) setReconnect(undefined);
     if (active && !paused)
       return observeServiceStatusPolling(
         () => refresh.current(),
@@ -172,15 +166,22 @@ export function WorkflowsPage({
       setBusy("");
     }
   };
+
   const showHistory = () => {
     setCreating(false);
     setSelected(null);
     setView(1);
   };
+
+  const providerName = (id: string | undefined) => {
+    if (!id) return "Default";
+    return list?.providers.find((provider) => provider.id === id)?.name ?? id;
+  };
+
   const newWorkflow = (
     <AppButton
       variant="primary"
-      disabled={!!busy || !list?.supported}
+      disabled={!!busy}
       onClick={() => {
         setTemplate(undefined);
         setCreating(true);
@@ -189,6 +190,7 @@ export function WorkflowsPage({
       New workflow
     </AppButton>
   );
+
   const actions = (
     <div className="workflow-actions">
       {selected && <AppButton onClick={showHistory}>Workflow history</AppButton>}
@@ -204,86 +206,23 @@ export function WorkflowsPage({
           Refresh
         </AppButton>
       )}
-      {list?.supported && !selected && (
-        <AppButton variant="quiet" aria-haspopup="dialog" onClick={() => setShowLogin(true)}>
-          Workflow sign-in
-        </AppButton>
-      )}
-      {record && detail?.connected === false && list?.supported && (
-        <AppButton disabled={!!busy} onClick={() => setReconnect(record.id)}>
-          Reconnect engine…
-        </AppButton>
-      )}
     </div>
   );
+
   return (
     <section className="workflows-page" aria-label="Workflows">
       <PageTitle page="workflows">
         {creating ? "New workflow" : record ? record.name : "Workflows"}
       </PageTitle>
       {(creating || selected) && actions}
-      {active && showLogin && (
-        <Modal
-          footer={
-            <>
-              <AppButton variant="primary" onClick={() => setShowLogin(false)}>
-                Done
-              </AppButton>
-            </>
-          }
-          title="Workflow sign-in"
-          busy={false}
-          onClose={() => setShowLogin(false)}
-        >
-          <p>Run this command in a terminal on the computer hosting Code60.</p>
-          <pre>
-            <code>code60 workflows login</code>
-          </pre>
-          <p>
-            Complete the Codex sign-in there, then return to review and start your workflow.
-            Transmission uses its own Codex credentials.
-          </p>
-        </Modal>
-      )}
-      {record && reconnect === record.id && active && (
-        <Modal
-          footer={
-            <>
-              <AppButton variant="secondary" type="button" onClick={() => setReconnect(undefined)}>
-                Cancel
-              </AppButton>
-              <AppButton
-                variant="primary"
-                type="button"
-                onClick={() => {
-                  setReconnect(undefined);
-                  void act({ action: "reconnect", id: record.id });
-                }}
-              >
-                Reconnect engine
-              </AppButton>
-            </>
-          }
-          key={record.id}
-          title="Reconnect engine?"
-          busy={!!busy}
-          onClose={() => setReconnect(undefined)}
-        >
-          <p>Starting this engine can resume unfinished approved workflows.</p>
-        </Modal>
-      )}
       <div className="workflow-content">
-        {list?.supported === false && (
-          <p role="status">
-            Transmission execution requires macOS Apple Silicon or Linux x64 with glibc and Node
-            24.22 or later in the 24.x series. Saved history remains available.
-          </p>
-        )}
         {error && <p role="alert">Refresh failed. The last verified state is retained. {error}</p>}
         {actionError && !record && <p role="alert">{actionError}</p>}
         {creating ? (
           <WorkflowForm
             initialDefinition={template?.definition}
+            providers={list?.providers ?? []}
+            defaultProvider={list?.defaultProvider ?? null}
             api={api}
             active={active}
             providerReady={providerReady}
@@ -303,10 +242,10 @@ export function WorkflowsPage({
             key={record.id}
             api={api}
             record={record}
+            providerLabel={providerName(record.snapshot?.provider ?? record.definition.provider)}
             active={active}
             polling={!paused}
-            connected={!!list?.supported && detail.connected && !error}
-            problem={detail.error}
+            connected={!error}
             actionError={actionError}
             activity={activity}
             busy={busy}
@@ -347,6 +286,7 @@ export function WorkflowsPage({
                           <TableHead>
                             <TableRow>
                               <TableHeader>Workflow</TableHeader>
+                              <TableHeader>Provider</TableHeader>
                               <TableHeader>{index ? "Started" : "Repository"}</TableHeader>
                               <TableHeader>{index ? "Status" : "Tasks"}</TableHeader>
                               {!index && <TableHeader>Action</TableHeader>}
@@ -371,6 +311,11 @@ export function WorkflowsPage({
                                     )}
                                   </TableCell>
                                   <TableCell>
+                                    {providerName(
+                                      entry.snapshot?.provider ?? entry.definition.provider,
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
                                     {index
                                       ? new Date(entry.createdAt).toLocaleString()
                                       : entry.repository}
@@ -385,7 +330,7 @@ export function WorkflowsPage({
                                   {!index && (
                                     <TableCell>
                                       <AppButton
-                                        disabled={!list.supported || !!busy}
+                                        disabled={!!busy}
                                         aria-label={`Edit a copy of ${entry.name}`}
                                         onClick={() => {
                                           setTemplate(entry);

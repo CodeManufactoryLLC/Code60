@@ -6,20 +6,15 @@ import { fileURLToPath } from "node:url";
 import {
   createInstallationParents,
   executableInstallationFile,
-  findRuntimeProcesses,
-  installationDirectory,
   installationFileCode,
   installationSnapshot,
   installationTreeIdentity,
-  installedEngineVersions,
   inventoryInstallationRemoval,
   lockInstallation,
   type RemovalServiceProof,
   removeInstallationInventory,
   removeRecordedInstallationLink,
   reserveRemovedBackend,
-  resolveTransmissionRuntime,
-  runtimeFileProcesses,
   snapshotRemovalLink,
   syncInstallationDirectory,
   verifyInstallationNode,
@@ -48,80 +43,6 @@ const exists = (path: string) =>
     if (installationFileCode(error) !== "ENOENT") throw error;
     return null;
   });
-function engineEnvironment(record: InstallationRecord) {
-  return { HOME: record.home, XDG_DATA_HOME: dirname(record.root) };
-}
-async function captureEngines(
-  record: InstallationRecord,
-  service: RemovalServiceProof,
-  signal?: AbortSignal,
-) {
-  const engines: RemovalReceipt["engines"] = [];
-  for (const version of installedEngineVersions()) {
-    try {
-      const { node, entry, root } = await resolveTransmissionRuntime(
-        engineEnvironment(record),
-        version,
-        signal,
-      );
-      engines.push({ version, node, entry, root });
-    } catch (error) {
-      if (
-        installationFileCode(error) !== "CODE60_ENGINE_UNAVAILABLE" ||
-        (await exists(join(dirname(service.root), "workflows", `transmission-${version}`)))
-      )
-        throw error;
-    }
-  }
-  return engines;
-}
-async function verifyEngines(receipt: RemovalReceipt, signal?: AbortSignal) {
-  const workflowRoot = join(dirname(receipt.service.root), "workflows");
-  if (await exists(workflowRoot)) {
-    await installationDirectory(workflowRoot, false, true);
-    for (const name of await readdir(workflowRoot)) {
-      if (
-        name.startsWith("transmission-") &&
-        !receipt.engines.some((engine) => name === `transmission-${engine.version}`)
-      )
-        throw Error("Unrecognized engine state appeared; preserve installation files");
-    }
-  }
-  for (const engine of receipt.engines) {
-    const runtime = await resolveTransmissionRuntime(
-      engineEnvironment(receipt.installation),
-      engine.version,
-      signal,
-    );
-    if (
-      runtime.root !== engine.root ||
-      runtime.node !== engine.node ||
-      runtime.entry !== engine.entry ||
-      (await findRuntimeProcesses([engine.node, engine.entry, "engine"], signal)).length
-    )
-      throw Error("Engine ownership or absence changed; preserve installation files");
-    const root = join(workflowRoot, `transmission-${engine.version}`);
-    if (await exists(root)) {
-      await installationDirectory(root, false, true);
-      if (await exists(join(root, "endpoint.json")))
-        throw Error("Engine endpoint reappeared; preserve installation files");
-      const files: string[] = [];
-      for (const name of [
-        "owner.sqlite",
-        "workflows.sqlite",
-        "workflows.sqlite-wal",
-        "workflows.sqlite-shm",
-      ]) {
-        const path = join(root, name);
-        if (await exists(path)) files.push(path);
-        else if (name === "owner.sqlite" || name === "workflows.sqlite")
-          throw Error("Engine evidence disappeared; preserve installation files");
-      }
-      if ((await runtimeFileProcesses(files, signal)).length)
-        throw Error("Engine evidence is still open; preserve installation files");
-    }
-  }
-}
 
 async function removeUnpublishedSupport(
   owned: { path: string; identity: { dev: string; ino: string } },
@@ -214,7 +135,6 @@ export async function prepareManagedRemoval(
       generation: plan.current.receipt.generation,
       node,
       service,
-      engines: await captureEngines(record, service, options.signal),
       inventories: [...plan.releases, ...plan.activations],
       current: plan.currentLink,
       launcher: plan.launcherLink,
@@ -222,7 +142,6 @@ export async function prepareManagedRemoval(
       files,
     };
     validateRemovalReceipt(record, receipt);
-    await verifyEngines(receipt, options.signal);
     const text = `${JSON.stringify(receipt)}\n`;
     if (Buffer.byteLength(text) > 64 * 1024 ** 2)
       throw Error("Uninstall receipt exceeded its bound; no application files removed");
@@ -309,7 +228,6 @@ export async function finishManagedRemoval(
       state.receipt.service,
       options.signal,
     );
-    await verifyEngines(state.receipt, options.signal);
     if (state.value.phase === "complete") {
       if (
         current ||
@@ -335,11 +253,9 @@ export async function finishManagedRemoval(
         state = await writeRemovalProgress(record, { ...state.value, phase: "removing" }, state);
       for (const inventory of state.receipt.inventories) {
         await reserved.verify();
-        await verifyEngines(state.receipt, options.signal);
         await removeInstallationInventory(inventory.root, inventory, options);
       }
       await reserved.verify();
-      await verifyEngines(state.receipt, options.signal);
       const residuals = [...state.receipt.residuals];
       if (state.receipt.launcher) {
         const launcher = await snapshotRemovalLink(record.launcher).catch(() => null);

@@ -30,12 +30,9 @@ import {
   boundedDirectorySize,
   diagnosticMessage,
   inspectPrivateDirectorySafety,
-  newerStableRelease,
   type PlatformMachineInfo,
   readMachineInfo,
   readVolumeSpace,
-  registryTransport,
-  resolveTransmissionRuntime,
   type VolumeProbeInput,
   type VolumeProbeResult,
 } from "../platform/index.js";
@@ -72,24 +69,6 @@ const EMBEDDING_ASSETS: readonly (readonly [string, number, string])[] = [
   ],
 ];
 
-export interface TransmissionHealthSlot {
-  slot: "current" | "legacy";
-  version: string;
-  supported: boolean;
-  running: boolean;
-  pid: number | null;
-  runtimeAvailable: boolean;
-  error?: string;
-}
-
-export interface TransmissionHealthInspection {
-  hostSupported: boolean;
-  defaultVersion: string;
-  legacyVersion: string;
-  bundledVersions: string[];
-  slots: TransmissionHealthSlot[];
-}
-
 interface HealthGatewayInfo {
   appVersion: string;
   gatewayVersion: number;
@@ -124,10 +103,6 @@ export interface HealthCheckPorts {
   gateway(): HealthGatewayInfo;
   appSnapshot(): Snapshot;
   schedulerStatus(): Promise<HealthSchedulerSnapshot>;
-  transmissionHealth(signal: AbortSignal): Promise<TransmissionHealthInspection>;
-  latestRelease?: (
-    signal: AbortSignal,
-  ) => Promise<{ version: string; newer: boolean } | { error: string }>;
   providers(): HealthProviderDescriptor[];
   refreshPath(signal: AbortSignal): Promise<boolean>;
   detectProvider(id: string, signal: AbortSignal): Promise<void>;
@@ -189,22 +164,6 @@ const CHECK_CATALOG: readonly CheckMeta[] = [
     group: "services",
     title: "Backend version compatibility",
     question: "Does the backend service have a compatible version?",
-    mode: "passive",
-    deepLink: { kind: "settings", id: "updates", label: "Updates" },
-  },
-  {
-    id: "transmission-status",
-    group: "services",
-    title: "Transmission server status",
-    question: "Is the transmission server running, and what version is it?",
-    mode: "passive",
-    deepLink: { kind: "page", id: "workflows", label: "Workflows" },
-  },
-  {
-    id: "transmission-version",
-    group: "services",
-    title: "Transmission server latest version",
-    question: "Is the transmission server on the latest version?",
     mode: "passive",
     deepLink: { kind: "settings", id: "updates", label: "Updates" },
   },
@@ -382,33 +341,6 @@ async function defaultGitVersion(
   }
 }
 
-async function defaultLatestRelease(
-  signal: AbortSignal,
-): Promise<{ version: string; newer: boolean } | { error: string }> {
-  try {
-    const stream = await registryTransport("https://registry.npmjs.org/code60/latest", { signal });
-    const chunks: Buffer[] = [];
-    let size = 0;
-    for await (const chunk of stream) {
-      signal.throwIfAborted();
-      const bytes = Buffer.from(chunk);
-      size += bytes.length;
-      if (size > 256 * 1024) throw new Error("Registry metadata response exceeded size limit.");
-      chunks.push(bytes);
-    }
-    const metadata = JSON.parse(Buffer.concat(chunks).toString("utf8")) as { version?: unknown };
-    if (typeof metadata?.version !== "string" || !metadata.version) {
-      throw new Error("Invalid registry version metadata.");
-    }
-    return {
-      version: metadata.version,
-      newer: newerStableRelease(metadata.version, CODE60_VERSION),
-    };
-  } catch (error) {
-    return { error: diagnosticMessage(error) };
-  }
-}
-
 async function defaultVerifyEmbeddingAssets(
   modelRoot: string,
   verifyHashes: boolean,
@@ -447,19 +379,6 @@ async function defaultVerifyEmbeddingAssets(
     }
   }
   return { present, total: EMBEDDING_ASSETS.length, verifiedHashes: verifyHashes, mismatched };
-}
-
-export async function inspectDefaultTransmissionRuntime(
-  env: Readonly<NodeJS.ProcessEnv>,
-  version: "0.1.0-staging.18" | "0.1.0-staging.20" | "0.1.1",
-  signal: AbortSignal,
-): Promise<boolean> {
-  try {
-    await resolveTransmissionRuntime(env, version, signal);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export function buildProviderDescriptors(
@@ -752,12 +671,7 @@ export class HealthCheckService {
     current.running = true;
     if (current.status === "not_checked") current.status = "running";
     this.publish();
-    const timeoutMs =
-      checkId === "embeddings-rag" && allowActive
-        ? 30_000
-        : checkId === "transmission-version" && allowActive
-          ? 10_000
-          : 6_000;
+    const timeoutMs = checkId === "embeddings-rag" && allowActive ? 30_000 : 6_000;
     const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(timeoutMs)]);
     try {
       const update = await this.executeCheck(checkId, targetId, allowActive, signal);
@@ -946,104 +860,6 @@ export class HealthCheckService {
           summary: `Backend ${gateway.appVersion} (Gateway protocol v${gateway.gatewayVersion}).`,
           detail: `Build mode: ${gateway.installMode}. Client compatibility is verified by the browser against this version.`,
         };
-      }
-
-      case "transmission-status": {
-        const info = await this.ports.transmissionHealth(signal);
-        if (!info.hostSupported) {
-          return {
-            status: "not_configured",
-            summary: `Transmission workflows are unsupported on ${process.platform}-${process.arch}.`,
-            detail: "Supported hosts: macOS Apple Silicon (arm64) and Linux x64 with glibc.",
-            targets: [],
-          };
-        }
-        const targets: HealthCheckTarget[] = info.slots.map((slot) => ({
-          id: slot.slot,
-          label: `Transmission ${slot.version} (${slot.slot})`,
-          status: slot.running ? "healthy" : slot.runtimeAvailable ? "not_configured" : "warning",
-          summary: slot.running
-            ? `Running (PID ${slot.pid ?? "unknown"}).`
-            : slot.runtimeAvailable
-              ? "Not running (starts on demand when a workflow runs)."
-              : "Bundled runtime not prepared yet.",
-          ...(slot.error ? { detail: slot.error } : {}),
-          checkedAt: this.nowIso(),
-          running: false,
-          canRun: true,
-          runLabel: "Recheck",
-          metrics: {
-            version: slot.version,
-            running: slot.running,
-            pid: slot.pid,
-            runtimeAvailable: slot.runtimeAvailable,
-          },
-        }));
-        const runningSlots = info.slots.filter((slot) => slot.running);
-        const currentSlot = info.slots.find((slot) => slot.slot === "current");
-        if (runningSlots.length > 0) {
-          return {
-            status: "healthy",
-            summary: `Running: ${runningSlots.map((slot) => `${slot.version} (PID ${slot.pid ?? "?"})`).join(", ")}.`,
-            detail: `Default platform engine: ${info.defaultVersion}. Read-only check never starts idle engines.`,
-            targets,
-          };
-        }
-        if (currentSlot?.runtimeAvailable) {
-          return {
-            status: "healthy",
-            summary: `Not currently running; bundled engine ${info.defaultVersion} is ready.`,
-            detail: "Transmission starts lazily when you start a workflow in Apps → Workflows.",
-            targets,
-          };
-        }
-        return {
-          status: "warning",
-          summary: `Not running and bundled engine ${info.defaultVersion} is not prepared.`,
-          detail:
-            "Run code60 setup (or npm run prepare:engines in source development) before running workflows.",
-          targets,
-        };
-      }
-
-      case "transmission-version": {
-        const info = await this.ports.transmissionHealth(signal);
-        if (!info.hostSupported) {
-          return {
-            status: "not_configured",
-            summary: "Transmission engine version check is not applicable on this host.",
-            detail: `Host ${process.platform}-${process.arch} does not run Transmission workflows.`,
-          };
-        }
-        const currentSlot = info.slots.find((slot) => slot.slot === "current");
-        const legacySlot = info.slots.find((slot) => slot.slot === "legacy");
-        let releaseNote =
-          "Compared against bundled Code60 engine pin. Use Recheck to query npm for a newer Code60 release.";
-        let status: HealthStatus = "healthy";
-        let summary = `Bundled Transmission engine is ${info.defaultVersion} (latest for Code60 ${CODE60_VERSION}).`;
-
-        if (legacySlot?.running && !currentSlot?.running) {
-          status = "warning";
-          summary = `Legacy Transmission ${legacySlot.version} is running (latest bundled is ${info.defaultVersion}).`;
-        } else if (!currentSlot?.runtimeAvailable) {
-          status = "warning";
-          summary = `Expected latest bundled Transmission ${info.defaultVersion} is not prepared locally.`;
-        }
-
-        if (allowActive) {
-          const latest = await (this.ports.latestRelease ?? defaultLatestRelease)(signal);
-          if ("error" in latest) {
-            status = status === "healthy" ? "warning" : status;
-            releaseNote = `Could not check npm registry for newer Code60 releases (${latest.error}).`;
-          } else if (latest.newer) {
-            status = "warning";
-            summary = `Newer Code60 release ${latest.version} is available (installed ${CODE60_VERSION}, Transmission ${info.defaultVersion}).`;
-            releaseNote = "Run code60 update in a terminal to update Code60 and bundled engines.";
-          } else {
-            releaseNote = `Confirmed against npm registry: Code60 ${CODE60_VERSION} (Transmission ${info.defaultVersion}) is up to date with latest stable ${latest.version}.`;
-          }
-        }
-        return { status, summary, detail: releaseNote };
       }
 
       case "mcp-gateway": {

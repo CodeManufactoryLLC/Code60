@@ -20,15 +20,6 @@
 - Retain full Linux/native evidence and independently verify owned process and
   Docker resource cleanup. Unit tests establish supporting behavior only; native
   login/reboot certification remains separate Phase 9 work.
-- Supporting native engine preparation can run with
-  `npm run test:uninstall:engines -- release/payloads/darwin-arm64.json` after a
-  build. It verifies/extracts that artifact, starts both empty engines from their
-  independent cache in isolated state, exercises production ownership/stop checks,
-  compares saved rows and verifies process exit. It calls no provider or real
-  login service and does not substitute for complete installed uninstall acceptance.
-  It also removes a deliberately inert synthetic application through durable
-  support, preserves the actual engine cache/history, and refuses a late engine
-  restart before deleting files. Record that fixture distinction in the report.
 - Exercise the actual recovery launcher from another directory after entrypoint
   and temporary cache deletion. Changed HOME/XDG must not select another service
   scope. Verify SIGINT/SIGTERM results and helper-process exit independently;
@@ -46,8 +37,7 @@
   publication, then new-version authenticated readiness through the durable launcher.
   Complete the shared golden journey, including attachment, refresh and both Undo decisions.
 - Compare database/preferences, Git/index/HEAD/worktrees and retained prior files
-  independently. On native macOS, keep staging.18/.20 version/Node/run/start-key/PID
-  identities through the update while approved independent work continues.
+  independently.
 - Fault registry/hash, shutdown, registration, readiness and publication boundaries.
   Recovery retains whichever generation was published, never downgrades a database,
   replays work, overwrites outside service edits or reclaims uncertain locks.
@@ -55,35 +45,17 @@
   process/container/image/volume identities. Verify cleanup without touching other
   agents' state. Real login/reboot certification remains separate Phase 9 work.
 
-## Bundled Transmission
+## Native workflows
 
-- **Start:** native macOS arm64, freshly prepared locked bundle, isolated HOME,
-  config/data/state and synthetic Git repository with staged and unstaged edits.
-  Use the real pinned Transmission, ACP adapter and native Codex; fake only the
-  external model endpoint and the separate application provider.
-- **Actions:** verify the application provider visibly, manually review/start a
-  workflow, pause/resume and queue guidance. Close the browser and stop/restart
-  the backend while the engine is active; reopen through visible Start/history.
-  Complete verification and inspect the retained worktree and accepted diff.
-  Separately exercise cancellation, uncertain starts and both legacy versions.
-- **Invariants:** reads/review do not launch anything. Original state roots,
-  start keys, run IDs, engine PID and executable/runtime bindings survive backend
-  replacement. Wait for guidance acknowledgement and its persisted engine event
-  before detaching. Source files/index/HEAD stay unchanged; native tools write only
-  the dedicated worktree. After visible Start, distinguish cold bundle/engine
-  readiness from the first model request with bounded read-only health checks;
-  a readiness probe must never launch the engine or replace user approval.
-  Trap runtime npm/npx/compiler calls. Do not seed login
-  or infer Transmission credentials from application provider verification. An
-  unavailable application CODEX_PATH must not replace the bundled workflow runtime.
-- **Evidence:** `npm run test:transmission` after native packaging, with traces,
-  screenshots, artifact/native identities, independent Git/filesystem assertions
-  and every owned engine/provider/helper PID verified gone. Preserve failures;
-  scripted HTTP engine tests remain independent protocol/UI regression coverage.
-  Hosted native validation runs the original regressions and two complete update
-  shards sequentially with one worker and separate output directories. Verify
-  collection covers the full suite exactly once before changing selectors;
-  Playwright matches file-prefixed titles. Keep journey/suite deadlines unchanged.
+- **Start:** isolated HOME, config/data/state, verified fake ACP provider, and a
+  synthetic Git repository with staged, unstaged, and untracked edits.
+- **Actions:** create workflows manually and via Create with prompt, select a
+  verified provider, review and start, pause and resume across reload, steer,
+  answer permission decisions, inspect accepted diffs, and cancel with confirmation.
+- **Invariants:** reads/review never start execution. Source files, index, and
+  HEAD stay unchanged; workers write only the dedicated worktree.
+- **Evidence:** `npm run test:browser -- --grep 'workflow:'`, with traces,
+  screenshots, persisted SQLite/registry assertions, and independent Git checks.
 
 Use synthetic projects and isolated private state. Each card is a user journey,
 not a claim that all of its steps are already automated. Check current selectors
