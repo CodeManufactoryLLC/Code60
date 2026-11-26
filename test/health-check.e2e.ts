@@ -54,7 +54,7 @@ test("browser: Health Check runs passive checks, supports granular rechecks and 
     await expect(progress.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "17");
     await expect(progress.getByRole("progressbar")).toHaveAttribute("aria-valuemax", "18");
     await expect(progress.locator('[data-segment="healthy"]')).toBeVisible();
-    await expect(progress.locator('[data-segment="warning"]')).toBeVisible();
+    await expect(progress.locator('[data-segment="not_configured"]')).toBeVisible();
 
     // System Health tile displays Carbon IconIndicator status metrics, last completed timestamp, and one completion toast.
     const kpiGrid = page.getByLabel("Health status breakdown");
