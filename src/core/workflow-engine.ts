@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import {
   closeSync,
+  fstatSync,
   mkdirSync,
   openSync,
   readSync,
   realpathSync,
   renameSync,
   rmSync,
-  statSync,
 } from "node:fs";
 import { join, sep } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -431,9 +431,9 @@ export class WorkflowEngine {
     const rev = r.accepted.at(-1)?.revision;
     if (!rev) return { content: "", nextOffset: null };
     const patchPath = join(this.runDir(r), `${rev}.patch`);
-    const size = statSync(patchPath).size;
     const fd = openSync(patchPath, "r");
     try {
+      const size = fstatSync(fd).size;
       const buf = Buffer.alloc(Math.max(0, Math.min(size - offset, 65_536)));
       const n = readSync(fd, buf, 0, buf.length, offset);
       return {
