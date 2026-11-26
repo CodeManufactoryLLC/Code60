@@ -6,6 +6,7 @@ import type {
   SessionState,
   StopReason,
   ToolKind,
+  UsageAttribution,
 } from "../contracts/index.js";
 
 export type { StopReason, ToolKind };
@@ -78,6 +79,8 @@ export type AgentMcpServer =
 export interface AgentSpec {
   /** Internal desktop-only correlation. Never transmitted to the provider. */
   diagnostic?: Pick<LogInput, "operationId" | "runId" | "projectId">;
+  /** Internal usage attribution. Never transmitted to the provider. */
+  usage?: UsageAttribution;
   /** Agent name from the config, used in error messages. */
   name: string;
   command: readonly [string, ...string[]];

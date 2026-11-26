@@ -16,7 +16,10 @@ export async function generateChatTitle(
   let onAbort = () => {};
   try {
     combined.throwIfAborted();
-    const session = await agents.start(spec, combined);
+    const session = await agents.start(
+      { ...spec, usage: { ...spec.usage, surface: "helper", helperKind: "chat-title" } },
+      combined,
+    );
     let dispose = () => {};
     try {
       combined.throwIfAborted();

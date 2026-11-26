@@ -59,6 +59,7 @@ describe("navigation registry", () => {
       "system-manager",
       "health-check",
       "workflows",
+      "usage",
       "mcp-servers",
     ]);
     expect(pagesInGroup("primary")).toEqual([

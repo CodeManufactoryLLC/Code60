@@ -81,6 +81,7 @@ Yes, for local lifecycle management only. The `code60` CLI cannot submit prompts
 
 - **Opening and pairing:** `code60 open` opens the browser interface, and `code60 pairing on|off|status` controls local pairing codes.
 - **Installation and backend service:** `code60 setup`, `code60 status`, `code60 update`, `code60 uninstall`, and `code60 service` manage installation and the per-user Code60 Gateway service.
+- **Usage reports:** `code60 usage` prints local token-usage summaries and turn breakdowns in table, JSON, Markdown, or CSV format without running agents.
 
 ### Does Code60 have a native desktop app?
 
@@ -121,6 +122,7 @@ Code60 keeps all application data locally on the host machine. New run directori
 - **Databases:** Project history, configurations, **Internal Prompts** edits, and `$` commands live in SQLite (default `$XDG_DATA_HOME/code60/databases/default.sqlite`). Application memory uses a separate private `memory.sqlite`.
 - **Run records and transcripts:** Runs write `run.json` and `events.jsonl` under `<git-common-dir>/code60/runs/`, `$XDG_STATE_HOME/code60/dirs/<key>/runs/`, or `.code60_workspace/` beside the database. Code60 does not automatically scrub or expire transcripts.
 - **Configuration, workflows, and logs:** MCP files live at `$XDG_CONFIG_HOME/code60/mcp.json` and `<project>/.code60/mcp.json`, and **Workflows** state lives under `$XDG_STATE_HOME/code60/workflows`. Diagnostic logs under `$XDG_STATE_HOME/code60/logs` carry a 7-day, 20 MiB cap.
+- **Usage ledger:** Token metrics live in `$XDG_STATE_HOME/code60/usage/usage.sqlite` with a 90-day, 500,000-turn cap. That file holds numeric counts, provider IDs, model IDs, and opaque IDs without prompts, replies, file paths, or secrets.
 - **Credentials:** Provider logins stay in each provider's own backend-user storage. MCP secrets stay in macOS Keychain, Linux Secret Service, or explicit temporary backend memory.
 
 ### How much disk space does a Code60 installation use?
@@ -138,6 +140,7 @@ A base installation typically uses about **400 MB to 1 GB**, depending on platfo
 | Request checkpoints | Up to 256 MiB per chat | Keeps up to 100 prior requests per chat. |
 | Workflow history | Up to 16 MiB | Keeps up to 1,000 workflow records. |
 | Diagnostic logs | Up to 20 MiB | Automatically expires after 7 days or 20 MiB. |
+| Usage history | Up to 90 days or 500,000 turns | Local `usage.sqlite` stores numeric counts and opaque IDs only. |
 | **Scheduled Jobs** free-space guard | At least 2 GiB free | **Scheduled Jobs** refuse to start below 2 GiB free. |
 
 Size figures reflect macOS Apple Silicon measurements for Code60 `v0.4.1` on `2026-11-25`. See [Low disk space](docs/runbooks/low-disk.md) for storage recovery guidance.
@@ -236,7 +239,28 @@ Code60 does not bill for tokens, and actual usage depends on the active **Agent 
 - **Upfront cost versus net savings:** Running an orchestrator alongside workers in Code60's [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture) adds upfront tokens for instructions, tools, and updates. On complex, long-trajectory tasks, narrow worker contexts, plan review, and independent verification can reduce drift and rework. That higher reliability may reduce net token usage across the full task.
 - **Parallel runs and workflows:** Running multiple workers in parallel increases immediate token usage. **Workflows** also spend tokens on independent verification, repair passes, and fresh-session retries.
 - **Optional helper features:** Active **Memory** extraction, **Search** overviews, **Create with prompt** drafting, and automatic context handoffs send relevant context to the active provider. Turning **Memory** off stops memory extraction and recall.
-- **Cost control and visibility:** The composer footer shows live context usage whenever the provider reports it. The **Model** picker lets a user set separate model and reasoning defaults for orchestrators and workers.
+- **Cost control and visibility:** The composer footer displays live context fill whenever the provider sends it. **Manage → Usage** and `code60 usage` display per-provider totals, heavy sessions, and turn details. The **Model** picker sets separate defaults for orchestrators and workers.
+
+### How does Code60 monitor token usage?
+
+[Code60 Gateway](TERMINOLOGY.md#gateway) logs quantitative metrics for every [ACP](TERMINOLOGY.md#acp) turn across **Relay**, **Custom Assistants**, project chats, workers, **Scheduled Jobs**, **Workflows**, and background helpers. A user can inspect totals under **Manage → Usage** or run `code60 usage` in a terminal.
+
+- **Three measurement tiers:** Each turn carries a confidence label. Labels cover exact ACP usage, context-model math from `usage_update` waves, or lower-bound counts from visible ACP text.
+- **Burn rate and context growth:** Reports separate cumulative turn totals from net context growth, tool waves, and context compactions. Those signals help identify heavy chats, loops, and workflow steps.
+- **ACP visibility limits:** When a provider omits ACP usage metadata, Code60 cannot inspect internal harness system prompts or local tool output outside ACP.
+- **Reports and exports:** Both **Manage → Usage** and `code60 usage` support JSON, CSV, and Markdown output with turn-level inputs and formulas.
+
+### Does Code60 enforce token budgets or calculate dollar bills?
+
+No. [Usage Monitoring](TERMINOLOGY.md#usage-monitoring) is read-only. Code60 never enforces spend caps, blocks turns, or guesses dollar bills from rate tables.
+
+When an [Agent Provider](TERMINOLOGY.md#agent-provider) emits an ACP `cost` field inside `usage_update`, Code60 shows that provider's session cost deltas directly.
+
+### What data does Usage Monitoring store, and how can I clear it?
+
+Code60 stores local usage data in `$XDG_STATE_HOME/code60/usage/usage.sqlite` with private file permissions (`0600`). Rows contain timestamps, provider IDs, model IDs, surface roles, opaque IDs, and numeric counts only.
+
+Usage records and exports omit prompts, assistant replies, source code, file paths, and secrets. Open **Manage → Usage** and choose **Clear usage history** to remove all usage rows after confirmation. Clearing usage history keeps transcripts, databases, and Git worktrees intact.
 
 ## Orchestration and Workers
 

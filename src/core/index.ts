@@ -1,7 +1,7 @@
 import * as fsPromises from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { type AgentMcpServer, type Agents, createAgents } from "../agents/index.js";
-import type { LogSink, PromptTemplates } from "../contracts/index.js";
+import type { LogSink, PromptTemplates, UsageAttribution, UsageSink } from "../contracts/index.js";
 import { createGit, type Git } from "../git/index.js";
 import {
   appendPrivateFile,
@@ -76,6 +76,7 @@ export interface CoreDeps {
   newRunId?: () => string;
   memory?: import("./agent-memory.js").MemoryFactory;
   log?: LogSink;
+  usage?: UsageSink;
   agents: Agents;
   git: Git;
   fs: RecordFs & ConfigFs;
@@ -87,10 +88,15 @@ export interface CoreDeps {
 
 const recordStoreScope = {};
 
-export function defaultDeps(log?: LogSink): CoreDeps {
+export function defaultDeps(log?: LogSink, usage?: UsageSink): CoreDeps {
   return {
     ...(log ? { log } : {}),
-    agents: createAgents({ clientVersion: CODE60_VERSION, ...(log ? { log } : {}) }),
+    ...(usage ? { usage } : {}),
+    agents: createAgents({
+      clientVersion: CODE60_VERSION,
+      ...(log ? { log } : {}),
+      ...(usage ? { usage } : {}),
+    }),
     git: createGit(),
     fs: {
       ...fsPromises,
@@ -120,6 +126,8 @@ export async function prepareOrchestrationChat(
     recovery?: RunRecord;
     /** Saved session-option defaults applied to each newly created session. */
     initialSettings?: readonly SessionSelection[];
+    /** Internal usage attribution for turns in this chat. */
+    usageAttribution?: UsageAttribution;
   } = {},
 ): Promise<Orchestrator> {
   const agent = Object.hasOwn(config.agents, name) ? config.agents[name] : undefined;
@@ -146,6 +154,7 @@ export async function prepareOrchestrationChat(
       ...(options.initialSettings?.length
         ? { initialSettings: () => options.initialSettings }
         : {}),
+      ...(options.usageAttribution ? { usageAttribution: options.usageAttribution } : {}),
     },
   );
 }
@@ -256,6 +265,8 @@ export interface RunRequest {
   owner?: "relay";
   /** Internal desktop-only saved session-option defaults per provider. */
   initialSettings?: (agent: string) => readonly SessionSelection[] | undefined;
+  /** Internal usage attribution for runs started from this request. */
+  usageAttribution?: UsageAttribution;
 }
 
 /** Why runs go directly into the workspace directory instead of worktrees. */
@@ -388,6 +399,7 @@ export async function prepareRuns(
         ? {}
         : { initialSettings: request.initialSettings }),
       ...(request.sessionResources ? { sessionResources: request.sessionResources } : {}),
+      ...(request.usageAttribution ? { usageAttribution: request.usageAttribution } : {}),
     },
   );
   return {
@@ -469,6 +481,8 @@ export {
 export { createRecordStore, directoryRunsDir } from "./records.js";
 export { summarizeSearch } from "./search-summary.js";
 
+export { buildUsageExport, USAGE_METHODOLOGY } from "./usage-report-format.js";
+export { openUsageStoreReadOnly, UsageStore } from "./usage-store.js";
 export { draftWorkflow } from "./workflow-draft.js";
 export {
   WorkflowEngine,

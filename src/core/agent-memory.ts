@@ -119,7 +119,10 @@ export async function generateAgentMemory(
   let dispose = () => {};
   let aborted = () => {};
   try {
-    session = await agents.start(spec, combined);
+    session = await agents.start(
+      { ...spec, usage: { ...spec.usage, surface: "helper", helperKind: "agent-memory" } },
+      combined,
+    );
     combined.throwIfAborted();
     session.onPermission(async () => "deny");
     let text = "";

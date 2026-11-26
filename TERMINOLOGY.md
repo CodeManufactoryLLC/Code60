@@ -18,6 +18,7 @@
 - [Relay](#relay)
 - [Scheduled Job](#scheduled-job)
 - [Two-Layer Architecture](#two-layer-architecture)
+- [Usage Monitoring](#usage-monitoring)
 - [Workflow](#workflow)
 
 ## ACP
@@ -98,6 +99,12 @@ Each job dispatches either a single-turn headless prompt under a deny-by-default
 
 - **Orchestration layer:** **Relay**, **Custom Assistants**, and project chats converse with the user, draft plans, delegate tasks, and review outcomes through Code60's orchestration tools. Orchestrators coordinate work and leave direct repository edits to workers.
 - **Worker layer:** Coding-agent workers receive standalone tasks and edit code inside separate Git worktrees. Workers run without Code60's orchestration tools, keeping each worker's context narrow and allowing parallel execution.
+
+## Usage Monitoring
+
+**Usage Monitoring** is Code60's local, read-only system for tracking token burn rates and inspecting heavy chats and workflows across every [Agent Provider](#agent-provider).
+
+[Code60 Gateway](#gateway) logs quantitative [ACP](#acp) turn metrics into `$XDG_STATE_HOME/code60/usage/usage.sqlite` without storing prompts, replies, file paths, or secrets. A user can inspect reports under **Manage → Usage** or run `code60 usage` in a terminal.
 
 ## Workflow
 

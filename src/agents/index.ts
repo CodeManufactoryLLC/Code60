@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ndJsonStream } from "@agentclientprotocol/sdk";
-import { emitLog, type LogSink, logInputSchema } from "../contracts/index.js";
+import { emitLog, type LogSink, logInputSchema, type UsageSink } from "../contracts/index.js";
 import { diagnosticMessage } from "../platform/index.js";
 import { AcpError, AcpRestoreUnavailableError, openSession, restoreSession } from "./acp-client.js";
 import { describeExit, spawnAgent } from "./process.js";
@@ -13,7 +13,11 @@ export { AgentStartError, TOOL_KINDS } from "./types.js";
 /** How long to wait for buffered agent output after the process exits. */
 const DRAIN_MS = 1_000;
 
-export function createAgents(options: { clientVersion: string; log?: LogSink }): Agents {
+export function createAgents(options: {
+  clientVersion: string;
+  log?: LogSink;
+  usage?: UsageSink;
+}): Agents {
   const launch = async (
     spec: AgentSpec,
     signal: AbortSignal | undefined,
@@ -48,6 +52,8 @@ export function createAgents(options: { clientVersion: string; log?: LogSink }):
               clientVersion: options.clientVersion,
               terminated,
               ...(spec.mcpServers === undefined ? {} : { mcpServers: spec.mcpServers }),
+              ...(options.usage === undefined ? {} : { usage: options.usage }),
+              ...(spec.usage === undefined ? {} : { usageAttribution: spec.usage }),
             })
           : await restoreSession(stream, {
               cwd: spec.cwd,
@@ -56,6 +62,8 @@ export function createAgents(options: { clientVersion: string; log?: LogSink }):
               sessionId: restoreId,
               terminated,
               ...(spec.mcpServers === undefined ? {} : { mcpServers: spec.mcpServers }),
+              ...(options.usage === undefined ? {} : { usage: options.usage }),
+              ...(spec.usage === undefined ? {} : { usageAttribution: spec.usage }),
             });
     } catch (error) {
       await proc.stop();

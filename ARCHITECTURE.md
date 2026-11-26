@@ -768,6 +768,20 @@ repairs services, clears locks or mutates state. Copy health report omits
 host-identifying fields (IP addresses, hostname, proxy hosts and paths) by
 default unless explicitly opted in. Relay and awareness cannot invoke health
 probes or read host-identifying details.
+Apps → Usage (also listed in the Manage sidebar group) and the read-only local
+`code60 usage` management CLI command provide database-independent, human-only
+provider token-usage monitoring and inspectable reporting. Every ACP turn across
+Relay, Custom Assistants, project chats, workers, Scheduled Jobs, Workflows and
+background helpers emits quantitative, payload-free turn metrics at the `agents`
+boundary into a private local SQLite ledger (`$XDG_STATE_HOME/code60/usage/usage.sqlite`,
+mode `0700`/`0600`, bounded to 90 days or 500,000 turns). Usage estimation applies
+a three-tier confidence ladder: exact provider-reported `PromptResponse.usage`
+when returned, derived `usage_update` context snapshots and tool-wave modeling,
+or wire-text lower-bound byte heuristics when no usage metadata is emitted.
+Usage records and JSON/CSV/Markdown exports never store prompts, replies, paths
+or credentials, enforce no budgets or rate limits, and remain inaccessible to
+agents, MCP and awareness. Clearing usage history requires browser confirmation
+and deletes only rows in `usage.sqlite`.
 System Manager also checks status two seconds after each completed read while the
 page and document are visible, respecting global Pause polling. Failed or
 unavailable checks back off to at most sixty seconds and reset after recovery.
