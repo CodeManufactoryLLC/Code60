@@ -23,20 +23,30 @@ export function GitReadinessNotice({
   if (state.status === "ready") return null;
   return (
     <section className="git-readiness" aria-label="Project Git setup">
-      <p>Set up Git to enable workers and change review</p>
-      <p>{state.message}</p>
-      {state.status === "missing" ? (
-        <p>Install Git using your system tools, then check again.</p>
-      ) : null}
+      <div className="git-readiness-copy">
+        <p className="git-readiness-title">Set up Git to enable workers and change review</p>
+        <p className="git-readiness-detail">
+          {state.message}
+          {["not_repository", "no_commits"].includes(state.status)
+            ? " Ask the assistant to initialize Git, or set it up now."
+            : ""}
+        </p>
+        {state.status === "missing" ? (
+          <p className="git-readiness-detail">
+            Install Git using your system tools, then check again.
+          </p>
+        ) : null}
+      </div>
       <div className="review-actions">
         <AppButton
           type="button"
+          variant="primary"
           disabled={!["not_repository", "no_commits"].includes(state.status)}
           onClick={onSetup}
         >
           Set up Git
         </AppButton>
-        <AppButton type="button" onClick={onCheck}>
+        <AppButton type="button" variant="quiet" onClick={onCheck}>
           Check again
         </AppButton>
       </div>
@@ -87,8 +97,8 @@ export function GitSetupDialog({
           if (!current) return;
           setSession(session);
           setSelected(session.files.map((file) => file.id));
-          setName(session.author.name);
-          setEmail(session.author.email);
+          setName(session.author.name || "Code60");
+          setEmail(session.author.email || "code60@local");
         },
         (cause: unknown) => {
           if (current) setError(cause instanceof Error ? cause.message : String(cause));
@@ -236,62 +246,71 @@ export function GitSetupDialog({
             )}
             {session && (
               <>
-                <div className="review-actions">
-                  <AppButton
-                    type="button"
-                    disabled={busy}
-                    onClick={() => setSelected(session.files.map((file) => file.id))}
-                  >
-                    Select all files
-                  </AppButton>
-                  <AppButton type="button" disabled={busy} onClick={() => setSelected([])}>
-                    Clear selection
-                  </AppButton>
-                  <span>
-                    {selected.length} {selected.length === 1 ? "file" : "files"} selected
-                  </span>
-                </div>
-                <div className="git-setup-files">
-                  <fieldset disabled={busy}>
-                    <legend>Files for the initial commit</legend>
-                    {session.files.map((file) => (
-                      <div className="git-setup-file" key={file.id}>
-                        <div>
-                          <CarbonCheckbox
-                            labelText={<>{file.path}</>}
-                            checked={selected.includes(file.id)}
-                            onChange={(event) =>
-                              setSelected((ids) =>
-                                event.target.checked
-                                  ? [...ids, file.id]
-                                  : ids.filter((id) => id !== file.id),
-                              )
-                            }
-                          />
-                        </div>
-                        <AppButton
-                          type="button"
-                          onClick={() => setFileId(file.id)}
-                          aria-label={`Preview ${file.path}`}
-                        >
-                          Preview
-                        </AppButton>
-                      </div>
-                    ))}
-                  </fieldset>
-                  {fileId && (
-                    <section aria-label="Git setup file preview">
-                      <h3>{session.files.find((file) => file.id === fileId)?.path}</h3>
-                      {!preview ? (
-                        <p>Loading preview…</p>
-                      ) : preview.error ? (
-                        <p>{preview.error}</p>
-                      ) : (
-                        <pre>{preview.text}</pre>
+                {session.files.length > 0 ? (
+                  <>
+                    <div className="review-actions">
+                      <AppButton
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setSelected(session.files.map((file) => file.id))}
+                      >
+                        Select all files
+                      </AppButton>
+                      <AppButton type="button" disabled={busy} onClick={() => setSelected([])}>
+                        Clear selection
+                      </AppButton>
+                      <span>
+                        {selected.length} {selected.length === 1 ? "file" : "files"} selected
+                      </span>
+                    </div>
+                    <div className="git-setup-files">
+                      <fieldset disabled={busy}>
+                        <legend>Files for the initial commit</legend>
+                        {session.files.map((file) => (
+                          <div className="git-setup-file" key={file.id}>
+                            <div>
+                              <CarbonCheckbox
+                                labelText={<>{file.path}</>}
+                                checked={selected.includes(file.id)}
+                                onChange={(event) =>
+                                  setSelected((ids) =>
+                                    event.target.checked
+                                      ? [...ids, file.id]
+                                      : ids.filter((id) => id !== file.id),
+                                  )
+                                }
+                              />
+                            </div>
+                            <AppButton
+                              type="button"
+                              onClick={() => setFileId(file.id)}
+                              aria-label={`Preview ${file.path}`}
+                            >
+                              Preview
+                            </AppButton>
+                          </div>
+                        ))}
+                      </fieldset>
+                      {fileId && (
+                        <section aria-label="Git setup file preview">
+                          <h3>{session.files.find((file) => file.id === fileId)?.path}</h3>
+                          {!preview ? (
+                            <p>Loading preview…</p>
+                          ) : preview.error ? (
+                            <p>{preview.error}</p>
+                          ) : (
+                            <pre>{preview.text}</pre>
+                          )}
+                        </section>
                       )}
-                    </section>
-                  )}
-                </div>
+                    </div>
+                  </>
+                ) : (
+                  <p>
+                    This folder has no files to commit yet. Code60 will initialize Git and create an
+                    empty initial commit.
+                  </p>
+                )}
                 {session.excluded.length > 0 && (
                   <details>
                     <summary>Files not included</summary>
@@ -320,7 +339,11 @@ export function GitSetupDialog({
                     />
                   </div>
                 </div>
-                <p>Missing author settings are saved only in this repository.</p>
+                <p>
+                  {session.author.name && session.author.email
+                    ? "Using your existing Git author settings."
+                    : "Defaults are pre-filled so you can continue in one click. Missing author settings are saved only in this repository."}
+                </p>
               </>
             )}
           </>

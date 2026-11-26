@@ -324,7 +324,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Chat and existing worker tools",
     "capacity",
     "existing-tools",
-    "Project workers require Git isolation; idle workers consume capacity.",
+    "Project workers require Git isolation with an initial commit; project orchestrators can inspect and initialize Git through code60_setup_git. Idle workers consume capacity.",
   ),
   feature(
     "browser",
@@ -688,6 +688,7 @@ export const TOOL_CAPABILITIES: Record<string, string> = {
   code60_read_plan: "plans",
   code60_update_plan: "plans",
   code60_get_context: "workers",
+  code60_setup_git: "workers",
   code60_dispatch_agent: "workers",
   code60_list_agents: "workers",
   code60_read_agent: "workers",

@@ -72,6 +72,36 @@ describe("platform PTY", () => {
     }
   });
 
+  it("clears /dev/null GIT_CONFIG_GLOBAL and disabled GIT_TERMINAL_PROMPT in interactive shells", async () => {
+    const dir = await realpath(await mkdtemp(join(tmpdir(), "code60-pty-env-")));
+    dirs.push(dir);
+    const pty = await spawnOwnedPty({
+      cwd: dir,
+      cols: 80,
+      rows: 24,
+      env: {
+        ...process.env,
+        SHELL: "/bin/sh",
+        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_TERMINAL_PROMPT: "0",
+      },
+    });
+    try {
+      let output = "";
+      const off = pty.onData((chunk) => {
+        output += chunk;
+      });
+      pty.write('printf "CFG=[%s] PROMPT=[%s]\\n" "$GIT_CONFIG_GLOBAL" "$GIT_TERMINAL_PROMPT"\n');
+      pty.write("exit 0\n");
+      const result = await pty.exited;
+      off();
+      expect(result.code).toBe(0);
+      expect(output).toContain("CFG=[] PROMPT=[]");
+    } finally {
+      await pty.stop();
+    }
+  });
+
   it("stops an idle POSIX PTY cleanly", async () => {
     const dir = await realpath(await mkdtemp(join(tmpdir(), "code60-pty-stop-")));
     dirs.push(dir);

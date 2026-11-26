@@ -96,7 +96,7 @@ it("generates isolated amd64 mounts and keeps root initialization away from the 
   );
   expect(service.ports).toBeUndefined();
   expect(service.environment.SSH_AUTH_SOCK).toBe("");
-  expect(service.environment.GIT_CONFIG_GLOBAL).toBe("/dev/null");
+  expect(service.environment.GIT_CONFIG_GLOBAL).toBeUndefined();
   expect(service.environment.CODE60_DEV_GATEWAY_PORT).toBe("44000");
   expect(service.environment.CODE60_VITE_PORT).toBe("44001");
   expect(service.environment.ONNXRUNTIME_NODE_INSTALL).toBe("skip");

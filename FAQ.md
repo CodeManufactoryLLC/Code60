@@ -100,7 +100,7 @@ A phone or tablet on the same private local network can open Code60's browser in
 
 No. Code60 requires no special configuration files, scripts, or dependencies inside a repository. Opening a project never initializes Git or edits repository files automatically.
 
-- **Git repository:** Separate Git worktrees for project workers, **Scheduled Jobs**, and **Workflows** require a Git repository with at least one commit. Without Git, **Relay** can still target a direct folder explicitly, or a user can run **Set up Git** in Chat.
+- **Git repository:** Separate Git worktrees for project workers, **Scheduled Jobs**, and **Workflows** require a Git repository with at least one commit. Without Git, **Relay** can target a direct folder explicitly, or a project chat assistant or user can initialize Git with **Set up Git**.
 - **Optional project config:** A user can optionally create `.code60/mcp.json` inside a repository for project-scope MCP servers. Git run records stay inside `<git-common-dir>/code60/runs/` without touching repository source files.
 
 ### Does Code60 automatically delete worktrees?

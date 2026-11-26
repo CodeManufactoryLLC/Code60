@@ -669,12 +669,37 @@ label.check-label {
 
 .git-readiness {
   flex-shrink: 0;
-  margin: 8px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin: 8px 24px 12px;
+  padding: 12px 16px;
+  background: var(--cds-layer-01, var(--surface));
+  border: 1px solid var(--cds-border-subtle-01, var(--border));
+  border-inline-start: 3px solid var(--cds-support-warning, #f1c21b);
   font-size: 13px;
 }
 
+.git-readiness-copy {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.git-readiness-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+  color: var(--cds-text-primary, var(--text));
+}
+
+.git-readiness-detail {
+  margin: 0;
+  color: var(--cds-text-secondary, var(--muted));
+}
+
 .git-readiness :where(p) {
-  margin: 6px 0;
+  margin: 4px 0;
 }
 
 .git-setup-body {

@@ -111,6 +111,9 @@ export function resolveUserShell(
 
 function ptyEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const next: NodeJS.ProcessEnv = { ...env };
+  // Never trap an interactive user shell with a test/devcontainer /dev/null Git config or disabled prompts.
+  if (next.GIT_CONFIG_GLOBAL === "/dev/null") delete next.GIT_CONFIG_GLOBAL;
+  if (next.GIT_TERMINAL_PROMPT === "0") delete next.GIT_TERMINAL_PROMPT;
   next.TERM = "xterm-256color";
   next.COLORTERM = "truecolor";
   if (!next.CLICOLOR) next.CLICOLOR = "1";

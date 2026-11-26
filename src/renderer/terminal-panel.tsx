@@ -98,6 +98,61 @@ type TerminalPhase =
     }
   | { state: "error"; message: string };
 
+/**
+ * Custom xterm.js key handler: lets global Code60 shortcuts bubble, handles copy/paste
+ * without double-pasting on macOS (where Cmd+V triggers the browser's native paste event).
+ */
+export function handleTerminalKeyEvent(
+  event: Pick<
+    KeyboardEvent,
+    "type" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "key" | "preventDefault"
+  >,
+  options: {
+    mac: boolean;
+    hasSelection(): boolean;
+    getSelection(): string;
+    paste(text: string): void;
+    clipboard?: Pick<Clipboard, "readText" | "writeText"> | undefined;
+    isDisposed(): boolean;
+  },
+): boolean {
+  if (event.type !== "keydown") return true;
+  const { mac, clipboard } = options;
+  const mod = mac ? event.metaKey : event.ctrlKey;
+  // Let Code60 global shortcuts bubble out of the terminal.
+  if (mod && !event.altKey && (event.key.toLowerCase() === "k" || event.key === ",")) {
+    return false;
+  }
+  const isCopy = mac
+    ? event.metaKey && !event.ctrlKey && event.key.toLowerCase() === "c"
+    : event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "c";
+  if (isCopy && options.hasSelection()) {
+    const text = options.getSelection();
+    if (text && clipboard?.writeText) {
+      event.preventDefault();
+      void clipboard.writeText(text).catch(() => {});
+    }
+    return false;
+  }
+  if (mac && event.metaKey && !event.ctrlKey && event.key.toLowerCase() === "v") {
+    // Returning false without preventDefault lets the browser fire one native paste event,
+    // which xterm.js handles directly via its built-in paste listener (avoiding double paste).
+    return false;
+  }
+  const isLinuxPaste = !mac && event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "v";
+  if (isLinuxPaste && clipboard?.readText) {
+    event.preventDefault();
+    void clipboard
+      .readText()
+      .then((text) => {
+        if (!options.isDisposed() && text) options.paste(text);
+      })
+      .catch(() => {});
+    return false;
+  }
+  return true;
+}
+
 /** Interactive xterm.js panel pinned to one opaque agent/project terminal target. */
 export function TerminalPanel({
   api,
@@ -154,37 +209,16 @@ export function TerminalPanel({
 
     const mac =
       typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac");
-    terminal.attachCustomKeyEventHandler((event) => {
-      if (event.type !== "keydown") return true;
-      const mod = mac ? event.metaKey : event.ctrlKey;
-      // Let Code60 global shortcuts bubble out of the terminal.
-      if (mod && !event.altKey && (event.key.toLowerCase() === "k" || event.key === ",")) {
-        return false;
-      }
-      const isCopy = mac
-        ? event.metaKey && !event.ctrlKey && event.key.toLowerCase() === "c"
-        : event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "c";
-      if (isCopy && terminal.hasSelection()) {
-        const text = terminal.getSelection();
-        if (text && navigator.clipboard?.writeText) {
-          void navigator.clipboard.writeText(text).catch(() => {});
-        }
-        return false;
-      }
-      const isPaste = mac
-        ? event.metaKey && !event.ctrlKey && event.key.toLowerCase() === "v"
-        : event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "v";
-      if (isPaste && navigator.clipboard?.readText) {
-        void navigator.clipboard
-          .readText()
-          .then((text) => {
-            if (!disposed && text) terminal.paste(text);
-          })
-          .catch(() => {});
-        return false;
-      }
-      return true;
-    });
+    terminal.attachCustomKeyEventHandler((event) =>
+      handleTerminalKeyEvent(event, {
+        mac,
+        hasSelection: () => terminal.hasSelection(),
+        getSelection: () => terminal.getSelection(),
+        paste: (text) => terminal.paste(text),
+        clipboard: typeof navigator !== "undefined" ? navigator.clipboard : undefined,
+        isDisposed: () => disposed,
+      }),
+    );
 
     const measure = () => {
       try {

@@ -77,6 +77,9 @@ describe("prompt templates", () => {
     expect(contract).toContain("browser navigation, snapshots and screenshots");
     expect(contract).toContain("Delegate project changes to workers");
     expect(contract).toContain("This does not authorize project edits, shell commands");
+    expect(contract).toContain("code60_setup_git");
+    expect(contract).toContain(".env");
+    expect(contract).toContain("multiple-choice options with a clear recommended default");
     expect(contract).not.toContain("Use only the supplied Code60 MCP tools");
     expect(contract).toContain("inside the execute tool's code string");
     expect(contract).toContain('tools.playwright.browser_navigate({url: "https://example.com"})');
