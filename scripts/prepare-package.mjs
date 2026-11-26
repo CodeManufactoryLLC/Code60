@@ -2,8 +2,6 @@ import { execFileSync } from "node:child_process";
 import { cp, mkdir, readdir, rm } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { resolveCommand } from "../dist/platform/index.js";
-import { cleanBuild } from "./clean-build.mjs";
-import { buildTransmission } from "./distribution/transmission.mjs";
 
 const output = "release/licenses";
 execFileSync(process.execPath, ["scripts/prepare-models.mjs", "--verify"], { stdio: "inherit" });
@@ -46,7 +44,3 @@ for (const directory of new Set(dependencies.trim().split("\n").slice(1))) {
 
 await mkdir("release/build", { recursive: true });
 await cp(output, "dist/licenses", { recursive: true });
-{
-  await cleanBuild(resolve("dist/engines"));
-  await buildTransmission(process.cwd(), resolve("dist/engines"));
-}

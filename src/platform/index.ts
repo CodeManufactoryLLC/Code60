@@ -117,13 +117,6 @@ export {
 } from "./storage.js";
 export { assertSupportedPlatform } from "./support.js";
 export {
-  installedEngineVersions,
-  preserveTransmissionBundle,
-  resolveTransmissionRuntime,
-  type TransmissionVersion,
-  workflowHostSupported,
-} from "./transmission-bundle.js";
-export {
   newerStableRelease,
   readStableBootstrap,
   registryTransport,

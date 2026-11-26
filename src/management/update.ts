@@ -385,7 +385,7 @@ export async function runUpdate(
               !(await consent(
                 ports,
                 flags.yes,
-                `Verified Code60 ${bootstrap.version}. ${summary} Updating stops interactive and scheduled work, including work started after this inspection. Approved independent workflows keep their pinned engines.`,
+                `Verified Code60 ${bootstrap.version}. ${summary} Updating stops interactive work, scheduled jobs, and active workflows (unfinished workflows resume after restart).`,
                 signal,
               ))
             )

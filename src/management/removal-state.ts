@@ -9,9 +9,7 @@ import {
   installationLink,
   installationSnapshot,
   installationTreeIdentity,
-  installedEngineVersions,
   type RemovalServiceProof,
-  type TransmissionVersion,
   validateInstallationRemovalInventory,
   validateRemovalServiceProof,
   writeInstallationFile,
@@ -26,12 +24,6 @@ export interface RemovalReceipt {
   generation: string;
   node: string;
   service: RemovalServiceProof;
-  engines: {
-    version: TransmissionVersion;
-    node: string;
-    entry: string;
-    root: string;
-  }[];
   inventories: InstallationRemovalInventory[];
   current: InstallationRemovalLink;
   launcher: InstallationRemovalLink | null;
@@ -86,9 +78,6 @@ export function validateRemovalReceipt(record: InstallationRecord, value: Remova
     !Array.isArray(value.inventories) ||
     !value.inventories.length ||
     value.inventories.length > 256 ||
-    !Array.isArray(value.engines) ||
-    value.engines.length > 2 ||
-    new Set(value.engines.map((engine) => engine.version)).size !== value.engines.length ||
     !Array.isArray(value.residuals) ||
     value.residuals.length > 1024 ||
     value.residuals.some(
@@ -143,29 +132,6 @@ export function validateRemovalReceipt(record: InstallationRecord, value: Remova
     validateInstallationRemovalInventory(inventory);
   }
   if (!seen.has(join(record.root, "activations", value.generation))) throw refused();
-  for (const engine of value.engines) {
-    if (
-      !engine ||
-      !installedEngineVersions().includes(engine.version) ||
-      typeof engine.node !== "string" ||
-      absoluteInstallationPath(engine.node) !== engine.node ||
-      typeof engine.root !== "string" ||
-      !engine.root.startsWith(`${record.root}/engines/`) ||
-      !/^[a-f0-9]{64}$/.test(engine.root.slice(`${record.root}/engines/`.length)) ||
-      engine.entry !==
-        join(
-          engine.root,
-          "node_modules",
-          engine.version === "0.1.1"
-            ? "code60-transmission-server"
-            : engine.version.endsWith(".18")
-              ? "transmission-18"
-              : "transmission-20",
-          "dist/src/main.js",
-        )
-    )
-      throw refused();
-  }
 }
 
 export async function readRemovalState(record: InstallationRecord): Promise<RemovalState | null> {

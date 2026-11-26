@@ -21,9 +21,11 @@ if (processLogIndex >= 0)
   );
 if (process.env.FAKE_AGENT_STDERR) process.stderr.write(process.env.FAKE_AGENT_STDERR);
 const promptLogIndex = process.argv.indexOf("--prompt-log");
+const workflowGatesIndex = process.argv.indexOf("--workflow-gates");
 let promptSequence = 0;
 createFakeAgent({
   restoreSupported: process.argv.includes("--restore"),
+  workflowGatesDir: workflowGatesIndex >= 0 ? process.argv[workflowGatesIndex + 1] : undefined,
   onPrompt: () => {
     if (promptLogIndex >= 0)
       writeFileSync(

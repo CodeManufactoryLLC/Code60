@@ -61,10 +61,7 @@
     "test:setup": "node scripts/test-setup.mjs",
     "test:uninstall": "node scripts/test-uninstall.mjs",
     "verify:artifact": "node scripts/verify-artifact-handoff.mjs",
-    "test:update": "node scripts/test-update.mjs",
-    "test:uninstall:engines": "node scripts/test-uninstall-engines.mjs",
-    "prepare:engines": "node scripts/prepare-engines.mjs",
-    "test:transmission": "playwright test --config test/transmission-native.config.ts"
+    "test:update": "node scripts/test-update.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^2.4.0",

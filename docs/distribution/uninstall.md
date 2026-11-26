@@ -60,12 +60,9 @@ same-user descriptor inspection. The required native Linux container runs the
 process tests in strict mode before payload acceptance; those positive ownership,
 file-holder and absence checks cannot skip on permission or emulator failures.
 The application continues to refuse removal whenever inspection is unavailable.
-
-The installed engine-removal smoke also runs on native Linux x64 in the required
-payload job. It checks the bundled 0.1.1 engine, a late restart refusal, retained
-bindings/history and original process exit. Linux uses kernel procfs for executable,
-argv, UID, start identity and file-holder checks. Restricted permissions or an
-unverifiable emulator mapping remain an explicit refusal, never an argv-only fallback.
+Linux uses kernel procfs for executable, argv, UID, start identity and file-holder
+checks. Restricted permissions or an unverifiable emulator mapping remain an
+explicit refusal, never an argv-only fallback.
 Installed CLI commands share the caller's finite journey deadline: twenty minutes
 for native acceptance and nine minutes for Linux maintenance. Full receipt scans
 retain every ownership check; there is no shorter nested command deadline.

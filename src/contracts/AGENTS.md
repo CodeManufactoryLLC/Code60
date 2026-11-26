@@ -49,9 +49,9 @@ overlapping writes. The primary must be replaced before disconnecting. Publish
 main-owned blocking reasons; keep sidebar/gallery/details state and actions aligned.
 
 
-## Transmission prototype
+## Native workflows
 
-Transmission workflow/drafting contracts are strict and browser-safe. Preserve staging.18/staging.20 macOS and 0.1.1 Linux engine ownership, task indices and cursors, bounded evidence and separate draft versus execution authority.
+Workflow and drafting contracts are strict and browser-safe. Preserve task indices and cursors, bounded evidence, per-workflow provider selection and separate draft versus execution authority.
 
 
 ## MCP connector guided management (phase 3)

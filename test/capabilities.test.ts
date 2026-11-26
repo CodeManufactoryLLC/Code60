@@ -26,7 +26,7 @@ describe("browser capability catalog", () => {
     });
     expect(PAGE_CAPABILITIES["health-check"]).toBe("health-check");
     expect(pages.find((page) => page.id === "health-check")?.database).toBe(false);
-    expect(health?.limitations).toContain("never start engines");
+    expect(health?.limitations).toContain("never repair services or mutate state");
     expect(health?.limitations).toContain("omits hostname, IP addresses");
     expect(health?.limitations).toContain("Relay and awareness cannot run health probes");
   });

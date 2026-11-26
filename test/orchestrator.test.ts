@@ -539,7 +539,7 @@ describe("follow-up turns (desktop app)", () => {
 
 describe("permissions", () => {
   it("applies the policy and records who decided", async () => {
-    const answers: string[] = [];
+    const answers: unknown[] = [];
     const options = [{ optionId: "allow", name: "Allow once", kind: "allow_once" }];
     const { orch, store } = await setup({
       script: (_t, s) => {
@@ -565,7 +565,7 @@ describe("permissions", () => {
   });
 
   it("--allow overrides ask in headless mode", async () => {
-    let answer = "";
+    let answer: unknown = "";
     const { orch } = await setup({
       overrides: { allow: ["execute"] },
       script: (_t, s) => {
@@ -582,7 +582,7 @@ describe("permissions", () => {
   });
 
   it("desktop app: ask waits for the user while other runs keep going", async () => {
-    const answers: string[] = [];
+    const answers: unknown[] = [];
     let call = 0;
     const { orch, store, status } = await setup({
       mode: "interactive",

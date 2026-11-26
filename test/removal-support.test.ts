@@ -186,7 +186,7 @@ function uninstallPorts(f: Awaited<ReturnType<typeof fixture>>) {
       scheduledUncertain: false,
       workflows: { completed: 0, active: 0, uncertain: 0 },
     })),
-    prepare: vi.fn(async () => ({ quiescent: true, pid: 42, enginePids: [43] })),
+    prepare: vi.fn(async () => ({ quiescent: true, pid: 42 })),
     remove: vi.fn(async (_guard: Parameters<UninstallPorts["remove"]>[0]) =>
       structuredClone(f.proof),
     ),
@@ -705,7 +705,7 @@ it("public uninstall forwards exact prepared generation to guarded removal and m
   expect(ports.prepare.mock.invocationCallOrder[0]).toBeLessThan(
     ports.remove.mock.invocationCallOrder[0] ?? 0,
   );
-  expect((await readRemovalState(f.plan.record))?.receipt.service.pids.sort()).toEqual([42, 43]);
+  expect((await readRemovalState(f.plan.record))?.receipt.service.pids.sort()).toEqual([42]);
   await retained(f);
 });
 

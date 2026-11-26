@@ -120,68 +120,13 @@ try {
     log: join(output, "independent-backend.log"),
   });
   secondEnv.CODE60_TEST_BACKEND_SOCKET = independent.socket;
-  const platform = await import(pathToFileURL(join(application, "dist/platform/index.js")).href);
-  const metadata = JSON.parse(await readFile(join(application, "payload.json"), "utf8"));
-  await platform.preserveTransmissionBundle(
-    join(application, "dist/engines", metadata.transmissionBundle),
-    secondEnv,
-  );
-  if (process.platform === "darwin") {
-    // Model an interrupted source-development cache publication before managed
-    // installation. Preserve the original healthy staging.18 binding.
-    await rm(join(secondEnv.XDG_DATA_HOME, "code60/engines/0.1.0-staging.20.json"));
-  }
   assert.equal(
     await bootstrapMain(["setup", "--yes", "--no-open"], { ...options, env: secondEnv }),
     0,
   );
-  for (const version of platform.installedEngineVersions())
-    await platform.resolveTransmissionRuntime(secondEnv, version);
   const secondPid = independent.pid();
   assert.ok(secondPid);
   await rm(cache, { recursive: true });
-  {
-    const { resolveTransmissionRuntime, installedEngineVersions } = await import(
-      pathToFileURL(join(application, "dist/platform/index.js")).href
-    );
-    for (const version of installedEngineVersions()) {
-      const runtime = await resolveTransmissionRuntime(env, version);
-      assert.ok(runtime.root.startsWith(`${env.XDG_DATA_HOME}/code60/engines/`));
-      assert.ok(!runtime.entry.startsWith(`${application}/`));
-      const engineState = join(env.XDG_STATE_HOME, "code60/workflows", `transmission-${version}`);
-      // The pinned engine's CLI reports a missing endpoint with exit 1. It does
-      // not share the installed Code60 status command's JSON contract.
-      await assert.rejects(
-        execute(runtime.node, [runtime.entry, "status"], {
-          env: { ...env, TRANSMISSION_STATE_DIR: engineState },
-          cwd: "/",
-          timeout: 15000,
-          maxBuffer: 16384,
-        }),
-        (error) => error.code === 1 && error.stderr.includes(join(engineState, "endpoint.json")),
-      );
-      await assert.rejects(readdir(engineState), { code: "ENOENT" });
-      if (version !== "0.1.0-staging.18") {
-        const loginHome = join(home, "codex-help");
-        await mkdir(loginHome, { mode: 0o700 });
-        const help = await execute(
-          runtime.node,
-          [join(runtime.root, "node_modules/@openai/codex/bin/codex.js"), "login", "--help"],
-          {
-            env: { ...env, CODEX_HOME: loginHome },
-            cwd: "/",
-            timeout: 15000,
-            maxBuffer: 16384,
-          },
-        );
-        assert.match(help.stdout, /login|authenticate/i);
-        await assert.rejects(readFile(join(loginHome, "auth.json")), { code: "ENOENT" });
-      }
-    }
-    console.log(
-      "Preserved installed engines resolve after bootstrap removal; status remains inert",
-    );
-  }
   const before = await readFile(database);
   const pid = supervisor.pid();
   assert.ok(pid);

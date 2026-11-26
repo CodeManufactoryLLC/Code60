@@ -1,22 +1,10 @@
 import { z } from "zod";
 
 z.config({ jitless: true });
-export const LEGACY_TRANSMISSION_VERSION = "0.1.0-staging.18";
-export const TRANSMISSION_VERSION = "0.1.0-staging.20";
-const LINUX_TRANSMISSION_VERSION = "0.1.1";
-export const workflowEngineVersion = z.enum([
-  LEGACY_TRANSMISSION_VERSION,
-  TRANSMISSION_VERSION,
-  LINUX_TRANSMISSION_VERSION,
-]);
-export function defaultWorkflowEngine(os: string) {
-  return os === "linux" ? LINUX_TRANSMISSION_VERSION : TRANSMISSION_VERSION;
-}
-export function supportsWorkflowPause(version?: string) {
-  return version === TRANSMISSION_VERSION || version === LINUX_TRANSMISSION_VERSION;
-}
+
 const text = z.string().trim().min(1).max(65_536);
 const id = z.uuid();
+const providerIdSchema = z.string().trim().min(1).max(128);
 const workflowTaskSchema = z.strictObject({
   name: z.string().trim().min(1).max(160),
   instructions: text,
@@ -29,6 +17,7 @@ const workflowFieldsSchema = z.strictObject({
 });
 export const workflowDraftSchema = workflowFieldsSchema.extend({
   repositoryToken: id,
+  provider: providerIdSchema.optional(),
   repairs: z.number().int().min(0).max(30),
   retries: z.number().int().min(0).max(30),
   autoApprove: z.boolean(),
@@ -47,6 +36,8 @@ export const workflowVerdictSchema = z.object({
 });
 export const workflowSnapshotSchema = z.object({
   runId: id,
+  provider: providerIdSchema.optional(),
+  planRevision: z.number().int().nonnegative().optional(),
   status: z.enum([
     "running",
     "pausing",
@@ -145,7 +136,6 @@ export const workflowRequestSchema = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("resume"), id }),
   z.strictObject({ action: z.literal("cancel"), id }),
   z.strictObject({ action: z.literal("recover"), id }),
-  z.strictObject({ action: z.literal("reconnect"), id }),
   z.strictObject({ action: z.literal("invalidate"), ...form }),
   z.strictObject({ action: z.literal("disposeForm"), formId: id }),
   z.strictObject({
@@ -187,9 +177,13 @@ export interface WorkflowRepository {
   token: string;
   label: string;
 }
+export interface WorkflowProviderOption {
+  id: string;
+  name: string;
+  ready: boolean;
+}
 export interface WorkflowRecord {
   stopPending?: boolean;
-  engineVersion?: z.infer<typeof workflowEngineVersion>;
   id: string;
   name: string;
   repository: string;
@@ -207,9 +201,9 @@ export interface WorkflowRecord {
   state: "preparing" | "preparation_failed" | "starting" | "submitted" | "uncertain";
 }
 export interface WorkflowList {
-  supported: boolean;
-  version: string;
   entries: WorkflowRecord[];
+  providers: WorkflowProviderOption[];
+  defaultProvider: string | null;
 }
 export interface WorkflowReview {
   approvalId: string;
@@ -218,6 +212,5 @@ export interface WorkflowReview {
 }
 export interface WorkflowRead {
   record: WorkflowRecord;
-  connected: boolean;
   error?: string;
 }

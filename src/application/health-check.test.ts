@@ -5,7 +5,6 @@ import {
   buildProviderDescriptors,
   type HealthCheckPorts,
   HealthCheckService,
-  type TransmissionHealthInspection,
 } from "./health-check.js";
 
 function makeAppSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
@@ -83,22 +82,6 @@ function makeAppSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
 }
 
 function makePorts(overrides: Partial<HealthCheckPorts> = {}): HealthCheckPorts {
-  const transmission: TransmissionHealthInspection = {
-    hostSupported: true,
-    defaultVersion: "0.1.0-staging.20",
-    legacyVersion: "0.1.0-staging.18",
-    bundledVersions: ["0.1.0-staging.18", "0.1.0-staging.20"],
-    slots: [
-      {
-        slot: "current",
-        version: "0.1.0-staging.20",
-        supported: true,
-        running: true,
-        pid: 4242,
-        runtimeAvailable: true,
-      },
-    ],
-  };
   return {
     env: { HOME: "/tmp/home", SHELL: "/bin/zsh" },
     now: () => new Date("2026-11-25T14:00:00.000Z"),
@@ -132,8 +115,6 @@ function makePorts(overrides: Partial<HealthCheckPorts> = {}): HealthCheckPorts 
       recentLowDiskCount: 0,
       recentFailedCount: 0,
     }),
-    transmissionHealth: async () => transmission,
-    latestRelease: async () => ({ version: CODE60_VERSION, newer: false }),
     providers: () => [
       {
         id: "claude",
@@ -241,8 +222,7 @@ function makePorts(overrides: Partial<HealthCheckPorts> = {}): HealthCheckPorts 
 describe("HealthCheckService", () => {
   it("runs passive checks on scope all(includeActive=false) without invoking active ACP probes", async () => {
     const probeProvider = vi.fn(async () => {});
-    const latestRelease = vi.fn(async () => ({ version: CODE60_VERSION, newer: false }));
-    const service = new HealthCheckService(makePorts({ probeProvider, latestRelease }));
+    const service = new HealthCheckService(makePorts({ probeProvider }));
 
     const result = await service.handle({
       action: "run",
@@ -250,15 +230,12 @@ describe("HealthCheckService", () => {
     });
 
     expect(probeProvider).not.toHaveBeenCalled();
-    expect(latestRelease).not.toHaveBeenCalled();
     expect(result.environment.host.hostname).toBe("dev-mac.local");
     expect(result.environment.host.primaryPrivateIPv4).toBe("192.168.1.10");
 
     const byId = new Map(result.checks.map((check) => [check.id, check]));
     expect(byId.get("backend-connection")?.status).toBe("healthy");
     expect(byId.get("backend-version")?.status).toBe("healthy");
-    expect(byId.get("transmission-status")?.status).toBe("healthy");
-    expect(byId.get("transmission-version")?.status).toBe("healthy");
     expect(byId.get("scheduler-status")?.status).toBe("healthy");
     expect(byId.get("scheduler-registration")?.status).toBe("healthy");
     expect(byId.get("scheduler-health")?.status).toBe("healthy");
@@ -309,7 +286,7 @@ describe("HealthCheckService", () => {
     service.dispose();
   });
 
-  it("flags scheduler version mismatch, recovery blocks, low disk, legacy transmission and newer releases", async () => {
+  it("flags scheduler version mismatch, recovery blocks, low disk, unsafe storage and MCP recovery", async () => {
     const service = new HealthCheckService(
       makePorts({
         schedulerStatus: async () => ({
@@ -331,31 +308,6 @@ describe("HealthCheckService", () => {
           recentLowDiskCount: 0,
           recentFailedCount: 0,
         }),
-        transmissionHealth: async () => ({
-          hostSupported: true,
-          defaultVersion: "0.1.0-staging.20",
-          legacyVersion: "0.1.0-staging.18",
-          bundledVersions: ["0.1.0-staging.18", "0.1.0-staging.20"],
-          slots: [
-            {
-              slot: "current",
-              version: "0.1.0-staging.20",
-              supported: true,
-              running: false,
-              pid: null,
-              runtimeAvailable: true,
-            },
-            {
-              slot: "legacy",
-              version: "0.1.0-staging.18",
-              supported: true,
-              running: true,
-              pid: 777,
-              runtimeAvailable: true,
-            },
-          ],
-        }),
-        latestRelease: async () => ({ version: "0.5.0", newer: true }),
         volumeSpace: async (inputs) =>
           inputs.map((input) => ({
             id: input.id,
@@ -384,8 +336,6 @@ describe("HealthCheckService", () => {
     expect(byId.get("scheduler-status")?.summary).toContain("0.3.9");
     expect(byId.get("scheduler-registration")?.status).toBe("warning");
     expect(byId.get("scheduler-health")?.status).toBe("error");
-    expect(byId.get("transmission-version")?.status).toBe("warning");
-    expect(byId.get("transmission-version")?.summary).toContain("0.5.0");
     expect(byId.get("disk-space")?.status).toBe("error");
     expect(byId.get("storage-safety")?.status).toBe("error");
     expect(byId.get("diagnostic-logs")?.status).toBe("error");

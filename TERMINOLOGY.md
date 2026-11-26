@@ -17,7 +17,6 @@
 - [Orchestration](#orchestration)
 - [Relay](#relay)
 - [Scheduled Job](#scheduled-job)
-- [Transmission Server](#transmission-server)
 - [Two-Layer Architecture](#two-layer-architecture)
 - [Workflow](#workflow)
 
@@ -47,9 +46,9 @@ It carries recent context forward as evidence only, without restoring old permis
 
 ## Gateway
 
-**Code60 Gateway** is Code60's local Node.js 24 backend service. It serves the browser interface, enforces browser and network security boundaries, manages agent sessions, and runs **Scheduled Jobs**.
+**Code60 Gateway** is Code60's local Node.js 24 backend service. It serves the browser interface, enforces browser and network security boundaries, manages agent sessions, and runs **Scheduled Jobs** and **Workflows**.
 
-Code60 Gateway runs in the background as a per-user service. Active agents and **Scheduled Jobs** continue running after closing or refreshing the browser.
+Code60 Gateway runs in the background as a per-user service. Active agents, **Scheduled Jobs**, and **Workflows** continue running after closing or refreshing the browser.
 
 ## Internal Prompts
 
@@ -93,12 +92,6 @@ A **Scheduled Job** is a local recurring automation under **Automate → Schedul
 
 Each run executes one headless turn under an explicit deny-by-default permission allowlist. Code60 leaves the worktree and changes on disk for manual review.
 
-## Transmission Server
-
-**Code60 Transmission Server** is the local execution engine that runs **Workflow** tasks independently from [Code60 Gateway](#gateway).
-
-Because Code60 Transmission Server operates as its own local process, active workflows continue running even after closing the browser or stopping Code60 Gateway.
-
 ## Two-Layer Architecture
 
 **Two-Layer Architecture** is Code60's core technical design and orchestration philosophy. It separates high-level coordination from direct code execution.
@@ -108,6 +101,6 @@ Because Code60 Transmission Server operates as its own local process, active wor
 
 ## Workflow
 
-A **Workflow** is a sequence of coding tasks under **Develop → Workflows** that runs in a separate Git worktree. Each task specifies implementation instructions, independent verification criteria, and optional check and repair steps.
+A **Workflow** is a sequence of coding tasks under **Develop → Workflows** that [Code60 Gateway](#gateway) runs in a separate Git worktree with any active [Agent Provider](#agent-provider). Each task specifies implementation instructions, independent verification criteria, and optional check and repair steps.
 
 A user reviews and starts a workflow manually. Execution runs without changing source files, `HEAD`, or the Git index.

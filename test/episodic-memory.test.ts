@@ -17,7 +17,7 @@ const answer = (statements: string[]) => JSON.stringify({ statements });
 describe("episodic memory extraction", () => {
   it("extracts statements from all chunks in isolated sessions and removes repeated statements", async () => {
     const events = [event("a".repeat(70_000)), event("The project uses npm.")];
-    const permissions: Promise<string>[] = [];
+    const permissions: Promise<unknown>[] = [];
     const agents = new FakeAgents((_, session) => {
       permissions.push(
         session.requestPermission({ toolCallId: "edit", title: "Edit", kind: "edit" }),

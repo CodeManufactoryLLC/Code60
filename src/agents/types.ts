@@ -22,7 +22,7 @@ export interface RawAcpUpdate {
 }
 
 export type AgentUpdate =
-  | { type: "message"; text: string }
+  | { type: "message"; text: string; messageId?: string | null }
   | { type: "thought"; text: string }
   | {
       type: "toolCall";
@@ -51,7 +51,7 @@ export interface PermissionRequest {
   options?: readonly PermissionOption[];
 }
 
-export type PermissionAnswer = "allow" | "deny";
+export type PermissionAnswer = "allow" | "deny" | { optionId: string };
 
 /** Answers one permission request. `signal` aborts when the agent or a cancel withdraws it. */
 export type PermissionHandler = (

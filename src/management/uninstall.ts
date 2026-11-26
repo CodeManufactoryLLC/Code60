@@ -226,18 +226,10 @@ export async function runUninstall(
       if (resume) prepared = saved;
       else if (plan) {
         const processId = status?.service && pid(status.service.pid) ? status.service.pid : null;
-        let enginePids: number[] = [];
         if (processId !== null) {
           const result = await ports.prepare();
-          if (
-            result.quiescent !== true ||
-            result.pid !== processId ||
-            !Array.isArray(result.enginePids) ||
-            result.enginePids.length > 8192 ||
-            !result.enginePids.every(pid)
-          )
+          if (result.quiescent !== true || result.pid !== processId)
             throw Error("Backend uninstall preparation is uncertain; preserve installation files");
-          enginePids = result.enginePids;
         }
         signal.throwIfAborted();
         const proof = await ports.remove({
@@ -247,9 +239,7 @@ export async function runUninstall(
           appVersion: plan.current.receipt.release.version,
         });
         signal.throwIfAborted();
-        proof.pids = [
-          ...new Set([...proof.pids, ...enginePids, ...(processId === null ? [] : [processId])]),
-        ];
+        proof.pids = [...new Set([...proof.pids, ...(processId === null ? [] : [processId])])];
         prepared = await prepareManagedRemoval(plan, proof, {
           signal,
           ...(ports.runtimeDirectory ? { runtimeDirectory: ports.runtimeDirectory } : {}),
