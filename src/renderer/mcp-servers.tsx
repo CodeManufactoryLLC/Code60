@@ -320,6 +320,10 @@ export function McpServersPage({
       <DataTable
         {...table}
         tableId="mcp-servers"
+        selectable={false}
+        searchable={false}
+        filterable={false}
+        sortable={false}
         emptyMessage={
           read?.document && !blocked
             ? "No servers configured. Choose Add server to create the first one."

@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
-import { orderedRows } from "./data-table.js";
+import { DataTable, orderedRows } from "./data-table.js";
 import { TablePreview } from "./table-preview.js";
 import { defaultView } from "./table-view.js";
 import { defaultTextStyles } from "./typography.js";
@@ -63,4 +63,39 @@ it("previews real Carbon table density, saved widths, order, hidden columns and 
   expect(html).toContain("width:320px");
   expect(html).toContain('data-horizontal="false"');
   expect(html).toContain('data-fit-columns="false"');
+});
+it("omits selection radios, search, filters and sortable headers when disabled", () => {
+  const html = renderToStaticMarkup(
+    <DataTable
+      tableId="mcp-servers"
+      rows={[{ id: "deepwiki", label: "DeepWiki", enabled: "Yes", source: "User" }]}
+      columns={[
+        { key: "label", title: "Label", width: 180 },
+        { key: "enabled", title: "Enabled", width: 90 },
+        { key: "source", title: "Source", width: 160 },
+      ]}
+      initialSort="label"
+      display={(row, key) => row[key]}
+      selected="deepwiki"
+      onSelect={() => {}}
+      onActions={() => {}}
+      lines={{ horizontal: true, vertical: false, heading: true }}
+      density="medium"
+      fit
+      textStyles={defaultTextStyles}
+      selectable={false}
+      searchable={false}
+      filterable={false}
+      sortable={false}
+    />,
+  );
+  expect(html).not.toContain('type="radio"');
+  expect(html).not.toContain("Select row");
+  expect(html).not.toContain("Search MCP Servers");
+  expect(html).not.toContain("Column filter and sort");
+  expect(html).not.toContain("cds--table-sort");
+  expect(html).toContain(">Label<");
+  expect(html).toContain(">Enabled<");
+  expect(html).toContain(">Source<");
+  expect(html).toContain(">Actions<");
 });

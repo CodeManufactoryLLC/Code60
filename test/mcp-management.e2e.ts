@@ -61,12 +61,15 @@ test("MCP management: user scope, templates, pasted review, HTTP edits, cancella
     });
     expect((await stat(config(fixture.directory))).mode & 0o777).toBe(0o600);
     await expect(workspace.getByRole("columnheader")).toHaveText([
-      "Select row",
-      /Label$/,
-      /Enabled$/,
-      /Source$/,
+      "Label",
+      "Enabled",
+      "Source",
       "Actions",
     ]);
+    await expect(workspace.getByRole("table").getByRole("radio")).toHaveCount(0);
+    await expect(workspace.getByRole("searchbox")).toHaveCount(0);
+    await expect(workspace.getByRole("button", { name: "Filters", exact: true })).toHaveCount(0);
+    await expect(workspace.getByLabel("Column menu", { exact: true })).toHaveCount(0);
     await serverAction(page, "Edit", "Documentation");
     form = page.getByRole("dialog", { name: /Edit MCP server/ });
     await expect(form.getByLabel("Server ID", { exact: true })).toBeDisabled();
