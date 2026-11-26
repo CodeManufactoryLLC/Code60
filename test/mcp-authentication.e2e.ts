@@ -9,7 +9,7 @@ import { oauthServer } from "./fixtures/mcp-oauth-server.js";
 
 async function apps(page: Page) {
   await openMcpServers(page);
-  await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "User", exact: true })).toBeVisible();
 }
 async function serverAction(page: Page, action: string) {
   await page
@@ -225,32 +225,27 @@ test("MCP OAuth: reviewed issuer/registration, browser consent, retained JSON dr
     ).toBeVisible();
     await page.bringToFront();
     await dialog.getByRole("button", { name: "Continue in background", exact: true }).click();
-    await page.getByRole("tab", { name: "JSON", exact: true }).click();
-    await expect(page.locator(".mcp-json-editor .monaco-editor")).toBeVisible();
-    const draft = JSON.stringify(
+    await page.getByRole("button", { name: "Edit JSON", exact: true }).click();
+    const jsonModal = page.getByRole("dialog", { name: /^Edit JSON —/ });
+    await expect(jsonModal.locator(".mcp-json-editor .monaco-editor")).toBeVisible();
+    const edited = JSON.stringify(
       {
         ...document,
-        servers: { service: { ...document.servers.service, label: "Retained OAuth draft" } },
+        servers: { service: { ...document.servers.service, label: "Edited while authorizing" } },
       },
       null,
       2,
     );
-    await edit(page, draft);
-    await expect(
-      page.getByRole("button", { name: "Save configuration", exact: true }),
-    ).toBeEnabled();
+    await edit(page, edited);
+    await expect(jsonModal.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
     await issuer.getByRole("button", { name: "Authorize synthetic server", exact: true }).click();
     await expect(issuer.locator("body")).toContainText("Authorization response received");
     await page.bringToFront();
     await expect.poll(() => remote.counts.token).toBe(1);
-    await expect(page.locator(".mcp-json-editor")).toContainText("Retained OAuth draft");
+    await expect(jsonModal.locator(".mcp-json-editor")).toContainText("Edited while authorizing");
     expect(await readFile(file, "utf8")).toBe(original);
-    await page.getByRole("tab", { name: "Servers", exact: true }).click();
-    const guard = page.getByRole("dialog", { name: "Unsaved MCP JSON changes", exact: true });
-    await guard.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(page.locator(".mcp-json-editor")).toContainText("Retained OAuth draft");
-    await page.getByRole("tab", { name: "Servers", exact: true }).click();
-    await guard.getByRole("button", { name: "Discard", exact: true }).click();
+    await jsonModal.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(jsonModal).toHaveCount(0);
     dialog = await authentication(page);
     await expect(dialog).toContainText("authenticated");
     const secrets = remote.accessTokens();

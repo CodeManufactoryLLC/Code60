@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import {
   MCP_TEXT_LIMITS,
   type McpConnectorDefinition,
@@ -216,16 +216,8 @@ function BindingFields({
     </fieldset>
   );
 }
-export interface McpFormDraft {
-  fields: McpFormFields;
-  paste: string;
-  pasteOpen: boolean;
-  error: string;
-}
 export function McpForm({
   initial,
-  draft,
-  onDraft,
   base,
   originalId,
   templates,
@@ -236,8 +228,6 @@ export function McpForm({
   onReload,
 }: {
   initial: McpFormFields;
-  draft?: McpFormDraft | undefined;
-  onDraft?(draft: McpFormDraft): void;
   base: McpConnectorDocument;
   originalId?: string | undefined;
   templates: readonly { id: string; definition: McpConnectorDefinition }[];
@@ -248,15 +238,10 @@ export function McpForm({
   onReload(): void;
 }) {
   const formId = useId();
-  const [fields, setFields] = useState(draft?.fields ?? initial);
-  const [paste, setPaste] = useState(draft?.paste ?? "");
-  const [pasteOpen, setPasteOpen] = useState(draft?.pasteOpen ?? false);
-  const [error, setError] = useState(draft?.error ?? "");
-  const persist = useRef(onDraft);
-  persist.current = onDraft;
-  useEffect(() => {
-    persist.current?.({ fields, paste, pasteOpen, error });
-  }, [fields, paste, pasteOpen, error]);
+  const [fields, setFields] = useState(initial);
+  const [paste, setPaste] = useState("");
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [error, setError] = useState("");
   const change = <K extends keyof McpFormFields>(key: K, value: McpFormFields[K]) =>
     setFields((f) => ({
       ...f,
@@ -490,14 +475,10 @@ export function McpForm({
           </>
         )}
         {error && <p role="alert">{error}</p>}
-        {stale && (
-          <p role="alert">
-            This configuration or project changed. Reload before saving. Your draft is retained.
-          </p>
-        )}
+        {stale && <p role="alert">This configuration or project changed. Reset before saving.</p>}
         <div className="dialog-actions">
           <Button variant="quiet" type="button" onClick={onReload}>
-            Reload and discard draft
+            Reset
           </Button>
           <ModalActions>
             <Button variant="secondary" disabled={busy} onClick={onCancel}>

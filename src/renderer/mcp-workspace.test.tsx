@@ -15,10 +15,10 @@ it("classifies MCP configuration workspace failures without collapsing unsafe in
     "MCP_CONFIG_STORAGE_LIMIT:",
   );
   expect(mcpWorkspaceFailure(new Error("MCP configuration unsafe"))).toMatch(
-    /^MCP_CONFIG_UNSAFE:.*Your draft is retained\./,
+    /^MCP_CONFIG_UNSAFE:.*explicitly reload before saving\./,
   );
   expect(mcpWorkspaceFailure(new Error("MCP configuration unavailable"))).toMatch(
-    /^MCP_CONFIG_UNAVAILABLE:.*Your draft is retained\./,
+    /^MCP_CONFIG_UNAVAILABLE:.*explicitly reload before saving\./,
   );
   expect(mcpWorkspaceFailure("unexpected")).toContain("MCP_CONFIG_UNAVAILABLE:");
 });

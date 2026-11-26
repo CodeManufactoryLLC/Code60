@@ -9,7 +9,7 @@ import { browserApp, createDatabase, onboard, openProject } from "./fixtures/bro
 
 async function app(page: Page) {
   await openMcpServers(page);
-  await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "User", exact: true })).toBeVisible();
 }
 async function clickAdd(page: Page) {
   await page.getByRole("button", { name: "Add server", exact: true }).click();
@@ -42,7 +42,10 @@ test("MCP management: user scope, templates, pasted review, HTTP edits, cancella
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
     const providerProcesses = await readdir(fixture.processLog);
-    await expect(page.getByLabel("Configuration", { exact: true })).toHaveValue("user");
+    await expect(page.getByRole("tab", { name: "User", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     const workspace = page.locator(".mcp-workspace");
     await expect(
       workspace.getByRole("status").filter({ hasText: "No servers configured." }),
@@ -165,7 +168,6 @@ test("MCP management: project moves, collision preview, cancellation, inheritanc
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await openProject(page, fixture.directory, "alpha");
     await app(page);
-    const destination = page.getByLabel("Configuration", { exact: true });
     let form = await add(page, "docs", "User docs");
     await form.getByRole("button", { name: "Save server", exact: true }).click();
     await expect(form).toHaveCount(0);
@@ -193,7 +195,7 @@ test("MCP management: project moves, collision preview, cancellation, inheritanc
     await expect(move).toContainText("destination already contains this server ID");
     await expect(move.getByRole("button", { name: "Confirm move", exact: true })).toBeDisabled();
     await move.getByRole("button", { name: "Cancel", exact: true }).click();
-    await destination.selectOption({ label: "alpha" });
+    await page.getByRole("tab", { name: "Project", exact: true }).click();
     await expect(page.locator(".mcp-workspace").getByRole("table")).toContainText(
       "(overrides User)",
     );
@@ -206,7 +208,7 @@ test("MCP management: project moves, collision preview, cancellation, inheritanc
     await expect(form).toContainText("Configuration or project changed");
     await expect(form.getByLabel("Label", { exact: true })).toHaveValue("Unsaved project draft");
     expect(await readFile(join(project, ".code60/mcp.json"), "utf8")).toBe(external);
-    await form.getByRole("button", { name: "Reload and discard draft", exact: true }).click();
+    await form.getByRole("button", { name: "Reset", exact: true }).click();
     await expect(form).toHaveCount(0);
     await page.getByRole("button", { name: "Actions for Inherited docs", exact: true }).click();
     await expect(
@@ -216,7 +218,7 @@ test("MCP management: project moves, collision preview, cancellation, inheritanc
     // Reloading a now-malformed document must close the discarded form and keep writes blocked.
     form = await add(page, "draft", "Invalid reload");
     await writeFile(join(project, ".code60/mcp.json"), "malformed");
-    await form.getByRole("button", { name: "Reload and discard draft", exact: true }).click();
+    await form.getByRole("button", { name: "Reset", exact: true }).click();
     await expect(form).toHaveCount(0);
     await expect(page.locator("#panel-mcp-servers")).toContainText("Invalid configuration");
     await expect(page.getByRole("button", { name: "Add server", exact: true })).toBeDisabled();

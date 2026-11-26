@@ -12,7 +12,7 @@ const original =
   '{"version":1,"servers":{"docs":{"label":"Private definition","enabled":false,"type":"stdio","command":"never-run","args":[],"env":{"PRIVATE_TOKEN":{"credentialRef":"private-reference"}}}}}\n';
 async function app(page: Page) {
   await openMcpServers(page);
-  await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "User", exact: true })).toBeVisible();
 }
 async function edit(page: Page, value: string) {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
@@ -77,11 +77,11 @@ for (const direction of ["complete", "roll back", "conflict"] as const) {
       await app(recovered);
       expect(await fs.readFile(userFile)).toEqual(pendingBytes[0]);
       expect(await fs.readFile(projectFile)).toEqual(pendingBytes[1]);
-      await recovered.getByRole("tab", { name: "JSON", exact: true }).click();
-      await edit(recovered, original.replace("Private definition", "Retained recovery draft"));
-      await expect(
-        recovered.getByRole("button", { name: "Save configuration", exact: true }),
-      ).toBeDisabled();
+      await recovered.getByRole("button", { name: "Edit JSON", exact: true }).click();
+      const jsonModal = recovered.getByRole("dialog", { name: /^Edit JSON —/ });
+      await edit(recovered, original.replace("Private definition", "Blocked recovery edit"));
+      await expect(jsonModal.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+      await jsonModal.getByRole("button", { name: "Cancel", exact: true }).click();
       await recovered.getByRole("button", { name: "Configuration recovery", exact: true }).click();
       const dialog = recovered.getByRole("dialog", {
         name: "MCP configuration recovery",
@@ -90,7 +90,6 @@ for (const direction of ["complete", "roll back", "conflict"] as const) {
       await dialog.getByRole("button", { name: "Review transaction", exact: true }).click();
       await expect(dialog).toContainText("Current state: after");
       await expect(dialog).toContainText("Current state: before");
-      await expect(dialog).toContainText("Your unsaved draft will be retained");
       await expect(dialog).not.toContainText("private-reference");
       await dialog.getByRole("button", { name: "Complete transaction", exact: true }).click();
       await dialog.getByRole("button", { name: "Cancel recovery", exact: true }).click();
@@ -133,10 +132,7 @@ for (const direction of ["complete", "roll back", "conflict"] as const) {
           expect((await fs.stat(join(stateRoot, file))).mode & 0o777).toBe(0o600);
       }
       await dialog.getByRole("button", { name: "Close recovery", exact: true }).click();
-      await expect(recovered.locator(".mcp-json-editor")).toContainText("Retained recovery draft");
-      await expect(
-        recovered.getByRole("button", { name: "Compare saved and draft", exact: true }),
-      ).toBeVisible();
+      await expect(dialog).toHaveCount(0);
     } finally {
       await fixture.close();
     }
@@ -213,32 +209,33 @@ test("MCP troubleshooting: jump to malformed JSON, repair, and preserve draft af
     await onboard(page);
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
-    await page.getByRole("tab", { name: "JSON", exact: true }).click();
-    const issues = page.getByRole("list", { name: "Configuration issues", exact: true });
+    await page.getByRole("button", { name: "Edit JSON", exact: true }).click();
+    let jsonModal = page.getByRole("dialog", { name: /^Edit JSON —/ });
+    const issues = jsonModal.getByRole("list", { name: "Configuration issues", exact: true });
     await expect(issues).toBeVisible();
+    await expect(issues).toHaveCSS("list-style-type", "none");
     await expect(issues).not.toContainText("PRIVATE_UNKNOWN");
     await expect(issues).not.toContainText("PRIVATE_VALUE");
     await issues.getByRole("button").first().click();
-    await expect(page.locator(".mcp-json-editor .inputarea")).toBeFocused();
-    await expect(
-      page.getByRole("button", { name: "Save configuration", exact: true }),
-    ).toBeDisabled();
+    await expect(jsonModal.locator(".mcp-json-editor .inputarea")).toBeFocused();
+    await expect(jsonModal.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await edit(page, original);
-    await page.getByRole("button", { name: "Save configuration", exact: true }).click();
-    await expect(page.locator('.mcp-json-actions [role="status"]')).toHaveText("Saved");
+    await jsonModal.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(jsonModal).toHaveCount(0);
     await expect.poll(() => fs.readFile(file, "utf8")).toBe(original);
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
     const backups = (await fs.readdir(storage)).filter((f) => f.endsWith(".backup"));
     expect(backups.length).toBe(1);
     expect(await fs.readFile(join(storage, backups[0]!), "utf8")).toContain(
       Buffer.from(malformed).toString("base64"),
     );
     await fs.chmod(file, 0o400);
-    const draft = original.replace("Private definition", "Retained unsafe-write draft");
-    await edit(page, draft);
-    await page.getByRole("button", { name: "Save configuration", exact: true }).click();
-    await expect(page.locator("#panel-mcp-servers")).toContainText("Your draft is retained");
-    await expect(page.locator(".mcp-json-editor")).toContainText("Retained unsafe-write draft");
+    await page.getByRole("button", { name: "Edit JSON", exact: true }).click();
+    jsonModal = page.getByRole("dialog", { name: /^Edit JSON —/ });
+    const next = original.replace("Private definition", "Blocked unsafe write");
+    await edit(page, next);
+    await jsonModal.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(jsonModal).toContainText("MCP_CONFIG_UNSAFE");
+    await expect(jsonModal.locator(".mcp-json-editor")).toContainText("Blocked unsafe write");
     expect(await fs.readFile(file, "utf8")).toBe(original);
     expect((await fs.stat(file)).mode & 0o777).toBe(0o400);
     expect((await fs.readdir(storage)).filter((f) => f.endsWith(".backup"))).toEqual(backups);

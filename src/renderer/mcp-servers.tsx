@@ -16,7 +16,7 @@ import { Button } from "./carbon/button.js";
 import { Select } from "./carbon/fields.js";
 import { DataTable, type TableOptions } from "./data-table.js";
 import { hasMcpAuthentication, McpAuthenticationPanel } from "./mcp-authentication.js";
-import { McpForm, type McpFormDraft, mcpFormFields } from "./mcp-form.js";
+import { McpForm, mcpFormFields } from "./mcp-form.js";
 import { type McpRuntimeActions, McpRuntimePanel } from "./mcp-runtime.js";
 import { Modal } from "./modal.js";
 
@@ -26,15 +26,9 @@ const message = (cause: unknown) => {
     `MCP_CONFIG_${code}: ${detail} Other application features and available tools remain usable.`;
   const text = cause instanceof Error ? cause.message : "";
   if (text.includes("conflict"))
-    return explain(
-      "CONFLICT",
-      "Configuration or project changed. Reload before saving. Your draft is retained.",
-    );
+    return explain("CONFLICT", "Configuration or project changed. Reset before saving.");
   if (text.includes("recovery-required"))
-    return explain(
-      "RECOVERY_REQUIRED",
-      "Configuration recovery is required. Your draft is retained.",
-    );
+    return explain("RECOVERY_REQUIRED", "Configuration recovery is required.");
   if (text.includes("storage-limit"))
     return explain(
       "STORAGE_LIMIT",
@@ -66,7 +60,6 @@ interface Editor {
   originalId?: string;
   initial?: McpConnectorDefinition | undefined;
   key: string;
-  draft?: McpFormDraft | undefined;
 }
 interface Move {
   source: McpManagementRead;
@@ -80,7 +73,7 @@ export function McpServersPage({
   active,
   contextKey,
   configuration,
-  onFormDirty,
+  onEditJson,
   readOnly = false,
   ...table
 }: Pick<TableOptions, "lines" | "density" | "fit" | "textStyles"> & {
@@ -88,7 +81,7 @@ export function McpServersPage({
   active: boolean;
   contextKey: string;
   configuration: { scope: string; select(scope: string): void; reload(): void };
-  onFormDirty?(dirty: boolean): void;
+  onEditJson?(): void;
   readOnly?: boolean | undefined;
 }) {
   const [visible, setVisible] = useState(
@@ -107,13 +100,6 @@ export function McpServersPage({
   const [error, setError] = useState("");
   const [menu, setMenu] = useState<{ id: string; x: number; y: number }>();
   const runtimeRef = useRef<McpRuntimeActions>(null);
-  const dirtyNotice = useRef(onFormDirty);
-  dirtyNotice.current = onFormDirty;
-  const formKey = editor?.key;
-  useEffect(() => {
-    dirtyNotice.current?.(Boolean(formKey));
-    return () => dirtyNotice.current?.(false);
-  }, [formKey]);
   const editing = useRef(editor?.key);
   editing.current = editor?.key;
   const ownerContext = useRef(contextKey);
@@ -216,7 +202,7 @@ export function McpServersPage({
     try {
       const result = await api.mcpSave({ ...payload, requestId: requestId(payload) });
       if (result.status === "recovery-required") {
-        setError("Configuration recovery is required. Your draft is retained.");
+        setError("Configuration recovery is required.");
       } else {
         setSelected(
           value.originalId ??
@@ -328,6 +314,11 @@ export function McpServersPage({
         >
           Add server
         </Button>
+        {onEditJson && (
+          <Button variant="secondary" disabled={busy || readOnly} onClick={onEditJson}>
+            Edit JSON
+          </Button>
+        )}
       </div>
       <DataTable
         {...table}
@@ -472,10 +463,6 @@ export function McpServersPage({
           <McpForm
             key={editor.key}
             initial={mcpFormFields(editor.originalId ?? "", editor.initial)}
-            draft={editor.draft}
-            onDraft={(draft) =>
-              setEditor((value) => (value?.key === editor.key ? { ...value, draft } : value))
-            }
             base={editor.base.document}
             originalId={editor.originalId}
             templates={targets?.templates ?? []}
@@ -603,7 +590,7 @@ export function McpServersPage({
                     .then(
                       async (result) => {
                         if (result.status === "recovery-required")
-                          setError("Configuration recovery is required. Your draft is retained.");
+                          setError("Configuration recovery is required.");
                         else setMove(undefined);
                         await refresh();
                       },

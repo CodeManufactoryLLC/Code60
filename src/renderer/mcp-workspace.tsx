@@ -12,18 +12,13 @@ import {
   type McpResetPreview,
   type McpTargetAddress,
   type McpTextIssue,
+  type McpTextRead,
+  validateMcpConnectorText,
 } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
 import { Button } from "./carbon/button.js";
 import { Select } from "./carbon/fields.js";
 import type { TableOptions } from "./data-table.js";
-import {
-  type McpDraft,
-  mcpDraftState,
-  newMcpDraft,
-  observeMcpDraft,
-  sameMcpOwner,
-} from "./mcp-draft.js";
 import type { McpEditorView } from "./mcp-json-editor.js";
 import { McpRecoveryPanel } from "./mcp-recovery.js";
 import { McpServersPage } from "./mcp-servers.js";
@@ -32,7 +27,13 @@ import { Modal } from "./modal.js";
 import { PageTitle } from "./page-title.js";
 
 const JsonEditor = lazy(() => import("./mcp-json-editor.js"));
-const Diff = lazy(() => import("./monaco-diff.js"));
+const sameOwner = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const textOf = (value: McpTextRead) =>
+  value.contentBase64 === null
+    ? value.exists
+      ? ""
+      : MCP_EMPTY_TEXT
+    : decodeMcpText(value.contentBase64);
 export const mcpWorkspaceFailure = (cause: unknown) => {
   const explain = (code: string, detail: string) =>
     `MCP_CONFIG_${code}: ${detail} Other application features and available tools remain usable.`;
@@ -40,12 +41,12 @@ export const mcpWorkspaceFailure = (cause: unknown) => {
   if (text.includes("conflict"))
     return explain(
       "CONFLICT",
-      "Configuration, project or backup changed. Your draft is retained. Reload or compare before trying again.",
+      "Configuration, project or backup changed. Reset before trying again.",
     );
   if (text.includes("recovery-required"))
     return explain(
       "RECOVERY_REQUIRED",
-      "Configuration recovery is required. Your draft is retained; preserve the transaction evidence.",
+      "Configuration recovery is required; preserve the transaction evidence.",
     );
   if (text.includes("invalid"))
     return explain(
@@ -60,11 +61,11 @@ export const mcpWorkspaceFailure = (cause: unknown) => {
   if (text.includes("unsafe"))
     return explain(
       "UNSAFE",
-      "MCP configuration storage identity or permissions are unsafe. Your draft is retained. Review storage ownership and permissions, then explicitly reload or compare before saving.",
+      "MCP configuration storage identity or permissions are unsafe. Review storage ownership and permissions, then explicitly reload before saving.",
     );
   return explain(
     "UNAVAILABLE",
-    "MCP configuration storage is unavailable. Your draft is retained. Review storage availability, locks and free space, then explicitly reload or compare before saving.",
+    "MCP configuration storage is unavailable. Review storage availability, locks and free space, then explicitly reload before saving.",
   );
 };
 const failure = mcpWorkspaceFailure;
@@ -78,20 +79,20 @@ export function McpWorkspace({
   active: boolean;
   contextKey: string;
 }) {
-  const [mode, setMode] = useState<"servers" | "json">("servers");
   const [scope, setScope] = useState("user");
   const [targets, setTargets] = useState<McpManagementTargets>();
-  const [draft, setDraft] = useState<McpDraft>();
+  const [saved, setSaved] = useState<McpTextRead>();
+  const [ownerLost, setOwnerLost] = useState(false);
   const [visible, setVisible] = useState(
     typeof document === "undefined" || document.visibilityState !== "hidden",
   );
-  const [formDirty, setFormDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [retryKey, setRetryKey] = useState(0);
-  const [compare, setCompare] = useState(false);
+  const [jsonOpen, setJsonOpen] = useState(false);
+  const [jsonBase, setJsonBase] = useState<McpTextRead>();
+  const [jsonText, setJsonText] = useState("");
   const [issueLocation, setIssueLocation] = useState<{ issue: McpTextIssue; key: string }>();
-  const [guard, setGuard] = useState<{ title: string; proceed(): void }>();
   const [backups, setBackups] = useState<McpBackupEntry[]>();
   const [backup, setBackup] = useState<
     McpBackupPreview & {
@@ -101,33 +102,47 @@ export function McpWorkspace({
   >();
   const [reset, setReset] = useState<McpResetPreview>();
   const sequence = useRef(0);
-  const reloadToken = useRef<number | undefined>(undefined);
   const requests = useRef<{ key: string; id: string } | undefined>(undefined);
   const pending = useRef(false);
   const awake = useRef(active && visible);
   awake.current = active && visible;
-  const current = useRef(draft);
-  current.current = draft;
+  const currentSaved = useRef(saved);
+  currentSaved.current = saved;
   const view = useRef<McpEditorView["current"]>(null);
-  const state = draft ? mcpDraftState(draft) : undefined;
-  const target = targets?.targets.find((t) =>
-    scope === "user" ? t.address.scope === "user" : t.address.targetId === scope,
-  );
   const context = useRef(contextKey);
   context.current = contextKey;
+  const projectTargets = targets?.targets.filter((t) => t.address.scope === "project") ?? [];
+  const activeScope =
+    scope === "project" ? (projectTargets[0]?.address.targetId ?? "project") : scope;
+  const target = targets?.targets.find((t) =>
+    activeScope === "user" ? t.address.scope === "user" : t.address.targetId === activeScope,
+  );
+  const noProjectOpen = scope === "project" && projectTargets.length === 0;
   const load = useCallback(
     async (clearError = false) => {
-      if (!awake.current || reloadToken.current !== undefined) return;
+      if (!awake.current) return;
       const token = ++sequence.current;
       try {
         const list = await api.mcpTargets();
         if (!awake.current || token !== sequence.current || contextKey !== context.current) return;
         setTargets(list);
+        const projects = list.targets.filter((t) => t.address.scope === "project");
+        const resolvedScope =
+          scope === "project" ? (projects[0]?.address.targetId ?? "project") : scope;
+        if (resolvedScope === "project") {
+          setSaved(undefined);
+          setOwnerLost(false);
+          if (clearError) setError("");
+          return;
+        }
+        if (scope === "project" && resolvedScope !== "project") setScope(resolvedScope);
         const selected = list.targets.find((t) =>
-          scope === "user" ? t.address.scope === "user" : t.address.targetId === scope,
+          resolvedScope === "user"
+            ? t.address.scope === "user"
+            : t.address.targetId === resolvedScope,
         );
         if (!selected) {
-          setDraft((v) => (v ? { ...v, ownerLost: true } : v));
+          setOwnerLost(true);
           setError(
             "This configuration owner is unavailable. Reopen the project and explicitly reload or select its new configuration.",
           );
@@ -135,11 +150,12 @@ export function McpWorkspace({
         }
         const value = await api.mcpReadText(selected.address);
         if (!awake.current || token !== sequence.current || contextKey !== context.current) return;
-        setDraft((v) => (v ? observeMcpDraft(v, value) : newMcpDraft(value)));
+        setSaved(value);
+        setOwnerLost(false);
         if (clearError) setError("");
       } catch (cause) {
         if (awake.current && token === sequence.current) {
-          setDraft((v) => (v ? { ...v, ownerLost: true } : v));
+          setOwnerLost(Boolean(currentSaved.current));
           setError(failure(cause));
         }
       }
@@ -155,7 +171,6 @@ export function McpWorkspace({
     if (active && visible) void load();
     return () => {
       sequence.current++;
-      reloadToken.current = undefined;
     };
   }, [load, active, visible]);
   useEffect(
@@ -165,67 +180,70 @@ export function McpWorkspace({
       }),
     [api, load],
   );
-  useEffect(() => {
-    if (!state?.dirty && !formDirty) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [state?.dirty, formDirty]);
   const requestId = (value: unknown) => {
     const key = JSON.stringify(value);
     if (requests.current?.key !== key) requests.current = { key, id: randomId() };
     return requests.current.id;
   };
-  async function reload() {
-    if (!target) throw new Error("MCP configuration conflict");
+  async function openJson() {
+    if (!target) return;
+    setError("");
     const token = ++sequence.current;
     const ownerContext = context.current;
-    // Background connection notifications can arrive while discarding a draft.
-    // Let the explicit read finish, then observe any newer revision normally.
-    reloadToken.current = token;
     try {
       const value = await api.mcpReadText(target.address);
-      if (token !== sequence.current || !awake.current || ownerContext !== context.current)
-        throw new Error("MCP configuration conflict");
-      setDraft(newMcpDraft(value));
-      setError("");
-      setCompare(false);
-    } finally {
-      if (reloadToken.current === token) {
-        reloadToken.current = undefined;
-        void load();
-      }
+      if (!awake.current || token !== sequence.current || ownerContext !== context.current) return;
+      setSaved(value);
+      setOwnerLost(false);
+      setJsonBase(value);
+      setJsonText(textOf(value));
+      setIssueLocation(undefined);
+      view.current = null;
+      setJsonOpen(true);
+    } catch (cause) {
+      if (awake.current && token === sequence.current) setError(failure(cause));
+    }
+  }
+  async function resetJson() {
+    if (!target) return;
+    setError("");
+    const token = ++sequence.current;
+    const ownerContext = context.current;
+    try {
+      const value = await api.mcpReadText(target.address);
+      if (!awake.current || token !== sequence.current || ownerContext !== context.current) return;
+      setSaved(value);
+      setOwnerLost(false);
+      setJsonBase(value);
+      setJsonText(textOf(value));
+      setIssueLocation(undefined);
+    } catch (cause) {
+      if (awake.current && token === sequence.current) setError(failure(cause));
     }
   }
   async function mutate(
     value: unknown,
     action: (requestId: string) => Promise<McpManagementResult>,
   ) {
-    if (pending.current || !draft) return false;
+    if (pending.current || !saved) return false;
     pending.current = true;
     setBusy(true);
     setError("");
-    const owner = draft.saved.target;
+    const owner = saved.target;
     const ownerContext = context.current;
-    setDraft((v) => (v ? { ...v, hold: true } : v));
     try {
       const result = await action(requestId(value));
       if (result.status === "recovery-required") {
-        setError(
-          "Configuration recovery is required. Your draft is retained; preserve the transaction evidence.",
-        );
+        setError("Configuration recovery is required; preserve the transaction evidence.");
         await load();
         return false;
       }
-      const saved = await api.mcpReadText(owner);
-      if (!sameMcpOwner(current.current?.saved.target, owner) || ownerContext !== context.current)
+      const latest = await api.mcpReadText(owner);
+      if (!sameOwner(currentSaved.current?.target, owner) || ownerContext !== context.current)
         throw new Error("MCP configuration conflict");
-      setDraft(newMcpDraft(saved));
+      setSaved(latest);
+      setOwnerLost(false);
       setError("");
-      setCompare(false);
       return true;
     } catch (cause) {
       setError(failure(cause));
@@ -236,45 +254,57 @@ export function McpWorkspace({
       setBusy(false);
     }
   }
-  async function saveText() {
-    if (!draft || !mcpDraftState(draft).canSave) return false;
+  const jsonValidation = jsonOpen ? validateMcpConnectorText(jsonText) : undefined;
+  const jsonEditable = jsonBase ? !jsonBase.exists || jsonBase.contentBase64 !== null : false;
+  const jsonBlocked = Boolean(saved?.pendingRecovery.length || jsonBase?.pendingRecovery.length);
+  const jsonStale = Boolean(
+    jsonBase && (ownerLost || (saved && saved.revision !== jsonBase.revision)),
+  );
+  const jsonDirty = jsonBase ? jsonText !== textOf(jsonBase) : false;
+  const jsonCanSave = Boolean(
+    jsonBase && jsonDirty && jsonEditable && jsonValidation?.valid && !jsonStale && !jsonBlocked,
+  );
+  async function saveJson() {
+    if (!jsonBase || !jsonCanSave) return false;
     const value = {
-      target: draft.saved.target,
-      expectedRevision: draft.saved.revision,
-      contentBase64: encodeMcpText(draft.text),
+      target: jsonBase.target,
+      expectedRevision: jsonBase.revision,
+      contentBase64: encodeMcpText(jsonText),
     };
-    return mutate(value, (requestId) => api.mcpSaveText({ ...value, requestId }));
-  }
-  function navigate(proceed: () => void) {
-    if (state?.dirty) setGuard({ title: "Unsaved MCP JSON changes", proceed });
-    else proceed();
+    const ok = await mutate(value, (requestId) => api.mcpSaveText({ ...value, requestId }));
+    if (ok) {
+      setJsonOpen(false);
+      setJsonBase(undefined);
+    }
+    return ok;
   }
   function select(next: string) {
     if (next === scope) return;
-    navigate(() => {
-      sequence.current++;
-      setDraft(undefined);
-      current.current = undefined;
-      setScope(next);
-      setError("");
-      setBackup(undefined);
-      setBackups(undefined);
-      setReset(undefined);
-      view.current = null;
-    });
+    sequence.current++;
+    setSaved(undefined);
+    currentSaved.current = undefined;
+    setOwnerLost(false);
+    setScope(next);
+    setError("");
+    setJsonOpen(false);
+    setJsonBase(undefined);
+    setBackup(undefined);
+    setBackups(undefined);
+    setReset(undefined);
+    view.current = null;
   }
   async function openBackups() {
-    if (!draft) return;
+    if (!saved) return;
     setError("");
     setBackup(undefined);
-    const owner = draft.saved.target;
+    const owner = saved.target;
     const ownerContext = context.current;
     try {
       const list = await api.mcpBackups(owner);
       if (
         awake.current &&
         ownerContext === context.current &&
-        sameMcpOwner(current.current?.saved.target, owner)
+        sameOwner(currentSaved.current?.target, owner)
       )
         setBackups(list);
     } catch (cause) {
@@ -282,57 +312,71 @@ export function McpWorkspace({
     }
   }
   async function openReset(includeUser: boolean) {
-    if (!draft) return;
+    if (!saved) return;
     setError("");
-    const owner = draft.saved.target;
+    const owner = saved.target;
     const ownerContext = context.current;
     try {
       const preview = await api.mcpPreviewReset({ target: owner, includeUser });
       if (
         awake.current &&
         ownerContext === context.current &&
-        sameMcpOwner(current.current?.saved.target, owner)
+        sameOwner(currentSaved.current?.target, owner)
       )
         setReset(preview);
     } catch (cause) {
       setError(failure(cause));
     }
   }
-  return (
-    <section className="mcp-workspace">
-      <div className="mcp-scope">
-        <Select
-          labelText="Configuration"
-          aria-label="Configuration"
-          value={scope}
-          disabled={busy || formDirty}
-          onChange={(e) => select(e.target.value)}
-        >
-          <option value="user">User</option>
-          {targets?.targets
-            .filter((t) => t.address.scope === "project")
-            .map((t) => (
+  const serversView = noProjectOpen ? (
+    <section className="mcp-servers-page">
+      <PageTitle page="mcp-servers" />
+      <p role="status">Open a project to configure project MCP servers.</p>
+    </section>
+  ) : (
+    <>
+      {scope !== "user" && projectTargets.length > 1 && (
+        <div className="mcp-scope">
+          <Select
+            labelText="Project"
+            aria-label="Project"
+            value={activeScope}
+            disabled={busy}
+            onChange={(e) => select(e.target.value)}
+          >
+            {projectTargets.map((t) => (
               <option key={t.address.targetId} value={t.address.targetId}>
                 {t.label}
               </option>
             ))}
-          {scope !== "user" && !targets?.targets.some((t) => t.address.targetId === scope) && (
-            <option value={scope}>Unavailable project</option>
-          )}
-        </Select>
-      </div>
+          </Select>
+        </div>
+      )}
+      <McpServersPage
+        key={`${activeScope}:${retryKey}`}
+        api={api}
+        active={active && visible}
+        contextKey={contextKey}
+        configuration={{ scope: activeScope, select, reload: () => void load(true) }}
+        onEditJson={() => void openJson()}
+        readOnly={ownerLost}
+        {...table}
+      />
+    </>
+  );
+  return (
+    <section className="mcp-workspace">
       <Tabs
-        selectedIndex={mode === "servers" ? 0 : 1}
-        onChange={({ selectedIndex }) => {
-          if (selectedIndex === 0) navigate(() => setMode("servers"));
-          else setMode("json");
-        }}
+        selectedIndex={scope === "user" ? 0 : 1}
+        onChange={({ selectedIndex }) =>
+          select(selectedIndex === 0 ? "user" : (projectTargets[0]?.address.targetId ?? "project"))
+        }
       >
-        <TabList aria-label="MCP configuration view" activation="manual">
-          <Tab disabled={busy}>Servers</Tab>
-          <Tab disabled={busy}>JSON</Tab>
+        <TabList aria-label="MCP configuration scope" activation="manual">
+          <Tab disabled={busy}>User</Tab>
+          <Tab disabled={busy}>Project</Tab>
         </TabList>
-        {error && (
+        {error && !jsonOpen && (
           <InlineNotification
             role="alert"
             kind="error"
@@ -341,235 +385,76 @@ export function McpWorkspace({
             hideCloseButton
           />
         )}
-        {(draft?.ownerLost || (!draft && error)) && (
+        {(ownerLost || (!saved && error)) && !jsonOpen && (
           <Button
             variant="quiet"
             type="button"
             disabled={busy}
             onClick={() => {
-              if (draft) setGuard({ title: "Reload MCP configuration?", proceed: () => {} });
-              else {
-                setRetryKey((n) => n + 1);
-                void load(true);
-              }
+              setRetryKey((n) => n + 1);
+              void load(true);
             }}
           >
             Reload configuration
           </Button>
         )}
         <TabPanels>
-          <TabPanel>
-            {mode === "servers" && (
-              <McpServersPage
-                key={`${scope}:${retryKey}`}
-                api={api}
-                active={active && visible}
-                contextKey={contextKey}
-                configuration={{ scope, select, reload: () => void load(true) }}
-                onFormDirty={setFormDirty}
-                readOnly={draft?.ownerLost ?? false}
-                {...table}
-              />
-            )}
-          </TabPanel>
-          <TabPanel>
-            {mode === "json" && (
-              <>
-                <PageTitle page="mcp-servers" />
-                <p className="mcp-editor-description">
-                  Changes apply to future sessions. Use credential references in place of secrets.
-                </p>
-                {draft && state && (
-                  <>
-                    <div className="mcp-json-actions">
-                      <Button
-                        variant="primary"
-                        type="button"
-                        disabled={busy || !state.canSave}
-                        onClick={() => void saveText()}
-                      >
-                        Save configuration
-                      </Button>
-                      <Button
-                        variant="quiet"
-                        type="button"
-                        disabled={busy || !state.editable || !state.validation.valid}
-                        onClick={() =>
-                          setDraft((v) =>
-                            v
-                              ? { ...v, text: `${JSON.stringify(JSON.parse(v.text), null, 2)}\n` }
-                              : v,
-                          )
-                        }
-                      >
-                        Format JSON
-                      </Button>
-                      <Button
-                        variant="quiet"
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          setGuard({ title: "Discard MCP changes?", proceed: () => {} })
-                        }
-                      >
-                        Discard changes
-                      </Button>
-                      <Button
-                        variant="quiet"
-                        type="button"
-                        disabled={busy}
-                        onClick={() => {
-                          setCompare(true);
-                          void load();
-                        }}
-                      >
-                        Compare saved and draft
-                      </Button>
-                      <span role="status">{state.dirty ? "Unsaved changes" : "Saved"}</span>
-                    </div>
-                    {state.stale && (
-                      <InlineNotification
-                        role="alert"
-                        kind="warning"
-                        hideCloseButton
-                        title="Configuration or owner changed."
-                        subtitle="Your draft is retained. Compare or explicitly discard/reload before saving."
-                      />
-                    )}
-                    {state.blocked && (
-                      <InlineNotification
-                        role="alert"
-                        kind="warning"
-                        hideCloseButton
-                        title="Pending recovery blocks writes."
-                        subtitle="Preserve private evidence and follow the MCP configuration recovery runbook."
-                      />
-                    )}
-                    {!state.editable && (
-                      <InlineNotification
-                        role="alert"
-                        kind="error"
-                        hideCloseButton
-                        title="The original file is not valid UTF-8."
-                        subtitle="Use a valid backup or a confirmed reset. The original bytes remain protected."
-                      />
-                    )}
-                    {!state.validation.valid && (
-                      <ul aria-label="Configuration issues">
-                        {state.validation.issues.map((issue) => (
-                          <li
-                            key={`${issue.code}:${issue.line}:${issue.column}:${issue.path.join(".")}`}
-                          >
-                            <Button
-                              type="button"
-                              onClick={() => setIssueLocation({ issue, key: randomId() })}
-                            >
-                              {issue.message} Line {issue.line}, column {issue.column}.
-                            </Button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    <Suspense fallback={<p role="status">Loading JSON editor…</p>}>
-                      <JsonEditor
-                        text={draft.text}
-                        issues={state.validation.issues}
-                        reveal={issueLocation}
-                        active={active && visible}
-                        key={JSON.stringify(draft.saved.target)}
-                        editable={state.editable && !busy}
-                        canSave={state.canSave && !busy}
-                        view={view}
-                        onChange={(text) => setDraft((v) => (v ? { ...v, text } : v))}
-                        onSave={() => void saveText()}
-                      />
-                    </Suspense>
-                    {compare && (
-                      <section aria-label="Saved versus draft">
-                        <h2>Saved versus Draft</h2>
-                        <Suspense fallback={<p>Loading comparison…</p>}>
-                          <Diff
-                            original={
-                              draft.latest.contentBase64 === null
-                                ? draft.latest.exists
-                                  ? ""
-                                  : MCP_EMPTY_TEXT
-                                : decodeMcpText(draft.latest.contentBase64)
-                            }
-                            modified={draft.text}
-                            path="mcp.json"
-                            address={`mcp:${draft.latest.revision}`}
-                            originalLabel="Saved configuration"
-                            modifiedLabel="Your configuration draft"
-                          />
-                        </Suspense>
-                        <Button variant="quiet" type="button" onClick={() => setCompare(false)}>
-                          Close comparison
-                        </Button>
-                      </section>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-          </TabPanel>
+          <TabPanel>{scope === "user" && serversView}</TabPanel>
+          <TabPanel>{scope !== "user" && serversView}</TabPanel>
         </TabPanels>
       </Tabs>
-      <section className="mcp-maintenance" aria-label="Configuration maintenance">
-        <h2>Configuration maintenance</h2>
-        <div className="mcp-maintenance-row">
-          <h3>Backup and recovery</h3>
-          <div className="mcp-actions">
-            <Button
-              variant="quiet"
-              type="button"
-              disabled={busy || !draft}
-              onClick={() => void openBackups()}
-            >
-              Restore backup
-            </Button>
-            <Button
-              variant="quiet"
-              className="destructive"
-              type="button"
-              disabled={
-                busy || !draft || Boolean(draft.latest.pendingRecovery.length) || draft.ownerLost
-              }
-              onClick={() => void openReset(false)}
-            >
-              Reset this configuration
-            </Button>
-            {target?.address.scope === "project" && (
+      {!noProjectOpen && (
+        <section className="mcp-maintenance" aria-label="Configuration maintenance">
+          <h2>Configuration maintenance</h2>
+          <div className="mcp-maintenance-row">
+            <h3>Backup and recovery</h3>
+            <div className="mcp-actions">
+              <Button
+                variant="quiet"
+                type="button"
+                disabled={busy || !saved}
+                onClick={() => void openBackups()}
+              >
+                Restore backup
+              </Button>
               <Button
                 variant="quiet"
                 className="destructive"
                 type="button"
-                disabled={
-                  busy || !draft || Boolean(draft.latest.pendingRecovery.length) || draft.ownerLost
-                }
-                onClick={() => void openReset(true)}
+                disabled={busy || !saved || Boolean(saved.pendingRecovery.length) || ownerLost}
+                onClick={() => void openReset(false)}
               >
-                Reset User and this project
+                Reset this configuration
               </Button>
-            )}
-            {target && (
-              <McpRecoveryPanel
-                api={api}
-                target={target.address}
-                active={active && visible}
-                dirty={Boolean(state?.dirty || formDirty)}
-                onChanged={() => {
-                  void load();
-                }}
-              />
-            )}
+              {target?.address.scope === "project" && (
+                <Button
+                  variant="quiet"
+                  className="destructive"
+                  type="button"
+                  disabled={busy || !saved || Boolean(saved.pendingRecovery.length) || ownerLost}
+                  onClick={() => void openReset(true)}
+                >
+                  Reset User and this project
+                </Button>
+              )}
+              {target && (
+                <McpRecoveryPanel
+                  api={api}
+                  target={target.address}
+                  active={active && visible}
+                  onChanged={() => {
+                    void load();
+                  }}
+                />
+              )}
+            </div>
           </div>
-        </div>
-        {target && (
-          <McpTroubleshooting api={api} target={target.address} active={active && visible} />
-        )}
-      </section>
-      {active && visible && guard && (
+          {target && (
+            <McpTroubleshooting api={api} target={target.address} active={active && visible} />
+          )}
+        </section>
+      )}
+      {active && visible && jsonOpen && jsonBase && (
         <Modal
           footer={
             <>
@@ -577,52 +462,117 @@ export function McpWorkspace({
                 variant="secondary"
                 type="button"
                 disabled={busy}
-                onClick={() => setGuard(undefined)}
+                onClick={() => void resetJson()}
+              >
+                Reset
+              </Button>
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setJsonOpen(false);
+                  setJsonBase(undefined);
+                }}
               >
                 Cancel
               </Button>
               <Button
-                className="destructive"
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  void reload().then(
-                    () => {
-                      setGuard(undefined);
-                      guard.proceed();
-                    },
-                    (cause) => setError(failure(cause)),
-                  );
-                }}
-              >
-                Discard
-              </Button>
-              <Button
                 variant="primary"
                 type="button"
-                disabled={busy || !state?.canSave}
-                onClick={() => {
-                  void saveText().then((saved) => {
-                    if (saved) {
-                      setGuard(undefined);
-                      guard.proceed();
-                    }
-                  });
-                }}
+                disabled={busy || !jsonCanSave}
+                onClick={() => void saveJson()}
               >
                 Save
               </Button>
             </>
           }
-          title={guard.title}
+          title={`Edit JSON — ${target?.label ?? "User"}`}
+          wide
           busy={busy}
-          onClose={() => setGuard(undefined)}
+          onClose={() => {
+            setJsonOpen(false);
+            setJsonBase(undefined);
+          }}
         >
-          {error && <p role="alert">{error}</p>}
-          <p>
-            Save the JSON draft, discard it and read the latest saved configuration, or cancel.
-            Discard never writes the file.
-          </p>
+          <div className="mcp-json-modal">
+            <div className="mcp-json-actions">
+              <Button
+                variant="quiet"
+                type="button"
+                disabled={busy || !jsonEditable || !jsonValidation?.valid}
+                onClick={() => setJsonText(`${JSON.stringify(JSON.parse(jsonText), null, 2)}\n`)}
+              >
+                Format JSON
+              </Button>
+              <span role="status">{jsonDirty ? "Unsaved changes" : "Saved"}</span>
+            </div>
+            {error && (
+              <InlineNotification
+                role="alert"
+                kind="error"
+                title="Configuration error"
+                subtitle={error}
+                hideCloseButton
+              />
+            )}
+            {jsonStale && (
+              <InlineNotification
+                role="alert"
+                kind="warning"
+                hideCloseButton
+                title="Configuration or owner changed."
+                subtitle="Reset to load the latest saved configuration before saving."
+              />
+            )}
+            {jsonBlocked && (
+              <InlineNotification
+                role="alert"
+                kind="warning"
+                hideCloseButton
+                title="Pending recovery blocks writes."
+                subtitle="Preserve private evidence and follow the MCP configuration recovery runbook."
+              />
+            )}
+            {!jsonEditable && (
+              <InlineNotification
+                role="alert"
+                kind="error"
+                hideCloseButton
+                title="The original file is not valid UTF-8."
+                subtitle="Use a valid backup or a confirmed reset. The original bytes remain protected."
+              />
+            )}
+            {jsonValidation && !jsonValidation.valid && (
+              <ul className="mcp-issues" aria-label="Configuration issues">
+                {jsonValidation.issues.map((issue) => (
+                  <li key={`${issue.code}:${issue.line}:${issue.column}:${issue.path.join(".")}`}>
+                    <Button
+                      variant="quiet"
+                      type="button"
+                      onClick={() => setIssueLocation({ issue, key: randomId() })}
+                    >
+                      {issue.message} Line {issue.line}, column {issue.column}.
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Suspense fallback={<p role="status">Loading JSON editor…</p>}>
+              <JsonEditor
+                text={jsonText}
+                issues={jsonValidation?.issues ?? []}
+                reveal={issueLocation}
+                active={active && visible && jsonOpen}
+                key={`${JSON.stringify(jsonBase.target)}:${jsonBase.revision}`}
+                editable={jsonEditable && !busy}
+                canSave={jsonCanSave && !busy}
+                view={view}
+                onChange={setJsonText}
+                onSave={() => void saveJson()}
+              />
+            </Suspense>
+          </div>
         </Modal>
       )}
       {active && visible && backups && (
@@ -644,14 +594,10 @@ export function McpWorkspace({
                 className="destructive"
                 type="button"
                 disabled={
-                  busy ||
-                  !backup ||
-                  !draft ||
-                  draft.ownerLost ||
-                  Boolean(draft.latest.pendingRecovery.length)
+                  busy || !backup || !saved || ownerLost || Boolean(saved.pendingRecovery.length)
                 }
                 onClick={() => {
-                  if (!draft || !backup) return;
+                  if (!saved || !backup) return;
                   const value = {
                     target: backup.target,
                     expectedRevision: backup.expectedRevision,
@@ -659,8 +605,8 @@ export function McpWorkspace({
                     expectedBackupRevision: backup.backupRevision,
                   };
                   void mutate(value, (requestId) => api.mcpRestore({ ...value, requestId })).then(
-                    (saved) => {
-                      if (saved) {
+                    (ok) => {
+                      if (ok) {
                         setBackups(undefined);
                         setBackup(undefined);
                       }
@@ -693,17 +639,17 @@ export function McpWorkspace({
               onChange={(e) => {
                 const backupId = e.target.value;
                 setBackup(undefined);
-                if (draft) {
+                if (saved) {
                   const token = ++sequence.current;
-                  const captured = draft.saved;
+                  const captured = saved;
                   const ownerContext = context.current;
-                  void api.mcpPreviewBackup({ target: draft.saved.target, backupId }).then(
+                  void api.mcpPreviewBackup({ target: saved.target, backupId }).then(
                     (value) => {
                       if (
                         awake.current &&
                         token === sequence.current &&
                         ownerContext === context.current &&
-                        sameMcpOwner(current.current?.saved.target, captured.target)
+                        sameOwner(currentSaved.current?.target, captured.target)
                       )
                         setBackup({
                           ...value,
@@ -738,8 +684,7 @@ export function McpWorkspace({
               <p>
                 {backup.missing
                   ? "The configuration file was absent. Restore removes this dedicated file and may reveal inherited user definitions."
-                  : "Preview of the configuration that will be restored."}{" "}
-                {state?.dirty ? "Your unsaved draft will be discarded only after success." : ""}
+                  : "Preview of the configuration that will be restored."}
               </p>
               <pre className="mcp-backup-preview">
                 {backup.contentBase64 === null
@@ -770,8 +715,8 @@ export function McpWorkspace({
                 onClick={() => {
                   const value = reset.request;
                   void mutate(value, (requestId) => api.mcpReset({ ...value, requestId })).then(
-                    (saved) => {
-                      if (saved) setReset(undefined);
+                    (ok) => {
+                      if (ok) setReset(undefined);
                     },
                   );
                 }}
@@ -806,9 +751,6 @@ export function McpWorkspace({
           </p>
           {reset.malformed && (
             <p>Malformed originals will be preserved as private recovery evidence.</p>
-          )}
-          {state?.dirty && (
-            <p>Your unsaved JSON draft will be discarded only after reset succeeds.</p>
           )}
           <p>
             Credentials, unrelated settings, built-in capabilities and running agents/connections

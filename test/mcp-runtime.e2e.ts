@@ -6,7 +6,7 @@ import { browserApp, createDatabase, onboard, openProject } from "./fixtures/bro
 
 async function apps(page: Page) {
   await openMcpServers(page);
-  await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "User", exact: true })).toBeVisible();
 }
 const alive = (pid: number) => {
   try {
@@ -148,13 +148,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     }
     await serverAction("Disable server");
     await expect(page.locator(".mcp-workspace").getByRole("table")).toContainText("No");
-    const projectValue = await page
-      .getByLabel("Configuration", { exact: true })
-      .locator("option")
-      .filter({ hasText: "project" })
-      .getAttribute("value");
-    if (!projectValue) throw new Error("Project target missing");
-    await page.getByLabel("Configuration", { exact: true }).selectOption(projectValue);
+    await page.getByRole("tab", { name: "Project", exact: true }).click();
     // Add a disabled project override; approval is explicit and source identity remains canonical.
     await page.getByRole("button", { name: "Add server", exact: true }).click();
     const form = page.getByRole("dialog", { name: /Add MCP server/ });
@@ -177,17 +171,11 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
       await readFile(join(fixture.directory, "state/code60/mcp-runtime/trust.json"), "utf8"),
     );
     expect(Object.keys(metadata.approvals)).toHaveLength(1);
-    await page.getByRole("tab", { name: "JSON", exact: true }).click();
-    await page.locator(".mcp-json-editor .inputarea").focus();
-    await page.keyboard.press("ControlOrMeta+a");
-    await page.keyboard.press("ArrowRight");
-    await page.keyboard.insertText(" ");
-    await page.getByRole("link", { name: "Code60", exact: true }).click();
-    await apps(page);
-    await expect(page.locator(".mcp-json-editor")).toContainText("Project override");
-    await expect(
-      page.getByRole("button", { name: "Save configuration", exact: true }),
-    ).toBeEnabled();
+    await page.getByRole("button", { name: "Edit JSON", exact: true }).click();
+    const jsonModal = page.getByRole("dialog", { name: /^Edit JSON —/ });
+    await expect(jsonModal.locator(".mcp-json-editor")).toContainText("Project override");
+    await jsonModal.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(jsonModal).toHaveCount(0);
     const records = await readdir(join(fixture.directory, "state/code60/mcp-configuration"));
     expect(records.some((record) => record.endsWith(".backup"))).toBe(true);
     expect((await events()).some((event) => event.event === "call")).toBe(false);
