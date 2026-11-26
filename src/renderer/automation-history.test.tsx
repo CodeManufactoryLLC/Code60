@@ -54,3 +54,22 @@ it("exposes single selection, sortable headers and an explicit empty state", () 
     renderToStaticMarkup(<AutomationHistory rows={[]} selected={undefined} onSelect={() => {}} />),
   ).toContain("No executions yet.");
 });
+it("renders workflow job type and task progress in history rows", () => {
+  const html = renderToStaticMarkup(
+    <AutomationHistory
+      rows={[
+        row("wf", 2, {
+          actionType: "workflow",
+          status: "running",
+          workflowStatus: "needs_input",
+          tasksCompleted: 1,
+          tasksTotal: 3,
+        }),
+      ]}
+      selected={undefined}
+      onSelect={() => {}}
+    />,
+  );
+  expect(html).toContain("Workflow (1/3)");
+  expect(html).toContain("needs input");
+});

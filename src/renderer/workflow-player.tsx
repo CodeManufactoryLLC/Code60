@@ -1,4 +1,5 @@
 import { DirectionStraightRight, Pause, Play, Stop } from "@carbon/icons-react";
+import { Tag } from "@carbon/react";
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type {
   ApplicationClient,
@@ -400,6 +401,15 @@ export function WorkflowPlayer({
       )}
       <section className="workflow-player">
         <h2>Execution status</h2>
+        {record.origin?.kind === "scheduled" && (
+          <p className="workflow-scheduled-origin">
+            <Tag size="sm" type="purple">
+              Scheduled
+            </Tag>{" "}
+            <span>{record.origin.automationName}</span>
+            {record.baseBranch && <span> · Base branch: {record.baseBranch}</span>}
+          </p>
+        )}
         <div className="workflow-player-panels">
           <div className="workflow-player-left">
             <div className="workflow-transport-row">

@@ -1,10 +1,11 @@
-import { parseValue, workflowRequestSchema } from "../contracts/index.js";
+import { branchNameSchema, parseValue, workflowRequestSchema } from "../contracts/index.js";
 
 export type {
   WorkflowDraft,
   WorkflowDraftReply,
   WorkflowEvent,
   WorkflowList,
+  WorkflowOrigin,
   WorkflowProviderOption,
   WorkflowRead,
   WorkflowRecord,
@@ -14,10 +15,12 @@ export type {
   WorkflowSnapshot,
 } from "../contracts/index.js";
 export {
+  branchNameSchema,
   workflowDiffSchema,
   workflowDraftReplySchema,
   workflowDraftSchema,
   workflowEventsSchema,
+  workflowOriginSchema,
   workflowSnapshotSchema,
   workflowVerdictSchema,
 } from "../contracts/index.js";

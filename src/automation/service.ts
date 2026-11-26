@@ -2,7 +2,8 @@ import { join } from "node:path";
 import { type CoreDeps, defaultDeps, stateHome } from "../core/index.js";
 import { assertSupportedPlatform } from "../platform/index.js";
 import { executionEvidence } from "./evidence.js";
-import { createExecutor } from "./executor.js";
+import { createPromptActionHandler } from "./executor.js";
+import { ActionRegistry, type AnyActionHandler } from "./handlers.js";
 import { listenService, serviceRequest } from "./protocol.js";
 import { Scheduler } from "./scheduler.js";
 import { AutomationStore } from "./store.js";
@@ -10,15 +11,24 @@ import { AutomationStore } from "./store.js";
 export const automationRoot = (env: Readonly<NodeJS.ProcessEnv>) =>
   join(stateHome(env), "code60", "automations");
 
+interface SchedulerRuntimeOptions {
+  listen?: boolean;
+  /** Additional action handlers composed by gateway (e.g. "workflow"). */
+  handlers?: readonly AnyActionHandler[];
+}
+
 export async function startSchedulerRuntime(
   env: Readonly<NodeJS.ProcessEnv>,
   deps: CoreDeps = defaultDeps(),
-  listen = false,
+  options: boolean | SchedulerRuntimeOptions = false,
 ) {
   assertSupportedPlatform();
+  const { listen = false, handlers = [] } =
+    typeof options === "boolean" ? { listen: options } : options;
   const root = automationRoot(env);
   const store = await AutomationStore.open(root);
-  const scheduler = new Scheduler(store, createExecutor(deps, env));
+  const registry = new ActionRegistry([createPromptActionHandler(deps, env), ...handlers]);
+  const scheduler = new Scheduler(store, registry);
   let timer: ReturnType<typeof setInterval> | undefined;
   try {
     await scheduler.initialize();
@@ -27,7 +37,7 @@ export async function startSchedulerRuntime(
           root,
           (request) =>
             request.action === "transcript" || request.action === "diff"
-              ? executionEvidence(scheduler, deps, env, request.executionId, request.action)
+              ? executionEvidence(scheduler, registry, request.executionId, request.action)
               : scheduler.request(request),
           (listener) => scheduler.onChange(listener),
         )
@@ -48,7 +58,7 @@ export async function startSchedulerRuntime(
       scheduler,
       request: (request: Parameters<typeof serviceRequest>[1]) =>
         request.action === "transcript" || request.action === "diff"
-          ? executionEvidence(scheduler, deps, env, request.executionId, request.action)
+          ? executionEvidence(scheduler, registry, request.executionId, request.action)
           : scheduler.request(request),
       subscribe: (listener: (revision: number) => void) => scheduler.onChange(listener),
       stop() {

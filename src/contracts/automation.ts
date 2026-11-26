@@ -4,13 +4,19 @@ import { z } from "zod";
 z.config({ jitless: true });
 
 import { durationSchema, TOOL_KINDS } from "./values.js";
+import { workflowTaskSchema } from "./workflows.js";
 
 /** Version of the local scheduler service protocol and its private state file. */
 const AUTOMATION_PROTOCOL_VERSION = 1;
-const AUTOMATION_STATE_FORMAT = 1;
+const LEGACY_AUTOMATION_STATE_FORMAT = 1;
+export const AUTOMATION_STATE_FORMAT = 2;
 /** Largest single protocol frame, in UTF-16 code units, accepted by either side. */
 export const AUTOMATION_FRAME_LIMIT = 512 * 1024;
+/** Largest serialized workflow task definition inside a scheduled job. */
+const AUTOMATION_WORKFLOW_DEFINITION_LIMIT = 256 * 1024;
 export const AUTOMATION_LIMIT = 100;
+export const DEFAULT_PROMPT_LANE_LIMIT = 1;
+export const DEFAULT_WORKFLOW_LANE_LIMIT = 2;
 const AUTOMATION_HISTORY_PAGE = 50;
 const AUTOMATION_MIN_INTERVAL_MINUTES = 1;
 const AUTOMATION_MAX_INTERVAL_MINUTES = 7 * 24 * 60;
@@ -69,6 +75,14 @@ export const automationScheduleSchema = z.discriminatedUnion("type", [
 ]);
 export type AutomationSchedule = z.infer<typeof automationScheduleSchema>;
 
+/** Extensible trigger definition. Future non-time event triggers add new variants here. */
+const automationTriggerSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("schedule"),
+    schedule: automationScheduleSchema,
+  }),
+]);
+
 const agentNameSchema = z
   .string({ error: "Invalid agent" })
   .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/, "Invalid agent");
@@ -97,19 +111,6 @@ const timeoutSchema = z
   .string()
   .max(32)
   .refine((value) => durationSchema.safeParse(value).success, "Invalid timeout");
-
-/** Fields a person chooses. The repository path is supplied only by trusted local callers. */
-const draftShape = {
-  name: bounded("name", 1, 80),
-  prompt: bounded("prompt", 1, 32_000),
-  agent: agentNameSchema,
-  baseBranch: branchNameSchema,
-  /** Tool-call kinds allowed without asking. Every other kind is denied. */
-  allow: allowSchema,
-  turnTimeout: timeoutSchema,
-  schedule: automationScheduleSchema,
-  enabled: z.boolean(),
-};
 const absolutePath = z
   .string({ error: "Invalid repository" })
   .min(1)
@@ -118,31 +119,108 @@ const absolutePath = z
     (path) => !path.includes("\0") && (path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path)),
     "The repository must be an absolute path",
   );
-export const automationDraftSchema = z.strictObject({ ...draftShape, repository: absolutePath });
+const decimal = z.string().regex(/^\d{1,40}$/);
+const repositoryPinSchema = z.strictObject({ path: absolutePath, dev: decimal, ino: decimal });
+export type RepositoryPin = z.infer<typeof repositoryPinSchema>;
+const providerHashSchema = z.string().regex(/^[a-f0-9]{64}$/);
+
+const automationActionTypeSchema = z.enum(["prompt", "workflow"]);
+export type AutomationActionType = z.infer<typeof automationActionTypeSchema>;
+
+const workflowTasksSchema = z
+  .array(workflowTaskSchema)
+  .min(1, "Add at least one workflow task")
+  .max(100)
+  .refine(
+    (tasks) => JSON.stringify(tasks).length <= AUTOMATION_WORKFLOW_DEFINITION_LIMIT,
+    "Workflow tasks exceed the scheduled job size limit",
+  );
+
+const promptActionCommon = {
+  type: z.literal("prompt"),
+  prompt: bounded("prompt", 1, 32_000),
+  agent: agentNameSchema,
+  baseBranch: branchNameSchema,
+  /** Tool-call kinds allowed without asking. Every other kind is denied. */
+  allow: allowSchema,
+  turnTimeout: timeoutSchema,
+};
+
+const workflowActionCommon = {
+  type: z.literal("workflow"),
+  provider: agentNameSchema,
+  baseBranch: branchNameSchema,
+  tasks: workflowTasksSchema,
+  repairs: z.number().int().min(0).max(30),
+  retries: z.number().int().min(0).max(30),
+  autoApprove: z.boolean(),
+};
+
+const automationActionDraftSchema = z.discriminatedUnion("type", [
+  z.strictObject({ ...promptActionCommon, repository: absolutePath }),
+  z.strictObject({ ...workflowActionCommon, repository: absolutePath }),
+]);
+export type AutomationActionDraft = z.infer<typeof automationActionDraftSchema>;
+
+const rendererAutomationActionDraftSchema = z.discriminatedUnion("type", [
+  z.strictObject({ ...promptActionCommon, repositoryToken: z.uuid().optional() }),
+  z.strictObject({ ...workflowActionCommon, repositoryToken: z.uuid().optional() }),
+]);
+export type RendererAutomationActionDraft = z.infer<typeof rendererAutomationActionDraftSchema>;
+
+const automationActionSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("prompt"),
+    prompt: z.string().max(32_000),
+    agent: agentNameSchema,
+    /** SHA-256 of the provider command approved when the automation was saved. */
+    providerHash: providerHashSchema,
+    repository: repositoryPinSchema,
+    baseBranch: branchNameSchema,
+    allow: allowSchema,
+    turnTimeout: z.string().max(32),
+  }),
+  z.strictObject({
+    type: z.literal("workflow"),
+    provider: agentNameSchema,
+    /** SHA-256 of the provider command approved when the automation was saved. */
+    providerHash: providerHashSchema,
+    repository: repositoryPinSchema,
+    baseBranch: branchNameSchema,
+    tasks: workflowTasksSchema,
+    repairs: z.number().int().min(0).max(30),
+    retries: z.number().int().min(0).max(30),
+    autoApprove: z.boolean(),
+  }),
+]);
+export type AutomationAction = z.infer<typeof automationActionSchema>;
+
+/** Fields a person chooses. Repository paths are supplied only by trusted local callers. */
+export const automationDraftSchema = z.strictObject({
+  name: bounded("name", 1, 80),
+  trigger: automationTriggerSchema,
+  action: automationActionDraftSchema,
+  enabled: z.boolean(),
+});
 export type AutomationDraft = z.input<typeof automationDraftSchema>;
+
 /** Renderer drafts name a main-process repository choice, never a path. */
 export const rendererAutomationDraftSchema = z.strictObject({
-  ...draftShape,
-  repositoryToken: z.uuid().optional(),
+  name: bounded("name", 1, 80),
+  trigger: automationTriggerSchema,
+  action: rendererAutomationActionDraftSchema,
+  enabled: z.boolean(),
 });
 export type RendererAutomationDraft = z.input<typeof rendererAutomationDraftSchema>;
 
-const decimal = z.string().regex(/^\d{1,40}$/);
 const automationSchema = z.strictObject({
   id: z.uuid(),
   revision: z.number().int().positive(),
   createdAt: isoInstant,
   updatedAt: isoInstant,
   name: z.string().max(80),
-  prompt: z.string().max(32_000),
-  agent: agentNameSchema,
-  /** SHA-256 of the provider command approved when the automation was saved. */
-  providerHash: z.string().regex(/^[a-f0-9]{64}$/),
-  repository: z.strictObject({ path: absolutePath, dev: decimal, ino: decimal }),
-  baseBranch: branchNameSchema,
-  allow: allowSchema,
-  turnTimeout: z.string().max(32),
-  schedule: automationScheduleSchema,
+  trigger: automationTriggerSchema,
+  action: automationActionSchema,
   enabled: z.boolean(),
   nextRunAt: isoInstant.nullable(),
 });
@@ -164,6 +242,7 @@ const EXECUTION_REASONS = [
   "busy",
   "paused",
   "blocked",
+  "handler_unavailable",
   "provider_missing",
   "provider_changed",
   "repository_missing",
@@ -176,23 +255,67 @@ const EXECUTION_REASONS = [
   "cancelled_by_user",
   "service_stopped",
   "agent_failed",
+  "workflow_failed",
   "timed_out",
 ] as const;
 export type ExecutionReason = (typeof EXECUTION_REASONS)[number];
 
 const evidenceSchema = z.strictObject({
-  worktree: z.strictObject({ path: absolutePath, dev: decimal, ino: decimal }),
+  worktree: repositoryPinSchema,
   base: z.string().regex(/^[a-f0-9]{40,64}$/),
   branch: z.string().max(200),
 });
 export type AutomationEvidence = z.infer<typeof evidenceSchema>;
+
+const workflowExecutionStatusSchema = z.enum([
+  "preparing",
+  "running",
+  "pausing",
+  "paused",
+  "needs_input",
+  "completed",
+  "failed",
+  "cancelled",
+  "uncertain",
+]);
+export type ScheduledWorkflowStatus = z.infer<typeof workflowExecutionStatusSchema>;
+
+const promptArtifactSchema = z.strictObject({
+  type: z.literal("prompt"),
+  repository: repositoryPinSchema,
+  evidence: evidenceSchema.nullable(),
+  runId: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
+    .nullable(),
+  /** Permission requests denied because they were outside the saved policy. */
+  denials: z.number().int().min(0),
+  changedFiles: z.number().int().min(0).nullable(),
+});
+
+const workflowArtifactSchema = z.strictObject({
+  type: z.literal("workflow"),
+  repository: repositoryPinSchema,
+  evidence: evidenceSchema.nullable(),
+  workflowId: z.uuid().nullable(),
+  workflowRunId: z.uuid().nullable(),
+  workflowStatus: workflowExecutionStatusSchema.nullable(),
+  tasksCompleted: z.number().int().min(0),
+  tasksTotal: z.number().int().min(1).max(100),
+});
+
+const executionArtifactSchema = z.discriminatedUnion("type", [
+  promptArtifactSchema,
+  workflowArtifactSchema,
+]);
+export type ExecutionArtifact = z.infer<typeof executionArtifactSchema>;
+
 const executionSchema = z.strictObject({
   id: z.uuid(),
   sequence: z.number().int().positive(),
   automationId: z.uuid(),
   automationName: z.string().max(80),
-  repository: z.strictObject({ path: absolutePath, dev: decimal, ino: decimal }),
-  evidence: evidenceSchema.nullable(),
+  actionType: automationActionTypeSchema,
   revision: z.number().int().positive(),
   trigger: z.enum(["schedule", "manual"]),
   scheduledFor: isoInstant.nullable(),
@@ -201,13 +324,7 @@ const executionSchema = z.strictObject({
   endedAt: isoInstant.nullable(),
   status: z.enum(EXECUTION_STATUSES),
   reason: z.enum(EXECUTION_REASONS).nullable(),
-  runId: z
-    .string()
-    .regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
-    .nullable(),
-  /** Permission requests denied because they were outside the saved policy. */
-  denials: z.number().int().min(0),
-  changedFiles: z.number().int().min(0).nullable(),
+  artifact: executionArtifactSchema,
 });
 export type Execution = z.infer<typeof executionSchema>;
 
@@ -227,6 +344,116 @@ export const automationStateSchema = z.strictObject({
 });
 export type AutomationState = z.infer<typeof automationStateSchema>;
 
+/** Legacy format 1 schemas retained for lossless read-time upgrade to format 2. */
+const legacyAutomationSchema = z.strictObject({
+  id: z.uuid(),
+  revision: z.number().int().positive(),
+  createdAt: isoInstant,
+  updatedAt: isoInstant,
+  name: z.string().max(80),
+  prompt: z.string().max(32_000),
+  agent: agentNameSchema,
+  providerHash: providerHashSchema,
+  repository: repositoryPinSchema,
+  baseBranch: branchNameSchema,
+  allow: allowSchema,
+  turnTimeout: z.string().max(32),
+  schedule: automationScheduleSchema,
+  enabled: z.boolean(),
+  nextRunAt: isoInstant.nullable(),
+});
+
+const legacyExecutionSchema = z.strictObject({
+  id: z.uuid(),
+  sequence: z.number().int().positive(),
+  automationId: z.uuid(),
+  automationName: z.string().max(80),
+  repository: repositoryPinSchema,
+  evidence: evidenceSchema.nullable(),
+  revision: z.number().int().positive(),
+  trigger: z.enum(["schedule", "manual"]),
+  scheduledFor: isoInstant.nullable(),
+  claimedAt: isoInstant,
+  startedAt: isoInstant.nullable(),
+  endedAt: isoInstant.nullable(),
+  status: z.enum(EXECUTION_STATUSES),
+  reason: z.enum(EXECUTION_REASONS).nullable(),
+  runId: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
+    .nullable(),
+  denials: z.number().int().min(0),
+  changedFiles: z.number().int().min(0).nullable(),
+});
+
+const legacyAutomationStateSchema = z.strictObject({
+  format: z.literal(LEGACY_AUTOMATION_STATE_FORMAT),
+  revision: z.number().int().min(0),
+  sequence: z.number().int().min(0),
+  pausedAll: z.boolean(),
+  block: serviceBlockSchema.nullable(),
+  automations: z.array(legacyAutomationSchema).max(AUTOMATION_LIMIT),
+  executions: z.array(legacyExecutionSchema).max(5000),
+});
+
+/** Parse format 2 state directly, or upgrade legacy format 1 prompt state losslessly. */
+export function parseAutomationState(raw: unknown): AutomationState {
+  if (raw && typeof raw === "object" && (raw as { format?: unknown }).format === 1) {
+    const legacy = legacyAutomationStateSchema.parse(raw);
+    return automationStateSchema.parse({
+      format: AUTOMATION_STATE_FORMAT,
+      revision: legacy.revision,
+      sequence: legacy.sequence,
+      pausedAll: legacy.pausedAll,
+      block: legacy.block,
+      automations: legacy.automations.map((item) => ({
+        id: item.id,
+        revision: item.revision,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        name: item.name,
+        trigger: { type: "schedule" as const, schedule: item.schedule },
+        action: {
+          type: "prompt" as const,
+          prompt: item.prompt,
+          agent: item.agent,
+          providerHash: item.providerHash,
+          repository: item.repository,
+          baseBranch: item.baseBranch,
+          allow: item.allow,
+          turnTimeout: item.turnTimeout,
+        },
+        enabled: item.enabled,
+        nextRunAt: item.nextRunAt,
+      })),
+      executions: legacy.executions.map((exec) => ({
+        id: exec.id,
+        sequence: exec.sequence,
+        automationId: exec.automationId,
+        automationName: exec.automationName,
+        actionType: "prompt" as const,
+        revision: exec.revision,
+        trigger: exec.trigger,
+        scheduledFor: exec.scheduledFor,
+        claimedAt: exec.claimedAt,
+        startedAt: exec.startedAt,
+        endedAt: exec.endedAt,
+        status: exec.status,
+        reason: exec.reason,
+        artifact: {
+          type: "prompt" as const,
+          repository: exec.repository,
+          evidence: exec.evidence,
+          runId: exec.runId,
+          denials: exec.denials,
+          changedFiles: exec.changedFiles,
+        },
+      })),
+    });
+  }
+  return automationStateSchema.parse(raw);
+}
+
 export interface ServiceStatus {
   version: number;
   appVersion: string;
@@ -236,6 +463,7 @@ export interface ServiceStatus {
   pausedAll: boolean;
   block: z.infer<typeof serviceBlockSchema> | null;
   activeExecutionId: string | null;
+  activeExecutionIds?: string[];
 }
 
 /** Read-only native registration and live scheduler health; not persisted state. */

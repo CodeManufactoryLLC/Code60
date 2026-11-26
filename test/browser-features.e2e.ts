@@ -1846,3 +1846,91 @@ test("browser: removes focus highlight borders across Carbon controls, shadow ch
     await fixture.close();
   }
 });
+
+test("browser: scheduled workflow branches from baseBranch, runs with autoApprove, and opens interactively in Workflows", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const fixture = await browserApp(browser);
+  const repo = join(fixture.directory, "scheduled-workflow-repo");
+  await mkdir(repo);
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 10_000 });
+  git("init", "-q", "-b", "main");
+  await writeFile(join(repo, "README.md"), "# Committed base\n");
+  git("add", ".");
+  commitFixture(repo);
+  // Leave an uncommitted dirty file; scheduled workflows must branch from refs/heads/main.
+  await writeFile(join(repo, "UNCOMMITTED.txt"), "local-only\n");
+  const head = git("rev-parse", "HEAD");
+  const jobName = "Nightly workflow check";
+  try {
+    const view = await fixture.open();
+    view.page.setDefaultTimeout(15_000);
+    await start(view.page, fixture.directory);
+    await app(view.page, "Scheduled Jobs");
+    const content = view.page.locator(".carbon-scheduled-jobs:not(.carbon-job-modal-host)");
+    await content.getByRole("button", { name: "New scheduled job", exact: true }).click();
+    const form = view.page.getByRole("region", { name: "New scheduled job", exact: true });
+    await form.getByLabel("Name", { exact: true }).fill(jobName);
+    await form.getByLabel("Job type", { exact: true }).selectOption("workflow");
+    await form.getByRole("button", { name: "Choose repository", exact: true }).click();
+    const chooser = view.page.getByRole("dialog", { name: "Choose folder", exact: true });
+    await chooser.getByRole("option", { name: fixture.directory, exact: true }).dblclick();
+    await chooser.getByRole("option", { name: "scheduled-workflow-repo", exact: true }).dblclick();
+    await chooser.getByRole("button", { name: "Choose folder", exact: true }).click();
+    await view.page
+      .getByRole("dialog", { name: "Use this automation repository?", exact: true })
+      .getByRole("button", { name: "Use repository", exact: true })
+      .click();
+    await expect(form.getByLabel("Automatically approve harness permissions")).toBeChecked();
+    await form.getByLabel("Task name", { exact: true }).fill("Build check");
+    await form
+      .getByLabel("Implementation instructions", { exact: true })
+      .fill("Update README with verification note");
+    await form
+      .getByLabel("Verification criteria", { exact: true })
+      .fill("README exists and looks valid");
+    await form.getByRole("button", { name: "Create job", exact: true }).click();
+    await expect(form).toHaveCount(0);
+
+    // Verify Workflow badge on row and expanded workflow facts.
+    const row = content.locator("tr", { hasText: jobName }).first();
+    await expect(row).toContainText("Workflow");
+    await content.getByRole("button", { name: `Expand ${jobName}` }).click();
+    await expect(content).toContainText("Workflow tasks (1)");
+    await expect(content).toContainText("Auto-approve");
+
+    // Run immediately and verify completion in Execution history.
+    await content.getByRole("button", { name: `Run ${jobName}`, exact: true }).click();
+    await content.getByRole("button", { name: `Actions for ${jobName}`, exact: true }).click();
+    await view.page.getByRole("menuitem", { name: "View history", exact: true }).click();
+    const table = content.getByRole("table", { name: "Execution history", exact: true });
+    await expect(table).toContainText("Workflow (1/1)", { timeout: 30_000 });
+    await expect(table).toContainText("finished", { timeout: 30_000 });
+
+    // Select execution and jump directly into Apps -> Workflows via "Open in Workflows".
+    await table.getByRole("radio").first().focus();
+    await view.page.keyboard.press("Space");
+    await expect(table.getByRole("radio").first()).toBeChecked();
+    await content.getByRole("button", { name: "Open in Workflows", exact: true }).click();
+
+    const workflowsPage = view.page.locator(".workflows-page");
+    await expect(workflowsPage).toBeVisible();
+    await expect(workflowsPage.locator(".workflow-scheduled-origin")).toContainText("Scheduled");
+    await expect(workflowsPage.locator(".workflow-scheduled-origin")).toContainText(jobName);
+    await expect(workflowsPage.locator(".workflow-scheduled-origin")).toContainText("main");
+    await expect(workflowsPage).toContainText("Completed");
+
+    // Source checkout remains untouched and worktree does not include uncommitted dirty files.
+    expect(git("rev-parse", "HEAD")).toBe(head);
+    const worktrees = git("worktree", "list", "--porcelain")
+      .split("\n")
+      .filter((line) => line.startsWith("worktree "))
+      .map((line) => line.slice(9));
+    expect(worktrees.length).toBe(2);
+    await expect(readFile(join(worktrees[1] ?? "", "UNCOMMITTED.txt"), "utf8")).rejects.toThrow();
+  } finally {
+    await fixture.close();
+  }
+});

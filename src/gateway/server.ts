@@ -50,6 +50,7 @@ import { applicationOperations } from "./operations.js";
 import { Sessions, sameSecret } from "./sessions.js";
 import { readGatewaySettings, writeGatewaySettings } from "./settings.js";
 import { type LanPublisher, WebServerBeta } from "./web-server.js";
+import { createWorkflowActionHandler } from "./workflow-automation.js";
 
 export const gatewayRoot = (env: Readonly<NodeJS.ProcessEnv>) =>
   join(stateHome(env), "code60", "gateway");
@@ -290,15 +291,44 @@ export async function startGateway(options: GatewayOptions = {}) {
       ragModelRoot: options.modelRoot ?? fileURLToPath(new URL("../../models/", import.meta.url)),
     },
   );
+  const workflowBaseDeps = options.deps ?? defaultDeps();
+  const workflows = new DesktopWorkflows(
+    env,
+    { ...workflowBaseDeps, agents: providerAgents(workflowBaseDeps.agents, env) },
+    () => interactions.pick("folder"),
+    (input, signal) => application.draftWorkflow(input, signal),
+    {
+      list: () => application.workflowProviders(),
+      resolve: (providerId, cwd) => application.resolveWorkflowProvider(providerId, cwd),
+    },
+  );
+  let resolveAppReady!: () => void;
+  const appReady = new Promise<void>((resolve) => {
+    resolveAppReady = resolve;
+  });
   // Scheduler dependencies intentionally have no application diagnostic sink.
   let scheduler: Awaited<ReturnType<typeof startSchedulerRuntime>> | undefined;
   let schedulerError: string | null = null;
   try {
     const schedulerDeps = options.deps ?? defaultDeps();
-    scheduler = await startSchedulerRuntime(env, {
-      ...schedulerDeps,
-      agents: providerAgents(schedulerDeps.agents, env),
-    });
+    scheduler = await startSchedulerRuntime(
+      env,
+      {
+        ...schedulerDeps,
+        agents: providerAgents(schedulerDeps.agents, env),
+      },
+      {
+        handlers: [
+          createWorkflowActionHandler({
+            deps: schedulerDeps,
+            workflows,
+            resolveProvider: (providerId, cwd) =>
+              application.resolveWorkflowProvider(providerId, cwd),
+            ready: appReady,
+          }),
+        ],
+      },
+    );
   } catch {
     schedulerError = "Scheduled jobs are unavailable. Check scheduler storage and ownership.";
   }
@@ -334,17 +364,6 @@ export async function startGateway(options: GatewayOptions = {}) {
           service: scheduler?.scheduler.status() ?? null,
         };
       },
-    },
-  );
-  const workflowBaseDeps = options.deps ?? defaultDeps();
-  const workflows = new DesktopWorkflows(
-    env,
-    { ...workflowBaseDeps, agents: providerAgents(workflowBaseDeps.agents, env) },
-    () => interactions.pick("folder"),
-    (input, signal) => application.draftWorkflow(input, signal),
-    {
-      list: () => application.workflowProviders(),
-      resolve: (providerId, cwd) => application.resolveWorkflowProvider(providerId, cwd),
     },
   );
   const startedAt = new Date().toISOString();
@@ -995,11 +1014,14 @@ export async function startGateway(options: GatewayOptions = {}) {
     await pairingChange?.catch(() => {});
     await webServer?.close();
     interactions.close();
-    const results = await Promise.allSettled([
-      application.shutdown().finally(closeConnectors),
-      scheduler?.stop(),
-      workflows.close(),
-    ]);
+    const schedulerResult = await Promise.allSettled([scheduler?.stop()]);
+    const results = [
+      ...schedulerResult,
+      ...(await Promise.allSettled([
+        application.shutdown().finally(closeConnectors),
+        workflows.close(),
+      ])),
+    ];
     if (results.some((result) => result.status === "rejected")) {
       quiescing = false;
       throw new Error("Some work could not be stopped. Ownership and evidence were retained.");
@@ -1077,6 +1099,7 @@ export async function startGateway(options: GatewayOptions = {}) {
         Boolean(options.container) || (env.CODE60_DEV_CONTAINER === "1" && !lanPublisher),
     });
     await application.restore({ prepareDefaultDatabase: true });
+    resolveAppReady();
     await webServer.start(options.container ? false : (settings?.webServerEnabled ?? false));
     return {
       origin,
@@ -1091,10 +1114,11 @@ export async function startGateway(options: GatewayOptions = {}) {
   } catch (error) {
     for (const dispose of disposers) dispose();
     healthCheck.dispose();
+    resolveAppReady();
+    await Promise.allSettled([scheduler?.stop()]);
     await Promise.allSettled([
       webServer?.close(),
       application.shutdown().finally(closeConnectors),
-      scheduler?.stop(),
       workflows.close(),
       logs.close(),
     ]);

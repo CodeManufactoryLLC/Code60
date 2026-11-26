@@ -4,10 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { executionEvidence } from "../src/automation/evidence.js";
-import { createExecutor, executionConfig } from "../src/automation/executor.js";
+import { createPromptActionHandler, executionConfig } from "../src/automation/executor.js";
+import { type ActionExecutionContext, ActionRegistry } from "../src/automation/handlers.js";
 import type {
   Automation,
-  AutomationDraft,
+  AutomationAction,
+  AutomationActionDraft,
   AutomationEvidence,
   Execution,
 } from "../src/contracts/index.js";
@@ -18,6 +20,7 @@ const roots: string[] = [];
 afterEach(async () => {
   for (const root of roots.splice(0)) await fs.rm(root, { recursive: true, force: true });
 });
+
 async function setup() {
   const root = await fs.realpath(await fs.mkdtemp(join(tmpdir(), "c60-exec-")));
   roots.push(root);
@@ -60,26 +63,30 @@ async function setup() {
     await fs.mkdir(spec.path, { recursive: true });
   };
   const deps: CoreDeps = { ...defaultDeps(), agents, git, processes: new FakeProcesses() };
-  const executor = createExecutor(deps, env);
-  const draft: AutomationDraft = {
+  const handler = createPromptActionHandler(deps, env);
+  const registry = new ActionRegistry([handler]);
+  const actionDraft: Extract<AutomationActionDraft, { type: "prompt" }> = {
+    type: "prompt",
     repository,
-    name: "Checks",
     prompt: "Saved prompt",
     agent: "fixture",
     baseBranch: "main",
     allow: ["read"],
     turnTimeout: "1s",
-    enabled: false,
-    schedule: { type: "interval", everyMinutes: 1, anchor: "2026-01-01T00:00:00Z" },
   };
-  const identity = await executor.validate(draft);
+  const persistedAction = await handler.validate(actionDraft);
   const automation: Automation = {
-    ...draft,
-    ...identity,
     id: randomUUID(),
     revision: 1,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    name: "Checks",
+    trigger: {
+      type: "schedule",
+      schedule: { type: "interval", everyMinutes: 1, anchor: "2026-01-01T00:00:00Z" },
+    },
+    action: persistedAction,
+    enabled: false,
     nextRunAt: null,
   };
   const execution: Execution = {
@@ -87,8 +94,7 @@ async function setup() {
     sequence: 1,
     automationId: automation.id,
     automationName: automation.name,
-    repository: identity.repository,
-    evidence: null,
+    actionType: "prompt",
     revision: 1,
     trigger: "manual",
     scheduledFor: null,
@@ -97,10 +103,30 @@ async function setup() {
     endedAt: null,
     status: "running",
     reason: null,
-    runId: `auto-${randomUUID()}`,
-    denials: 0,
-    changedFiles: null,
+    artifact: {
+      type: "prompt",
+      repository: persistedAction.repository,
+      evidence: null,
+      runId: `auto-${randomUUID()}`,
+      denials: 0,
+      changedFiles: null,
+    },
   };
+  const makeCtx = (
+    signal = new AbortController().signal,
+    onPin?: (evidence: AutomationEvidence) => void,
+    notify = () => {},
+  ): ActionExecutionContext => ({
+    signal,
+    abortKind: () => (signal.aborted ? "user" : null),
+    updateArtifact: async (updater) => {
+      execution.artifact = updater(execution.artifact);
+      if (execution.artifact.type === "prompt" && execution.artifact.evidence) {
+        onPin?.(execution.artifact.evidence);
+      }
+    },
+    notify,
+  });
   return {
     root,
     repository,
@@ -109,74 +135,80 @@ async function setup() {
     agents,
     git,
     deps,
-    executor,
-    draft,
+    handler,
+    registry,
+    persistedAction,
     automation,
     execution,
+    makeCtx,
   };
 }
+
 describe("isolated automation execution", () => {
   it("recognizes missing core records for claims and prelaunch refusals, not uncertain launches", async () => {
     const s = await setup();
-    expect(await s.executor.inspect({ ...s.execution, status: "claimed" })).toBe("gone");
+    expect(await s.handler.inspect({ ...s.execution, status: "claimed" })).toBe("gone");
     for (const reason of ["provider_changed", "base_missing", "low_disk"] as const)
-      expect(await s.executor.inspect({ ...s.execution, status: "failed", reason })).toBe("gone");
-    expect(await s.executor.inspect(s.execution)).toBe("blocked");
+      expect(await s.handler.inspect({ ...s.execution, status: "failed", reason })).toBe("gone");
+    expect(await s.handler.inspect(s.execution)).toBe("blocked");
     expect(
-      await s.executor.inspect({
+      await s.handler.inspect({
         ...s.execution,
         status: "failed",
         reason: "preparation_failed",
       }),
     ).toBe("blocked");
   });
+
   it("overrides permissive global policy, disables MCP, pins a worktree and runs exactly one turn", async () => {
     const s = await setup();
     let pin: AutomationEvidence | undefined;
-    const result = await s.executor.execute(
+    const result = await s.handler.execute(
       s.automation,
       s.execution,
-      new AbortController().signal,
-      async (evidence) => {
+      s.makeCtx(new AbortController().signal, (evidence) => {
         pin = evidence;
-      },
+      }),
     );
     expect(result.status).toBe("finished");
-    expect(result.denials).toBe(1);
+    const updatedArtifact = result.artifact
+      ? result.artifact(s.execution.artifact)
+      : s.execution.artifact;
+    expect(updatedArtifact.type === "prompt" && updatedArtifact.denials).toBe(1);
     expect(s.agents.sessions[0]?.prompts).toEqual(["Saved prompt"]);
     expect(s.agents.specs[0]?.mcpServers ?? []).toEqual([]);
     expect(s.agents.specs[0]?.cwd).not.toBe(s.repository);
     expect(pin?.worktree.path).toBe(s.agents.specs[0]?.cwd);
     const workspace = await openWorkspace(s.deps, s.repository, s.env);
-    expect((await workspace.store.read(s.execution.runId as string)).id).toBe(s.execution.runId);
+    const runId =
+      s.execution.artifact.type === "prompt" ? (s.execution.artifact.runId as string) : "";
+    expect((await workspace.store.read(runId)).id).toBe(runId);
     const config = executionConfig(
       { ...DEFAULT_CONFIG, agents: { fixture: { command: ["fake-provider"] } } },
-      s.automation,
+      s.automation.action as Extract<AutomationAction, { type: "prompt" }>,
     );
     expect(config.permissions).toEqual({ default: "deny", read: "allow" });
     expect(config).not.toHaveProperty("mcpServers");
   });
+
   it.each(["finished", "failed", "cancelled"] as const)(
     "publishes saved chunks before %s and preserves reopened evidence",
     async (terminal) => {
       const s = await setup();
       s.agents.script = () => "hang";
-      s.automation.turnTimeout = "1m";
+      if (s.automation.action.type === "prompt") s.automation.action.turnTimeout = "1m";
       const abort = new AbortController();
       const changed = vi.fn();
-      const running = s.executor.execute(
+      const running = s.handler.execute(
         s.automation,
         s.execution,
-        abort.signal,
-        async () => {},
-        changed,
+        s.makeCtx(abort.signal, undefined, changed),
       );
       const scheduler = { execution: () => structuredClone(s.execution) };
       const read = async () =>
         (await executionEvidence(
           scheduler,
-          s.deps,
-          s.env,
+          s.registry,
           s.execution.id,
           "transcript",
         )) as import("../src/contracts/index.js").AutomationTranscript;
@@ -206,7 +238,8 @@ describe("isolated automation execution", () => {
         else session.endTurn("end_turn");
         const outcome = await running;
         expect(outcome.status).toBe(terminal);
-        Object.assign(s.execution, outcome);
+        s.execution.status = outcome.status;
+        s.execution.reason = outcome.reason;
         const reopened = await read();
         expect(reopened.status).toBe(terminal);
         expect(reopened.entries.filter((entry) => entry.type === "message")).toEqual(
@@ -221,14 +254,11 @@ describe("isolated automation execution", () => {
 
   it("keeps hundreds of fragments in one message and preserves semantic boundaries and bounds", async () => {
     const s = await setup();
-    await s.executor.execute(
-      s.automation,
-      s.execution,
-      new AbortController().signal,
-      async () => {},
-    );
+    await s.handler.execute(s.automation, s.execution, s.makeCtx());
     const workspace = await openWorkspace(s.deps, s.repository, s.env);
-    const base = { runId: s.execution.runId as string, at: "2026-01-01T00:00:00Z" };
+    const runId =
+      s.execution.artifact.type === "prompt" ? (s.execution.artifact.runId as string) : "";
+    const base = { runId, at: "2026-01-01T00:00:00Z" };
     await Promise.all(
       Array.from({ length: 600 }, (_, i) =>
         workspace.store.appendEvent({ ...base, type: "message", text: `${i} \n` }),
@@ -240,8 +270,7 @@ describe("isolated automation execution", () => {
     const read = async () =>
       (await executionEvidence(
         { execution: () => s.execution },
-        s.deps,
-        s.env,
+        s.registry,
         s.execution.id,
         "transcript",
       )) as import("../src/contracts/index.js").AutomationTranscript;
@@ -262,14 +291,11 @@ describe("isolated automation execution", () => {
 
   it("suppresses raw ACP while preserving empty semantic boundaries and the entry display limit", async () => {
     const s = await setup();
-    await s.executor.execute(
-      s.automation,
-      s.execution,
-      new AbortController().signal,
-      async () => {},
-    );
+    await s.handler.execute(s.automation, s.execution, s.makeCtx());
     const workspace = await openWorkspace(s.deps, s.repository, s.env);
-    const base = { runId: s.execution.runId as string, at: "2026-01-01T00:00:00Z" };
+    const runId =
+      s.execution.artifact.type === "prompt" ? (s.execution.artifact.runId as string) : "";
+    const base = { runId, at: "2026-01-01T00:00:00Z" };
     await workspace.store.appendEvent({ ...base, type: "message", text: "A " });
     await workspace.store.appendEvent({
       ...base,
@@ -291,8 +317,7 @@ describe("isolated automation execution", () => {
     const read = async () =>
       (await executionEvidence(
         { execution: () => s.execution },
-        s.deps,
-        s.env,
+        s.registry,
         s.execution.id,
         "transcript",
       )) as import("../src/contracts/index.js").AutomationTranscript;
@@ -315,42 +340,40 @@ describe("isolated automation execution", () => {
 
   it("refuses changed providers, missing bases and replaced repositories before starting agents", async () => {
     const s = await setup();
-    const pin = async () => {};
     await fs.writeFile(
       s.config,
       JSON.stringify({ agents: { fixture: { command: ["different-provider"] } } }),
     );
-    await expect(
-      s.executor.execute(s.automation, s.execution, new AbortController().signal, pin),
-    ).rejects.toMatchObject({ reason: "provider_changed" });
+    await expect(s.handler.execute(s.automation, s.execution, s.makeCtx())).rejects.toMatchObject({
+      reason: "provider_changed",
+    });
     s.git.resolveCommit = async () => {
       throw new Error("missing");
     };
-    await expect(
-      s.executor.execute(s.automation, s.execution, new AbortController().signal, pin),
-    ).rejects.toMatchObject({ reason: "base_missing" });
+    await expect(s.handler.execute(s.automation, s.execution, s.makeCtx())).rejects.toMatchObject({
+      reason: "base_missing",
+    });
     await fs.rename(s.repository, `${s.repository}-old`);
     await fs.mkdir(s.repository);
-    await expect(
-      s.executor.execute(s.automation, s.execution, new AbortController().signal, pin),
-    ).rejects.toMatchObject({ reason: "repository_replaced" });
+    await expect(s.handler.execute(s.automation, s.execution, s.makeCtx())).rejects.toMatchObject({
+      reason: "repository_replaced",
+    });
     expect(s.agents.sessions).toHaveLength(0);
   });
+
   it("never falls back to a direct directory and never starts after cancelled preparation", async () => {
     const s = await setup();
     s.git.repoInfo = async () => {
       throw new Error("missing repo");
     };
-    await expect(
-      s.executor.execute(s.automation, s.execution, new AbortController().signal, async () => {}),
-    ).rejects.toThrow();
+    await expect(s.handler.execute(s.automation, s.execution, s.makeCtx())).rejects.toThrow();
     expect(s.agents.sessions).toHaveLength(0);
     const abort = new AbortController();
     abort.abort();
     expect(
-      (await s.executor.execute(s.automation, s.execution, abort.signal, async () => {})).status,
+      (await s.handler.execute(s.automation, s.execution, s.makeCtx(abort.signal))).status,
     ).toBe("cancelled");
     expect(s.agents.sessions).toHaveLength(0);
-    expect(await s.executor.inspect(s.execution)).toBe("blocked");
+    expect(await s.handler.inspect(s.execution)).toBe("blocked");
   });
 });

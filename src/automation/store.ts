@@ -1,5 +1,10 @@
 import { join } from "node:path";
-import { type AutomationState, automationStateSchema } from "../contracts/index.js";
+import {
+  AUTOMATION_STATE_FORMAT,
+  type AutomationState,
+  automationStateSchema,
+  parseAutomationState,
+} from "../contracts/index.js";
 import {
   fileCode,
   lockPrivateState,
@@ -9,7 +14,7 @@ import {
 
 const STATE_LIMIT = 16 * 1024 * 1024;
 export const emptyState = (): AutomationState => ({
-  format: 1,
+  format: AUTOMATION_STATE_FORMAT,
   revision: 0,
   sequence: 0,
   pausedAll: false,
@@ -27,6 +32,7 @@ export class AutomationStore implements StateWriter {
   private constructor(
     private readonly path: string,
     public state: AutomationState,
+    private diskState: unknown,
     readonly close: () => Promise<void>,
   ) {}
 
@@ -35,14 +41,18 @@ export class AutomationStore implements StateWriter {
     const path = join(root, "state.json");
     try {
       let state: AutomationState;
+      let diskState: unknown;
       try {
-        state = automationStateSchema.parse(await readPrivateJson(path, STATE_LIMIT));
+        const raw = await readPrivateJson(path, STATE_LIMIT);
+        state = parseAutomationState(raw);
+        diskState = raw;
       } catch (error) {
         if (fileCode(error) !== "ENOENT") throw error;
         state = emptyState();
         await writePrivateJson(path, state, undefined, STATE_LIMIT);
+        diskState = structuredClone(state);
       }
-      return new AutomationStore(path, state, release);
+      return new AutomationStore(path, state, diskState, release);
     } catch (error) {
       await release();
       throw error;
@@ -51,7 +61,8 @@ export class AutomationStore implements StateWriter {
 
   async save(next: AutomationState): Promise<void> {
     const parsed = automationStateSchema.parse(next);
-    await writePrivateJson(this.path, parsed, this.state, STATE_LIMIT);
+    await writePrivateJson(this.path, parsed, this.diskState, STATE_LIMIT);
     this.state = parsed;
+    this.diskState = structuredClone(parsed);
   }
 }

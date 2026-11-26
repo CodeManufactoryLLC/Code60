@@ -5,7 +5,7 @@ z.config({ jitless: true });
 const text = z.string().trim().min(1).max(65_536);
 const id = z.uuid();
 const providerIdSchema = z.string().trim().min(1).max(128);
-const workflowTaskSchema = z.strictObject({
+export const workflowTaskSchema = z.strictObject({
   name: z.string().trim().min(1).max(160),
   instructions: text,
   verify: text,
@@ -15,6 +15,14 @@ const workflowFieldsSchema = z.strictObject({
   name: z.string().trim().min(1).max(160),
   tasks: z.array(workflowTaskSchema).min(1).max(100),
 });
+export const workflowOriginSchema = z.strictObject({
+  kind: z.literal("scheduled"),
+  automationId: id,
+  automationName: z.string().max(80),
+  executionId: id,
+  scheduledFor: z.iso.datetime().nullable(),
+});
+export type WorkflowOrigin = z.infer<typeof workflowOriginSchema>;
 export const workflowDraftSchema = workflowFieldsSchema.extend({
   repositoryToken: id,
   provider: providerIdSchema.optional(),
@@ -189,11 +197,13 @@ export interface WorkflowRecord {
   repository: string;
   worktree: string;
   branch: string;
+  baseBranch?: string;
   baseline: string;
   repositoryIdentity: string;
   repositoryGitIdentity: string;
   worktreeIdentity: string;
   definition: Omit<WorkflowDraft, "repositoryToken">;
+  origin?: WorkflowOrigin;
   key: string;
   createdAt: string;
   snapshot?: WorkflowSnapshot;

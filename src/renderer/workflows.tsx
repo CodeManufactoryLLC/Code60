@@ -10,6 +10,7 @@ import {
   TabPanel,
   TabPanels,
   Tabs,
+  Tag,
 } from "@carbon/react";
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -36,18 +37,28 @@ export function WorkflowsPage({
   active,
   paused,
   providerReady,
+  requestedWorkflow,
   onProvider,
 }: {
   api: ApplicationClient;
   active: boolean;
   paused: boolean;
   providerReady: boolean;
+  requestedWorkflow?: { id: string; nonce: number } | null;
   onProvider(): void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState(0);
   const [template, setTemplate] = useState<WorkflowRecord>();
   const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    if (!requestedWorkflow) return;
+    setCreating(false);
+    setTemplate(undefined);
+    setView(1);
+    setSelected(requestedWorkflow.id);
+  }, [requestedWorkflow]);
   const [list, setList] = useState<WorkflowList | null>(null);
   const [detail, setDetail] = useState<WorkflowRead | null>(null);
   const [error, setError] = useState("");
@@ -308,6 +319,14 @@ export function WorkflowsPage({
                                       </AppButton>
                                     ) : (
                                       entry.name
+                                    )}
+                                    {entry.origin?.kind === "scheduled" && (
+                                      <>
+                                        {" "}
+                                        <Tag size="sm" type="purple">
+                                          Scheduled
+                                        </Tag>
+                                      </>
                                     )}
                                   </TableCell>
                                   <TableCell>

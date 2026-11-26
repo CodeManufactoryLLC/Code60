@@ -3,18 +3,22 @@ import { lstat, mkdir, realpath } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import {
+  branchNameSchema,
   parseWorkflowRequest,
   type WorkflowDraft,
   type WorkflowDraftReply,
   type WorkflowList,
+  type WorkflowOrigin,
   type WorkflowProviderOption,
   type WorkflowRead,
   type WorkflowRecord,
   type WorkflowRequest,
+  type WorkflowSnapshot,
   workflowDiffSchema,
   workflowDraftReplySchema,
   workflowDraftSchema,
   workflowEventsSchema,
+  workflowOriginSchema,
   workflowSnapshotSchema,
 } from "../bridge/index.js";
 import {
@@ -33,7 +37,8 @@ import {
 } from "../platform/index.js";
 import { workflowContext, workflowDirectoryIdentity } from "./workflow-context.js";
 
-const maximum = 8 * 1024 * 1024;
+const maximum = 16 * 1024 * 1024;
+const WORKFLOW_HISTORY_LIMIT = 1000;
 const recordSchema = z.strictObject({
   stopPending: z.boolean().optional(),
   id: z.uuid(),
@@ -41,11 +46,13 @@ const recordSchema = z.strictObject({
   repository: z.string().max(32_768),
   worktree: z.string().max(32_768),
   branch: z.string().regex(/^code60\/workflow-[a-f0-9-]{36}$/),
+  baseBranch: branchNameSchema.optional(),
   baseline: z.string().regex(/^[a-f0-9]{40,64}$/),
   repositoryIdentity: z.string().max(40_000),
   repositoryGitIdentity: z.string().max(40_000),
   worktreeIdentity: z.string().max(40_000),
   definition: workflowDraftSchema.omit({ repositoryToken: true }),
+  origin: workflowOriginSchema.optional(),
   key: z.uuid(),
   createdAt: z.string().max(100),
   snapshot: workflowSnapshotSchema.optional(),
@@ -54,7 +61,7 @@ const recordSchema = z.strictObject({
 });
 const registrySchema = z.strictObject({
   format: z.literal(2),
-  entries: z.array(recordSchema).max(200),
+  entries: z.array(recordSchema).max(WORKFLOW_HISTORY_LIMIT),
 });
 const ended = (record: WorkflowRecord) =>
   record.state === "preparation_failed" ||
@@ -188,10 +195,35 @@ type Approval = {
   recordId?: string;
 };
 
+export class WorkflowCheckoutBusyError extends Error {
+  constructor() {
+    super("A workflow is already active or uncertain for this checkout");
+    this.name = "WorkflowCheckoutBusyError";
+  }
+}
+
+export interface ScheduledWorkflowStartInput {
+  workflowId: string;
+  name: string;
+  repository: string;
+  baseBranch: string;
+  provider: string;
+  tasks: WorkflowDraft["tasks"];
+  repairs: number;
+  retries: number;
+  autoApprove: boolean;
+  origin: WorkflowOrigin;
+}
+
 /** Human-approved ordered workflows running natively in-process through Code60's ACP agents. */
 export class DesktopWorkflows {
   readonly root: string;
   private engine: WorkflowEngine | undefined;
+  private unwatchEngine: (() => void) | undefined;
+  private readonly workflowObservers = new Map<string, Set<(snapshot: WorkflowSnapshot) => void>>();
+  private readonly globalObservers = new Set<
+    (recordId: string, snapshot: WorkflowSnapshot) => void
+  >();
   private choices = new Map<string, Choice>();
   private approvals = new Map<string, Approval>();
   private forms = new Map<string, number>();
@@ -204,6 +236,7 @@ export class DesktopWorkflows {
   private loading: Promise<void> | undefined;
   private release: (() => Promise<void>) | undefined;
   private queue: Promise<unknown> = Promise.resolve();
+  private saveChain: Promise<unknown> = Promise.resolve();
   private queuedActions = 0;
   private pendingDrafts = 0;
   private removalReservation: symbol | null = null;
@@ -229,8 +262,203 @@ export class DesktopWorkflows {
         this.deps.agents,
         (providerId, cwd) => this.providers.resolve(providerId, cwd),
       );
+      this.unwatchEngine = this.engine.onRunChange((snapshot) => {
+        this.handleEngineSnapshot(snapshot);
+      });
     }
     return this.engine;
+  }
+
+  private notifyWorkflowObservers(recordId: string, snapshot: WorkflowSnapshot) {
+    const scoped = this.workflowObservers.get(recordId);
+    if (scoped) {
+      for (const listener of scoped) {
+        try {
+          listener(snapshot);
+        } catch {
+          /* Observer failures must not disrupt workflow execution. */
+        }
+      }
+    }
+    for (const listener of this.globalObservers) {
+      try {
+        listener(recordId, snapshot);
+      } catch {
+        /* Observer failures must not disrupt workflow execution. */
+      }
+    }
+  }
+
+  private handleEngineSnapshot(snapshot: WorkflowSnapshot) {
+    const record = this.entries.find((entry) => entry.snapshot?.runId === snapshot.runId);
+    if (!record) return;
+    this.notifyWorkflowObservers(record.id, snapshot);
+  }
+
+  observeWorkflow(workflowId: string, listener: (snapshot: WorkflowSnapshot) => void): () => void {
+    let set = this.workflowObservers.get(workflowId);
+    if (!set) {
+      set = new Set();
+      this.workflowObservers.set(workflowId, set);
+    }
+    set.add(listener);
+    return () => {
+      set?.delete(listener);
+      if (set && set.size === 0) this.workflowObservers.delete(workflowId);
+    };
+  }
+
+  subscribeChanges(listener: (recordId: string, snapshot: WorkflowSnapshot) => void): () => void {
+    this.globalObservers.add(listener);
+    return () => {
+      this.globalObservers.delete(listener);
+    };
+  }
+
+  async hasActiveWorkflowForRepository(repositoryPath: string): Promise<boolean> {
+    if (this.closed) return false;
+    await this.load();
+    let identity: string;
+    try {
+      identity = await workflowDirectoryIdentity(await realpath(repositoryPath));
+    } catch {
+      return false;
+    }
+    return this.entries.some((record) => record.repositoryIdentity === identity && !ended(record));
+  }
+
+  async startScheduled(input: ScheduledWorkflowStartInput): Promise<WorkflowRecord> {
+    if (this.closed || this.removalReservation) throw new Error("Workflows is closing");
+    return this.queueAction(async () => {
+      if (this.closed || this.removalReservation) throw new Error("Workflows is closing");
+      await this.load();
+      if (this.entries.length >= WORKFLOW_HISTORY_LIMIT)
+        throw new Error("Workflow history limit reached");
+      const path = await realpath(input.repository);
+      const repo = await this.deps.git.repoInfo(path);
+      if (repo.topLevel !== path) throw new Error("Choose the repository root");
+      const repoIdentity = await workflowDirectoryIdentity(path);
+      const gitIdentity = await workflowDirectoryIdentity(repo.commonDir);
+      if (
+        this.entries.some((record) => record.repositoryIdentity === repoIdentity && !ended(record))
+      )
+        throw new WorkflowCheckoutBusyError();
+      const baseline = await this.deps.git.resolveCommit(path, `refs/heads/${input.baseBranch}`);
+      this.providers.resolve(input.provider, path);
+      const definition: Omit<WorkflowDraft, "repositoryToken"> = {
+        name: input.name,
+        provider: input.provider,
+        tasks: structuredClone(input.tasks),
+        repairs: input.repairs,
+        retries: input.retries,
+        autoApprove: input.autoApprove,
+      };
+      const record: WorkflowRecord = {
+        id: input.workflowId,
+        name: input.name,
+        repository: path,
+        repositoryIdentity: repoIdentity,
+        repositoryGitIdentity: gitIdentity,
+        definition,
+        baseBranch: input.baseBranch,
+        origin: structuredClone(input.origin),
+        worktree: join(`${path}.worktrees`, `workflow-${input.workflowId}`),
+        worktreeIdentity: "",
+        branch: `code60/workflow-${input.workflowId}`,
+        baseline,
+        key: randomUUID(),
+        createdAt: new Date().toISOString(),
+        state: "preparing",
+      };
+      this.entries.push(record);
+      await this.save();
+      try {
+        await mkdir(dirname(record.worktree), { recursive: true });
+        await this.deps.git.addWorktree(
+          {
+            repoDir: record.repository,
+            path: record.worktree,
+            branch: record.branch,
+            base: record.baseline,
+          },
+          this.startup.signal,
+        );
+        record.worktreeIdentity = await workflowDirectoryIdentity(record.worktree);
+        record.state = "starting";
+        await this.save();
+      } catch {
+        record.state = "preparation_failed";
+        await this.save();
+        throw new Error(
+          "Worktree preparation failed before workflow dispatch. Evidence and any partial worktree were retained.",
+        );
+      }
+      const submitted = await this.submit(record);
+      if (submitted.snapshot) this.notifyWorkflowObservers(submitted.id, submitted.snapshot);
+      return submitted;
+    });
+  }
+
+  async readScheduledState(
+    workflowId: string,
+    options: { live?: boolean } = {},
+  ): Promise<WorkflowRecord | null> {
+    if (this.closed) return null;
+    const live = options.live ?? true;
+    return this.queueAction(async () => {
+      if (this.closed) return null;
+      await this.load(live);
+      const record = this.entries.find((entry) => entry.id === workflowId);
+      if (!record) return null;
+      if (live && record.snapshot && !ended(record)) {
+        try {
+          await this.target(record);
+          const latest = this.ensureEngine().status(record.snapshot.runId);
+          this.snapshot(record, latest);
+          await this.save();
+        } catch {
+          /* Preserve last known persisted state when inspection cannot read live status. */
+        }
+      }
+      return structuredClone(record);
+    });
+  }
+
+  async cancelScheduled(workflowId: string): Promise<WorkflowRecord | null> {
+    if (this.closed) return null;
+    return this.queueAction(async () => {
+      if (this.closed) return null;
+      await this.load();
+      const record = this.entries.find((entry) => entry.id === workflowId);
+      if (!record || !record.snapshot || ended(record))
+        return record ? structuredClone(record) : null;
+      if (!record.stopPending) {
+        record.stopPending = true;
+        await this.save();
+      }
+      const nextSnapshot = await this.ensureEngine().cancel(record.snapshot.runId);
+      this.snapshot(record, nextSnapshot);
+      if (["cancelled", "completed", "failed"].includes(record.snapshot.status))
+        delete record.stopPending;
+      await this.save();
+      this.notifyWorkflowObservers(record.id, record.snapshot);
+      return structuredClone(record);
+    });
+  }
+
+  async readScheduledDiff(
+    workflowId: string,
+  ): Promise<{ runId: string; text: string; truncated: boolean }> {
+    await this.load();
+    const record = this.entries.find((entry) => entry.id === workflowId);
+    if (!record) throw new Error("Unknown workflow");
+    await this.target(record);
+    const text = await this.deps.git.diff(record.worktree, record.baseline);
+    return {
+      runId: record.snapshot?.runId ?? record.id,
+      text: text.slice(0, 48_000),
+      truncated: text.length > 48_000,
+    };
   }
 
   observeProvider(identity: string) {
@@ -259,6 +487,10 @@ export class DesktopWorkflows {
     await this.reset();
     await this.queue.catch(() => {});
     await this.loading?.catch(() => {});
+    this.unwatchEngine?.();
+    this.unwatchEngine = undefined;
+    this.workflowObservers.clear();
+    this.globalObservers.clear();
     await this.engine?.close().catch(() => {});
     this.engine = undefined;
     await this.release?.();
@@ -317,7 +549,7 @@ export class DesktopWorkflows {
     return run;
   }
 
-  private async load() {
+  private async load(reconcileEngine = true) {
     this.loading ??= (async () => {
       this.release = await lockPrivateState(this.root);
       try {
@@ -333,10 +565,6 @@ export class DesktopWorkflows {
             throw new Error("Duplicate workflow registry identities");
           this.previous = raw;
         }
-        // Reconcile any active/paused runs persisted in workflows.sqlite on first load.
-        if (this.entries.some((entry) => entry.snapshot && !ended(entry))) {
-          this.ensureEngine();
-        }
       } catch (error) {
         await this.release?.();
         this.release = undefined;
@@ -344,13 +572,25 @@ export class DesktopWorkflows {
       }
     })();
     await this.loading;
+    // Reconcile any active/paused runs persisted in workflows.sqlite once callers allow live engine startup.
+    if (
+      reconcileEngine &&
+      !this.engine &&
+      this.entries.some((entry) => entry.snapshot && !ended(entry))
+    ) {
+      this.ensureEngine();
+    }
   }
 
   private async save() {
-    const next = { format: 2 as const, entries: this.entries };
-    registrySchema.parse(next);
-    await writePrivateJson(join(this.root, "registry.json"), next, this.previous, maximum);
-    this.previous = structuredClone(next);
+    const write = this.saveChain.then(async () => {
+      const parsed = registrySchema.parse({ format: 2 as const, entries: this.entries });
+      const normalized = JSON.parse(JSON.stringify(parsed)) as unknown;
+      await writePrivateJson(join(this.root, "registry.json"), normalized, this.previous, maximum);
+      this.previous = normalized;
+    });
+    this.saveChain = write.catch(() => {});
+    await write;
   }
 
   private form(formId: string, revision: number) {
@@ -610,7 +850,8 @@ export class DesktopWorkflows {
         throw new Error("Workflow changed. Review it again before starting.");
       if (approval.recordId) return structuredClone(this.record(approval.recordId));
       await this.identity(approval.choice);
-      if (this.entries.length >= 200) throw new Error("Workflow history limit reached");
+      if (this.entries.length >= WORKFLOW_HISTORY_LIMIT)
+        throw new Error("Workflow history limit reached");
       if (
         this.entries.some(
           (record) => record.repositoryIdentity === approval.choice.identity && !ended(record),
@@ -747,6 +988,7 @@ export class DesktopWorkflows {
     )
       delete record.stopPending;
     await this.save();
+    if (record.snapshot) this.notifyWorkflowObservers(record.id, record.snapshot);
     return structuredClone(record);
   }
 

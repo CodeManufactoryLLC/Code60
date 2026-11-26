@@ -18,7 +18,7 @@ import type {
 } from "../bridge/index.js";
 import { automationDate, automationWeekdays } from "./automation-date.js";
 
-function cadence(schedule: AutomationEditor["draft"]["schedule"]) {
+function cadence(schedule: AutomationEditor["draft"]["trigger"]["schedule"]) {
   if (schedule.type === "interval")
     return `Every ${schedule.everyMinutes} ${schedule.everyMinutes === 1 ? "minute" : "minutes"}`;
   return `${
@@ -69,19 +69,49 @@ function JobDetails({ api, job }: { api: ApplicationClient; job: AutomationSumma
     );
   if (!details) return <InlineLoading description="Loading job details…" />;
   const { draft } = details;
+  const { action } = draft;
+  if (action.type === "workflow") {
+    return (
+      <div className="carbon-job-details">
+        <section>
+          <h3>Workflow tasks ({action.tasks.length})</h3>
+          <ol className="carbon-job-prompt">
+            {action.tasks.map((task, index) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: Saved task order is fixed per revision.
+              <li key={index}>{task.name}</li>
+            ))}
+          </ol>
+        </section>
+        <dl className="carbon-job-facts">
+          {Object.entries({
+            Schedule: cadence(draft.trigger.schedule),
+            Repository: details.repositoryLabel,
+            "Base branch": action.baseBranch,
+            "Auto-approve": action.autoApprove ? "On" : "Off",
+            "Repairs / retries": `${action.repairs} / ${action.retries}`,
+          }).map(([name, value]) => (
+            <div key={name}>
+              <dt>{name}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    );
+  }
   return (
     <div className="carbon-job-details">
       <section>
         <h3>Saved prompt</h3>
-        <p className="carbon-job-prompt">{draft.prompt}</p>
+        <p className="carbon-job-prompt">{action.prompt}</p>
       </section>
       <dl className="carbon-job-facts">
         {Object.entries({
-          Schedule: cadence(draft.schedule),
+          Schedule: cadence(draft.trigger.schedule),
           Repository: details.repositoryLabel,
-          "Base branch": draft.baseBranch,
-          "Turn timeout": draft.turnTimeout,
-          "Allowed tools": draft.allow.join(", ") || "None",
+          "Base branch": action.baseBranch,
+          "Turn timeout": action.turnTimeout,
+          "Allowed tools": action.allow.join(", ") || "None",
         }).map(([name, value]) => (
           <div key={name}>
             <dt>{name}</dt>
@@ -115,6 +145,7 @@ export function AutomationJob({
 }) {
   const run = job.running ? "Stop" : "Run";
   const detailsId = `job-details-${job.id}`;
+  const isWorkflow = job.actionType === "workflow";
   return (
     <>
       <TableExpandRow
@@ -126,6 +157,11 @@ export function AutomationJob({
         onExpand={onToggle}
       >
         <TableCell>{job.name}</TableCell>
+        <TableCell>
+          <Tag size="sm" type={isWorkflow ? "purple" : "cool-gray"}>
+            {isWorkflow ? "Workflow" : "Prompt"}
+          </Tag>
+        </TableCell>
         <TableCell>
           <Tag size="sm" type={job.enabled ? "green" : "gray"}>
             {job.enabled ? "Enabled" : "Paused"}
@@ -192,7 +228,7 @@ export function AutomationJob({
         </TableCell>
       </TableExpandRow>
       {open && (
-        <TableExpandedRow id={detailsId} colSpan={7}>
+        <TableExpandedRow id={detailsId} colSpan={8}>
           {active && <JobDetails key={job.revision} api={api} job={job} />}
         </TableExpandedRow>
       )}

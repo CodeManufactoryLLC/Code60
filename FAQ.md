@@ -136,7 +136,7 @@ A base installation typically uses about **400 MB to 1 GB**, depending on platfo
 | Git worktrees | Varies by repository | Code60 never deletes worktrees automatically. |
 | Conversation transcripts | No automatic limit | Local `events.jsonl` and **Relay** journals never expire automatically. |
 | Request checkpoints | Up to 256 MiB per chat | Keeps up to 100 prior requests per chat. |
-| Workflow history | Up to 8 MiB | Keeps up to 200 workflow records. |
+| Workflow history | Up to 16 MiB | Keeps up to 1,000 workflow records. |
 | Diagnostic logs | Up to 20 MiB | Automatically expires after 7 days or 20 MiB. |
 | **Scheduled Jobs** free-space guard | At least 2 GiB free | **Scheduled Jobs** refuse to start below 2 GiB free. |
 
@@ -152,7 +152,7 @@ Size figures reflect macOS Apple Silicon measurements for Code60 `v0.4.1` on `20
 - **When off:** Each new ACP request waits in the requesting conversation for a human to choose **Allow once** or **Deny**. The **Workspace** approval count opens a waiting conversation, including a project chat in the archive.
 - **Live changes:** The toggle remains available during a turn and applies to new ACP requests in live and future sessions. Any request already waiting for review still needs a human answer after switching auto-approval back on.
 - **Harness mode:** **Code60 auto-approval** operates separately from **Harness mode**. Choosing an Ask mode on a provider harness leaves **Code60 auto-approval** on. Any sandboxing depends on that provider harness.
-- **Other run types and limits:** Manual runs, **Scheduled Jobs**, and **Workflows** keep separate permission policies. ACP permissions do not create an operating-system sandbox and cannot block actions an agent takes without requesting approval.
+- **Other run types and limits:** Manual runs, **Scheduled Jobs**, and **Workflows** keep separate permission policies. Single-prompt jobs use an explicit deny-by-default tool allowlist, while workflow jobs expose the workflow `autoApprove` toggle. ACP permissions do not create an operating-system sandbox and cannot block actions an agent takes without requesting approval.
 
 ### Does Code60 provide a sandbox for my agents?
 
@@ -281,8 +281,8 @@ Yes. Code60 applies per-feature concurrency limits alongside the host machine's 
 
 - **Interactive workers:** Each orchestration conversation (such as **Relay**, a **Custom Assistant**, or a project chat) defaults to **4** simultaneous workers (`maxParallel` in `config.json`). Idle workers still hold a slot while their process stays alive. Finishing or stopping an idle worker frees its slot.
 - **Adjusting worker slots:** A user can raise `maxParallel` to any positive integer in `config.json`. Manual multi-copy runs cap at **32** copies per batch.
-- **Scheduled Jobs:** At most **1** job from **Scheduled Jobs** runs globally at a time.
-- **Workflows:** **Code60 Gateway** allows at most **1** active **Workflow** per source repository checkout at a time. A workflow whose start or stop still awaits confirmation also holds that slot until a user resolves it.
+- **Scheduled Jobs:** Concurrency lanes allow at most **1** single-prompt job globally and at most **2** workflow jobs globally at a time. Each active job holds its lane slot and repository lock until it finishes or stops.
+- **Workflows:** **Code60 Gateway** allows at most **1** active **Workflow** per source repository checkout across manual and **Scheduled Jobs** runs. A workflow whose start or stop still awaits confirmation also holds that slot until a user resolves it.
 - **Custom Assistants:** Code60 supports up to **64** **Custom Assistants** application-wide.
 - **Hardware and provider limits:** Running many agents at once still depends on local CPU, memory, and each **Agent Provider's** own rate limits.
 
@@ -331,7 +331,7 @@ Code60 neither triggers nor blocks an [Agent Provider's](TERMINOLOGY.md#agent-pr
 
 **Plans** guide interactive chat orchestration in [Code60 Gateway](TERMINOLOGY.md#gateway), while [Workflows](TERMINOLOGY.md#workflow) run standalone multi-task coding runs inside **Code60 Gateway**.
 
-- **Execution and providers:** Both **Plans** and **Workflows** run on any active **Agent Provider** through ACP. **Plans** run inside chat (**Relay**, **Custom Assistants**, or project chats), while **Workflows** run under **Develop → Workflows** with a per-workflow provider choice.
+- **Execution and providers:** Both **Plans** and **Workflows** run on any active **Agent Provider** through ACP. **Plans** run inside chat (**Relay**, **Custom Assistants**, or project chats), while **Workflows** start manually under **Develop → Workflows** or on a cadence under **Automate → Scheduled Jobs**.
 - **Structure and verification:** A **Plan** is an optional task list that an orchestrator revises in chat and executes by dispatching interactive Code60 workers. A **Workflow** defines up to 100 sequential tasks with independent verification criteria, optional check commands, and automatic repair and retry limits.
 - **Changes and lifecycle:** **Plans** integrate worker edits with message-level **Undo**, while **Workflows** keep all edits inside a separate Git worktree without automatic apply or **Undo**. Both continue running after closing the browser and pause or stop when **Code60 Gateway** stops.
 
@@ -357,22 +357,30 @@ Code60 **Plans** are application-level plans with human approval gates and worke
 **Scheduled Jobs** run locally on the host computer inside a mandatory separate Git worktree. There is no cloud runner or remote service.
 
 - **Local backend service:** The per-user [Code60 Gateway](TERMINOLOGY.md#gateway) service (`launchd` on macOS or user `systemd` without linger on Linux) runs each job directly on the host machine. The machine must stay awake with an active user login session.
-- **Separate Git worktree:** Each run creates a separate Git worktree from the job's local repository and base branch. It runs one headless turn under an explicit deny-by-default permission allowlist, without external MCP servers or implicit memory.
+- **Separate Git worktree:** Each run creates a separate Git worktree from the job's local repository and base branch. Single-prompt jobs run one headless turn under an explicit deny-by-default allowlist, while workflow jobs run multi-task **Workflows** with an `autoApprove` option. Both run without external MCP servers or implicit memory.
 - **Manual review:** Code60 keeps the worktree, transcript, and diff on disk and never automatically applies, merges, commits, or pushes changes.
+
+### What kinds of jobs can Scheduled Jobs run?
+
+**Scheduled Jobs** uses an extensible action model that currently supports **Single prompt** jobs and **Workflow** jobs.
+
+- **Single prompt jobs:** A single-prompt job runs one headless turn inside a separate Git worktree from the local base branch. It uses an explicit deny-by-default tool allowlist and records a transcript and diff in **Execution history**.
+- **Workflow jobs:** A workflow job launches a multi-task **Workflow** from the local base branch with repairs, retries, and an `autoApprove` toggle. When `autoApprove` stays off, permission requests pause the run for human review.
+- **Live workflow interaction:** Every workflow run from **Scheduled Jobs** appears inside **Develop → Workflows** with a **Scheduled** tag. A user can inspect activity, pause, resume, steer, answer questions, or stop the run there.
 
 ### Do Scheduled Jobs automatically resume when I restart my computer?
 
-Future occurrences resume automatically when the per-user Code60 Gateway service is active, while incomplete runs and occurrences during downtime never replay.
+Future occurrences resume automatically when the per-user Code60 Gateway service is active, while incomplete prompt runs and occurrences during downtime never replay.
 
 - **Automatic service startup:** After `code60 service install`, `launchd` (macOS) or user `systemd` without linger (Linux) starts Code60 Gateway again when the user logs in. Future occurrences from **Scheduled Jobs** continue on their normal cadence.
-- **No catch-up or replay:** Code60 never replays a run that stops during a reboot and never catches up on occurrences from sleep or downtime.
+- **No catch-up or prompt replay:** Code60 never catches up on downtime occurrences and never replays a single-prompt run that stops during a reboot. Active **Workflow** runs still use **Workflows** restart reconciliation under **Develop → Workflows** and re-attach their status in **Scheduled Jobs**.
 - **Uncertain leftover processes:** If a reboot leaves uncertain process ownership behind, Code60 pauses new launches. A user must confirm the old process no longer runs and clear the block in **Apps → System Manager**.
 
 ### Do Scheduled Jobs re-try automatically?
 
-No. **Scheduled Jobs** never retry runs that fail, time out, or overlap with another active job.
+No. **Scheduled Jobs** never retry occurrences that fail, time out, or overlap with another active job.
 
-Each occurrence runs one headless turn, and at most one job from **Scheduled Jobs** runs at a time. Code60 records the outcome in **Execution history** and waits for the next future occurrence. A user can inspect the transcript and changes under **Automate → Scheduled Jobs**, then click **Run** manually when ready.
+Single-prompt jobs run one headless turn, while workflow jobs still apply their own in-run verification, repair passes, and fresh-session retries within that single run. Concurrency lanes enforce per-type limits and allow at most one active job per repository checkout. Code60 records every outcome in **Execution history** so a user can review results and click **Run** manually when ready.
 
 ## Accessibility
 
