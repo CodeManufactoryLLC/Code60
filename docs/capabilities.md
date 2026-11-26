@@ -228,16 +228,16 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
-## Prompt templates
+## Internal Prompts
 
 - ID: `prompts`
 - Status: shipped
-- Purpose: Customize project orchestration and handoff templates.
-- Access: Customize → Internal Prompts (also Apps → Internal Prompts) → title actions for Save, Discard changes or Reset to default
+- Purpose: Inspect all 44 internal prompts by canonical dotted ID and customize the 10 editable project, handoff, and utility templates.
+- Access: Customize → Internal Prompts (also Apps → Internal Prompts) → filter by ID/name and Save, Discard changes, or Reset to default
 - Prerequisite: database
 - Agent access: read
 - Confirmation: Existing permissions apply.
-- Limits: Database overrides precede config and built-ins; Relay uses its fixed application instructions.
+- Limits: Database overrides precede config and built-ins for the 10 editable templates. Safety wrappers, strict JSON schemas, bundled tactics, built-in commands, and Relay/Custom Assistant prompts are read-only; Relay stays independent of project databases.
 - Pages: `prompts`
 - Settings sections: none
 - Tools: none

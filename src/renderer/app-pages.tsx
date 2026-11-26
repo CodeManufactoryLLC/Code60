@@ -555,6 +555,13 @@ export function AppPages(props: AppPagesProps) {
           runs={projectRuns}
           data={transcripts}
           provider={orchestratorConfigured ? (snapshot?.orchestration.provider ?? null) : null}
+          defaultPrompt={
+            typeof snapshot?.prompts.find((entry) => entry.id === "memory.episodic-instructions")
+              ?.template === "string"
+              ? (snapshot.prompts.find((entry) => entry.id === "memory.episodic-instructions")
+                  ?.template as string)
+              : undefined
+          }
         />
       </>
     ),

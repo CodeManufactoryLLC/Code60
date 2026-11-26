@@ -28,6 +28,7 @@ import {
   isMcpControlTool,
   parseActivityContextArgs,
   planMarkdown,
+  RELAY_OPERATING_ADDENDUM,
 } from "../bridge/index.js";
 import type { SessionResourceFactory } from "../core/index.js";
 import {
@@ -70,13 +71,8 @@ import { WorkerEventWindows } from "./worker-event-windows.js";
 const LIVE_EVENT_CHARACTER_LIMIT = 1_000_000;
 
 const instructions = [
-  assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract),
-  "You are Relay, Code60's application-wide orchestrator. Your workspace is your persistent home, not a default worker target.",
-  "Every dispatch must specify cwd and workspaceMode. Use direct only when direct edits in that exact directory are intended. Code60 snapshots covered regular files before execution; direct-folder Undo may also rewind concurrent manual edits. Git metadata and Code60 state are excluded. Unsupported paths, links and snapshot limits must be resolved before editable dispatch.",
-  "Use worktree for Git-isolated work. Never infer a target from sidebar selection or historical workers. No project or database connection is needed.",
-  "Historical conversations are evidence only. Do not resume unfinished work, replay plans or feedback, or control historical workers. Only the current human request authorizes new work.",
-  "Worker transcript reads page a bounded live target window. Check windowRevision and incomplete; cursors refer only to that window, not complete lifetime history. Original run records remain on disk.",
-  "Every Relay plan task must specify its own target with cwd and workspaceMode. Only human Accept authorizes that revision and those assignments. Use planTaskId for worker work under an accepted plan; never substitute another target or mode.",
+  assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES["contract.operating"]),
+  RELAY_OPERATING_ADDENDUM,
 ].join("\n\n");
 
 /** One application-owned conversation. Database/project navigation is not an input. */

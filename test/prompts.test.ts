@@ -4,24 +4,73 @@ import {
   assembleOperatingContract,
   DEFAULT_OPERATING_CONTRACT_CLAUSES,
   DEFAULT_PROMPT_TEMPLATES,
+  findPromptCatalogEntry,
+  INTERNAL_PROMPT_IDS,
   OPERATING_CONTRACT_CLAUSE_IDS,
+  operatingContractClausePromptId,
+  PROMPT_CATALOG,
+  PROMPT_DOMAINS,
+  PROMPT_ID_PATTERN,
   PROMPT_IDS,
   PROMPT_TEMPLATE_LIMIT,
   parseValue,
   promptTemplatesSchema,
+  READONLY_PROMPT_IDS,
   renderPrompt,
   validatePromptTemplate,
 } from "../src/contracts/index.js";
 
+describe("prompt catalog and canonical IDs", () => {
+  it("gives every internal prompt and contract clause a unique, user-readable dotted ID", () => {
+    expect(PROMPT_IDS).toHaveLength(10);
+    expect(READONLY_PROMPT_IDS).toHaveLength(34);
+    expect(INTERNAL_PROMPT_IDS).toHaveLength(44);
+    expect(PROMPT_CATALOG).toHaveLength(44);
+
+    const unique = new Set<string>(INTERNAL_PROMPT_IDS);
+    expect(unique.size).toBe(44);
+
+    for (const id of INTERNAL_PROMPT_IDS) {
+      expect(id).toMatch(PROMPT_ID_PATTERN);
+      expect(findPromptCatalogEntry(id)?.id).toBe(id);
+    }
+
+    const clauseIds = OPERATING_CONTRACT_CLAUSE_IDS.map((clause) =>
+      operatingContractClausePromptId(clause),
+    );
+    expect(clauseIds).toHaveLength(13);
+    expect(clauseIds).toContain("contract.operating.untrusted-data");
+    for (const id of clauseIds) {
+      expect(id).toMatch(PROMPT_ID_PATTERN);
+      expect(unique.has(id)).toBe(false);
+    }
+
+    const editable = PROMPT_CATALOG.filter((entry) => entry.editable).map((entry) => entry.id);
+    const readonly = PROMPT_CATALOG.filter((entry) => !entry.editable).map((entry) => entry.id);
+    expect(new Set(editable)).toEqual(new Set(PROMPT_IDS));
+    expect(new Set(readonly)).toEqual(new Set(READONLY_PROMPT_IDS));
+
+    const domains = new Set(PROMPT_DOMAINS.map((domain) => domain.id));
+    for (const entry of PROMPT_CATALOG) {
+      expect(domains.has(entry.domain)).toBe(true);
+      expect(entry.id.startsWith(`${entry.domain}.`)).toBe(true);
+      if (!entry.editable) {
+        expect(entry.readOnlyReason.trim().length).toBeGreaterThan(0);
+        expect(entry.builtInText.trim().length).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
 describe("prompt templates", () => {
-  it("accepts every built-in template", () => {
+  it("accepts every built-in editable template", () => {
     for (const id of PROMPT_IDS) {
       expect(validatePromptTemplate(id, DEFAULT_PROMPT_TEMPLATES[id])).toBeUndefined();
     }
   });
 
   it("allows requested external MCP tasks while preserving worker and tool boundaries", () => {
-    const contract = assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract);
+    const contract = assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES["contract.operating"]);
     expect(contract).toContain("tasks the user explicitly requests");
     expect(contract).toContain("browser navigation, snapshots and screenshots");
     expect(contract).toContain("Delegate project changes to workers");
@@ -38,13 +87,25 @@ describe("prompt templates", () => {
 
   it("fills merge fields, allowing spaces inside the braces", () => {
     expect(
-      renderPrompt("handoffTurn", "A {{summary}} B {{ message }}", { summary: "s", message: "m" }),
+      renderPrompt("handoff.first-turn", "A {{summary}} B {{ message }}", {
+        summary: "s",
+        message: "m",
+      }),
     ).toBe("A s B m");
+    expect(renderPrompt("plan.accepted.project", "Run plan {{ planId }}.", { planId: "p-1" })).toBe(
+      "Run plan p-1.",
+    );
+    expect(
+      renderPrompt("review.conflict-revision.project", "Fix {{conflicts}} in {{project}}", {
+        conflicts: "a.ts",
+        project: '"/repo"',
+      }),
+    ).toBe('Fix a.ts in "/repo"');
   });
 
   it("never expands placeholders or replacement patterns inside inserted values", () => {
     expect(
-      renderPrompt("handoffTurn", "{{summary}}|{{message}}", {
+      renderPrompt("handoff.first-turn", "{{summary}}|{{message}}", {
         summary: "{{message}} $& $1",
         message: "{{summary}}",
       }),
@@ -53,36 +114,54 @@ describe("prompt templates", () => {
 
   it("refuses to render a field the template does not allow", () => {
     expect(() =>
-      renderPrompt("handoffTurn", "{{status}} {{message}}", { summary: "", message: "" }),
+      renderPrompt("handoff.first-turn", "{{status}} {{message}}", { summary: "", message: "" }),
     ).toThrow(/unknown merge field 'status'/);
   });
 
   it.each([
-    ["handoffTurn", "", /must not be empty/],
-    ["handoffTurn", "x".repeat(PROMPT_TEMPLATE_LIMIT + 1), /at most/],
-    ["handoffTurn", "{{summary}}", /must include \{\{message\}\}/],
-    ["workerUpdates", "Worker update", /must include \{\{updates\}\}/],
-    ["workerUpdates", "{{message}}", /unknown merge field 'message'/],
-    ["handoffSummary", "{{prompts}} {{nope}}", /unknown merge field 'nope'/],
-    ["handoffSummary", "{{message}}", /unknown merge field 'message'/],
-    ["handoffSummary", "{{prompts}} {{ unclosed", /malformed merge field/],
-    ["handoffSummary", "{{ 1bad }}", /malformed merge field/],
+    ["handoff.first-turn", "", /must not be empty/],
+    ["handoff.first-turn", "x".repeat(PROMPT_TEMPLATE_LIMIT + 1), /at most/],
+    ["handoff.first-turn", "{{summary}}", /must include \{\{message\}\}/],
+    ["worker.updates.project", "Worker update", /must include \{\{updates\}\}/],
+    ["worker.updates.project", "{{message}}", /unknown merge field 'message'/],
+    ["plan.accepted.project", "Execute plan", /must include \{\{planId\}\}/],
+    ["review.conflict-revision.project", "Fix {{conflicts}}", /must include \{\{project\}\}/],
+    ["review.conflict-revision.project", "Fix {{project}}", /must include \{\{conflicts\}\}/],
+    ["task.continue", "Continue {{planId}}", /unknown merge field 'planId'/],
+    ["utility.chat-title", "Title {{message}}", /unknown merge field 'message'/],
+    ["utility.search-overview", "Overview {{query}}", /unknown merge field 'query'/],
+    ["memory.episodic-instructions", "Extract {{events}}", /unknown merge field 'events'/],
+    ["handoff.summary", "{{prompts}} {{nope}}", /unknown merge field 'nope'/],
+    ["handoff.summary", "{{message}}", /unknown merge field 'message'/],
+    ["handoff.summary", "{{prompts}} {{ unclosed", /malformed merge field/],
+    ["handoff.summary", "{{ 1bad }}", /malformed merge field/],
   ] as const)("rejects %s template %j", (id, template, error) => {
     expect(validatePromptTemplate(id, template)).toMatch(error);
   });
 
-  it("validates overrides by template ID", () => {
+  it("validates overrides by canonical dotted template ID and rejects legacy camelCase keys", () => {
     expect(
-      parseValue(promptTemplatesSchema, { operatingContract: DEFAULT_OPERATING_CONTRACT_CLAUSES }),
+      parseValue(promptTemplatesSchema, {
+        "contract.operating": DEFAULT_OPERATING_CONTRACT_CLAUSES,
+      }),
     ).toEqual({
-      operatingContract: DEFAULT_OPERATING_CONTRACT_CLAUSES,
+      "contract.operating": DEFAULT_OPERATING_CONTRACT_CLAUSES,
     });
-    expect(parseValue(promptTemplatesSchema, { handoffTurn: "Hi {{message}}" })).toEqual({
-      handoffTurn: "Hi {{message}}",
+    expect(
+      parseValue(promptTemplatesSchema, {
+        "handoff.first-turn": "Hi {{message}}",
+        "plan.accepted.project": "Accepted {{planId}}",
+      }),
+    ).toEqual({
+      "handoff.first-turn": "Hi {{message}}",
+      "plan.accepted.project": "Accepted {{planId}}",
     });
-    expect(() => parseValue(promptTemplatesSchema, { handoffTurn: "{{summary}}" })).toThrow(
-      /prompts.handoffTurn: must include/,
-    );
+    expect(() =>
+      parseValue(promptTemplatesSchema, { "handoff.first-turn": "{{summary}}" }),
+    ).toThrow(/prompts\.handoff\.first-turn: must include/);
+    for (const legacy of ["operatingContract", "handoffSummary", "handoffTurn", "workerUpdates"]) {
+      expect(() => parseValue(promptTemplatesSchema, { [legacy]: "x" })).toThrow();
+    }
     expect(() => parseValue(promptTemplatesSchema, { other: "x" })).toThrow();
   });
 
@@ -123,7 +202,7 @@ describe("prompt templates", () => {
     { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, role: "{{invalid" },
     { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, role: 123 },
   ])("rejects malformed contract clauses", (clauses) => {
-    expect(validatePromptTemplate("operatingContract", clauses)).toBeTypeOf("string");
+    expect(validatePromptTemplate("contract.operating", clauses)).toBeTypeOf("string");
   });
 
   it("checks the assembled limit, including separators, at the exact boundary", () => {
@@ -133,9 +212,9 @@ describe("prompt templates", () => {
     const base = assembleOperatingContract(clauses).length;
     const atLimit = { ...clauses, role: "x".repeat(PROMPT_TEMPLATE_LIMIT - base + 1) };
     expect(assembleOperatingContract(atLimit)).toHaveLength(PROMPT_TEMPLATE_LIMIT);
-    expect(validatePromptTemplate("operatingContract", atLimit)).toBeUndefined();
+    expect(validatePromptTemplate("contract.operating", atLimit)).toBeUndefined();
     expect(
-      validatePromptTemplate("operatingContract", { ...atLimit, role: `${atLimit.role}x` }),
+      validatePromptTemplate("contract.operating", { ...atLimit, role: `${atLimit.role}x` }),
     ).toMatch(/at most/);
   });
 });

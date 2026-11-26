@@ -22,9 +22,9 @@ export function promptStates(
 ): PromptTemplateState[] {
   return PROMPT_IDS.map((id) => {
     const fallbackSource = (
-      id === "operatingContract"
-        ? assembleOperatingContract(config.operatingContract) ===
-          assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES.operatingContract)
+      id === "contract.operating"
+        ? assembleOperatingContract(config["contract.operating"]) ===
+          assembleOperatingContract(DEFAULT_PROMPT_TEMPLATES["contract.operating"])
         : config[id] === DEFAULT_PROMPT_TEMPLATES[id]
     )
       ? "built-in"
