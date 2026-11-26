@@ -53,7 +53,7 @@ export interface ProjectDatabase {
 export type OpenProjectDatabase = (path: string, create: boolean) => ProjectDatabase;
 
 const APP = "code60";
-export const SCHEMA = 5;
+export const SCHEMA = 6;
 const COMMAND_TABLE =
   "CREATE TABLE code60_commands (" +
   "id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE, title TEXT NOT NULL, " +
@@ -118,15 +118,17 @@ function prepare(db: DatabaseSync, path: string): void {
     throw new Error(`${path} is not a Code60 database`);
   const schema = Number(meta.get("schema"));
   if (schema > SCHEMA) throw new Error(`${path} was created by a newer version of Code60`);
-  if (schema === 1 || schema === 2 || schema === 3 || schema === 4) {
+  if (schema === 1 || schema === 2 || schema === 3 || schema === 4 || schema === 5) {
     db.exec("BEGIN");
     try {
       if (schema === 1) db.exec(CONFIG_TABLE);
       if (schema < 3) db.exec(PROMPT_TABLE);
-      // Clause editing starts fresh; preserve every other saved prompt.
-      if (schema < 4)
-        db.prepare("DELETE FROM code60_prompt_templates WHERE id = ?").run("operatingContract");
-      db.exec(COMMAND_TABLE);
+      if (schema < 5) db.exec(COMMAND_TABLE);
+      // Canonical dotted prompt IDs replace the four legacy camelCase rows once on upgrade.
+      if (schema < 6)
+        db.prepare(
+          "DELETE FROM code60_prompt_templates WHERE id IN ('operatingContract', 'handoffSummary', 'handoffTurn', 'workerUpdates')",
+        ).run();
       db.prepare("UPDATE code60_meta SET value = ? WHERE key = 'schema'").run(String(SCHEMA));
       db.exec("COMMIT");
     } catch (error) {
@@ -306,7 +308,7 @@ export const openProjectDatabase: OpenProjectDatabase = (path, create) => {
           continue;
         }
         let template: unknown = String(row.template);
-        if (id === "operatingContract") {
+        if (id === "contract.operating") {
           try {
             template = JSON.parse(String(row.template));
           } catch {
@@ -319,9 +321,9 @@ export const openProjectDatabase: OpenProjectDatabase = (path, create) => {
           saved.skipped.push(`Ignored the saved ${id} prompt template: it ${problem}`);
           continue;
         }
-        if (id === "operatingContract")
-          saved.templates.operatingContract = template as PromptTemplates["operatingContract"];
-        else saved.templates[id as Exclude<PromptId, "operatingContract">] = template as string;
+        if (id === "contract.operating")
+          saved.templates["contract.operating"] = template as PromptTemplates["contract.operating"];
+        else saved.templates[id as Exclude<PromptId, "contract.operating">] = template as string;
       }
       return saved;
     },

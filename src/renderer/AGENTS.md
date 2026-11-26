@@ -432,7 +432,7 @@ keyboard controls, drafts and domain ownership. Never put authentication in link
   [Neo-brutalist presentation](#neo-brutalist-presentation). Preserve native
   window geometry, the chamfered wordmark and independent window-background transparency.
 
-- Give every independent icon action the shared `icon-button` class: no border, shadow or background fill in resting, hovered, pressed or disabled states; hover and focus highlight only the glyph, with no focus outline even when Focus highlight border is enabled. Preserve hit targets, accessible labels, disabled semantics and visible keyboard focus. Decorative icons in labeled buttons, rows and menus inherit their parent state, never their own hover. Close, add and drag actions remain separate controls even when visually inside a tab or row.
+- Give every independent icon action the shared `icon-button` class: no border, shadow or background fill in resting, hovered, pressed or disabled states; hover and focus highlight only the glyph, with no focus outline. Preserve hit targets, accessible labels and disabled semantics. Decorative icons in labeled buttons, rows and menus inherit their parent state, never their own hover. Close, add and drag actions remain separate controls even when visually inside a tab or row.
 - Use the 16px Carbon icons from `icons.tsx` (`Icon` in DOM/SVG controls; the canvas grid is retired), except the Phosphor duotone sidebar icons from `navigation-icons.tsx`, animated conversation role icons and 8px static activity fallbacks, instead of text glyphs such as ×, ↑, or ▾. Write run states with `statusSpec` labels and, outside the left sidebar, icons; nothing blinks.
 - Apply the seven text roles (table headings, buttons, agent messages, human messages, page titles, card titles, and normal text) through their CSS properties and the canvas table theme. Page titles default to Space Grotesk Bold (700) at 16px; card titles also use Space Grotesk Bold. Body/chat use IBM Plex Sans Regular (400); controls/table headings use IBM Plex Sans Semibold (600); card titles use 22px and independent settings, never page-title settings. All roles preserve sentence case by default. Offer Light (300) and bundle its normal and italic IBM Plex faces locally. Text sizes accept 8–64px. Left navigation labels default to 15px; other buttons retain their 13px default. An explicit Button Text size controls both, including an explicit 13px choice; resetting it restores the separate defaults. Preserve saved role choices and existing migration markers when changing defaults, without another appearance reset. Avoid hard-coded bold or selected-state weight changes. Keep code and diffs monospace and case-preserving. The shared Code60 wordmark uses D-DIN Regular independently of text-role choices; preserve its blue chamfered 60 block and the D-DIN splash subtitle. Bundle fonts locally and retain their licenses; keep `font-src 'self'`.
 - Get external data from snapshots and request reads with `poll`; do not start timers that fetch data. Use `useTicker` from `ticker.ts` for clock-only redraws, inside the smallest component that needs it, and report visibility with `setVisibility`.
@@ -738,8 +738,9 @@ shadowless. The 5px page top margin and 11px sidebar-card gaps remain.
 Window opacity/blur affects the full-window background live; never paint an opaque
 layer behind its tint. Splash stays opaque and uses the same palette. Forced colors uses
 system fills/outlines and removes decorative shadows; reduced motion disables
-transitions. Keyboard focus uses a distinct solid outline/inset edge; the saved
-Focus highlight border preference retains its stronger treatment.
+transitions. Focus highlight borders and outlines are disabled across the app
+(including Carbon controls and embedded AI Chat shadow roots), and the Focus
+highlight border setting and command have been removed.
 
 This change adds no capability, so the self-knowledge catalog, availability rules
 and generated capability artifacts need no changes.

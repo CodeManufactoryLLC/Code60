@@ -47,16 +47,7 @@ export function appCommands({
   setExplorerOpen,
   terminalSource,
 }: CommandContext): Command[] {
-  const {
-    theme,
-    setTheme,
-    focusHighlight,
-    setFocusHighlight,
-    signals,
-    setSignals,
-    charts,
-    setCharts,
-  } = preferences;
+  const { theme, setTheme, signals, setSignals, charts, setCharts } = preferences;
   const settingsShortcut = navigator.platform.startsWith("Mac") ? "⌘," : "Ctrl+,";
   return [
     ...pageCommands(
@@ -158,14 +149,6 @@ export function appCommands({
         run: () => setTheme(id),
       }),
     ),
-    {
-      id: "focus-highlight",
-      label: "Focus highlight border",
-      group: "Appearance",
-      icon: "view",
-      checked: focusHighlight,
-      run: () => setFocusHighlight((value) => !value),
-    },
     {
       id: "signals",
       label: "Signal colors",

@@ -4,19 +4,19 @@ import { loadConfig, parseConfig } from "./config.js";
 import { UsageError } from "./types.js";
 
 describe("Operating Contract configuration", () => {
-  it("accepts the complete clause map and resets old single-block overrides", () => {
+  it("accepts the complete clause map under contract.operating and rejects legacy keys", () => {
     const clauses = { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, planning: "Custom planning." };
     expect(
-      parseConfig({ prompts: { operatingContract: clauses } }).prompts.operatingContract,
+      parseConfig({ prompts: { "contract.operating": clauses } }).prompts["contract.operating"],
     ).toEqual(clauses);
-    expect(
+    expect(() =>
       parseConfig({
-        prompts: { operatingContract: "Old custom contract", workerUpdates: "{{updates}}" },
-      }).prompts,
-    ).toMatchObject({
-      operatingContract: DEFAULT_OPERATING_CONTRACT_CLAUSES,
-      workerUpdates: "{{updates}}",
-    });
+        prompts: { "contract.operating": "Old custom contract" },
+      }),
+    ).toThrow(/prompts\.contract\.operating/);
+    for (const legacy of ["operatingContract", "handoffSummary", "handoffTurn", "workerUpdates"]) {
+      expect(() => parseConfig({ prompts: { [legacy]: "x" } })).toThrow(/unknown key/);
+    }
   });
 
   it("rejects incomplete, empty, or unexpected clauses", () => {
@@ -25,8 +25,8 @@ describe("Operating Contract configuration", () => {
       { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, planning: "" },
       { ...DEFAULT_OPERATING_CONTRACT_CLAUSES, extra: "Not predefined" },
     ])
-      expect(() => parseConfig({ prompts: { operatingContract: clauses } })).toThrow(
-        /prompts.operatingContract/,
+      expect(() => parseConfig({ prompts: { "contract.operating": clauses } })).toThrow(
+        /prompts\.contract\.operating/,
       );
   });
 });

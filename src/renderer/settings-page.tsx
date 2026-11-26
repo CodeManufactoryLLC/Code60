@@ -30,8 +30,6 @@ export function SettingsPage({
   onDensity,
   fit,
   onFit,
-  focusHighlight,
-  onFocusHighlight,
   signals,
   onSignals,
   charts,
@@ -42,8 +40,6 @@ export function SettingsPage({
   versions: Versions | undefined;
   memory?: ReactNode;
   pollingControls: ReactNode;
-  focusHighlight: boolean;
-  onFocusHighlight(on: boolean): void;
   signals: boolean;
   onSignals(on: boolean): void;
   charts: boolean;
@@ -118,13 +114,6 @@ export function SettingsPage({
             </div>
           </SettingsCard>
           <SettingsCard title="Accessibility">
-            <div className="settings-row">
-              <CarbonSwitch
-                labelText={<>Focus highlight border</>}
-                checked={focusHighlight}
-                onChange={(checked) => onFocusHighlight(checked)}
-              />
-            </div>
             <div className="settings-row">
               <CarbonSwitch
                 labelText={

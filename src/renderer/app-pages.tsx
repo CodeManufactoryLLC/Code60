@@ -129,8 +129,6 @@ export function AppPages(props: AppPagesProps) {
     setDensity,
     fit,
     setFit,
-    focusHighlight,
-    setFocusHighlight,
     accentColor,
     setAccentColor,
     signals,
@@ -381,8 +379,6 @@ export function AppPages(props: AppPagesProps) {
           onDensity={setDensity}
           fit={fit}
           onFit={setFit}
-          focusHighlight={focusHighlight}
-          onFocusHighlight={setFocusHighlight}
           signals={signals}
           onSignals={setSignals}
           charts={charts}
@@ -573,6 +569,13 @@ export function AppPages(props: AppPagesProps) {
           runs={projectRuns}
           data={transcripts}
           provider={orchestratorConfigured ? (snapshot?.orchestration.provider ?? null) : null}
+          defaultPrompt={
+            typeof snapshot?.prompts.find((entry) => entry.id === "memory.episodic-instructions")
+              ?.template === "string"
+              ? (snapshot.prompts.find((entry) => entry.id === "memory.episodic-instructions")
+                  ?.template as string)
+              : undefined
+          }
         />
       </>
     ),

@@ -165,10 +165,6 @@
   opacity: 0.45;
 }
 
-.navigation-card:has(> .home-card:focus-visible) {
-  box-shadow: var(--card-shadow), var(--focus-shadow);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .home-card,
   .navigation-card {

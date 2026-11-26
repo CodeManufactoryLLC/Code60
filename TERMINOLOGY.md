@@ -52,9 +52,9 @@ Code60 Gateway runs in the background as a per-user service. Active agents, **Sc
 
 ## Internal Prompts
 
-**Internal Prompts** are the system prompt templates under **Customize → Internal Prompts** that guide project orchestration and session handoffs in Code60. They cover the **Operating Contract**, handoff summary, handoff turn, and worker-update templates.
+**Internal Prompts** are the 44 system prompts under **Customize → Internal Prompts** that guide orchestration, handoffs, plans, reviews, memory, and utilities in Code60. Each prompt uses a unique lowercase dot-path identifier across 11 domains.
 
-A user can edit or reset these templates for the active database. **Relay** keeps its own separate application instructions.
+A user can edit or reset 10 project and utility templates for the active database, including the **Operating Contract**. The other 34 entries stay read-only to protect safety wrappers, strict JSON schemas, tactics, default `$` commands, and **Relay**.
 
 ## MCP
 

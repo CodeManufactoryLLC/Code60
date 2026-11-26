@@ -380,7 +380,7 @@ Code60 includes broad keyboard, screen-reader, contrast, and motion accessibilit
 
 - **Keyboard and focus:** Code60 uses IBM Carbon Design System components and includes a **Skip to main content** link. Menus, tables, trees, dialogs, and the command palette (`Cmd+K` or `Ctrl+K`) support full keyboard navigation. Closing overlays restores focus to the trigger control.
 - **Screen readers and status cues:** Controls include accessible labels, Accessible Rich Internet Applications (ARIA) states, and polite or alert status announcements. Status indicators include text labels alongside color.
-- **Themes, text, and system preferences:** **Personalize** settings offer **Light**, **Dark**, and **System** themes, adjustable interface text size, and focus highlights. The interface also respects operating-system `forced-colors` (high-contrast) and `prefers-reduced-motion` settings by switching to system colors and turning off animations.
+- **Themes, text, and system preferences:** **Personalize** settings offer **Light**, **Dark**, and **System** themes, a customizable accent color, adjustable interface text size, and optional signal colors. The interface also respects operating-system `forced-colors` (high-contrast) and `prefers-reduced-motion` settings by switching to system colors and turning off animations.
 - **Current compliance status:** Code60 makes no formal Web Content Accessibility Guidelines (WCAG) compliance claim today. Full accessibility readiness sits under the `v0.12.0` milestone in the [Code60 roadmap](ROADMAP.md).
 
 ## Architecture and Development

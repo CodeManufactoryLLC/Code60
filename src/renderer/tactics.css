@@ -89,10 +89,6 @@
 .tactics-option:hover {
   background: var(--hover-bg);
 }
-.tactics-option:focus-within {
-  outline: 1px solid var(--accent);
-  outline-offset: -1px;
-}
 .tactics-empty {
   padding: 12px;
 }
