@@ -348,7 +348,11 @@ test("MCP troubleshooting: launch-stage warning and explicit bounded discovery r
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
     for (let attempt = 0; attempt < 2; attempt++) {
-      await page.getByRole("button", { name: "Test connection", exact: true }).click();
+      await page
+        .getByRole("button", { name: /^Actions for / })
+        .first()
+        .click();
+      await page.getByRole("menuitem", { name: "Test connection", exact: true }).click();
       const confirm = page.getByRole("dialog", { name: "Test MCP server?", exact: true });
       await expect(confirm).toContainText("Only initialization and tool discovery");
       await confirm.getByRole("button", { name: "Test connection", exact: true }).click();
@@ -356,9 +360,7 @@ test("MCP troubleshooting: launch-stage warning and explicit bounded discovery r
       await expect(page.getByLabel("MCP connection controls")).toContainText(
         "Other tools remain available",
       );
-      await expect(
-        page.getByRole("button", { name: "Test connection", exact: true }),
-      ).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Cancel connection test" })).toHaveCount(0);
     }
     await page.getByRole("button", { name: "Review troubleshooting report", exact: true }).click();
     const report = page.getByRole("dialog", {
@@ -445,7 +447,11 @@ test("MCP troubleshooting: uncertain HTTP cleanup stays revoked until explicit v
     await onboard(page);
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
+    await page
+      .getByRole("button", { name: /^Actions for / })
+      .first()
+      .click();
+    await page.getByRole("menuitem", { name: "Test connection", exact: true }).click();
     await expect(page.getByLabel("MCP connection controls")).toContainText(
       "cleanup could not be verified",
     );

@@ -11,8 +11,15 @@ async function apps(page: Page) {
   await openMcpServers(page);
   await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
 }
+async function serverAction(page: Page, action: string) {
+  await page
+    .getByRole("button", { name: /^Actions for / })
+    .first()
+    .click();
+  await page.getByRole("menuitem", { name: action, exact: true }).click();
+}
 async function authentication(page: Page) {
-  await page.getByRole("button", { name: "Manage authentication", exact: true }).click();
+  await serverAction(page, "Manage authentication");
   const dialog = page.getByRole("dialog", { name: /^Authentication —/ });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -83,7 +90,7 @@ test("MCP credentials: explicit temporary entry, clearing, reload, no plaintext 
     await expect(dialog.getByLabel("Credential secret", { exact: true })).toHaveValue("");
     await expect(dialog.getByRole("status").filter({ hasText: "Credential saved" })).toBeVisible();
     await dialog.getByRole("button", { name: /^Close Authentication/ }).click();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
+    await serverAction(page, "Test connection");
     await expect(
       page.getByRole("status").filter({ hasText: "connected. 1 tools discovered" }),
     ).toBeVisible();
@@ -104,7 +111,7 @@ test("MCP credentials: explicit temporary entry, clearing, reload, no plaintext 
     await dialog.getByRole("button", { name: "Confirm sign out", exact: true }).click();
     await expect(dialog.getByRole("status").filter({ hasText: "Signed out." })).toBeVisible();
     await dialog.getByRole("button", { name: /^Close Authentication/ }).click();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
+    await serverAction(page, "Test connection");
     await expect(
       page.getByRole("status").filter({ hasText: "Authentication required" }),
     ).toBeVisible();
@@ -159,7 +166,7 @@ test("MCP credentials: unavailable persistent storage never silently becomes tem
     await dialog.getByRole("button", { name: "Save credential", exact: true }).click();
     await expect(dialog.getByRole("status").filter({ hasText: "Credential saved" })).toBeVisible();
     await dialog.getByRole("button", { name: /^Close Authentication/ }).click();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
+    await serverAction(page, "Test connection");
     await expect.poll(() => remote.counts.initialize).toBe(1);
     expect(await readFile(file, "utf8")).toBe(original);
     await secretFree(fixture.directory, [secret]);
@@ -248,7 +255,7 @@ test("MCP OAuth: reviewed issuer/registration, browser consent, retained JSON dr
     await expect(dialog).toContainText("authenticated");
     const secrets = remote.accessTokens();
     await dialog.getByRole("button", { name: /^Close Authentication/ }).click();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
+    await serverAction(page, "Test connection");
     await expect.poll(() => remote.counts.initialize).toBe(1);
     expect(remote.counts.calls).toBe(0);
     dialog = await authentication(page);

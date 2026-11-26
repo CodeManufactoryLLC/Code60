@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type {
   ApplicationClient,
   McpManagementRead,
@@ -11,6 +11,11 @@ import { randomId } from "./browser-platform.js";
 import { Button } from "./carbon/button.js";
 import { Modal } from "./modal.js";
 
+export interface McpRuntimeActions {
+  toggleEnabled(serverId: string, enabled: boolean): void;
+  testConnection(serverId: string): void;
+}
+
 /** Controls capture the displayed configuration; selection never retargets a pending decision. */
 export function McpRuntimePanel({
   api,
@@ -18,12 +23,16 @@ export function McpRuntimePanel({
   read,
   serverId,
   blocked,
+  actionsRef,
+  onBusyChange,
 }: {
   api: ApplicationClient;
   active: boolean;
   read: McpManagementRead;
   serverId?: string | undefined;
   blocked: boolean;
+  actionsRef?: Ref<McpRuntimeActions>;
+  onBusyChange?(busy: boolean): void;
 }) {
   const [status, setStatus] = useState<McpRuntimeResponse>();
   const [decision, setDecision] = useState<{
@@ -75,7 +84,12 @@ export function McpRuntimePanel({
     };
   }, [api, address, active]);
   const captured = { target: address, expectedRevision: read.revision };
-  const definition = serverId ? read.document?.servers[serverId] : undefined;
+  const busyNotice = useRef(onBusyChange);
+  busyNotice.current = onBusyChange;
+  useEffect(() => {
+    busyNotice.current?.(busy);
+    return () => busyNotice.current?.(false);
+  }, [busy]);
   const act = async (request: McpRuntimeRequest) => {
     const current = epoch.current;
     setBusy(true);
@@ -132,13 +146,39 @@ export function McpRuntimePanel({
       );
     }
   };
+  useImperativeHandle(actionsRef, () => ({
+    toggleEnabled(targetServerId: string, enabled: boolean) {
+      if (blocked || busy) return;
+      void act({
+        action: "enable",
+        ...captured,
+        serverId: targetServerId,
+        enabled,
+        requestId: randomId(),
+      });
+    },
+    testConnection(targetServerId: string) {
+      if (blocked || busy) return;
+      const requestId = randomId();
+      setTest(requestId);
+      void act({ action: "test", ...captured, serverId: targetServerId, requestId });
+    },
+  }));
+  const hasContent = Boolean(
+    error ||
+      retry ||
+      outcome ||
+      status?.failures?.length ||
+      status?.unresolvedCleanup ||
+      test ||
+      read.target.scope === "project" ||
+      status?.sessions?.length ||
+      decision,
+  );
+  if (!hasContent) return null;
   return (
     <section aria-label="MCP connection controls" className="mcp-details mcp-connections">
       <h2>Connections</h2>
-      <p>
-        Enablement and approval apply to future connections. Reconnect an existing session to use
-        its updated configuration.
-      </p>
       {error && <p role="alert">{error}</p>}
       {retry && (
         <Button type="button" disabled={busy} onClick={() => void act(retry)}>
@@ -153,39 +193,6 @@ export function McpRuntimePanel({
         <p>MCP_CLEANUP: Cleanup is unresolved. Use Verify cleanup without starting new work.</p>
       )}
       <div className="mcp-actions">
-        {definition && serverId && (
-          <>
-            <Button
-              type="button"
-              disabled={blocked || busy}
-              onClick={() =>
-                void act({
-                  action: "enable",
-                  ...captured,
-                  serverId,
-                  enabled: !definition.enabled,
-                  requestId: randomId(),
-                })
-              }
-            >
-              {definition.enabled ? "Disable server" : "Enable server"}
-            </Button>
-            <Button
-              type="button"
-              disabled={blocked || busy}
-              onClick={() => {
-                const requestId = randomId();
-                setTest(requestId);
-                void act({ action: "test", ...captured, serverId, requestId });
-              }}
-            >
-              Test connection
-            </Button>
-            <p className="mcp-test-hint">
-              Testing initializes the connection and discovers tools without calling them.
-            </p>
-          </>
-        )}
         {test && (
           <Button
             variant="quiet"

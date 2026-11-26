@@ -266,11 +266,10 @@ export function McpForm({
         : {}),
     }));
   let document: McpConnectorDocument | undefined;
-  let problem = "";
   try {
     document = mcpFormDocument(fields, base, originalId);
-  } catch (cause) {
-    problem = cause instanceof Error ? cause.message : "Invalid MCP server definition.";
+  } catch {
+    document = undefined;
   }
   return (
     <form
@@ -490,25 +489,7 @@ export function McpForm({
             )}
           </>
         )}
-        <p>
-          Credential references are unverified by configuration editing. Use Manage authentication
-          after saving. Credentials are never stored in this file or copied by Move. Use literals
-          only for non-secret values.
-        </p>
-        <p>
-          {originalId
-            ? "The existing enabled state is preserved."
-            : "New servers are saved disabled."}{" "}
-          Saving does not launch or connect a server. Commands such as npx may download packages
-          when a connection or confirmed test starts.
-        </p>
         {error && <p role="alert">{error}</p>}
-        {problem && (
-          <p role="status">
-            {problem} Use a lowercase alphanumeric/hyphen ID, valid transport fields and explicit
-            non-secret or credential bindings.
-          </p>
-        )}
         {stale && (
           <p role="alert">
             This configuration or project changed. Reload before saving. Your draft is retained.

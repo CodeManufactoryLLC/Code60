@@ -15,9 +15,9 @@ import { randomId } from "./browser-platform.js";
 import { Button } from "./carbon/button.js";
 import { Select } from "./carbon/fields.js";
 import { DataTable, type TableOptions } from "./data-table.js";
-import { McpAuthenticationPanel } from "./mcp-authentication.js";
+import { hasMcpAuthentication, McpAuthenticationPanel } from "./mcp-authentication.js";
 import { McpForm, type McpFormDraft, mcpFormFields } from "./mcp-form.js";
-import { McpRuntimePanel } from "./mcp-runtime.js";
+import { type McpRuntimeActions, McpRuntimePanel } from "./mcp-runtime.js";
 import { Modal } from "./modal.js";
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -57,13 +57,8 @@ const message = (cause: unknown) => {
 };
 const columns = [
   { key: "label", title: "Label", width: 180, filter: "text" },
-  { key: "id", title: "Server ID", width: 140, filter: "text" },
-  { key: "transport", title: "Transport", width: 100, filter: "category" },
-  { key: "source", title: "Source", width: 160, filter: "category" },
   { key: "enabled", title: "Enabled", width: 90, filter: "category" },
-  { key: "approval", title: "Approval", width: 110, filter: "category" },
-  { key: "authentication", title: "Authentication", width: 110, filter: "category" },
-  { key: "connection", title: "Connection", width: 110, filter: "category" },
+  { key: "source", title: "Source", width: 160, filter: "category" },
 ] as const;
 interface Editor {
   base: McpManagementRead;
@@ -107,8 +102,11 @@ export function McpServersPage({
   const [remove, setRemove] = useState<Editor>();
   const [move, setMove] = useState<Move>();
   const [busy, setBusy] = useState(false);
+  const [runtimeBusy, setRuntimeBusy] = useState(false);
+  const [authOpenKey, setAuthOpenKey] = useState(0);
   const [error, setError] = useState("");
   const [menu, setMenu] = useState<{ id: string; x: number; y: number }>();
+  const runtimeRef = useRef<McpRuntimeActions>(null);
   const dirtyNotice = useRef(onFormDirty);
   dirtyNotice.current = onFormDirty;
   const formKey = editor?.key;
@@ -182,29 +180,13 @@ export function McpServersPage({
   const rows = (read?.rows ?? []).map((row) => ({
     id: row.id,
     label: row.label,
-    transport: row.transport === "http" ? "HTTP" : "stdio",
-    source: `${row.source.scope === "user" ? "User" : (target?.label ?? "Project")}${row.shadowedSources.length ? " (overrides User)" : ""}`,
     enabled: row.enabled ? "Yes" : "No",
-    approval:
-      row.approval === "required"
-        ? "Required"
-        : row.approval === "approved"
-          ? "Approved"
-          : "Not required",
-    authentication:
-      row.observation?.authentication === "required"
-        ? "Authentication required"
-        : row.observation?.authentication === "not-required"
-          ? "Not required"
-          : "Not checked",
-    connection: row.observation?.connection?.replace(/-/g, " ") ?? "Not tested",
+    source: `${row.source.scope === "user" ? "User" : (target?.label ?? "Project")}${row.shadowedSources.length ? " (overrides User)" : ""}`,
   }));
   const selectedId = rows.some((r) => r.id === selected) ? selected : rows[0]?.id;
-  const status = read?.rows.find((r) => r.id === selectedId);
-  const local = Boolean(
-    selectedId && read?.document && Object.hasOwn(read.document.servers, selectedId),
-  );
   const blocked = readOnly || !read?.document || Boolean(read.pendingRecovery.length) || busy;
+  const menuDefinition = menu ? read?.document?.servers[menu.id] : undefined;
+  const menuLocal = Boolean(menuDefinition);
   const captured = (id?: string): Editor | undefined =>
     read?.document && target
       ? {
@@ -338,8 +320,6 @@ export function McpServersPage({
       <DataTable
         {...table}
         tableId="mcp-servers"
-        title="Configured servers"
-        description="Manage servers available to new agent sessions."
         emptyMessage={
           read?.document && !blocked
             ? "No servers configured. Choose Add server to create the first one."
@@ -383,54 +363,16 @@ export function McpServersPage({
         ]}
         onActions={(id, bounds) => setMenu({ id, x: bounds.x, y: bounds.y + bounds.height })}
       />
-      {selectedId && (
-        <section className="mcp-details" aria-label="Selected server">
-          <h2>{status?.label}</h2>
-          {Boolean(status?.shadowedSources.length) && (
-            <p>Overrides the user definition, including while disabled or unapproved.</p>
-          )}
-          <div className="mcp-actions">
-            <Button type="button" disabled={blocked || !local} onClick={() => openEdit(selectedId)}>
-              Edit server
-            </Button>
-            <Button
-              type="button"
-              disabled={blocked || !local || (targets?.targets.length ?? 0) < 2}
-              onClick={() => openMove(selectedId)}
-            >
-              Move server
-            </Button>
-            {!local && (
-              <Button
-                type="button"
-                onClick={() => {
-                  setScope("user");
-                  setRead(undefined);
-                }}
-              >
-                Open user configuration
-              </Button>
-            )}
-            {read && !editor && !remove && !move && (
-              <McpAuthenticationPanel
-                api={api}
-                read={read}
-                serverId={selectedId}
-                blocked={blocked}
-                active={active}
-              />
-            )}
-            <Button
-              variant="quiet"
-              className="destructive"
-              type="button"
-              disabled={blocked || !local}
-              onClick={() => setRemove(captured(selectedId))}
-            >
-              Remove server
-            </Button>
-          </div>
-        </section>
+      {read && selectedId && !editor && !remove && !move && (
+        <McpAuthenticationPanel
+          api={api}
+          read={read}
+          serverId={selectedId}
+          blocked={blocked}
+          active={active}
+          hideTrigger
+          openKey={authOpenKey}
+        />
       )}
       {read && !editor && !remove && !move && (
         <McpRuntimePanel
@@ -439,6 +381,8 @@ export function McpServersPage({
           read={read}
           serverId={selectedId}
           blocked={blocked}
+          actionsRef={runtimeRef}
+          onBusyChange={setRuntimeBusy}
         />
       )}
       {active && visible && menu && (
@@ -450,21 +394,57 @@ export function McpServersPage({
           items={[
             {
               label: "Edit",
-              disabled: blocked || !Object.hasOwn(read?.document?.servers ?? {}, menu.id),
+              disabled: blocked || !menuLocal,
               run: () => openEdit(menu.id),
             },
             {
-              label: "Remove",
-              disabled: blocked || !Object.hasOwn(read?.document?.servers ?? {}, menu.id),
-              run: () => setRemove(captured(menu.id)),
-            },
-            {
               label: "Move",
-              disabled:
-                blocked ||
-                !Object.hasOwn(read?.document?.servers ?? {}, menu.id) ||
-                (targets?.targets.length ?? 0) < 2,
+              disabled: blocked || !menuLocal || (targets?.targets.length ?? 0) < 2,
               run: () => openMove(menu.id),
+            },
+            ...(!menuLocal
+              ? [
+                  {
+                    label: "Open user configuration",
+                    disabled: false,
+                    run: () => {
+                      setScope("user");
+                      setRead(undefined);
+                    },
+                  },
+                ]
+              : []),
+            ...(menuLocal && hasMcpAuthentication(menuDefinition)
+              ? [
+                  {
+                    label: "Manage authentication",
+                    disabled: blocked,
+                    run: () => {
+                      setSelected(menu.id);
+                      setAuthOpenKey((value) => value + 1);
+                    },
+                  },
+                ]
+              : []),
+            ...(menuDefinition
+              ? [
+                  {
+                    label: menuDefinition.enabled ? "Disable server" : "Enable server",
+                    disabled: blocked || runtimeBusy,
+                    run: () => runtimeRef.current?.toggleEnabled(menu.id, !menuDefinition.enabled),
+                  },
+                  {
+                    label: "Test connection",
+                    disabled: blocked || runtimeBusy,
+                    run: () => runtimeRef.current?.testConnection(menu.id),
+                  },
+                ]
+              : []),
+            {
+              label: "Remove server",
+              danger: true,
+              disabled: blocked || !menuLocal,
+              run: () => setRemove(captured(menu.id)),
             },
           ]}
         />

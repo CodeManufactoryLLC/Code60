@@ -52,7 +52,7 @@ it("creates disabled stdio definitions, preserves empty arguments and rejects du
   fields.id = "code60";
   expect(() => mcpFormDocument(fields, base)).toThrow("Invalid MCP connector configuration");
 });
-it("provides labelled guided fields, unverified credential guidance and stale-save protection without activation controls", () => {
+it("provides labelled guided fields and stale-save protection without activation controls", () => {
   const html = renderToStaticMarkup(
     <McpForm
       initial={mcpFormFields("docs", base.servers.docs)}
@@ -67,7 +67,8 @@ it("provides labelled guided fields, unverified credential guidance and stale-sa
     />,
   );
   expect(html).toContain('aria-label="Headers prefix 1"');
-  expect(html).toContain("Credential references are unverified");
+  expect(html).not.toContain("Credential references are unverified");
+  expect(html).not.toContain("New servers are saved disabled");
   expect(html).toContain("Reload before saving");
   expect(html.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).toMatch(/\sdisabled(?:=|\s|>)/);
   expect(html).not.toContain("Sign in");

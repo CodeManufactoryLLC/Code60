@@ -43,16 +43,23 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     await createDatabase(page, fixture.directory);
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await apps(page);
-    await page.getByRole("button", { name: "Enable server", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Disable server", exact: true })).toBeVisible();
+    const serverAction = async (action: string) => {
+      await page
+        .getByRole("button", { name: /^Actions for / })
+        .first()
+        .click();
+      await page.getByRole("menuitem", { name: action, exact: true }).click();
+    };
+    await serverAction("Enable server");
+    await expect(page.locator(".mcp-workspace").getByRole("table")).toContainText("Yes");
     expect(JSON.parse(await readFile(userFile, "utf8")).servers.fixture.enabled).toBe(true);
     await expect(stat(evidence)).rejects.toThrow();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
+    await serverAction("Test connection");
     const confirmation = page.getByRole("dialog", { name: "Test MCP server?", exact: true });
     await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(confirmation).toHaveCount(0);
     await expect(stat(evidence)).rejects.toThrow();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
+    await serverAction("Test connection");
     await confirmation.getByRole("button", { name: "Test connection", exact: true }).click();
     await expect(page.getByLabel("MCP connection controls")).toContainText("1 tools discovered");
     const events = async () =>
@@ -139,8 +146,8 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     } finally {
       await configuration.close();
     }
-    await page.getByRole("button", { name: "Disable server", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Enable server", exact: true })).toBeVisible();
+    await serverAction("Disable server");
+    await expect(page.locator(".mcp-workspace").getByRole("table")).toContainText("No");
     const projectValue = await page
       .getByLabel("Configuration", { exact: true })
       .locator("option")
@@ -223,7 +230,11 @@ test("MCP runtime: Cancel and browser detach stop page-owned discovery processes
         .filter(Boolean)
         .map((line) => JSON.parse(line));
     const begin = async () => {
-      await page.getByRole("button", { name: "Test connection", exact: true }).click();
+      await page
+        .getByRole("button", { name: /^Actions for / })
+        .first()
+        .click();
+      await page.getByRole("menuitem", { name: "Test connection", exact: true }).click();
       await page
         .getByRole("dialog", { name: "Test MCP server?", exact: true })
         .getByRole("button", { name: "Test connection", exact: true })

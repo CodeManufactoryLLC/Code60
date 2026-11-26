@@ -95,7 +95,11 @@ test("MCP JSON: completion, safe validation, exact saves, navigation and guided 
     expect(await readFile(config(fixture.directory), "utf8")).toBe(
       `{ ${text("Retained draft").slice(1)}`,
     );
-    await page.getByRole("button", { name: "Edit server", exact: true }).click();
+    await page
+      .getByRole("button", { name: /^Actions for / })
+      .first()
+      .click();
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
     const form = page.getByRole("dialog", { name: /Edit MCP server/ });
     await form.getByLabel("Label", { exact: true }).fill("Guided save");
     await form.getByRole("button", { name: "Save server", exact: true }).click();
