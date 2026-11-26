@@ -317,6 +317,18 @@ export function McpServersPage({
           User configuration is invalid. Inherited definitions cannot be shown completely.
         </p>
       )}
+      <div className="mcp-actions">
+        <Button
+          variant="primary"
+          disabled={blocked}
+          onClick={() => {
+            setError("");
+            setEditor(captured());
+          }}
+        >
+          Add server
+        </Button>
+      </div>
       <DataTable
         {...table}
         tableId="mcp-servers"
@@ -324,6 +336,7 @@ export function McpServersPage({
         searchable={false}
         filterable={false}
         sortable={false}
+        configurable={false}
         emptyMessage={
           read?.document && !blocked
             ? "No servers configured. Choose Add server to create the first one."
@@ -347,12 +360,6 @@ export function McpServersPage({
         selected={selectedId}
         onSelect={setSelected}
         display={(row, key) => row[key]}
-        onAdd={() => {
-          setError("");
-          setEditor(captured());
-        }}
-        addLabel="Add server"
-        addDisabled={blocked}
         pageActions={[
           {
             id: "mcp-refresh",

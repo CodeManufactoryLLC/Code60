@@ -70,6 +70,7 @@ test("MCP management: user scope, templates, pasted review, HTTP edits, cancella
     await expect(workspace.getByRole("searchbox")).toHaveCount(0);
     await expect(workspace.getByRole("button", { name: "Filters", exact: true })).toHaveCount(0);
     await expect(workspace.getByLabel("Column menu", { exact: true })).toHaveCount(0);
+    await expect(workspace.getByRole("button", { name: "Settings", exact: true })).toHaveCount(0);
     await serverAction(page, "Edit", "Documentation");
     form = page.getByRole("dialog", { name: /Edit MCP server/ });
     await expect(form.getByLabel("Server ID", { exact: true })).toBeDisabled();

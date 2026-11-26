@@ -87,12 +87,15 @@ it("omits selection radios, search, filters and sortable headers when disabled",
       searchable={false}
       filterable={false}
       sortable={false}
+      configurable={false}
     />,
   );
   expect(html).not.toContain('type="radio"');
   expect(html).not.toContain("Select row");
   expect(html).not.toContain("Search MCP Servers");
   expect(html).not.toContain("Column filter and sort");
+  expect(html).not.toContain("Table settings");
+  expect(html).not.toContain("MCP Servers controls");
   expect(html).not.toContain("cds--table-sort");
   expect(html).toContain(">Label<");
   expect(html).toContain(">Enabled<");

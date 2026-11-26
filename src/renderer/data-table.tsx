@@ -150,6 +150,7 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
   searchable = true,
   filterable = true,
   sortable = true,
+  configurable = true,
 }: {
   rows: Row[];
   columns: { key: Key; title: string; width: number; filter?: FilterKind }[];
@@ -177,6 +178,7 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
   searchable?: boolean;
   filterable?: boolean;
   sortable?: boolean;
+  configurable?: boolean;
 } & TableOptions) {
   const id = useId();
   const container = useRef<HTMLDivElement>(null);
@@ -337,6 +339,7 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
     setSettings(undefined);
     if (settingsTrigger.current?.checkVisibility()) settingsTrigger.current.focus();
   };
+  const showToolbar = searchable || filterable || sortable || configurable || Boolean(onAdd);
   return (
     <TableContainer
       className="data-table carbon-data-table"
@@ -347,90 +350,94 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
         <TableHeading tableId={tableId} actions={pageActions} />
         {scope && <div className="table-scope">{scope}</div>}
       </div>
-      <TableToolbar aria-label={`${tableTitles[tableId]} controls`}>
-        <TableToolbarContent>
-          {searchable && (
-            <form
-              className="carbon-table-search"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (onRetainedQuery) setSubmittedSearch(query);
-              }}
-            >
-              <Search
-                id={`${id}-search`}
-                ref={search}
-                labelText={
-                  onRetainedQuery ? "Search retained logs" : `Search ${tableTitles[tableId]}`
-                }
-                placeholder={
-                  onRetainedQuery ? "Search retained logs" : `Search ${tableTitles[tableId]}`
-                }
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setPage(1);
-                  if (!event.target.value) setSubmittedSearch("");
+      {showToolbar && (
+        <TableToolbar aria-label={`${tableTitles[tableId]} controls`}>
+          <TableToolbarContent>
+            {searchable && (
+              <form
+                className="carbon-table-search"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (onRetainedQuery) setSubmittedSearch(query);
                 }}
+              >
+                <Search
+                  id={`${id}-search`}
+                  ref={search}
+                  labelText={
+                    onRetainedQuery ? "Search retained logs" : `Search ${tableTitles[tableId]}`
+                  }
+                  placeholder={
+                    onRetainedQuery ? "Search retained logs" : `Search ${tableTitles[tableId]}`
+                  }
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setPage(1);
+                    if (!event.target.value) setSubmittedSearch("");
+                  }}
+                />
+                {onRetainedQuery && <Button type="submit">Search history</Button>}
+              </form>
+            )}
+            {filterable && (
+              <FilterControls
+                key={`${tableId}:${workspace}`}
+                fields={fields}
+                library={named.library}
+                error={named.error}
+                onChange={(value) => {
+                  named.update(value);
+                  setPage(1);
+                }}
+                preview={(filter, at) =>
+                  rows.filter(
+                    (row) => !parent?.(row) && matchesColumns(row) && matchesNamed(row, filter, at),
+                  ).length
+                }
+                retained={!!onRetainedQuery}
               />
-              {onRetainedQuery && <Button type="submit">Search history</Button>}
-            </form>
-          )}
-          {filterable && (
-            <FilterControls
-              key={`${tableId}:${workspace}`}
-              fields={fields}
-              library={named.library}
-              error={named.error}
-              onChange={(value) => {
-                named.update(value);
-                setPage(1);
-              }}
-              preview={(filter, at) =>
-                rows.filter(
-                  (row) => !parent?.(row) && matchesColumns(row) && matchesNamed(row, filter, at),
-                ).length
-              }
-              retained={!!onRetainedQuery}
-            />
-          )}
-          {(filterable || sortable) && (
-            <Select
-              aria-label="Column menu"
-              value=""
-              onChange={(event) => {
-                if (event.target.value)
-                  setHeaderMenu({
-                    key: event.target.value as Key,
-                    bounds: event.currentTarget.getBoundingClientRect(),
-                  });
-              }}
-            >
-              <option value="">Column filter and sort</option>
-              {allColumns.map((column) => (
-                <option key={column.key} value={column.key}>
-                  {column.title}
-                </option>
-              ))}
-            </Select>
-          )}
-          <Button
-            className="icon-button"
-            ref={settingsTrigger}
-            aria-haspopup="dialog"
-            aria-label="Settings"
-            title="Table settings"
-            onClick={() => setSettings(settingsScope)}
-          >
-            <Icon name="settings--adjust" />
-          </Button>
-          {onAdd && (
-            <Button variant="primary" disabled={addDisabled} onClick={onAdd}>
-              {addLabel}
-            </Button>
-          )}
-        </TableToolbarContent>
-      </TableToolbar>
+            )}
+            {(filterable || sortable) && (
+              <Select
+                aria-label="Column menu"
+                value=""
+                onChange={(event) => {
+                  if (event.target.value)
+                    setHeaderMenu({
+                      key: event.target.value as Key,
+                      bounds: event.currentTarget.getBoundingClientRect(),
+                    });
+                }}
+              >
+                <option value="">Column filter and sort</option>
+                {allColumns.map((column) => (
+                  <option key={column.key} value={column.key}>
+                    {column.title}
+                  </option>
+                ))}
+              </Select>
+            )}
+            {configurable && (
+              <Button
+                className="icon-button"
+                ref={settingsTrigger}
+                aria-haspopup="dialog"
+                aria-label="Settings"
+                title="Table settings"
+                onClick={() => setSettings(settingsScope)}
+              >
+                <Icon name="settings--adjust" />
+              </Button>
+            )}
+            {onAdd && (
+              <Button variant="primary" disabled={addDisabled} onClick={onAdd}>
+                {addLabel}
+              </Button>
+            )}
+          </TableToolbarContent>
+        </TableToolbar>
+      )}
       {filterable && incompatibility && (
         <p role="alert">Saved filter is incompatible and has not been applied: {incompatibility}</p>
       )}
