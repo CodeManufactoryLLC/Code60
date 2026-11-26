@@ -113,6 +113,8 @@ describe("Docker image and workflow definitions", () => {
     expect(compose.services.code60.image).toBe("mjholliday/code60:${CODE60_IMAGE_TAG:-latest}");
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal Compose interpolation
     expect(compose.services.code60.ports).toEqual(["127.0.0.1:${CODE60_HOST_PORT:-6060}:6060"]);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal Compose interpolation
+    expect(compose.volumes["code60-home"]?.name).toBe("${CODE60_HOME_VOLUME:-code60-home}");
   });
 
   it("validates the Docker image in release.yml and gates Hub push behind dockerhub_release", () => {

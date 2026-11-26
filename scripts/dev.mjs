@@ -37,6 +37,7 @@ const dataRoot = process.env.CODE60_DEV_DATA_ROOT ?? join(root, "test-results/de
 if (!isAbsolute(dataRoot)) throw new Error("Development data root must be absolute.");
 const env = {
   ...process.env,
+  XDG_DATA_HOME: join(dataRoot, "data"),
   XDG_STATE_HOME: join(dataRoot, "state"),
   XDG_CONFIG_HOME: join(dataRoot, "config"),
   CODE60_DEV_ASSETS: `http://127.0.0.1:${port}`,

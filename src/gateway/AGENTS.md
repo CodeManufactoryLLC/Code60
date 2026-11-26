@@ -106,12 +106,15 @@ launches a process, retries a business call or discovers/kills processes by name
 
 Web Server Beta has separate origin/activation-bound mandatory pairing. Only the controlling localhost page manages LAN or issues codes; LAN cannot reach private management. Preserve local pairing policy, fixed host/origin checks and the shared single-controller model. Serve bundled manifested assets on LAN; never proxy Vite there. Revoke LAN views without stopping approved work.
 
-The private prepare-database management operation accepts no payload or browser
-Origin and requires the management token. Call ApplicationHost serialization;
-never initialize databases in ordinary startup or expose this route through the
-browser bridge. Management status reports bounded database/engine availability
-without provider probes, pairing codes or repair. Preserve XDG_DATA_HOME in the
-registered runtime so setup and the backend use the same data location.
+Ordinary gateway startup initializes the default database under
+XDG_DATA_HOME/code60/databases/default.sqlite through ApplicationHost serialization
+when no database selection exists yet, while preserving existing, custom or damaged
+selections and unsafe files. The private prepare-database management operation
+accepts no payload or browser Origin, requires the management token, remains
+idempotent, and must not be exposed through the browser bridge. Management status
+reports bounded database/engine availability without provider probes, pairing codes
+or repair. Preserve XDG_DATA_HOME in the registered runtime so setup and the backend
+use the same data location.
 
 Update interruption inspection is a payload-free authenticated management read.
 Report only bounded interactive/scheduled availability; do not mint pairing codes,

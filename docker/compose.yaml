@@ -18,3 +18,5 @@ services:
 
 volumes:
   code60-home:
+    # Explicit name prevents Compose from prefixing by folder name so sessions share one database.
+    name: ${CODE60_HOME_VOLUME:-code60-home}

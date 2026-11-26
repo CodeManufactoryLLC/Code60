@@ -1076,7 +1076,7 @@ export async function startGateway(options: GatewayOptions = {}) {
       unsupported:
         Boolean(options.container) || (env.CODE60_DEV_CONTAINER === "1" && !lanPublisher),
     });
-    await application.restore();
+    await application.restore({ prepareDefaultDatabase: true });
     await webServer.start(options.container ? false : (settings?.webServerEnabled ?? false));
     return {
       origin,

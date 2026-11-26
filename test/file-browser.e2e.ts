@@ -17,7 +17,8 @@ test("browser: host chooser navigates, recovers, and creates and reopens the cho
     await mkdir(join(root, "Archives"));
     const { page } = await fixture.open({ hasTouch: true });
     await onboard(page);
-    await page.getByRole("button", { name: "Connect to database", exact: true }).click();
+    await page.getByRole("button", { name: "Workspace", exact: true }).click();
+    await page.getByRole("button", { name: "Select or create database" }).click();
     const launch = page.getByRole("button", { name: "Create database…", exact: true });
     await launch.click();
     const picker = page.getByRole("dialog", { name: "Create database", exact: true });
@@ -86,14 +87,14 @@ test("browser: host chooser navigates, recovers, and creates and reopens the cho
     await name.press("Enter");
     await expect(picker.getByRole("alert").filter({ hasText: /\S/ })).toBeVisible();
     await expect(name).toHaveValue("Archives");
-    await name.fill("Data");
+    await name.fill("WorkspaceData");
     await name.press("Enter");
-    await at(join(root, "Data"));
-    expect((await stat(join(root, "Data"))).isDirectory()).toBe(true);
+    await at(join(root, "WorkspaceData"));
+    expect((await stat(join(root, "WorkspaceData"))).isDirectory()).toBe(true);
     await picker.getByLabel("Database filename").fill("Work.sqlite");
     await picker.getByLabel("Database filename").press("Enter");
     await expect(picker).toHaveCount(0);
-    const target = join(root, "Data", "Work.sqlite");
+    const target = join(root, "WorkspaceData", "Work.sqlite");
     expect((await readFile(target)).subarray(0, 16).toString()).toBe("SQLite format 3\0");
     await page.setViewportSize({ width: 1440, height: 900 });
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
@@ -102,7 +103,7 @@ test("browser: host chooser navigates, recovers, and creates and reopens the cho
     await databases.click();
     await launch.click();
     await row(root).dblclick();
-    await row("Data").dblclick();
+    await row("WorkspaceData").dblclick();
     await picker.getByLabel("Database filename").fill("Work.sqlite");
     const before = await readFile(target);
     await button("Create database").click();
@@ -114,7 +115,7 @@ test("browser: host chooser navigates, recovers, and creates and reopens the cho
     if (!(await open.isVisible())) await databases.click();
     await open.click();
     const reopen = page.getByRole("dialog", { name: "Open database", exact: true });
-    for (const folder of [root, "Data"])
+    for (const folder of [root, "WorkspaceData"])
       await reopen.getByRole("option", { name: folder, exact: true }).dblclick();
     await reopen.getByRole("option", { name: "Work.sqlite", exact: true }).click();
     await reopen.getByRole("button", { name: "Open", exact: true }).click();

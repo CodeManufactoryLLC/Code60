@@ -11,9 +11,7 @@ async function serverPage(page: Page) {
   return page.getByRole("main", { name: "Web Server (Beta)", exact: true });
 }
 
-test("browser: Web Server (Beta) is available before provider or database setup", async ({
-  browser,
-}) => {
+test("browser: Web Server (Beta) is available before provider setup", async ({ browser }) => {
   const fixture = await browserApp(browser, [], false);
   try {
     const local = await fixture.open();
@@ -28,7 +26,9 @@ test("browser: Web Server (Beta) is available before provider or database setup"
     await expect(settings.locator("p[role=status]")).toHaveText("Off");
     const snapshot = await local.page.evaluate(() => window.code60.snapshot());
     expect(snapshot.agentSetup?.complete).toBe(false);
-    expect(snapshot.database).toBeNull();
+    expect(snapshot.database).toBe(
+      join(fixture.env.XDG_DATA_HOME, "code60/databases/default.sqlite"),
+    );
     expect(await readdir(fixture.processLog)).toEqual([]);
   } finally {
     await fixture.close();
