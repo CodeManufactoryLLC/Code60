@@ -91,9 +91,12 @@ test("MCP credentials: explicit temporary entry, clearing, reload, no plaintext 
     await expect(dialog.getByRole("status").filter({ hasText: "Credential saved" })).toBeVisible();
     await dialog.getByRole("button", { name: /^Close Authentication/ }).click();
     await serverAction(page, "Test connection");
-    await expect(
-      page.getByRole("status").filter({ hasText: "connected. 1 tools discovered" }),
-    ).toBeVisible();
+    let testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+    await expect(testDialog.locator(".cds--inline-notification--success")).toBeVisible();
+    await expect(testDialog).toContainText("Connection succeeded");
+    await expect(testDialog).toContainText("1 tool discovered");
+    await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(testDialog).toHaveCount(0);
     expect(remote.counts.calls).toBe(0);
     expect(remote.counts.initialize).toBe(1);
     await page.reload();
@@ -112,9 +115,10 @@ test("MCP credentials: explicit temporary entry, clearing, reload, no plaintext 
     await expect(dialog.getByRole("status").filter({ hasText: "Signed out." })).toBeVisible();
     await dialog.getByRole("button", { name: /^Close Authentication/ }).click();
     await serverAction(page, "Test connection");
-    await expect(
-      page.getByRole("status").filter({ hasText: "Authentication required" }),
-    ).toBeVisible();
+    testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+    await expect(testDialog).toContainText("Authentication required");
+    await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(testDialog).toHaveCount(0);
     expect(remote.counts.initialize).toBe(1);
     expect(await readFile(file, "utf8")).toBe(original);
     expect((await stat(file)).mode & 0o777).toBe(0o600);
@@ -252,6 +256,10 @@ test("MCP OAuth: reviewed issuer/registration, browser consent, retained JSON dr
     await dialog.getByRole("button", { name: /^Close Authentication/ }).click();
     await serverAction(page, "Test connection");
     await expect.poll(() => remote.counts.initialize).toBe(1);
+    const testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+    await expect(testDialog.locator(".cds--inline-notification--success")).toBeVisible();
+    await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(testDialog).toHaveCount(0);
     expect(remote.counts.calls).toBe(0);
     dialog = await authentication(page);
     await dialog.getByRole("button", { name: "Sign out…", exact: true }).click();

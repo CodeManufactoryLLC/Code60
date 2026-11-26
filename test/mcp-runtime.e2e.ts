@@ -61,7 +61,11 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     await expect(stat(evidence)).rejects.toThrow();
     await serverAction("Test connection");
     await confirmation.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(page.getByLabel("MCP connection controls")).toContainText("1 tools discovered");
+    const testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+    await expect(testDialog.locator(".cds--inline-notification--success")).toBeVisible();
+    await expect(testDialog).toContainText("1 tool discovered");
+    await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(testDialog).toHaveCount(0);
     const events = async () =>
       (await readFile(evidence, "utf8"))
         .trim()
@@ -72,7 +76,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     await mkdir(join(fixture.directory, "project"));
     await openProject(page, fixture.directory, "project");
     await apps(page);
-    await expect(page.getByLabel("MCP connection controls")).toContainText("connected");
+    await expect(page.getByLabel("MCP connection controls")).toContainText("Idle");
     const before = (await events()).filter((event) => event.event === "spawn").length;
     await page
       .getByRole("button", { name: "Reconnect session servers", exact: true })
@@ -93,6 +97,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     await expect
       .poll(async () => (await events()).filter((event) => event.event === "spawn").length)
       .toBe(before + 1);
+    await expect(page.getByLabel("MCP connection controls")).toContainText("fixture: connected");
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const chat = page.locator(".orchestration-chat-page:visible");
     const composer = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
@@ -232,8 +237,11 @@ test("MCP runtime: Cancel and browser detach stop page-owned discovery processes
     await expect
       .poll(async () => (await events()).filter((event) => event.event === "list").length)
       .toBe(1);
-    await page.getByRole("button", { name: "Cancel connection test", exact: true }).click();
-    await expect(page.getByLabel("MCP connection controls")).toContainText("cancelled");
+    const testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+    await testDialog.getByRole("button", { name: "Cancel connection test", exact: true }).click();
+    await expect(testDialog).toContainText(/cancelled/i);
+    await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(testDialog).toHaveCount(0);
     await expect
       .poll(async () => alive((await events()).find((event) => event.event === "spawn").pid))
       .toBe(false);

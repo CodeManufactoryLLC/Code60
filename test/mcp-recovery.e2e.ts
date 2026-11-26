@@ -353,11 +353,11 @@ test("MCP troubleshooting: launch-stage warning and explicit bounded discovery r
       const confirm = page.getByRole("dialog", { name: "Test MCP server?", exact: true });
       await expect(confirm).toContainText("Only initialization and tool discovery");
       await confirm.getByRole("button", { name: "Test connection", exact: true }).click();
-      await expect(page.getByLabel("MCP connection controls")).toContainText("MCP_LAUNCH (launch)");
-      await expect(page.getByLabel("MCP connection controls")).toContainText(
-        "Other tools remain available",
-      );
-      await expect(page.getByRole("button", { name: "Cancel connection test" })).toHaveCount(0);
+      const testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+      await expect(testDialog).toContainText("MCP_LAUNCH (launch)");
+      await expect(testDialog).toContainText("Other tools remain available");
+      await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+      await expect(testDialog).toHaveCount(0);
     }
     await page.getByRole("button", { name: "Review troubleshooting report", exact: true }).click();
     const report = page.getByRole("dialog", {
@@ -449,9 +449,10 @@ test("MCP troubleshooting: uncertain HTTP cleanup stays revoked until explicit v
       .first()
       .click();
     await page.getByRole("menuitem", { name: "Test connection", exact: true }).click();
-    await expect(page.getByLabel("MCP connection controls")).toContainText(
-      "cleanup could not be verified",
-    );
+    const testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+    await expect(testDialog).toContainText("cleanup could not be verified");
+    await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(testDialog).toHaveCount(0);
     expect({ initializes, lists, calls, deletes }).toEqual({
       initializes: 1,
       lists: 1,

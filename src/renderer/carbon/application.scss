@@ -629,7 +629,7 @@
     .mcp-maintenance-row .mcp-actions { flex: 1 1 21rem; }
     .mcp-maintenance-row [role='status'] { flex-basis: 100%; }
   }
-  .mcp-json-modal {
+  .mcp-json-modal, .mcp-test-modal {
     display: grid;
     gap: space.$spacing-04;
     .cds--inline-notification { max-inline-size: 100%; }
