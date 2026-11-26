@@ -40,7 +40,8 @@ definition for credential entry or reviewed OAuth sign-in. Configuration recover
 owned cleanup verification and safe troubleshooting reports are available below.
 Dedicated integrations, Code60-owned OAuth
 registrations/client IDs/secrets, hosted authentication and legacy SSE are excluded.
-See the [implementation plan](ad-hoc-plans/mcp-connectors-plan.md),
+See the [FAQ](FAQ.md#does-code60-support-mcp), [terminology](TERMINOLOGY.md#mcp),
+[implementation plan](ad-hoc-plans/mcp-connectors-plan.md),
 [architecture](ARCHITECTURE.md#mcp-connector-foundation-and-target-runtime) and
 [recovery runbook](docs/runbooks/mcp-configuration.md).
 

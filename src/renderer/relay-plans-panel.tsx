@@ -7,6 +7,7 @@ import type { RecallSource } from "./memory-recall.js";
 import { RelayChanges } from "./relay-changes.js";
 import { useRelayFiles } from "./relay-files.js";
 import type { ReviewPreview } from "./review-actions.js";
+import type { TerminalSource } from "./terminal-source.js";
 
 /** Application-owned files and plans never borrow a project's file context or database. */
 export function RelayPlansPanel({
@@ -20,6 +21,7 @@ export function RelayPlansPanel({
   onOpen,
   snapshot,
   recallSource,
+  terminalSource,
   revisionPreview,
   planRequest,
 }: {
@@ -33,6 +35,7 @@ export function RelayPlansPanel({
   onOpen(value: boolean): void;
   snapshot: Snapshot | undefined;
   recallSource?: RecallSource | undefined;
+  terminalSource?: TerminalSource | undefined;
   planRequest?: { conversationId: string; serial: number } | undefined;
   revisionPreview?: { id: number; preview: ReviewPreview } | undefined;
 }) {
@@ -118,7 +121,8 @@ export function RelayPlansPanel({
                 tab.kind === "changes" ||
                 tab.kind === "recall" ||
                 tab.kind === "revision" ||
-                tab.kind === "application",
+                tab.kind === "application" ||
+                tab.kind === "terminal",
             ),
             active: null,
           },
@@ -146,6 +150,7 @@ export function RelayPlansPanel({
         onOpenProject={() => {}}
         api={api}
         recallSource={recallSource}
+        terminalSource={terminalSource}
         plans={plans}
         currentChat={currentChat}
         knowledgeOwner={

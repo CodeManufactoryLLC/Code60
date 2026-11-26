@@ -4,6 +4,8 @@ Code60 runs coding agents in isolated Git worktrees, with a browser interface an
 
 The opt-in per-user backend starts at login. Closing the browser keeps approved agents and scheduled jobs running. Stop all in Chat stops interactive work; Stop Code60 Backend stops interactive and scheduled work together. Your computer must be awake and logged in for scheduling.
 
+For common questions and core concepts, see the [FAQ](FAQ.md) and [Terminology](TERMINOLOGY.md).
+
 ## Install and open
 
 Install a downloaded Code60 npm tarball using Node 24. Code60 runs embeddings on the CPU. The install command skips the optional ONNX GPU download and uses the CPU runtime bundled in the npm package.
@@ -139,7 +141,7 @@ npm run test:packaged
 
 Browser tests run headlessly with fake providers and isolated state. Package checks install the npm tarball into a temporary prefix. Native service tests need an isolated, explicitly authorized supervisor environment; ordinary checks never register a real service.
 
-See [architecture](ARCHITECTURE.md), [capabilities](docs/capabilities.md), [MCP integration](MCP.md), [security](SECURITY.md), [contributing](CONTRIBUTING.md), [releases](RELEASING.md), [roadmap](ROADMAP.md) and [recovery runbooks](docs/runbooks/README.md).
+See [FAQ](FAQ.md), [terminology](TERMINOLOGY.md), [architecture](ARCHITECTURE.md), [capabilities](docs/capabilities.md), [MCP integration](MCP.md), [security](SECURITY.md), [contributing](CONTRIBUTING.md), [releases](RELEASING.md), [roadmap](ROADMAP.md) and [recovery runbooks](docs/runbooks/README.md).
 
 ### Transmission workflow prototype
 

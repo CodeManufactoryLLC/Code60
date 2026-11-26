@@ -11,6 +11,7 @@ import "@fontsource/ibm-plex-sans/700-italic.css";
 import "./style.css";
 import "./carbon/application.scss";
 import "./carbon/scheduled-jobs.scss";
+import "./carbon/health-check.scss";
 
 document.documentElement.classList.add("carbon-app");
 const root = document.getElementById("root");

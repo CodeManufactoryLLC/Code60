@@ -13,6 +13,9 @@
 @use '@carbon/react/scss/breakpoint' as bp;
 @use '@carbon/react/scss/utilities/layout' as carbon-layout;
 @use '@carbon/styles/scss/layer/layer-tokens' as carbon-layer;
+@use '@carbon/styles/scss/components/icon-indicator/tokens' as carbon-icon-indicator-tokens;
+
+@include theme.add-component-tokens(carbon-icon-indicator-tokens.$status-tokens);
 
 @layer carbon-app {
   @include meta.load-css('@carbon/react/scss/grid/css-grid');
@@ -115,6 +118,8 @@
     @include meta.load-css('@carbon/react/scss/components/pagination');
     @include meta.load-css('@carbon/react/scss/components/notification');
     @include meta.load-css('@carbon/react/scss/components/tag');
+    @include meta.load-css('@carbon/react/scss/components/icon-indicator');
+    @include meta.load-css('@carbon/react/scss/components/structured-list');
     @include meta.load-css('@carbon/react/scss/components/inline-loading');
     @include meta.load-css('@carbon/react/scss/components/progress-bar');
     @include meta.load-css('@carbon/react/scss/components/modal');
@@ -401,12 +406,12 @@
     .content-page-title { @include type.type-style('heading-05'); justify-content:flex-start; text-align:start; font-family:inherit; text-transform:none; }
     .content-page-title .navigation-icon, .navigation-destination-icon:has(.navigation-icon) {display:none;}
     .home-content,.settings-section,.workflow-content {margin-inline:0; align-items:flex-start;}
-    .home-content, .system-manager-page,
+    .home-content, .system-manager-page, .health-check-page,
     .prompt-editor-body, .rag-page, .web-server-page, .contributor-tools {
       padding: 0 0 space.$spacing-07;
     }
     .home-content { scrollbar-gutter: stable; }
-    .system-manager-page { margin-inline: 0; }
+    .system-manager-page, .health-check-page { margin-inline: 0; }
     .table-controls:has(> .page-title-placeholder):not(:has(> :not(.page-title-placeholder, [hidden], .sr-only))) {
       display: contents;
     }

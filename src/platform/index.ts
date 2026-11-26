@@ -18,6 +18,19 @@ export {
   syncGuardedDirectory,
 } from "./guarded-file.js";
 export {
+  type BoundedSizeResult,
+  boundedDirectorySize,
+  inspectPrivateDirectorySafety,
+  type PlatformLocalAddress,
+  type PlatformMachineInfo,
+  type PrivateDirectoryAudit,
+  readMachineInfo,
+  readVolumeSpace,
+  summarizeProxyEnv,
+  type VolumeProbeInput,
+  type VolumeProbeResult,
+} from "./health-probes.js";
+export {
   absoluteInstallationPath,
   createInstallationParents,
   exclusiveInstallationLink,
@@ -82,6 +95,7 @@ export {
   runtimeProcessExists,
   waitForRuntimeExit,
 } from "./process-identity.js";
+export { type OwnedPty, type SpawnPtyOptions, spawnOwnedPty } from "./pty.js";
 export {
   findRuntimeProcesses,
   inspectRuntimeProcess,

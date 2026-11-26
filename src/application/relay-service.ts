@@ -1205,6 +1205,47 @@ export class RelayService {
       ? this.execution.list({ id: this.store.id, generation: this.generation })
       : [];
   }
+  async terminalTarget(runId?: string): Promise<{
+    cwd: string;
+    label: string;
+    project: string | null;
+    targetKind: "relay" | "relay-worker";
+    runId: string | null;
+  }> {
+    if (this.closing) throw new Error("Relay is closing");
+    if (runId !== undefined) {
+      const worker = this.currentWorkers().find((entry) => entry.id === runId);
+      if (!worker) throw new Error("That Relay worker is no longer active");
+      return {
+        cwd: worker.record.worktree ?? worker.target.cwd,
+        label: worker.label ?? worker.provider,
+        project: worker.target.cwd,
+        targetKind: "relay-worker",
+        runId: worker.id,
+      };
+    }
+    this.storeOpening ??= RelayStore.open(
+      this.identity?.root ?? join(stateHome(this.env), "code60", "relay"),
+    ).then(
+      (store) => {
+        this.store = store;
+        return store;
+      },
+      (cause: unknown) => {
+        this.storeOpening = undefined;
+        throw cause;
+      },
+    );
+    const store = await this.storeOpening;
+    await store.validateWorkspace();
+    return {
+      cwd: store.workspace,
+      label: this.identity?.name ?? "Relay",
+      project: null,
+      targetKind: "relay",
+      runId: null,
+    };
+  }
   private async tool(name: string, args: unknown, signal?: AbortSignal): Promise<unknown> {
     if (this.closing || !this.gateway) throw new Error("Relay gateway is closed");
     if (name === "code60_browser") {

@@ -167,3 +167,43 @@ it.each(["blank", "recall", "changes"] as const)("omits Close from the %s page",
   );
   expect(html).not.toContain('aria-label="Close current tab"');
 });
+
+it("offers Open Terminal in blank actions and keeps open terminal slots mounted across tab switches", () => {
+  const api = {} as unknown as ApplicationClient;
+  const blankHtml = renderToStaticMarkup(
+    <FilePanel
+      tabs={updateFileTabs(emptyFileTabs(), { type: "blank" })}
+      onAction={() => {}}
+      browser={{} as FileBrowser}
+      open
+      active
+      api={api}
+      terminalSource={{ target: { kind: "relay" }, label: "Relay" }}
+      onOpenProject={() => {}}
+      onToggle={() => {}}
+    />,
+  );
+  expect(blankHtml).toContain(">Open Terminal</button>");
+
+  let tabs = updateFileTabs(emptyFileTabs(), {
+    type: "terminal",
+    target: { kind: "relay" },
+    label: "Relay",
+  });
+  tabs = updateFileTabs(tabs, { type: "explorer" });
+  const switchedHtml = renderToStaticMarkup(
+    <FilePanel
+      tabs={tabs}
+      onAction={() => {}}
+      browser={{} as FileBrowser}
+      open
+      active
+      api={api}
+      terminalSource={{ target: { kind: "relay" }, label: "Relay" }}
+      onOpenProject={() => {}}
+      onToggle={() => {}}
+    />,
+  );
+  expect(switchedHtml).toContain('class="file-panel-terminal-slot" hidden=""');
+  expect(switchedHtml).toContain('aria-label="Terminal for Relay"');
+});

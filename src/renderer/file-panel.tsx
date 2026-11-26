@@ -17,6 +17,8 @@ import { PlanPanelLoader } from "./plan-panel.js";
 import { ReviewFilePreview } from "./review-content.js";
 import { ReviewPanelLoader } from "./review-panel.js";
 import { ReviewPreviewPanel } from "./review-preview.js";
+import { TerminalPanel } from "./terminal-panel.js";
+import type { TerminalSource } from "./terminal-source.js";
 
 function revisionTime(at: string, now = new Date()): string {
   const date = new Date(at);
@@ -105,6 +107,7 @@ export function FilePanel({
   changesContent,
   knowledgeOwner,
   recallSource,
+  terminalSource,
 }: {
   tabs: FileTabs;
   onAction(action: FileTabAction): void;
@@ -127,6 +130,7 @@ export function FilePanel({
   changesContent?: ReactNode;
   knowledgeOwner?: KnowledgeOwner | undefined;
   recallSource?: RecallSource | undefined;
+  terminalSource?: TerminalSource | undefined;
 }) {
   useKnowledgePanel(api, knowledgeOwner, {
     tabs,
@@ -176,13 +180,16 @@ export function FilePanel({
           tab.kind === "file" ||
           tab.kind === "plan" ||
           tab.kind === "revision" ||
-          tab.kind === "application",
+          tab.kind === "application" ||
+          tab.kind === "terminal",
         icon:
           tab.kind === "changes" || tab.kind === "explorer" || tab.kind === "recall"
             ? fileMainViews[tab.kind].icon
-            : tab.kind === "revision"
-              ? ("file--diff" as const)
-              : ("document" as const),
+            : tab.kind === "terminal"
+              ? ("terminal" as const)
+              : tab.kind === "revision"
+                ? ("file--diff" as const)
+                : ("document" as const),
       })),
     [tabs.entries],
   );
@@ -201,6 +208,22 @@ export function FilePanel({
         },
       });
   }
+  if (terminalSource?.target) {
+    const target = terminalSource.target;
+    const label = terminalSource.label;
+    pages.push({
+      id: "page-terminal",
+      label: "Terminal",
+      icon: "terminal",
+      select: () => {
+        act({ type: "terminal", target, label });
+      },
+    });
+  }
+  const terminalTabs = tabs.entries.filter(
+    (tab): tab is Extract<FileTabs["entries"][number], { kind: "terminal" }> =>
+      tab.kind === "terminal",
+  );
   return (
     <PanelShell
       disabled={disabled}
@@ -222,6 +245,21 @@ export function FilePanel({
               {changesContent}
             </div>
           )}
+          {api &&
+            terminalTabs.map((tab) => (
+              <div
+                key={`terminal-${tab.id}`}
+                className="file-panel-terminal-slot"
+                hidden={selected?.id !== tab.id}
+              >
+                <TerminalPanel
+                  api={api}
+                  target={tab.target}
+                  label={tab.label}
+                  visible={active && open && visible && selected?.id === tab.id}
+                />
+              </div>
+            ))}
           {targetLabel && (selected?.kind === "explorer" || selected?.kind === "file") && (
             <p className="file-target-label" role="note" aria-label="File target">
               Project files: {targetLabel}
@@ -268,9 +306,28 @@ export function FilePanel({
                 >
                   Open Memory Recall
                 </AppButton>
+                {terminalSource && (
+                  <AppButton
+                    type="button"
+                    className="file-open-link"
+                    disabled={!terminalSource.target}
+                    title={terminalSource.unavailable}
+                    onClick={() => {
+                      if (!terminalSource.target) return;
+                      focusActiveTab();
+                      act({
+                        type: "terminal",
+                        target: terminalSource.target,
+                        label: terminalSource.label,
+                      });
+                    }}
+                  >
+                    Open Terminal
+                  </AppButton>
+                )}
               </div>
             </div>
-          ) : selected.kind === "recall" ? (
+          ) : selected.kind === "terminal" ? null : selected.kind === "recall" ? (
             active && open && visible && api ? (
               recallSource ? (
                 <MemoryRecall key={recallSource.owner} api={api} source={recallSource} />

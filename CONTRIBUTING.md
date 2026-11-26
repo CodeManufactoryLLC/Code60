@@ -374,7 +374,12 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md), [AGENTS.md](AGENTS.md), and the
 `src/<module>/AGENTS.md` instructions for the modules you change. Keep module
 boundaries intact and import other modules through their `index.ts` entry points.
 Add tests for changed behavior and update relevant application and scheduler documentation
-when the user-visible behavior changes.
+when the user-visible behavior changes, including [FAQ.md](FAQ.md) and
+[TERMINOLOGY.md](TERMINOLOGY.md) (or note in the PR why no update is needed).
+When editing `FAQ.md` or `TERMINOLOGY.md`, use the `refreshingly-simple-english`
+skill, keep `TERMINOLOGY.md` terms alphabetical, and refresh the `Last update`
+date (and `Applies to` version on releases). See the [Support and Feedback FAQ](FAQ.md#support-and-feedback)
+for user-facing issue and vulnerability reporting guidance.
 
 Keep pull requests focused. Explain what changed, why, and which checks you ran.
 Complete the [pull request template](.github/pull_request_template.md), including
