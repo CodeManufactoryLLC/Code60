@@ -28,7 +28,7 @@
   conditions bounded and reject unknown fields and filesystem paths. Initialize
   Zod jitless parsing before schema construction in directly re-exported modules.
 
-- Worker tools require Git readiness and an initial commit. Context reports prerequisites; direct users to Chat setup and wait for explicit continuation. No agent-accessible initialization or commit tool.
+- Worker tools require Git readiness and an initial commit. Context reports prerequisites; `code60_setup_git` lets the orchestrator inspect and initialize the open project repository with an initial commit while prompt rules guide due diligence around sensitive files (such as `.env`) and multi-choice questions with sensible defaults for identity or major setup decisions.
 - Relay-only dispatch may require an explicit bounded absolute cwd and direct/worktree
   mode; project dispatch still rejects directories and requires Git isolation.
   Shared identities and history-window policies remain browser-safe, strict and

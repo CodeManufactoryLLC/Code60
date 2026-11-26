@@ -139,10 +139,10 @@ Schema version: 1
 - Prerequisite: capacity
 - Agent access: existing-tools
 - Confirmation: Existing permissions apply.
-- Limits: Project workers require Git isolation; idle workers consume capacity.
+- Limits: Project workers require Git isolation with an initial commit; project orchestrators can inspect and initialize Git through code60_setup_git. Idle workers consume capacity.
 - Pages: none
 - Settings sections: none
-- Tools: `code60_get_context`, `code60_dispatch_agent`, `code60_list_agents`, `code60_read_agent`, `code60_send_agent`, `code60_cancel_agent`, `code60_finish_agent`, `code60_stop_agent`, `code60_resume_agent`
+- Tools: `code60_get_context`, `code60_setup_git`, `code60_dispatch_agent`, `code60_list_agents`, `code60_read_agent`, `code60_send_agent`, `code60_cancel_agent`, `code60_finish_agent`, `code60_stop_agent`, `code60_resume_agent`
 
 ## Browser automation
 

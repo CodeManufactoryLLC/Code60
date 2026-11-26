@@ -114,7 +114,7 @@ preserve captured owner identities. Native shell APIs are not browser capabiliti
 
 - Diff reads accept only a UUID request ID and validated run ID; cancellation accepts only the request ID. Reject unknown fields and paths. Keep the existing diff action as a compatibility adapter.
 
-- Git setup requests accept only the current project, main-process session UUID and preview file UUIDs, plus bounded author values. Expose checkGit, beginGitSetup, previewGitSetupFile, initializeGit, commitGitSetup and cancelGitSetup; never accept arbitrary paths or commands. Readiness is visible in snapshots and worker context; agents have no setup mutation capability.
+- Git setup requests accept only the current project, main-process session UUID and preview file UUIDs, plus bounded author values. Expose checkGit, beginGitSetup, previewGitSetupFile, initializeGit, commitGitSetup and cancelGitSetup; never accept arbitrary paths or commands. Readiness is visible in snapshots and worker context; project orchestrators may initialize the open project through `code60_setup_git`.
 
 ## Custom Assistants
 

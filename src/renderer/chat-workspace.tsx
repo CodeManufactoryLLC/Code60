@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AppPagesProps } from "./app-page-props.js";
 import { Surface as Card } from "./carbon/surfaces.js";
 import { chatDraftKey } from "./chat-draft.js";
@@ -118,6 +118,32 @@ export function ChatWorkspace({
   const projectFiles =
     showsProjectFiles(snapshot, workerId) ||
     (project.explicitProjectFiles === true && !relayWorkerActive);
+  const needsGitCheck =
+    conversationActive &&
+    snapshot?.chat.kind !== "relay" &&
+    Boolean(directory) &&
+    Boolean(snapshot?.gitReadiness) &&
+    snapshot?.gitReadiness?.status !== "ready";
+  const gitProjectId = snapshot?.projectInstanceId ?? undefined;
+  const gitDatabaseEpoch = snapshot?.databaseEpoch;
+  useEffect(() => {
+    if (!needsGitCheck || !directory) return;
+    const refresh = () => {
+      if (document.visibilityState === "hidden") return;
+      void api
+        .checkGit({
+          project: directory,
+          ...(gitProjectId ? { projectId: gitProjectId, databaseEpoch: gitDatabaseEpoch } : {}),
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [api, directory, gitProjectId, gitDatabaseEpoch, needsGitCheck]);
   const projectNotice =
     snapshot?.chat.kind !== "relay" && directory && snapshot?.gitReadiness ? (
       <GitReadinessNotice

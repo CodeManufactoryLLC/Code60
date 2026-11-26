@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -5549,6 +5550,117 @@ describe("orchestrated workers over ACP", {
     expect(controller.snapshot().runs).toHaveLength(0);
     expect(controller.snapshot().reviews).toHaveLength(0);
     expect(agents.specs).toHaveLength(1);
+  });
+
+  it("lets the orchestrator inspect and initialize Git via code60_setup_git while excluding sensitive paths", async () => {
+    const { call, scope } = await setup();
+    const realGit = defaultDeps().git;
+    Object.assign(git, {
+      setup: realGit.setup,
+      repoInfo: realGit.repoInfo,
+      resolveCommit: realGit.resolveCommit,
+    });
+    const projectDir = controller.snapshot().directory as string;
+    await fs.writeFile(join(projectDir, ".env"), "SECRET=123\n");
+    await fs.writeFile(join(projectDir, "README.md"), "# Demo\n");
+
+    const inspected = await call("code60_setup_git", { scope, action: "inspect" });
+    expect(inspected.status, inspected.body.error).toBe(200);
+    expect(inspected.body.result).toMatchObject({
+      alreadyReady: false,
+      readiness: { status: "not_repository" },
+      truncated: false,
+    });
+    const paths = (inspected.body.result.files as Array<{ path: string }>).map((f) => f.path);
+    expect(paths).toEqual(expect.arrayContaining([".env", "README.md"]));
+    const totalBefore = inspected.body.result.totalFiles as number;
+
+    const prevGlobal = process.env.GIT_CONFIG_GLOBAL;
+    process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+    try {
+      const initialized = await call("code60_setup_git", {
+        scope,
+        action: "setup",
+        excludePaths: [".env"],
+        authorName: "Demo Dev",
+        authorEmail: "demo@example.invalid",
+        defaultBranch: "main",
+        commitMessage: "Initial repo setup",
+      });
+      expect(initialized.status, initialized.body.error).toBe(200);
+      expect(initialized.body.result).toMatchObject({
+        alreadyReady: false,
+        readiness: { status: "ready" },
+        committedFiles: totalBefore - 1,
+        commitEmpty: false,
+        excludedCount: 1,
+        author: { name: "Demo Dev", email: "demo@example.invalid" },
+        identityScope: "local",
+      });
+    } finally {
+      if (prevGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+      else process.env.GIT_CONFIG_GLOBAL = prevGlobal;
+    }
+
+    const committed = execFileSync("git", ["-C", projectDir, "ls-tree", "--name-only", "HEAD"], {
+      encoding: "utf8",
+    })
+      .trim()
+      .split("\n");
+    expect(committed).toContain("README.md");
+    expect(committed).not.toContain(".env");
+    expect(controller.snapshot().gitReadiness?.status).toBe("ready");
+
+    // Calling setup again on a ready repository is an idempotent no-op.
+    const repeat = await call("code60_setup_git", { scope, action: "setup" });
+    expect(repeat.status, repeat.body.error).toBe(200);
+    expect(repeat.body.result).toMatchObject({
+      alreadyReady: true,
+      readiness: { status: "ready" },
+    });
+
+    // Worker dispatch now succeeds immediately in the same session.
+    const runId = await dispatch(call, scope, "add tests", "after-git-setup");
+    expect(runId).toBeTruthy();
+  });
+
+  it("supports empty initial commits via code60_setup_git even when untracked files exist", async () => {
+    const { call, scope } = await setup();
+    const realGit = defaultDeps().git;
+    Object.assign(git, {
+      setup: realGit.setup,
+      repoInfo: realGit.repoInfo,
+      resolveCommit: realGit.resolveCommit,
+    });
+    const projectDir = controller.snapshot().directory as string;
+    await fs.writeFile(join(projectDir, ".env"), "SECRET=keep-out\n");
+
+    const prevGlobal = process.env.GIT_CONFIG_GLOBAL;
+    process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+    try {
+      const initialized = await call("code60_setup_git", {
+        scope,
+        action: "setup",
+        commitEmpty: true,
+      });
+      expect(initialized.status, initialized.body.error).toBe(200);
+      expect(initialized.body.result).toMatchObject({
+        alreadyReady: false,
+        readiness: { status: "ready" },
+        committedFiles: 0,
+        commitEmpty: true,
+        author: { name: "Code60", email: "code60@local" },
+      });
+      expect(initialized.body.result.excludedCount as number).toBeGreaterThanOrEqual(1);
+    } finally {
+      if (prevGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+      else process.env.GIT_CONFIG_GLOBAL = prevGlobal;
+    }
+
+    const committed = execFileSync("git", ["-C", projectDir, "ls-tree", "--name-only", "HEAD"], {
+      encoding: "utf8",
+    }).trim();
+    expect(committed).toBe("");
   });
 
   it("rejects MCP send and resume for a worker with no baseline while keeping finish available", async () => {

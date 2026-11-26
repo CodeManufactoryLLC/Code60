@@ -80,7 +80,6 @@ export function containerConfiguration(root, common, uid = 1000, gid = 1000, pai
             CODE60_DEV_GATEWAY_PORT: String(pair.gateway),
             CODE60_VITE_PORT: String(pair.vite),
             PLAYWRIGHT_BROWSERS_PATH: volumeTargets.browsers,
-            GIT_CONFIG_GLOBAL: "/dev/null",
             GIT_TERMINAL_PROMPT: "0",
             VITEST_MAX_WORKERS: "2",
             SSH_AUTH_SOCK: "",

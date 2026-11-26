@@ -144,3 +144,47 @@ it("cancels a commit and its hook process while preserving staged files", async 
 it("reports a disappeared project as unavailable rather than missing Git", async () => {
   expect((await gitSetup.readiness(join(root, "gone"))).status).toBe("unavailable");
 });
+
+it("defaults initial branch to main when init.defaultBranch is unset and supports custom branch and commit options", async () => {
+  const prevGlobal = process.env.GIT_CONFIG_GLOBAL;
+  process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+  try {
+    const preview = await gitSetup.preview(root);
+    expect(preview.defaultBranch).toBe("main");
+    await gitSetup.initialize(root);
+    expect(git("symbolic-ref", "--short", "HEAD").trim()).toBe("main");
+
+    const fallbackReasons: string[] = [];
+    git("config", "commit.gpgsign", "false");
+    await gitSetup.commit(root, [], { name: "Matt", email: "matt@example.invalid" }, undefined, {
+      commitMessage: "Bootstrap repo",
+      saveIdentity: "global",
+      overrideAuthor: true,
+      onIdentityFallback: (reason) => fallbackReasons.push(reason),
+    });
+    expect(fallbackReasons.length).toBeGreaterThan(0);
+    expect(git("log", "-1", "--pretty=%s|%an|%ae").trim()).toBe(
+      "Bootstrap repo|Matt|matt@example.invalid",
+    );
+    expect(git("config", "--local", "user.name").trim()).toBe("Matt");
+    expect(git("config", "--local", "user.email").trim()).toBe("matt@example.invalid");
+  } finally {
+    if (prevGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+    else process.env.GIT_CONFIG_GLOBAL = prevGlobal;
+  }
+});
+
+it("falls back to default local author identity when blank values are passed", async () => {
+  const prevGlobal = process.env.GIT_CONFIG_GLOBAL;
+  process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+  try {
+    await gitSetup.initialize(root, undefined, { defaultBranch: "trunk" });
+    expect(git("symbolic-ref", "--short", "HEAD").trim()).toBe("trunk");
+    git("config", "commit.gpgsign", "false");
+    await gitSetup.commit(root, [], { name: "", email: "" });
+    expect(git("log", "-1", "--pretty=%an|%ae").trim()).toBe("Code60|code60@local");
+  } finally {
+    if (prevGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+    else process.env.GIT_CONFIG_GLOBAL = prevGlobal;
+  }
+});

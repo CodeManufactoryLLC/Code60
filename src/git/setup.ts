@@ -19,6 +19,16 @@ interface GitSetupPreview {
   files: GitSetupFile[];
   author: { name: string; email: string };
   excluded: string[];
+  defaultBranch?: string;
+}
+interface GitSetupInitializeOptions {
+  defaultBranch?: string | undefined;
+}
+interface GitSetupCommitOptions {
+  commitMessage?: string | undefined;
+  saveIdentity?: "local" | "global" | undefined;
+  overrideAuthor?: boolean | undefined;
+  onIdentityFallback?: ((reason: string) => void) | undefined;
 }
 export interface GitSetupOps {
   readiness(directory: string, signal?: AbortSignal): Promise<GitReadiness>;
@@ -27,12 +37,17 @@ export interface GitSetupOps {
     signal?: AbortSignal,
     excludedPaths?: string[],
   ): Promise<GitSetupPreview>;
-  initialize(directory: string, signal?: AbortSignal): Promise<void>;
+  initialize(
+    directory: string,
+    signal?: AbortSignal,
+    options?: GitSetupInitializeOptions,
+  ): Promise<void>;
   commit(
     directory: string,
     files: GitSetupFile[],
     author: { name: string; email: string },
     signal?: AbortSignal,
+    options?: GitSetupCommitOptions,
   ): Promise<void>;
 }
 const detail = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
@@ -188,18 +203,32 @@ export const gitSetup: GitSetupOps = {
         files,
         excluded,
         author: { name: await config("user.name"), email: await config("user.email") },
+        defaultBranch: (await config("init.defaultBranch")) || "main",
       };
     } finally {
       if (temporary) await rm(temporary, { recursive: true, force: true });
     }
   },
-  async initialize(directory, signal) {
+  async initialize(directory, signal, options) {
     const state = await readiness(directory, signal);
     if (state.status === "no_commits") return;
     if (state.status !== "not_repository") throw new Error(state.message);
-    await runSetupGit(["init", "--quiet"], directory, signal);
+    let branch = options?.defaultBranch?.trim();
+    if (!branch) {
+      let configured = "";
+      try {
+        configured = (
+          await runGit(["config", "--get", "init.defaultBranch"], directory, { signal })
+        ).trim();
+      } catch (cause) {
+        if (!(cause instanceof GitError && cause.exitCode === 1)) throw cause;
+      }
+      if (!configured) branch = "main";
+    }
+    const args = branch ? ["init", "--quiet", "--initial-branch", branch] : ["init", "--quiet"];
+    await runSetupGit(args, directory, signal);
   },
-  async commit(directory, files, author, signal) {
+  async commit(directory, files, author, signal, options) {
     return coordinateMetadata(
       directory,
       async () => {
@@ -217,10 +246,22 @@ export const gitSetup: GitSetupOps = {
           } catch (cause) {
             if (!(cause instanceof GitError && cause.exitCode === 1)) throw cause;
           }
-          if (!current) await runGit(["config", "--local", key, value], directory, { signal });
+          if (current && !options?.overrideAuthor) return;
+          if (options?.saveIdentity === "global") {
+            try {
+              await runGit(["config", "--global", key, value], directory, { signal });
+              return;
+            } catch (cause) {
+              options.onIdentityFallback?.(detail(cause));
+            }
+          }
+          await runGit(["config", "--local", key, value], directory, { signal });
         };
-        await configured("user.name", author.name);
-        await configured("user.email", author.email);
+        const authorName = author.name.trim() || "Code60";
+        const authorEmail = author.email.trim() || "code60@local";
+        await configured("user.name", authorName);
+        await configured("user.email", authorEmail);
+        const commitMessage = options?.commitMessage?.trim() || "Initial commit";
         const temporary = await mkdtemp(join(tmpdir(), "code60-git-commit-"));
         try {
           const paths = join(temporary, "paths");
@@ -233,7 +274,7 @@ export const gitSetup: GitSetupOps = {
             const pathspec = [`--pathspec-from-file=${paths}`, "--pathspec-file-nul"];
             await runSetupGit(["--literal-pathspecs", "add", ...pathspec], directory, signal);
             await runSetupGit(
-              ["--literal-pathspecs", "commit", "--only", "-m", "Initial commit", ...pathspec],
+              ["--literal-pathspecs", "commit", "--only", "-m", commitMessage, ...pathspec],
               directory,
               signal,
             );
@@ -241,11 +282,7 @@ export const gitSetup: GitSetupOps = {
             const staged = await runGit(["ls-files", "-z"], directory, { signal });
             if (staged)
               throw new Error("Staged files exist. Refresh the setup preview before committing.");
-            await runSetupGit(
-              ["commit", "--allow-empty", "-m", "Initial commit"],
-              directory,
-              signal,
-            );
+            await runSetupGit(["commit", "--allow-empty", "-m", commitMessage], directory, signal);
           }
         } finally {
           await rm(temporary, { recursive: true, force: true });

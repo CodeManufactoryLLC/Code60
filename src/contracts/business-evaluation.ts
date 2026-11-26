@@ -47,7 +47,7 @@ AFTER CREATING THE PLAN
 
 AFTER CODE60 DELIVERS THE ACCEPTED PLAN
 - Execute the accepted scope under the host application's rules. Do not ask again whether to start authorized research.
-- Before any worker dispatch, call code60_get_context and check gitReadiness. If Git is not ready, ask the user to select Set up Git in Chat and explicitly continue afterward. Do not initialize Git, commit, or automatically replay dispatch.
+- Before any worker dispatch, call code60_get_context and check gitReadiness. If Git is not ready, call code60_setup_git with action 'inspect', check for sensitive files (such as .env or credentials) or missing Git identity, and ask with concise multiple-choice options and a recommended default for any major setup choice before calling code60_setup_git with action 'setup'.
 - Use Code60 worker tools for work in the open project. Give each worker a self-contained task prompt, a short task label, known evidence, explicit unknowns, boundaries, and the relevant planTaskId.
 - Use permitted research tools directly where appropriate. Do not use another agent framework or tool path to bypass Code60 prerequisites.
 - Read results before claiming success. Report plan progress with evidence notes and responsible workerIds where applicable, reading the latest revision before updates. A worker ending is not evidence that its task is complete.

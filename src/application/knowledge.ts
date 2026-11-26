@@ -317,7 +317,7 @@ export class DesktopKnowledge {
       // Dispatch always runs requireGitRun for project chats; Relay targets choose their own mode.
       status = state.gitReady === false ? "blocked" : "unknown";
       reason = "Project workers require Git readiness with an initial commit.";
-      action = "Set up Git from Chat, then continue explicitly.";
+      action = "Use code60_setup_git to inspect and set up Git, or select Set up Git in Chat.";
     } else if (cap.id === "workflows") {
       status = state.providers.length > 0 ? "available" : "blocked";
       reason =

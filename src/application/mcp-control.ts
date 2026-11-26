@@ -25,6 +25,30 @@ const name = z
     "contains control characters",
   );
 const target = z.strictObject({ scope, runId });
+const gitAuthorField = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .refine((value) => !/[\r\n\0<>]/.test(value), "contains disallowed characters");
+const gitBranchName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(128)
+  .refine(
+    (value) =>
+      !/[\s~^:?*[\]\\\0]/.test(value) &&
+      !value.startsWith("-") &&
+      !value.startsWith("/") &&
+      !value.endsWith("/") &&
+      !value.endsWith(".") &&
+      !value.endsWith(".lock") &&
+      !value.includes("..") &&
+      !value.includes("//") &&
+      !value.includes("@{"),
+    "is not a valid branch name",
+  );
 
 const controlSchemas = {
   code60_create_command: commandFieldsSchema,
@@ -39,6 +63,23 @@ const controlSchemas = {
     note: z.string().min(1).max(2_000),
   }),
   code60_get_context: z.strictObject({}),
+  code60_setup_git: z.strictObject({
+    scope,
+    action: z.enum(["inspect", "setup"]),
+    commitEmpty: z.boolean().optional(),
+    excludePaths: z.array(z.string().min(1).max(4096)).max(1_000).optional(),
+    authorName: gitAuthorField.optional(),
+    authorEmail: gitAuthorField.optional(),
+    saveIdentity: z.enum(["local", "global"]).optional(),
+    defaultBranch: gitBranchName.optional(),
+    commitMessage: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .refine((value) => !/[\r\n\0]/.test(value), "must be a single line")
+      .optional(),
+  }),
   code60_dispatch_agent: z.strictObject({
     planTaskId: z.string().uuid().optional(),
     reviewId: z.string().uuid().optional(),

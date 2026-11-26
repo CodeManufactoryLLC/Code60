@@ -6999,6 +6999,8 @@ export class ApplicationHost {
             knowledge: this.knowledgeHint(session),
           };
         });
+      case "code60_setup_git":
+        return this.setupProjectGit(parseControlArgs(name, args), session);
       case "code60_dispatch_agent":
         return this.dispatchWorker(parseControlArgs(name, args), session);
       case "code60_list_agents":
@@ -7039,6 +7041,123 @@ export class ApplicationHost {
       default:
         return this.controlWorker(name, parseControlArgs(name, args), session);
     }
+  }
+
+  private async setupProjectGit(
+    request: ControlArgs<"code60_setup_git">,
+    session: ChatSession,
+  ): Promise<unknown> {
+    const { project, readiness, excludedDbPaths } = await this.chatExclusive(session, async () => {
+      const workspace = this.requireScope(request.scope, session);
+      const state = await this.checkProjectGit(workspace.dir);
+      const database = this.database?.path;
+      return {
+        project: workspace.dir,
+        readiness: state,
+        excludedDbPaths: database
+          ? [database, `${database}-wal`, `${database}-shm`, `${database}-journal`]
+          : [],
+      };
+    });
+    if (readiness.status === "ready") {
+      return request.action === "inspect"
+        ? {
+            project,
+            readiness,
+            alreadyReady: true,
+            files: [],
+            totalFiles: 0,
+            truncated: false,
+            excluded: [],
+          }
+        : {
+            project,
+            readiness,
+            alreadyReady: true,
+            note: "Git repository is already ready with an initial commit.",
+          };
+    }
+    if (!["not_repository", "no_commits"].includes(readiness.status)) {
+      if (request.action === "inspect") {
+        return {
+          project,
+          readiness,
+          alreadyReady: false,
+          files: [],
+          totalFiles: 0,
+          truncated: false,
+          excluded: [],
+        };
+      }
+      throw new Error(readiness.message);
+    }
+    const gitOps = this.deps.git.setup;
+    if (!gitOps) throw new Error("Guided Git setup is unavailable");
+    if (request.action === "inspect") {
+      const preview = await gitOps.preview(project, undefined, excludedDbPaths);
+      return {
+        project,
+        readiness: preview.readiness,
+        alreadyReady: false,
+        files: preview.files.slice(0, 200).map(({ path, size }) => ({ path, size })),
+        totalFiles: preview.files.length,
+        truncated: preview.files.length > 200,
+        excluded: preview.excluded.slice(0, 50),
+        author: preview.author,
+        defaultBranch: preview.defaultBranch ?? "main",
+      };
+    }
+    return this.gitWork(project, async () => {
+      this.conversations.assertCurrent(session);
+      this.requireScope(request.scope, session);
+      const preview = await gitOps.preview(project, undefined, excludedDbPaths);
+      const excludeMatchers = (request.excludePaths ?? [])
+        .map((entry) => entry.replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/+$/, ""))
+        .filter(Boolean);
+      const isExcluded = (filePath: string) => {
+        const normalized = filePath.replaceAll("\\", "/").replace(/^\.\//, "");
+        return excludeMatchers.some(
+          (pattern) => normalized === pattern || normalized.startsWith(`${pattern}/`),
+        );
+      };
+      const filesToCommit = request.commitEmpty
+        ? []
+        : preview.files.filter((file) => !isExcluded(file.path));
+      const authorName = request.authorName ?? (preview.author.name || "Code60");
+      const authorEmail = request.authorEmail ?? (preview.author.email || "code60@local");
+      const overrideAuthor = Boolean(request.authorName || request.authorEmail);
+      const requestedScope = request.saveIdentity ?? "local";
+      let identityScope: "local" | "global" = requestedScope;
+      let identityWarning: string | undefined;
+      await gitOps.initialize(project, undefined, { defaultBranch: request.defaultBranch });
+      await gitOps.commit(
+        project,
+        filesToCommit,
+        { name: authorName, email: authorEmail },
+        undefined,
+        {
+          commitMessage: request.commitMessage,
+          saveIdentity: requestedScope,
+          overrideAuthor,
+          onIdentityFallback: (reason) => {
+            identityScope = "local";
+            identityWarning = `Could not save global Git identity (${reason}); saved in this repository instead.`;
+          },
+        },
+      );
+      const latest = await gitOps.readiness(project);
+      return {
+        project,
+        readiness: latest,
+        alreadyReady: false,
+        committedFiles: filesToCommit.length,
+        commitEmpty: filesToCommit.length === 0,
+        excludedCount: preview.files.length - filesToCommit.length,
+        author: { name: authorName, email: authorEmail },
+        identityScope,
+        ...(identityWarning ? { identityWarning } : {}),
+      };
+    });
   }
 
   private dispatchWorker(
@@ -7182,6 +7301,7 @@ export class ApplicationHost {
       | "code60_read_plan"
       | "code60_update_plan"
       | "code60_get_context"
+      | "code60_setup_git"
       | "code60_dispatch_agent"
       | "code60_list_agents"
       | "code60_read_agent"

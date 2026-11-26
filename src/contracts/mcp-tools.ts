@@ -108,6 +108,7 @@ const MCP_CONTROL_TOOLS = [
   "code60_read_plan",
   "code60_update_plan",
   "code60_get_context",
+  "code60_setup_git",
   "code60_dispatch_agent",
   "code60_list_agents",
   "code60_read_agent",
@@ -381,9 +382,72 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
     true,
   ),
   control(
+    "code60_setup_git",
+    "Set up Git",
+    "Inspects or initializes Git and creates the initial commit for the open project when it is not yet a committed Git repository. Call action 'inspect' first to see existing non-ignored files, configured Git author identity, and default branch. Exercise due diligence before committing: watch for sensitive files (such as .env, private keys, or credentials) or unwanted build artifacts, and ask the user with concise multiple-choice options and a clear recommended default before committing sensitive files or making major setup decisions (such as Git author identity or committing existing files versus starting with an empty initial commit). Call action 'setup' to initialize Git (defaulting to branch 'main' when unset) and create the initial commit.",
+    object(
+      {
+        ...scopeInput,
+        action: {
+          type: "string",
+          enum: ["inspect", "setup"],
+          description:
+            "Use 'inspect' to check readiness, files, author identity, and default branch without modifying the folder. Use 'setup' to initialize Git (if needed) and create the initial commit.",
+        },
+        commitEmpty: {
+          type: "boolean",
+          description:
+            "When true with action 'setup', creates an empty initial commit without staging existing files in the folder.",
+        },
+        excludePaths: {
+          type: "array",
+          maxItems: 1_000,
+          items: { type: "string", minLength: 1, maxLength: 4096 },
+          description:
+            "Optional relative file or directory paths to exclude from the initial commit (for example ['.env', '.env.local']). Ignored when commitEmpty is true.",
+        },
+        authorName: {
+          type: "string",
+          minLength: 1,
+          maxLength: 200,
+          description:
+            "Optional Git user.name to configure for the initial commit. Uses existing Git config or a local default when omitted.",
+        },
+        authorEmail: {
+          type: "string",
+          minLength: 1,
+          maxLength: 200,
+          description:
+            "Optional Git user.email to configure for the initial commit. Uses existing Git config or a local default when omitted.",
+        },
+        saveIdentity: {
+          type: "string",
+          enum: ["local", "global"],
+          description:
+            "Where to save authorName/authorEmail when configuring Git identity. Defaults to 'local'. Use 'global' only when the user wants it saved as their global default.",
+        },
+        defaultBranch: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128,
+          description:
+            "Optional initial branch name when initializing a new repository. Defaults to the configured init.defaultBranch or 'main'.",
+        },
+        commitMessage: {
+          type: "string",
+          minLength: 1,
+          maxLength: 200,
+          description: "Optional single-line commit message. Defaults to 'Initial commit'.",
+        },
+      },
+      ["scope", "action"],
+    ),
+    false,
+  ),
+  control(
     "code60_dispatch_agent",
     "Dispatch a worker",
-    "Starts one worker agent over ACP in the open project with a self-contained task prompt. Returns its run ID as soon as it is accepted, not when the task completes; Code60 sends an automatic update when its turn ends. Fails when Git is not ready or the parallel limit is reached. Ask the user to use Set up Git in Chat when needed; agents cannot initialize or commit. Never replay a rejected dispatch automatically after setup. Reusing requestId with the same arguments returns the earlier result instead of starting another worker.",
+    "Starts one worker agent over ACP in the open project with a self-contained task prompt. Returns its run ID as soon as it is accepted, not when the task completes; Code60 sends an automatic update when its turn ends. Fails when Git is not ready or the parallel limit is reached; use code60_setup_git first when Git is not ready. Reusing requestId with the same arguments returns the earlier result instead of starting another worker.",
     object(
       {
         ...scopeInput,
