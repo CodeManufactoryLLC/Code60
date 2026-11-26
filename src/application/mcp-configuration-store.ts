@@ -218,13 +218,17 @@ export class McpConfigurationStore {
       );
       await store.records(); // Inspection only; never replay pending effects on open.
       return store;
-    } catch {
+    } catch (error) {
+      const failure =
+        error instanceof McpStorageError && error.code === "storage-limit"
+          ? error
+          : new McpStorageError("unsafe");
       try {
         await release();
       } catch {
         throw new McpStorageError("unsafe");
       }
-      throw new McpStorageError("unsafe");
+      throw failure;
     }
   }
 

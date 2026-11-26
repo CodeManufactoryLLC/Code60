@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -17,6 +17,7 @@ const volumeTargets = {
   npm: "/home/node/.npm",
   browsers: "/home/node/.cache/ms-playwright",
   models: "models",
+  dev: "test-results/dev",
 };
 
 function workspaceId(root) {
@@ -93,7 +94,11 @@ export function containerConfiguration(root, common, uid = 1000, gid = 1000, pai
           name,
           {
             name: `${project}-${name}`,
-            labels: { ...labels, "com.code60.kind": name === "home" ? "provider-state" : "cache" },
+            labels: {
+              ...labels,
+              "com.code60.kind":
+                name === "home" ? "provider-state" : name === "dev" ? "dev-state" : "cache",
+            },
           },
         ]),
       ),
@@ -211,6 +216,17 @@ export async function manageContainer(directory, action, args = [], ports = {}) 
   const write = ports.write ?? ((message) => process.stdout.write(message));
 
   if (action === "prepare") {
+    const results = join(root, "test-results");
+    try {
+      const info = await lstat(results);
+      if (!info.isDirectory() || info.isSymbolicLink())
+        throw new Error("Refusing a symlink-redirected test-results directory.");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      await mkdir(results);
+    }
+    if ((await realpath(results)) !== results)
+      throw new Error("Refusing a symlink-redirected test-results directory.");
     await withDevelopmentPorts(
       root,
       common,
@@ -302,7 +318,7 @@ export async function manageContainer(directory, action, args = [], ports = {}) 
       failures.push(new Error("Owned containers or images remain; inspect their workspace label."));
     if (failures.length) throw new AggregateError(failures, "Container cleanup did not complete.");
     write(
-      "Owned containers and images removed. Private provider home and dependency, build, browser and model caches retained.\n",
+      "Owned containers and images removed. Private provider home, development state and dependency, build, browser and model caches retained.\n",
     );
   };
   if (action === "down") return cleanup();

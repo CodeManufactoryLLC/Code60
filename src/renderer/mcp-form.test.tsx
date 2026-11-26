@@ -52,7 +52,7 @@ it("creates disabled stdio definitions, preserves empty arguments and rejects du
   fields.id = "code60";
   expect(() => mcpFormDocument(fields, base)).toThrow("Invalid MCP connector configuration");
 });
-it("provides labelled guided fields, unverified credential guidance and stale-save protection without activation controls", () => {
+it("provides labelled guided fields and stale-save protection without activation controls", () => {
   const html = renderToStaticMarkup(
     <McpForm
       initial={mcpFormFields("docs", base.servers.docs)}
@@ -67,8 +67,9 @@ it("provides labelled guided fields, unverified credential guidance and stale-sa
     />,
   );
   expect(html).toContain('aria-label="Headers prefix 1"');
-  expect(html).toContain("Credential references are unverified");
-  expect(html).toContain("Reload before saving");
+  expect(html).not.toContain("Credential references are unverified");
+  expect(html).not.toContain("New servers are saved disabled");
+  expect(html).toContain("Reset before saving");
   expect(html.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).toMatch(/\sdisabled(?:=|\s|>)/);
   expect(html).not.toContain("Sign in");
   expect(html).not.toContain("Test connection");
@@ -81,31 +82,6 @@ it("blocks a document exceeding the UTF-8 byte budget even when every argument m
   fields.args = Array.from({ length: 128 }, () => "é".repeat(4096));
   expect(() => mcpFormDocument(fields, base)).toThrow("1 MiB UTF-8 limit");
   expect(Object.keys(base.servers)).toEqual(["docs"]);
-});
-it("restores incomplete guided fields and paste errors from renderer memory without creating a definition", () => {
-  const fields = mcpFormFields("unfinished");
-  fields.label = "Incomplete draft";
-  fields.command = "";
-  fields.args = ["", "partial argument"];
-  fields.argIds = ["empty-row", "partial-row"];
-  const html = renderToStaticMarkup(
-    <McpForm
-      initial={mcpFormFields("blank")}
-      base={base}
-      templates={MCP_CONNECTOR_TEMPLATES}
-      draft={{ fields, paste: "{incomplete", pasteOpen: true, error: "Invalid server definition." }}
-      busy={false}
-      stale={false}
-      onSave={() => {}}
-      onCancel={() => {}}
-      onReload={() => {}}
-    />,
-  );
-  expect(html).toContain("Incomplete draft");
-  expect(html).toContain("partial argument");
-  expect(html).toContain("{incomplete");
-  expect(html).toContain("Invalid server definition.");
-  expect(base.servers.unfinished).toBeUndefined();
 });
 
 it("rejects OAuth/Authorization conflicts and supports explicit metadata URL registration", () => {

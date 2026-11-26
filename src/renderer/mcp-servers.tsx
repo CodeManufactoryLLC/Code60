@@ -14,10 +14,11 @@ import { AnchoredMenu } from "./anchored-menu.js";
 import { randomId } from "./browser-platform.js";
 import { Button } from "./carbon/button.js";
 import { Select } from "./carbon/fields.js";
+import type { PageAction } from "./content-page-header.js";
 import { DataTable, type TableOptions } from "./data-table.js";
-import { McpAuthenticationPanel } from "./mcp-authentication.js";
-import { McpForm, type McpFormDraft, mcpFormFields } from "./mcp-form.js";
-import { McpRuntimePanel } from "./mcp-runtime.js";
+import { hasMcpAuthentication, McpAuthenticationPanel } from "./mcp-authentication.js";
+import { McpForm, mcpFormFields } from "./mcp-form.js";
+import { type McpRuntimeActions, McpRuntimePanel } from "./mcp-runtime.js";
 import { Modal } from "./modal.js";
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -26,15 +27,9 @@ const message = (cause: unknown) => {
     `MCP_CONFIG_${code}: ${detail} Other application features and available tools remain usable.`;
   const text = cause instanceof Error ? cause.message : "";
   if (text.includes("conflict"))
-    return explain(
-      "CONFLICT",
-      "Configuration or project changed. Reload before saving. Your draft is retained.",
-    );
+    return explain("CONFLICT", "Configuration or project changed. Reset before saving.");
   if (text.includes("recovery-required"))
-    return explain(
-      "RECOVERY_REQUIRED",
-      "Configuration recovery is required. Your draft is retained.",
-    );
+    return explain("RECOVERY_REQUIRED", "Configuration recovery is required.");
   if (text.includes("storage-limit"))
     return explain(
       "STORAGE_LIMIT",
@@ -57,13 +52,8 @@ const message = (cause: unknown) => {
 };
 const columns = [
   { key: "label", title: "Label", width: 180, filter: "text" },
-  { key: "id", title: "Server ID", width: 140, filter: "text" },
-  { key: "transport", title: "Transport", width: 100, filter: "category" },
-  { key: "source", title: "Source", width: 160, filter: "category" },
   { key: "enabled", title: "Enabled", width: 90, filter: "category" },
-  { key: "approval", title: "Approval", width: 110, filter: "category" },
-  { key: "authentication", title: "Authentication", width: 110, filter: "category" },
-  { key: "connection", title: "Connection", width: 110, filter: "category" },
+  { key: "source", title: "Source", width: 160, filter: "category" },
 ] as const;
 interface Editor {
   base: McpManagementRead;
@@ -71,7 +61,6 @@ interface Editor {
   originalId?: string;
   initial?: McpConnectorDefinition | undefined;
   key: string;
-  draft?: McpFormDraft | undefined;
 }
 interface Move {
   source: McpManagementRead;
@@ -85,7 +74,8 @@ export function McpServersPage({
   active,
   contextKey,
   configuration,
-  onFormDirty,
+  onEditJson,
+  extraPageActions,
   readOnly = false,
   ...table
 }: Pick<TableOptions, "lines" | "density" | "fit" | "textStyles"> & {
@@ -93,7 +83,8 @@ export function McpServersPage({
   active: boolean;
   contextKey: string;
   configuration: { scope: string; select(scope: string): void; reload(): void };
-  onFormDirty?(dirty: boolean): void;
+  onEditJson?(): void;
+  extraPageActions?: readonly PageAction[] | undefined;
   readOnly?: boolean | undefined;
 }) {
   const [visible, setVisible] = useState(
@@ -107,15 +98,11 @@ export function McpServersPage({
   const [remove, setRemove] = useState<Editor>();
   const [move, setMove] = useState<Move>();
   const [busy, setBusy] = useState(false);
+  const [runtimeBusy, setRuntimeBusy] = useState(false);
+  const [authOpenKey, setAuthOpenKey] = useState(0);
   const [error, setError] = useState("");
   const [menu, setMenu] = useState<{ id: string; x: number; y: number }>();
-  const dirtyNotice = useRef(onFormDirty);
-  dirtyNotice.current = onFormDirty;
-  const formKey = editor?.key;
-  useEffect(() => {
-    dirtyNotice.current?.(Boolean(formKey));
-    return () => dirtyNotice.current?.(false);
-  }, [formKey]);
+  const runtimeRef = useRef<McpRuntimeActions>(null);
   const editing = useRef(editor?.key);
   editing.current = editor?.key;
   const ownerContext = useRef(contextKey);
@@ -182,29 +169,13 @@ export function McpServersPage({
   const rows = (read?.rows ?? []).map((row) => ({
     id: row.id,
     label: row.label,
-    transport: row.transport === "http" ? "HTTP" : "stdio",
-    source: `${row.source.scope === "user" ? "User" : (target?.label ?? "Project")}${row.shadowedSources.length ? " (overrides User)" : ""}`,
     enabled: row.enabled ? "Yes" : "No",
-    approval:
-      row.approval === "required"
-        ? "Required"
-        : row.approval === "approved"
-          ? "Approved"
-          : "Not required",
-    authentication:
-      row.observation?.authentication === "required"
-        ? "Authentication required"
-        : row.observation?.authentication === "not-required"
-          ? "Not required"
-          : "Not checked",
-    connection: row.observation?.connection?.replace(/-/g, " ") ?? "Not tested",
+    source: `${row.source.scope === "user" ? "User" : (target?.label ?? "Project")}${row.shadowedSources.length ? " (overrides User)" : ""}`,
   }));
   const selectedId = rows.some((r) => r.id === selected) ? selected : rows[0]?.id;
-  const status = read?.rows.find((r) => r.id === selectedId);
-  const local = Boolean(
-    selectedId && read?.document && Object.hasOwn(read.document.servers, selectedId),
-  );
   const blocked = readOnly || !read?.document || Boolean(read.pendingRecovery.length) || busy;
+  const menuDefinition = menu ? read?.document?.servers[menu.id] : undefined;
+  const menuLocal = Boolean(menuDefinition);
   const captured = (id?: string): Editor | undefined =>
     read?.document && target
       ? {
@@ -234,7 +205,7 @@ export function McpServersPage({
     try {
       const result = await api.mcpSave({ ...payload, requestId: requestId(payload) });
       if (result.status === "recovery-required") {
-        setError("Configuration recovery is required. Your draft is retained.");
+        setError("Configuration recovery is required.");
       } else {
         setSelected(
           value.originalId ??
@@ -324,7 +295,8 @@ export function McpServersPage({
               <p>
                 Preserve configuration files, private backups and transaction evidence. Do not
                 delete writer locks or replay uncertain actions. Follow the MCP configuration
-                recovery runbook or review the affected transaction under Configuration maintenance.
+                recovery runbook or review the affected transaction from the MCP Servers actions
+                menu.
               </p>
             </AccordionItem>
           </Accordion>
@@ -335,11 +307,31 @@ export function McpServersPage({
           User configuration is invalid. Inherited definitions cannot be shown completely.
         </p>
       )}
+      <div className="mcp-actions">
+        <Button
+          variant="primary"
+          disabled={blocked}
+          onClick={() => {
+            setError("");
+            setEditor(captured());
+          }}
+        >
+          Add server
+        </Button>
+        {onEditJson && (
+          <Button variant="secondary" disabled={busy || readOnly} onClick={onEditJson}>
+            Edit JSON
+          </Button>
+        )}
+      </div>
       <DataTable
         {...table}
         tableId="mcp-servers"
-        title="Configured servers"
-        description="Manage servers available to new agent sessions."
+        selectable={false}
+        searchable={false}
+        filterable={false}
+        sortable={false}
+        configurable={false}
         emptyMessage={
           read?.document && !blocked
             ? "No servers configured. Choose Add server to create the first one."
@@ -363,12 +355,6 @@ export function McpServersPage({
         selected={selectedId}
         onSelect={setSelected}
         display={(row, key) => row[key]}
-        onAdd={() => {
-          setError("");
-          setEditor(captured());
-        }}
-        addLabel="Add server"
-        addDisabled={blocked}
         pageActions={[
           {
             id: "mcp-refresh",
@@ -380,57 +366,20 @@ export function McpServersPage({
             },
             disabled: busy,
           },
+          ...(extraPageActions ?? []),
         ]}
         onActions={(id, bounds) => setMenu({ id, x: bounds.x, y: bounds.y + bounds.height })}
       />
-      {selectedId && (
-        <section className="mcp-details" aria-label="Selected server">
-          <h2>{status?.label}</h2>
-          {Boolean(status?.shadowedSources.length) && (
-            <p>Overrides the user definition, including while disabled or unapproved.</p>
-          )}
-          <div className="mcp-actions">
-            <Button type="button" disabled={blocked || !local} onClick={() => openEdit(selectedId)}>
-              Edit server
-            </Button>
-            <Button
-              type="button"
-              disabled={blocked || !local || (targets?.targets.length ?? 0) < 2}
-              onClick={() => openMove(selectedId)}
-            >
-              Move server
-            </Button>
-            {!local && (
-              <Button
-                type="button"
-                onClick={() => {
-                  setScope("user");
-                  setRead(undefined);
-                }}
-              >
-                Open user configuration
-              </Button>
-            )}
-            {read && !editor && !remove && !move && (
-              <McpAuthenticationPanel
-                api={api}
-                read={read}
-                serverId={selectedId}
-                blocked={blocked}
-                active={active}
-              />
-            )}
-            <Button
-              variant="quiet"
-              className="destructive"
-              type="button"
-              disabled={blocked || !local}
-              onClick={() => setRemove(captured(selectedId))}
-            >
-              Remove server
-            </Button>
-          </div>
-        </section>
+      {read && selectedId && !editor && !remove && !move && (
+        <McpAuthenticationPanel
+          api={api}
+          read={read}
+          serverId={selectedId}
+          blocked={blocked}
+          active={active}
+          hideTrigger
+          openKey={authOpenKey}
+        />
       )}
       {read && !editor && !remove && !move && (
         <McpRuntimePanel
@@ -439,6 +388,8 @@ export function McpServersPage({
           read={read}
           serverId={selectedId}
           blocked={blocked}
+          actionsRef={runtimeRef}
+          onBusyChange={setRuntimeBusy}
         />
       )}
       {active && visible && menu && (
@@ -450,21 +401,57 @@ export function McpServersPage({
           items={[
             {
               label: "Edit",
-              disabled: blocked || !Object.hasOwn(read?.document?.servers ?? {}, menu.id),
+              disabled: blocked || !menuLocal,
               run: () => openEdit(menu.id),
             },
             {
-              label: "Remove",
-              disabled: blocked || !Object.hasOwn(read?.document?.servers ?? {}, menu.id),
-              run: () => setRemove(captured(menu.id)),
-            },
-            {
               label: "Move",
-              disabled:
-                blocked ||
-                !Object.hasOwn(read?.document?.servers ?? {}, menu.id) ||
-                (targets?.targets.length ?? 0) < 2,
+              disabled: blocked || !menuLocal || (targets?.targets.length ?? 0) < 2,
               run: () => openMove(menu.id),
+            },
+            ...(!menuLocal
+              ? [
+                  {
+                    label: "Open user configuration",
+                    disabled: false,
+                    run: () => {
+                      setScope("user");
+                      setRead(undefined);
+                    },
+                  },
+                ]
+              : []),
+            ...(menuLocal && hasMcpAuthentication(menuDefinition)
+              ? [
+                  {
+                    label: "Manage authentication",
+                    disabled: blocked,
+                    run: () => {
+                      setSelected(menu.id);
+                      setAuthOpenKey((value) => value + 1);
+                    },
+                  },
+                ]
+              : []),
+            ...(menuDefinition
+              ? [
+                  {
+                    label: menuDefinition.enabled ? "Disable server" : "Enable server",
+                    disabled: blocked || runtimeBusy,
+                    run: () => runtimeRef.current?.toggleEnabled(menu.id, !menuDefinition.enabled),
+                  },
+                  {
+                    label: "Test connection",
+                    disabled: blocked || runtimeBusy,
+                    run: () => runtimeRef.current?.testConnection(menu.id),
+                  },
+                ]
+              : []),
+            {
+              label: "Remove server",
+              danger: true,
+              disabled: blocked || !menuLocal,
+              run: () => setRemove(captured(menu.id)),
             },
           ]}
         />
@@ -481,10 +468,6 @@ export function McpServersPage({
           <McpForm
             key={editor.key}
             initial={mcpFormFields(editor.originalId ?? "", editor.initial)}
-            draft={editor.draft}
-            onDraft={(draft) =>
-              setEditor((value) => (value?.key === editor.key ? { ...value, draft } : value))
-            }
             base={editor.base.document}
             originalId={editor.originalId}
             templates={targets?.templates ?? []}
@@ -612,7 +595,7 @@ export function McpServersPage({
                     .then(
                       async (result) => {
                         if (result.status === "recovery-required")
-                          setError("Configuration recovery is required. Your draft is retained.");
+                          setError("Configuration recovery is required.");
                         else setMove(undefined);
                         await refresh();
                       },

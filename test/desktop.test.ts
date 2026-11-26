@@ -4136,6 +4136,32 @@ describe("app-wide orchestration chat", {
     expect(JSON.stringify(controller.snapshot())).not.toContain("/private/first.js");
   });
 
+  it("labels MCP runtime sessions by project chat and worker while keeping reports allowlisted", async () => {
+    await configureMcp();
+    const id = await ready();
+    await controller.open(directory);
+    const [manualId] = await controller.start({ ...request, prompt: "hello" });
+    await vi.waitFor(() => expect(agents.specs).toHaveLength(2));
+    const target = (await controller.mcpTargets()).targets.find(
+      (entry) => entry.address.scope === "user",
+    )?.address;
+    if (!target) throw new Error("Missing user target");
+    const projectName = basename(directory);
+    const status = await controller.mcpRuntime({ action: "status", target }, "synthetic-page");
+    expect(status.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ runId: id, label: `${projectName}: Chat 1` }),
+        expect.objectContaining({
+          runId: manualId,
+          label: `${projectName} worker: ${request.agents[0]}`,
+        }),
+      ]),
+    );
+    const report = await controller.mcpRuntime({ action: "report", target }, "synthetic-page");
+    expect(JSON.stringify(report)).not.toContain(projectName);
+    expect(JSON.stringify(report)).not.toContain("Chat 1");
+  });
+
   it("injects the latest saved contract without changing recorded user prompts", async () => {
     const id = await ready();
     const send = async (text: string) => {

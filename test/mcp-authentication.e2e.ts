@@ -9,10 +9,17 @@ import { oauthServer } from "./fixtures/mcp-oauth-server.js";
 
 async function apps(page: Page) {
   await openMcpServers(page);
-  await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "User", exact: true })).toBeVisible();
+}
+async function serverAction(page: Page, action: string) {
+  await page
+    .getByRole("button", { name: /^Actions for / })
+    .first()
+    .click();
+  await page.getByRole("menuitem", { name: action, exact: true }).click();
 }
 async function authentication(page: Page) {
-  await page.getByRole("button", { name: "Manage authentication", exact: true }).click();
+  await serverAction(page, "Manage authentication");
   const dialog = page.getByRole("dialog", { name: /^Authentication —/ });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -83,10 +90,13 @@ test("MCP credentials: explicit temporary entry, clearing, reload, no plaintext 
     await expect(dialog.getByLabel("Credential secret", { exact: true })).toHaveValue("");
     await expect(dialog.getByRole("status").filter({ hasText: "Credential saved" })).toBeVisible();
     await dialog.getByRole("button", { name: /^Close Authentication/ }).click();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(
-      page.getByRole("status").filter({ hasText: "connected. 1 tools discovered" }),
-    ).toBeVisible();
+    await serverAction(page, "Test connection");
+    let testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+    await expect(testDialog.locator(".cds--inline-notification--success")).toBeVisible();
+    await expect(testDialog).toContainText("Connection succeeded");
+    await expect(testDialog).toContainText("1 tool discovered");
+    await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(testDialog).toHaveCount(0);
     expect(remote.counts.calls).toBe(0);
     expect(remote.counts.initialize).toBe(1);
     await page.reload();
@@ -104,10 +114,11 @@ test("MCP credentials: explicit temporary entry, clearing, reload, no plaintext 
     await dialog.getByRole("button", { name: "Confirm sign out", exact: true }).click();
     await expect(dialog.getByRole("status").filter({ hasText: "Signed out." })).toBeVisible();
     await dialog.getByRole("button", { name: /^Close Authentication/ }).click();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(
-      page.getByRole("status").filter({ hasText: "Authentication required" }),
-    ).toBeVisible();
+    await serverAction(page, "Test connection");
+    testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+    await expect(testDialog).toContainText("Authentication required");
+    await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(testDialog).toHaveCount(0);
     expect(remote.counts.initialize).toBe(1);
     expect(await readFile(file, "utf8")).toBe(original);
     expect((await stat(file)).mode & 0o777).toBe(0o600);
@@ -159,7 +170,7 @@ test("MCP credentials: unavailable persistent storage never silently becomes tem
     await dialog.getByRole("button", { name: "Save credential", exact: true }).click();
     await expect(dialog.getByRole("status").filter({ hasText: "Credential saved" })).toBeVisible();
     await dialog.getByRole("button", { name: /^Close Authentication/ }).click();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
+    await serverAction(page, "Test connection");
     await expect.poll(() => remote.counts.initialize).toBe(1);
     expect(await readFile(file, "utf8")).toBe(original);
     await secretFree(fixture.directory, [secret]);
@@ -218,38 +229,37 @@ test("MCP OAuth: reviewed issuer/registration, browser consent, retained JSON dr
     ).toBeVisible();
     await page.bringToFront();
     await dialog.getByRole("button", { name: "Continue in background", exact: true }).click();
-    await page.getByRole("tab", { name: "JSON", exact: true }).click();
-    await expect(page.locator(".mcp-json-editor .monaco-editor")).toBeVisible();
-    const draft = JSON.stringify(
+    await page.getByRole("button", { name: "Edit JSON", exact: true }).click();
+    const jsonModal = page.getByRole("dialog", { name: /^Edit JSON —/ });
+    await expect(jsonModal.locator(".mcp-json-editor .monaco-editor")).toBeVisible();
+    const edited = JSON.stringify(
       {
         ...document,
-        servers: { service: { ...document.servers.service, label: "Retained OAuth draft" } },
+        servers: { service: { ...document.servers.service, label: "Edited while authorizing" } },
       },
       null,
       2,
     );
-    await edit(page, draft);
-    await expect(
-      page.getByRole("button", { name: "Save configuration", exact: true }),
-    ).toBeEnabled();
+    await edit(page, edited);
+    await expect(jsonModal.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
     await issuer.getByRole("button", { name: "Authorize synthetic server", exact: true }).click();
     await expect(issuer.locator("body")).toContainText("Authorization response received");
     await page.bringToFront();
     await expect.poll(() => remote.counts.token).toBe(1);
-    await expect(page.locator(".mcp-json-editor")).toContainText("Retained OAuth draft");
+    await expect(jsonModal.locator(".mcp-json-editor")).toContainText("Edited while authorizing");
     expect(await readFile(file, "utf8")).toBe(original);
-    await page.getByRole("tab", { name: "Servers", exact: true }).click();
-    const guard = page.getByRole("dialog", { name: "Unsaved MCP JSON changes", exact: true });
-    await guard.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(page.locator(".mcp-json-editor")).toContainText("Retained OAuth draft");
-    await page.getByRole("tab", { name: "Servers", exact: true }).click();
-    await guard.getByRole("button", { name: "Discard", exact: true }).click();
+    await jsonModal.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(jsonModal).toHaveCount(0);
     dialog = await authentication(page);
     await expect(dialog).toContainText("authenticated");
     const secrets = remote.accessTokens();
     await dialog.getByRole("button", { name: /^Close Authentication/ }).click();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
+    await serverAction(page, "Test connection");
     await expect.poll(() => remote.counts.initialize).toBe(1);
+    const testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+    await expect(testDialog.locator(".cds--inline-notification--success")).toBeVisible();
+    await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(testDialog).toHaveCount(0);
     expect(remote.counts.calls).toBe(0);
     dialog = await authentication(page);
     await dialog.getByRole("button", { name: "Sign out…", exact: true }).click();

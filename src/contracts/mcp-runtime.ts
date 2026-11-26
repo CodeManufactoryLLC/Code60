@@ -48,6 +48,7 @@ export type McpRuntimeRequest = z.infer<typeof mcpRuntimeRequestSchema>;
 interface McpRuntimeSessionStatus {
   sessionGeneration: string;
   runId: string;
+  label?: string;
   idle: boolean;
   canReconnect: boolean;
   connectors: { id: string; targetId: string; revision: string; connection: string }[];

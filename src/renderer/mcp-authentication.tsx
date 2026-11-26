@@ -3,6 +3,7 @@ import type {
   ApplicationClient,
   McpAuthenticationRequest,
   McpAuthenticationResponse,
+  McpConnectorDefinition,
   McpManagementRead,
 } from "../bridge/index.js";
 import { randomId } from "./browser-platform.js";
@@ -11,6 +12,15 @@ import { Checkbox, RadioButton } from "./carbon/choices.js";
 import { Select, TextInput } from "./carbon/fields.js";
 import { Modal } from "./modal.js";
 
+export function hasMcpAuthentication(definition?: McpConnectorDefinition): boolean {
+  if (!definition) return false;
+  const oauth = definition.type === "http" && definition.auth.type === "oauth";
+  if (oauth) return true;
+  return Object.values(definition.type === "stdio" ? definition.env : definition.headers).some(
+    (binding) => "credentialRef" in binding,
+  );
+}
+
 /** Secret fields are transient; only backend metadata survives submission or navigation. */
 export function McpAuthenticationPanel({
   api,
@@ -18,12 +28,16 @@ export function McpAuthenticationPanel({
   serverId,
   blocked,
   active,
+  hideTrigger = false,
+  openKey = 0,
 }: {
   api: ApplicationClient;
   read: McpManagementRead;
   serverId: string;
   blocked: boolean;
   active: boolean;
+  hideTrigger?: boolean;
+  openKey?: number;
 }) {
   const definition = read.document?.servers[serverId];
   const capturedKey = JSON.stringify([read.target, read.revision, serverId]);
@@ -37,6 +51,7 @@ export function McpAuthenticationPanel({
   }, [capturedKey]);
   const epoch = useRef(0);
   const currentOwner = useRef("");
+  const lastOpenKey = useRef(0);
   const [open, setOpen] = useState(false);
   const [review, setReview] = useState<McpAuthenticationResponse>();
   const [status, setStatus] = useState<McpAuthenticationResponse>();
@@ -150,6 +165,15 @@ export function McpAuthenticationPanel({
       if (owner === epoch.current) setBusy(false);
     }
   }
+  const actRef = useRef(act);
+  actRef.current = act;
+  useEffect(() => {
+    if (openKey > 0 && openKey !== lastOpenKey.current) {
+      lastOpenKey.current = openKey;
+      setOpen(true);
+      void actRef.current({ action: "preview", ...captured, allowPrivateIssuer: false });
+    }
+  }, [captured, openKey]);
   function close() {
     setSecret("");
     const finish = () => {
@@ -166,13 +190,8 @@ export function McpAuthenticationPanel({
     } else finish();
   }
   if (!definition) return null;
+  if (!hasMcpAuthentication(definition)) return null;
   const oauth = definition.type === "http" && definition.auth.type === "oauth";
-  const hasReferences =
-    Object.values(definition.type === "stdio" ? definition.env : definition.headers).some(
-      (binding) => "credentialRef" in binding,
-    ) ||
-    (oauth && definition.auth.type === "oauth" && Boolean(definition.auth.clientSecretRef));
-  if (!oauth && !hasReferences) return null;
   const selected = review?.references?.find((item) => item.reference === reference);
   const saveCredential = (
     <Button
@@ -206,16 +225,18 @@ export function McpAuthenticationPanel({
   );
   return (
     <section aria-label="MCP authentication controls">
-      <Button
-        type="button"
-        disabled={blocked || busy}
-        onClick={() => {
-          setOpen(true);
-          void act({ action: "preview", ...captured, allowPrivateIssuer: false });
-        }}
-      >
-        Manage authentication
-      </Button>
+      {!hideTrigger && (
+        <Button
+          type="button"
+          disabled={blocked || busy}
+          onClick={() => {
+            setOpen(true);
+            void act({ action: "preview", ...captured, allowPrivateIssuer: false });
+          }}
+        >
+          Manage authentication
+        </Button>
+      )}
       {open && (
         <Modal
           initialFocus={confirmation ? ".cds--btn--secondary" : undefined}

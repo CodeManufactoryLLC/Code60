@@ -146,6 +146,11 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
   emptyMessage,
   scope,
   onRetainedQuery,
+  selectable = true,
+  searchable = true,
+  filterable = true,
+  sortable = true,
+  configurable = true,
 }: {
   rows: Row[];
   columns: { key: Key; title: string; width: number; filter?: FilterKind }[];
@@ -169,6 +174,11 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
   emptyMessage?: string;
   scope?: ReactNode;
   onRetainedQuery?(query: RetainedTableQuery): void;
+  selectable?: boolean;
+  searchable?: boolean;
+  filterable?: boolean;
+  sortable?: boolean;
+  configurable?: boolean;
 } & TableOptions) {
   const id = useId();
   const container = useRef<HTMLDivElement>(null);
@@ -263,6 +273,7 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
     setPage(1);
   }, [workspace, tableId]);
   useEffect(() => {
+    if (!searchable) return;
     const find = (event: KeyboardEvent) => {
       if (
         !(event.metaKey || event.ctrlKey) ||
@@ -276,7 +287,7 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
     };
     window.addEventListener("keydown", find);
     return () => window.removeEventListener("keydown", find);
-  }, []);
+  }, [searchable]);
   const roots = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     const textMatch = (row: Row) =>
@@ -328,6 +339,7 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
     setSettings(undefined);
     if (settingsTrigger.current?.checkVisibility()) settingsTrigger.current.focus();
   };
+  const showToolbar = searchable || filterable || sortable || configurable || Boolean(onAdd);
   return (
     <TableContainer
       className="data-table carbon-data-table"
@@ -338,89 +350,99 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
         <TableHeading tableId={tableId} actions={pageActions} />
         {scope && <div className="table-scope">{scope}</div>}
       </div>
-      <TableToolbar aria-label={`${tableTitles[tableId]} controls`}>
-        <TableToolbarContent>
-          <form
-            className="carbon-table-search"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (onRetainedQuery) setSubmittedSearch(query);
-            }}
-          >
-            <Search
-              id={`${id}-search`}
-              ref={search}
-              labelText={
-                onRetainedQuery ? "Search retained logs" : `Search ${tableTitles[tableId]}`
-              }
-              placeholder={
-                onRetainedQuery ? "Search retained logs" : `Search ${tableTitles[tableId]}`
-              }
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setPage(1);
-                if (!event.target.value) setSubmittedSearch("");
-              }}
-            />
-            {onRetainedQuery && <Button type="submit">Search history</Button>}
-          </form>
-          <FilterControls
-            key={`${tableId}:${workspace}`}
-            fields={fields}
-            library={named.library}
-            error={named.error}
-            onChange={(value) => {
-              named.update(value);
-              setPage(1);
-            }}
-            preview={(filter, at) =>
-              rows.filter(
-                (row) => !parent?.(row) && matchesColumns(row) && matchesNamed(row, filter, at),
-              ).length
-            }
-            retained={!!onRetainedQuery}
-          />
-          <Select
-            aria-label="Column menu"
-            value=""
-            onChange={(event) => {
-              if (event.target.value)
-                setHeaderMenu({
-                  key: event.target.value as Key,
-                  bounds: event.currentTarget.getBoundingClientRect(),
-                });
-            }}
-          >
-            <option value="">Column filter and sort</option>
-            {allColumns.map((column) => (
-              <option key={column.key} value={column.key}>
-                {column.title}
-              </option>
-            ))}
-          </Select>
-          <Button
-            className="icon-button"
-            ref={settingsTrigger}
-            aria-haspopup="dialog"
-            aria-label="Settings"
-            title="Table settings"
-            onClick={() => setSettings(settingsScope)}
-          >
-            <Icon name="settings--adjust" />
-          </Button>
-          {onAdd && (
-            <Button variant="primary" disabled={addDisabled} onClick={onAdd}>
-              {addLabel}
-            </Button>
-          )}
-        </TableToolbarContent>
-      </TableToolbar>
-      {incompatibility && (
+      {showToolbar && (
+        <TableToolbar aria-label={`${tableTitles[tableId]} controls`}>
+          <TableToolbarContent>
+            {searchable && (
+              <form
+                className="carbon-table-search"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (onRetainedQuery) setSubmittedSearch(query);
+                }}
+              >
+                <Search
+                  id={`${id}-search`}
+                  ref={search}
+                  labelText={
+                    onRetainedQuery ? "Search retained logs" : `Search ${tableTitles[tableId]}`
+                  }
+                  placeholder={
+                    onRetainedQuery ? "Search retained logs" : `Search ${tableTitles[tableId]}`
+                  }
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setPage(1);
+                    if (!event.target.value) setSubmittedSearch("");
+                  }}
+                />
+                {onRetainedQuery && <Button type="submit">Search history</Button>}
+              </form>
+            )}
+            {filterable && (
+              <FilterControls
+                key={`${tableId}:${workspace}`}
+                fields={fields}
+                library={named.library}
+                error={named.error}
+                onChange={(value) => {
+                  named.update(value);
+                  setPage(1);
+                }}
+                preview={(filter, at) =>
+                  rows.filter(
+                    (row) => !parent?.(row) && matchesColumns(row) && matchesNamed(row, filter, at),
+                  ).length
+                }
+                retained={!!onRetainedQuery}
+              />
+            )}
+            {(filterable || sortable) && (
+              <Select
+                aria-label="Column menu"
+                value=""
+                onChange={(event) => {
+                  if (event.target.value)
+                    setHeaderMenu({
+                      key: event.target.value as Key,
+                      bounds: event.currentTarget.getBoundingClientRect(),
+                    });
+                }}
+              >
+                <option value="">Column filter and sort</option>
+                {allColumns.map((column) => (
+                  <option key={column.key} value={column.key}>
+                    {column.title}
+                  </option>
+                ))}
+              </Select>
+            )}
+            {configurable && (
+              <Button
+                className="icon-button"
+                ref={settingsTrigger}
+                aria-haspopup="dialog"
+                aria-label="Settings"
+                title="Table settings"
+                onClick={() => setSettings(settingsScope)}
+              >
+                <Icon name="settings--adjust" />
+              </Button>
+            )}
+            {onAdd && (
+              <Button variant="primary" disabled={addDisabled} onClick={onAdd}>
+                {addLabel}
+              </Button>
+            )}
+          </TableToolbarContent>
+        </TableToolbar>
+      )}
+      {filterable && incompatibility && (
         <p role="alert">Saved filter is incompatible and has not been applied: {incompatibility}</p>
       )}
       {storageError && <p role="status">{storageError}</p>}
-      {Object.keys(filters).length > 0 && (
+      {filterable && Object.keys(filters).length > 0 && (
         <section className="table-filter-bar" aria-label="Applied column filters">
           {allColumns
             .filter((column) => filters[column.key])
@@ -464,7 +486,7 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
         className="carbon-table-scroll"
         style={
           {
-            "--table-width": `${columns.reduce((sum, column) => sum + (view.widths[column.key] ?? column.width), onActions ? 144 : 48)}px`,
+            "--table-width": `${columns.reduce((sum, column) => sum + (view.widths[column.key] ?? column.width), (selectable ? 48 : 0) + (onActions ? 96 : 0))}px`,
           } as CSSProperties
         }
         data-fit-columns={view.fit}
@@ -477,7 +499,7 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
           size={view.density === "high" ? "sm" : view.density === "medium" ? "md" : "lg"}
         >
           <colgroup>
-            <col style={{ width: 48 }} />
+            {selectable && <col style={{ width: 48 }} />}
             {columns.map((column) => (
               <col
                 key={column.key}
@@ -488,24 +510,32 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
           </colgroup>
           <TableHead>
             <TableRow>
-              <TableHeader>
-                <span className="cds--visually-hidden">Select row</span>
-              </TableHeader>
-              {columns.map(({ key, title }) => (
-                <TableHeader
-                  key={key}
-                  scope="col"
-                  isSortable
-                  isSortHeader={sort.key === key}
-                  sortDirection={sort.key === key ? (sort.desc ? "DESC" : "ASC") : "NONE"}
-                  onClick={() => {
-                    setSort({ key, desc: sort.key === key ? !sort.desc : false });
-                    setPage(1);
-                  }}
-                >
-                  {title}
+              {selectable && (
+                <TableHeader>
+                  <span className="cds--visually-hidden">Select row</span>
                 </TableHeader>
-              ))}
+              )}
+              {columns.map(({ key, title }) =>
+                sortable ? (
+                  <TableHeader
+                    key={key}
+                    scope="col"
+                    isSortable
+                    isSortHeader={sort.key === key}
+                    sortDirection={sort.key === key ? (sort.desc ? "DESC" : "ASC") : "NONE"}
+                    onClick={() => {
+                      setSort({ key, desc: sort.key === key ? !sort.desc : false });
+                      setPage(1);
+                    }}
+                  >
+                    {title}
+                  </TableHeader>
+                ) : (
+                  <TableHeader key={key} scope="col">
+                    {title}
+                  </TableHeader>
+                ),
+              )}
               {onActions && <TableHeader scope="col">Actions</TableHeader>}
             </TableRow>
           </TableHead>
@@ -513,7 +543,7 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
             {visible.map((row) => (
               <TableRow
                 key={row.id}
-                isSelected={selected === row.id}
+                isSelected={selectable && selected === row.id}
                 data-row-id={row.id}
                 data-parent={parent?.(row)}
                 onClick={(event) => {
@@ -544,14 +574,16 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
                   }
                 }}
               >
-                <TableSelectRow
-                  id={`${id}-${row.id}`}
-                  name={`${id}-selection`}
-                  radio
-                  aria-label={`Select ${display(row, columns[0]?.key ?? initialSort)}`}
-                  checked={selected === row.id}
-                  onSelect={() => onSelect(row.id)}
-                />
+                {selectable && (
+                  <TableSelectRow
+                    id={`${id}-${row.id}`}
+                    name={`${id}-selection`}
+                    radio
+                    aria-label={`Select ${display(row, columns[0]?.key ?? initialSort)}`}
+                    checked={selected === row.id}
+                    onSelect={() => onSelect(row.id)}
+                  />
+                )}
                 {columns.map(({ key }) => (
                   <TableCell
                     key={key}
@@ -585,7 +617,7 @@ function TableContent<Row extends { id: string }, Key extends keyof Row & string
             ))}
             {!visible.length && (
               <TableRow>
-                <TableCell colSpan={columns.length + 1 + Number(!!onActions)}>
+                <TableCell colSpan={columns.length + Number(selectable) + Number(!!onActions)}>
                   {query || Object.keys(filters).length || activeFilter
                     ? "No rows match these filters."
                     : "No rows yet."}

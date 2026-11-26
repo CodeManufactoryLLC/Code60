@@ -6,7 +6,7 @@ import { browserApp, createDatabase, onboard, openProject } from "./fixtures/bro
 
 async function apps(page: Page) {
   await openMcpServers(page);
-  await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "User", exact: true })).toBeVisible();
 }
 const alive = (pid: number) => {
   try {
@@ -43,18 +43,29 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     await createDatabase(page, fixture.directory);
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await apps(page);
-    await page.getByRole("button", { name: "Enable server", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Disable server", exact: true })).toBeVisible();
+    const serverAction = async (action: string) => {
+      await page
+        .getByRole("button", { name: /^Actions for / })
+        .first()
+        .click();
+      await page.getByRole("menuitem", { name: action, exact: true }).click();
+    };
+    await serverAction("Enable server");
+    await expect(page.locator(".mcp-workspace").getByRole("table")).toContainText("Yes");
     expect(JSON.parse(await readFile(userFile, "utf8")).servers.fixture.enabled).toBe(true);
     await expect(stat(evidence)).rejects.toThrow();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
+    await serverAction("Test connection");
     const confirmation = page.getByRole("dialog", { name: "Test MCP server?", exact: true });
     await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(confirmation).toHaveCount(0);
     await expect(stat(evidence)).rejects.toThrow();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
+    await serverAction("Test connection");
     await confirmation.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(page.getByLabel("MCP connection controls")).toContainText("1 tools discovered");
+    const testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+    await expect(testDialog.locator(".cds--inline-notification--success")).toBeVisible();
+    await expect(testDialog).toContainText("1 tool discovered");
+    await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(testDialog).toHaveCount(0);
     const events = async () =>
       (await readFile(evidence, "utf8"))
         .trim()
@@ -65,7 +76,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     await mkdir(join(fixture.directory, "project"));
     await openProject(page, fixture.directory, "project");
     await apps(page);
-    await expect(page.getByLabel("MCP connection controls")).toContainText("connected");
+    await expect(page.getByLabel("MCP connection controls")).toContainText("Relay (Idle)");
     const before = (await events()).filter((event) => event.event === "spawn").length;
     await page
       .getByRole("button", { name: "Reconnect session servers", exact: true })
@@ -73,6 +84,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
       .click();
     let decision = page.getByRole("dialog", { name: "Reconnect session servers", exact: true });
     await expect(decision).toContainText("fixture");
+    await expect(decision).toContainText("Session: Relay");
     await decision.getByRole("button", { name: "Cancel", exact: true }).click();
     expect((await events()).filter((event) => event.event === "spawn")).toHaveLength(before);
     await page
@@ -86,6 +98,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     await expect
       .poll(async () => (await events()).filter((event) => event.event === "spawn").length)
       .toBe(before + 1);
+    await expect(page.getByLabel("MCP connection controls")).toContainText("fixture: connected");
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const chat = page.locator(".orchestration-chat-page:visible");
     const composer = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
@@ -102,7 +115,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
       name: `Session ${relayId}`,
       exact: true,
     });
-    await expect(liveSession).toContainText("Active");
+    await expect(liveSession.locator("legend")).toHaveText("Relay (Active)");
     await liveSession
       .getByRole("button", { name: "Reconnect session servers", exact: true })
       .click();
@@ -112,12 +125,18 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     expect((await events()).filter((event) => event.event === "spawn")).toHaveLength(before + 1);
     const savedConfiguration = await readFile(userFile);
     await writeFile(userFile, '{"version":1,"servers":', { mode: 0o600 });
-    await page.getByRole("button", { name: "Review troubleshooting report", exact: true }).click();
+    await page.getByRole("button", { name: "MCP Servers actions", exact: true }).click();
+    await page
+      .getByRole("menuitem", { name: "Review troubleshooting report", exact: true })
+      .click();
     const troubleshooting = page.getByRole("dialog", {
       name: "Safe MCP troubleshooting report",
       exact: true,
     });
-    const report = JSON.parse(await troubleshooting.locator("pre").innerText());
+    const reportText = await troubleshooting.locator("pre").innerText();
+    const report = JSON.parse(reportText);
+    expect(reportText).not.toContain("Relay");
+    expect(reportText).not.toContain("project: Chat 1");
     expect(report.configuration).toBe("invalid");
     expect(report.capturedInstances).toBeGreaterThan(0);
     expect(report.connectedInstances).toBeGreaterThan(0);
@@ -139,15 +158,9 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     } finally {
       await configuration.close();
     }
-    await page.getByRole("button", { name: "Disable server", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Enable server", exact: true })).toBeVisible();
-    const projectValue = await page
-      .getByLabel("Configuration", { exact: true })
-      .locator("option")
-      .filter({ hasText: "project" })
-      .getAttribute("value");
-    if (!projectValue) throw new Error("Project target missing");
-    await page.getByLabel("Configuration", { exact: true }).selectOption(projectValue);
+    await serverAction("Disable server");
+    await expect(page.locator(".mcp-workspace").getByRole("table")).toContainText("No");
+    await page.getByRole("tab", { name: "Project", exact: true }).click();
     // Add a disabled project override; approval is explicit and source identity remains canonical.
     await page.getByRole("button", { name: "Add server", exact: true }).click();
     const form = page.getByRole("dialog", { name: /Add MCP server/ });
@@ -170,17 +183,11 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
       await readFile(join(fixture.directory, "state/code60/mcp-runtime/trust.json"), "utf8"),
     );
     expect(Object.keys(metadata.approvals)).toHaveLength(1);
-    await page.getByRole("tab", { name: "JSON", exact: true }).click();
-    await page.locator(".mcp-json-editor .inputarea").focus();
-    await page.keyboard.press("ControlOrMeta+a");
-    await page.keyboard.press("ArrowRight");
-    await page.keyboard.insertText(" ");
-    await page.getByRole("link", { name: "Code60", exact: true }).click();
-    await apps(page);
-    await expect(page.locator(".mcp-json-editor")).toContainText("Project override");
-    await expect(
-      page.getByRole("button", { name: "Save configuration", exact: true }),
-    ).toBeEnabled();
+    await page.getByRole("button", { name: "Edit JSON", exact: true }).click();
+    const jsonModal = page.getByRole("dialog", { name: /^Edit JSON —/ });
+    await expect(jsonModal.locator(".mcp-json-editor")).toContainText("Project override");
+    await jsonModal.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(jsonModal).toHaveCount(0);
     const records = await readdir(join(fixture.directory, "state/code60/mcp-configuration"));
     expect(records.some((record) => record.endsWith(".backup"))).toBe(true);
     expect((await events()).some((event) => event.event === "call")).toBe(false);
@@ -223,7 +230,11 @@ test("MCP runtime: Cancel and browser detach stop page-owned discovery processes
         .filter(Boolean)
         .map((line) => JSON.parse(line));
     const begin = async () => {
-      await page.getByRole("button", { name: "Test connection", exact: true }).click();
+      await page
+        .getByRole("button", { name: /^Actions for / })
+        .first()
+        .click();
+      await page.getByRole("menuitem", { name: "Test connection", exact: true }).click();
       await page
         .getByRole("dialog", { name: "Test MCP server?", exact: true })
         .getByRole("button", { name: "Test connection", exact: true })
@@ -233,8 +244,11 @@ test("MCP runtime: Cancel and browser detach stop page-owned discovery processes
     await expect
       .poll(async () => (await events()).filter((event) => event.event === "list").length)
       .toBe(1);
-    await page.getByRole("button", { name: "Cancel connection test", exact: true }).click();
-    await expect(page.getByLabel("MCP connection controls")).toContainText("cancelled");
+    const testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+    await testDialog.getByRole("button", { name: "Cancel connection test", exact: true }).click();
+    await expect(testDialog).toContainText(/cancelled/i);
+    await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(testDialog).toHaveCount(0);
     await expect
       .poll(async () => alive((await events()).find((event) => event.event === "spawn").pid))
       .toBe(false);

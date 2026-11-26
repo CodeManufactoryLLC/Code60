@@ -100,6 +100,13 @@ export class ApplicationAgents {
   owns(id: string | null) {
     return !!this.owner(id);
   }
+  sessionLabel(runId: string): string | undefined {
+    for (const agent of this.all()) {
+      const label = agent.sessionLabel(runId);
+      if (label) return label;
+    }
+    return undefined;
+  }
   get active() {
     return this.pendingSends > 0 || this.all().some((agent) => agent.active);
   }

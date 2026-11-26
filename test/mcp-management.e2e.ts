@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
@@ -9,10 +9,17 @@ import { browserApp, createDatabase, onboard, openProject } from "./fixtures/bro
 
 async function app(page: Page) {
   await openMcpServers(page);
-  await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "User", exact: true })).toBeVisible();
 }
 async function clickAdd(page: Page) {
   await page.getByRole("button", { name: "Add server", exact: true }).click();
+}
+async function serverAction(page: Page, action: string, label?: string) {
+  const trigger = label
+    ? page.getByRole("button", { name: `Actions for ${label}`, exact: true })
+    : page.getByRole("button", { name: /^Actions for / }).first();
+  await trigger.click();
+  await page.getByRole("menuitem", { name: action, exact: true }).click();
 }
 async function add(page: Page, id: string, label: string) {
   await clickAdd(page);
@@ -35,9 +42,11 @@ test("MCP management: user scope, templates, pasted review, HTTP edits, cancella
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
     const providerProcesses = await readdir(fixture.processLog);
-    await expect(page.getByLabel("Configuration", { exact: true })).toHaveValue("user");
+    await expect(page.getByRole("tab", { name: "User", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     const workspace = page.locator(".mcp-workspace");
-    await expect(workspace.getByRole("heading", { name: "Configured servers" })).toBeVisible();
     await expect(
       workspace.getByRole("status").filter({ hasText: "No servers configured." }),
     ).toBeVisible();
@@ -54,7 +63,18 @@ test("MCP management: user scope, templates, pasted review, HTTP edits, cancella
       args: ["with spaces"],
     });
     expect((await stat(config(fixture.directory))).mode & 0o777).toBe(0o600);
-    await page.getByRole("button", { name: "Edit server", exact: true }).click();
+    await expect(workspace.getByRole("columnheader")).toHaveText([
+      "Label",
+      "Enabled",
+      "Source",
+      "Actions",
+    ]);
+    await expect(workspace.getByRole("table").getByRole("radio")).toHaveCount(0);
+    await expect(workspace.getByRole("searchbox")).toHaveCount(0);
+    await expect(workspace.getByRole("button", { name: "Filters", exact: true })).toHaveCount(0);
+    await expect(workspace.getByLabel("Column menu", { exact: true })).toHaveCount(0);
+    await expect(workspace.getByRole("button", { name: "Settings", exact: true })).toHaveCount(0);
+    await serverAction(page, "Edit", "Documentation");
     form = page.getByRole("dialog", { name: /Edit MCP server/ });
     await expect(form.getByLabel("Server ID", { exact: true })).toBeDisabled();
     await form.getByLabel("Transport", { exact: true }).selectOption("http");
@@ -66,12 +86,8 @@ test("MCP management: user scope, templates, pasted review, HTTP edits, cancella
     await form.getByLabel("Headers prefix 1", { exact: true }).fill("Bearer ");
     await form.getByLabel("Authentication", { exact: true }).selectOption("oauth");
     await form.getByLabel("Requested scopes", { exact: true }).fill("docs:read");
-    await expect(form).toContainText("Credential references are unverified");
     const beforeInvalidSave = await readFile(config(fixture.directory));
     await expect(form.getByRole("button", { name: "Save server", exact: true })).toBeDisabled();
-    await expect(
-      form.getByRole("status").filter({ hasText: "Invalid MCP connector configuration" }),
-    ).toBeVisible();
     expect(await readFile(config(fixture.directory))).toEqual(beforeInvalidSave);
     await form.getByLabel("Headers name 1", { exact: true }).fill("X-Service-Token");
     await expect(form.getByRole("button", { name: "Save server", exact: true })).toBeEnabled();
@@ -84,7 +100,7 @@ test("MCP management: user scope, templates, pasted review, HTTP edits, cancella
       auth: { type: "oauth", scopes: ["docs:read"] },
     });
     const before = await readFile(config(fixture.directory));
-    await page.getByRole("button", { name: "Remove server", exact: true }).click();
+    await serverAction(page, "Remove server", "Documentation");
     await page
       .getByRole("dialog", { name: "Remove MCP server?", exact: true })
       .getByRole("button", { name: "Cancel", exact: true })
@@ -118,7 +134,7 @@ test("MCP management: user scope, templates, pasted review, HTTP edits, cancella
     await form.getByRole("button", { name: "Save server", exact: true }).click();
     await expect(form).toHaveCount(0);
     expect((await load(config(fixture.directory))).servers.pasted.enabled).toBe(false);
-    await page.getByRole("button", { name: "Remove server", exact: true }).click();
+    await serverAction(page, "Remove server", "Pasted");
     await page
       .getByRole("dialog", { name: "Remove MCP server?", exact: true })
       .getByRole("button", { name: "Confirm removal", exact: true })
@@ -129,9 +145,7 @@ test("MCP management: user scope, templates, pasted review, HTTP edits, cancella
     expect(await readdir(fixture.processLog)).toEqual(providerProcesses);
     await page.reload();
     await app(page);
-    await expect(page.getByRole("region", { name: "Selected server", exact: true })).toContainText(
-      "Context7",
-    );
+    await expect(page.locator(".mcp-workspace").getByRole("table")).toContainText("Context7");
     expect(await readFile(join(fixture.directory, "config/code60/config.json"))).toEqual(legacy);
     expect(await readdir(join(fixture.directory, "state/code60/mcp-configuration"))).toEqual(
       expect.arrayContaining([expect.stringMatching(/\.backup$/)]),
@@ -154,18 +168,17 @@ test("MCP management: project moves, collision preview, cancellation, inheritanc
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await openProject(page, fixture.directory, "alpha");
     await app(page);
-    const destination = page.getByLabel("Configuration", { exact: true });
     let form = await add(page, "docs", "User docs");
     await form.getByRole("button", { name: "Save server", exact: true }).click();
     await expect(form).toHaveCount(0);
-    await page.getByRole("button", { name: "Move server", exact: true }).click();
+    await serverAction(page, "Move", "User docs");
     let move = page.getByRole("dialog", { name: "Move MCP server", exact: true });
     await move.getByLabel("Destination", { exact: true }).selectOption({ label: "alpha" });
     await expect(move.getByRole("button", { name: "Confirm move", exact: true })).toBeEnabled();
     await expect(move).toContainText("No credentials or approvals are moved");
     await move.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(stat(join(project, ".code60/mcp.json"))).rejects.toThrow();
-    await page.getByRole("button", { name: "Move server", exact: true }).click();
+    await serverAction(page, "Move", "User docs");
     move = page.getByRole("dialog", { name: "Move MCP server", exact: true });
     await move.getByLabel("Destination", { exact: true }).selectOption({ label: "alpha" });
     await move.getByRole("button", { name: "Confirm move", exact: true }).click();
@@ -176,17 +189,17 @@ test("MCP management: project moves, collision preview, cancellation, inheritanc
     form = await add(page, "docs", "Inherited docs");
     await form.getByRole("button", { name: "Save server", exact: true }).click();
     await expect(form).toHaveCount(0);
-    await page.getByRole("button", { name: "Move server", exact: true }).click();
+    await serverAction(page, "Move", "Inherited docs");
     move = page.getByRole("dialog", { name: "Move MCP server", exact: true });
     await move.getByLabel("Destination", { exact: true }).selectOption({ label: "alpha" });
     await expect(move).toContainText("destination already contains this server ID");
     await expect(move.getByRole("button", { name: "Confirm move", exact: true })).toBeDisabled();
     await move.getByRole("button", { name: "Cancel", exact: true }).click();
-    await destination.selectOption({ label: "alpha" });
-    await expect(page.getByRole("region", { name: "Selected server", exact: true })).toContainText(
-      "Overrides the user definition",
+    await page.getByRole("tab", { name: "Project", exact: true }).click();
+    await expect(page.locator(".mcp-workspace").getByRole("table")).toContainText(
+      "(overrides User)",
     );
-    await page.getByRole("button", { name: "Edit server", exact: true }).click();
+    await serverAction(page, "Edit", "User docs");
     form = page.getByRole("dialog", { name: /Edit MCP server/ });
     await form.getByLabel("Label", { exact: true }).fill("Unsaved project draft");
     const external = '{"version":1,"servers":{}}\n';
@@ -195,15 +208,17 @@ test("MCP management: project moves, collision preview, cancellation, inheritanc
     await expect(form).toContainText("Configuration or project changed");
     await expect(form.getByLabel("Label", { exact: true })).toHaveValue("Unsaved project draft");
     expect(await readFile(join(project, ".code60/mcp.json"), "utf8")).toBe(external);
-    await form.getByRole("button", { name: "Reload and discard draft", exact: true }).click();
+    await form.getByRole("button", { name: "Reset", exact: true }).click();
     await expect(form).toHaveCount(0);
+    await page.getByRole("button", { name: "Actions for Inherited docs", exact: true }).click();
     await expect(
-      page.getByRole("button", { name: "Open user configuration", exact: true }),
+      page.getByRole("menuitem", { name: "Open user configuration", exact: true }),
     ).toBeVisible();
+    await page.keyboard.press("Escape");
     // Reloading a now-malformed document must close the discarded form and keep writes blocked.
     form = await add(page, "draft", "Invalid reload");
     await writeFile(join(project, ".code60/mcp.json"), "malformed");
-    await form.getByRole("button", { name: "Reload and discard draft", exact: true }).click();
+    await form.getByRole("button", { name: "Reset", exact: true }).click();
     await expect(form).toHaveCount(0);
     await expect(page.locator("#panel-mcp-servers")).toContainText("Invalid configuration");
     await expect(page.getByRole("button", { name: "Add server", exact: true })).toBeDisabled();
@@ -284,6 +299,31 @@ test("MCP management: malformed files and interrupted transactions block guided 
       ),
     ).toBe(true);
     expect(await readFile(config(fixture.directory), "utf8")).toBe('{"version":1,"servers":{}}\n');
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("MCP management: initial unsafe storage surfaces MCP_CONFIG_UNSAFE and recovers on explicit reload", async ({
+  browser,
+}) => {
+  const fixture = await browserApp(browser);
+  try {
+    await writeFile(config(fixture.directory), '{"version":1,"servers":{}}\n', { mode: 0o644 });
+    await chmod(config(fixture.directory), 0o644);
+    const { page } = await fixture.open();
+    await onboard(page);
+    await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
+    await app(page);
+    const panel = page.locator("#panel-mcp-servers");
+    await expect(panel).toContainText("MCP_CONFIG_UNSAFE:");
+    const reload = panel.getByRole("button", { name: "Reload configuration", exact: true });
+    await expect(reload).toBeVisible();
+    await chmod(config(fixture.directory), 0o600);
+    await reload.click();
+    await expect(panel).not.toContainText("MCP_CONFIG_UNSAFE:");
+    await expect(panel).toContainText("No servers configured.");
+    await expect(page.getByRole("button", { name: "Add server", exact: true })).toBeEnabled();
   } finally {
     await fixture.close();
   }

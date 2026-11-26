@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   type ApplicationClient,
   type McpTargetAddress,
@@ -9,14 +9,23 @@ import { copyText, randomId } from "./browser-platform.js";
 import { Button } from "./carbon/button.js";
 import { Modal } from "./modal.js";
 
+export interface McpTroubleshootingActions {
+  reviewReport(): void;
+  verifyCleanup(): void;
+}
+
 export function McpTroubleshooting({
   api,
   target,
   active,
+  actionsRef,
+  onBusyChange,
 }: {
   api: ApplicationClient;
   target: McpTargetAddress;
   active: boolean;
+  actionsRef?: Ref<McpTroubleshootingActions>;
+  onBusyChange?(busy: boolean): void;
 }) {
   const [report, setReport] = useState<McpTroubleshootingReport>();
   const [busy, setBusy] = useState(false);
@@ -72,27 +81,21 @@ export function McpTroubleshooting({
       if (token === epoch.current) setBusy(false);
     }
   }
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
+  useImperativeHandle(actionsRef, () => ({
+    reviewReport() {
+      if (busy || !active) return;
+      void run("report");
+    },
+    verifyCleanup() {
+      if (busy || !active) return;
+      setCleanup(true);
+    },
+  }));
   return (
-    <section aria-label="MCP troubleshooting" className="mcp-maintenance-row">
-      <h3>Troubleshooting</h3>
-      <div className="mcp-actions">
-        <Button
-          variant="quiet"
-          type="button"
-          disabled={busy || !active}
-          onClick={() => void run("report")}
-        >
-          Review troubleshooting report
-        </Button>
-        <Button
-          variant="quiet"
-          type="button"
-          disabled={busy || !active}
-          onClick={() => setCleanup(true)}
-        >
-          Verify cleanup
-        </Button>
-      </div>
+    <>
       {notice && <p role="status">{notice}</p>}
       {cleanup && (
         <Modal
@@ -168,6 +171,6 @@ export function McpTroubleshooting({
           </Button>
         </Modal>
       )}
-    </section>
+    </>
   );
 }

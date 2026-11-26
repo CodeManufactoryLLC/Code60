@@ -925,4 +925,15 @@ describe("MCP configuration store (supporting filesystem integration)", () => {
       expect((await store.read(project)).document?.servers).toEqual({});
     },
   );
+
+  it("preserves storage-limit errors when opening over budget and releases the writer lock", async () => {
+    const { store, user } = await open();
+    await save(store, user, content());
+    await store.close();
+    await expect(McpConfigurationStore.open({ ...options, budgetBytes: 1 })).rejects.toMatchObject({
+      code: "storage-limit",
+    });
+    const reopened = await open();
+    expect((await reopened.store.read(user)).document?.servers.docs?.label).toBe("Docs");
+  });
 });

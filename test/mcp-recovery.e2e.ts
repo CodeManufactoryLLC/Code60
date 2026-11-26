@@ -10,9 +10,13 @@ import { browserApp, createDatabase, onboard, openProject } from "./fixtures/bro
 
 const original =
   '{"version":1,"servers":{"docs":{"label":"Private definition","enabled":false,"type":"stdio","command":"never-run","args":[],"env":{"PRIVATE_TOKEN":{"credentialRef":"private-reference"}}}}}\n';
+async function mcpAction(page: Page, name: string) {
+  await page.getByRole("button", { name: "MCP Servers actions", exact: true }).click();
+  await page.getByRole("menuitem", { name, exact: true }).click();
+}
 async function app(page: Page) {
   await openMcpServers(page);
-  await expect(page.getByLabel("Configuration", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "User", exact: true })).toBeVisible();
 }
 async function edit(page: Page, value: string) {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
@@ -77,12 +81,12 @@ for (const direction of ["complete", "roll back", "conflict"] as const) {
       await app(recovered);
       expect(await fs.readFile(userFile)).toEqual(pendingBytes[0]);
       expect(await fs.readFile(projectFile)).toEqual(pendingBytes[1]);
-      await recovered.getByRole("tab", { name: "JSON", exact: true }).click();
-      await edit(recovered, original.replace("Private definition", "Retained recovery draft"));
-      await expect(
-        recovered.getByRole("button", { name: "Save configuration", exact: true }),
-      ).toBeDisabled();
-      await recovered.getByRole("button", { name: "Configuration recovery", exact: true }).click();
+      await recovered.getByRole("button", { name: "Edit JSON", exact: true }).click();
+      const jsonModal = recovered.getByRole("dialog", { name: /^Edit JSON —/ });
+      await edit(recovered, original.replace("Private definition", "Blocked recovery edit"));
+      await expect(jsonModal.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+      await jsonModal.getByRole("button", { name: "Cancel", exact: true }).click();
+      await mcpAction(recovered, "Configuration recovery");
       const dialog = recovered.getByRole("dialog", {
         name: "MCP configuration recovery",
         exact: true,
@@ -90,7 +94,6 @@ for (const direction of ["complete", "roll back", "conflict"] as const) {
       await dialog.getByRole("button", { name: "Review transaction", exact: true }).click();
       await expect(dialog).toContainText("Current state: after");
       await expect(dialog).toContainText("Current state: before");
-      await expect(dialog).toContainText("Your unsaved draft will be retained");
       await expect(dialog).not.toContainText("private-reference");
       await dialog.getByRole("button", { name: "Complete transaction", exact: true }).click();
       await dialog.getByRole("button", { name: "Cancel recovery", exact: true }).click();
@@ -133,10 +136,7 @@ for (const direction of ["complete", "roll back", "conflict"] as const) {
           expect((await fs.stat(join(stateRoot, file))).mode & 0o777).toBe(0o600);
       }
       await dialog.getByRole("button", { name: "Close recovery", exact: true }).click();
-      await expect(recovered.locator(".mcp-json-editor")).toContainText("Retained recovery draft");
-      await expect(
-        recovered.getByRole("button", { name: "Compare saved and draft", exact: true }),
-      ).toBeVisible();
+      await expect(dialog).toHaveCount(0);
     } finally {
       await fixture.close();
     }
@@ -153,7 +153,7 @@ test("MCP troubleshooting: review/copy allowlisted report and explicit cleanup w
     await onboard(page);
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
-    await page.getByRole("button", { name: "Review troubleshooting report", exact: true }).click();
+    await mcpAction(page, "Review troubleshooting report");
     const dialog = page.getByRole("dialog", {
       name: "Safe MCP troubleshooting report",
       exact: true,
@@ -177,10 +177,10 @@ test("MCP troubleshooting: review/copy allowlisted report and explicit cleanup w
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(JSON.stringify(report, null, 2));
     await dialog.getByRole("button", { name: "Close report", exact: true }).click();
-    await page.getByRole("button", { name: "Verify cleanup", exact: true }).click();
+    await mcpAction(page, "Verify cleanup");
     const cleanup = page.getByRole("dialog", { name: "Verify owned MCP cleanup?", exact: true });
     await cleanup.getByRole("button", { name: "Cancel cleanup verification", exact: true }).click();
-    await page.getByRole("button", { name: "Verify cleanup", exact: true }).click();
+    await mcpAction(page, "Verify cleanup");
     await cleanup
       .getByRole("button", { name: "Confirm cleanup verification", exact: true })
       .click();
@@ -193,7 +193,7 @@ test("MCP troubleshooting: review/copy allowlisted report and explicit cleanup w
     ).toEqual([]);
     await page.reload();
     await app(page);
-    await page.getByRole("button", { name: "Review troubleshooting report", exact: true }).click();
+    await mcpAction(page, "Review troubleshooting report");
     await expect(dialog.locator("pre")).toContainText('"notTested": 1');
   } finally {
     await fixture.close();
@@ -213,32 +213,33 @@ test("MCP troubleshooting: jump to malformed JSON, repair, and preserve draft af
     await onboard(page);
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
-    await page.getByRole("tab", { name: "JSON", exact: true }).click();
-    const issues = page.getByRole("list", { name: "Configuration issues", exact: true });
+    await page.getByRole("button", { name: "Edit JSON", exact: true }).click();
+    let jsonModal = page.getByRole("dialog", { name: /^Edit JSON —/ });
+    const issues = jsonModal.getByRole("list", { name: "Configuration issues", exact: true });
     await expect(issues).toBeVisible();
+    await expect(issues).toHaveCSS("list-style-type", "none");
     await expect(issues).not.toContainText("PRIVATE_UNKNOWN");
     await expect(issues).not.toContainText("PRIVATE_VALUE");
     await issues.getByRole("button").first().click();
-    await expect(page.locator(".mcp-json-editor .inputarea")).toBeFocused();
-    await expect(
-      page.getByRole("button", { name: "Save configuration", exact: true }),
-    ).toBeDisabled();
+    await expect(jsonModal.locator(".mcp-json-editor .inputarea")).toBeFocused();
+    await expect(jsonModal.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await edit(page, original);
-    await page.getByRole("button", { name: "Save configuration", exact: true }).click();
-    await expect(page.locator('.mcp-json-actions [role="status"]')).toHaveText("Saved");
+    await jsonModal.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(jsonModal).toHaveCount(0);
     await expect.poll(() => fs.readFile(file, "utf8")).toBe(original);
-    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible();
     const backups = (await fs.readdir(storage)).filter((f) => f.endsWith(".backup"));
     expect(backups.length).toBe(1);
     expect(await fs.readFile(join(storage, backups[0]!), "utf8")).toContain(
       Buffer.from(malformed).toString("base64"),
     );
     await fs.chmod(file, 0o400);
-    const draft = original.replace("Private definition", "Retained unsafe-write draft");
-    await edit(page, draft);
-    await page.getByRole("button", { name: "Save configuration", exact: true }).click();
-    await expect(page.locator("#panel-mcp-servers")).toContainText("Your draft is retained");
-    await expect(page.locator(".mcp-json-editor")).toContainText("Retained unsafe-write draft");
+    await page.getByRole("button", { name: "Edit JSON", exact: true }).click();
+    jsonModal = page.getByRole("dialog", { name: /^Edit JSON —/ });
+    const next = original.replace("Private definition", "Blocked unsafe write");
+    await edit(page, next);
+    await jsonModal.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(jsonModal).toContainText("MCP_CONFIG_UNSAFE");
+    await expect(jsonModal.locator(".mcp-json-editor")).toContainText("Blocked unsafe write");
     expect(await fs.readFile(file, "utf8")).toBe(original);
     expect((await fs.stat(file)).mode & 0o777).toBe(0o400);
     expect((await fs.readdir(storage)).filter((f) => f.endsWith(".backup"))).toEqual(backups);
@@ -308,7 +309,7 @@ test("MCP recovery: interrupted combined reset rolls back exact malformed preima
     const { page: recovered } = await fixture.open();
     await expect(recovered.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(recovered);
-    await recovered.getByRole("button", { name: "Configuration recovery", exact: true }).click();
+    await mcpAction(recovered, "Configuration recovery");
     const dialog = recovered.getByRole("dialog", {
       name: "MCP configuration recovery",
       exact: true,
@@ -348,19 +349,21 @@ test("MCP troubleshooting: launch-stage warning and explicit bounded discovery r
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
     for (let attempt = 0; attempt < 2; attempt++) {
-      await page.getByRole("button", { name: "Test connection", exact: true }).click();
+      await page
+        .getByRole("button", { name: /^Actions for / })
+        .first()
+        .click();
+      await page.getByRole("menuitem", { name: "Test connection", exact: true }).click();
       const confirm = page.getByRole("dialog", { name: "Test MCP server?", exact: true });
       await expect(confirm).toContainText("Only initialization and tool discovery");
       await confirm.getByRole("button", { name: "Test connection", exact: true }).click();
-      await expect(page.getByLabel("MCP connection controls")).toContainText("MCP_LAUNCH (launch)");
-      await expect(page.getByLabel("MCP connection controls")).toContainText(
-        "Other tools remain available",
-      );
-      await expect(
-        page.getByRole("button", { name: "Test connection", exact: true }),
-      ).toBeEnabled();
+      const testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+      await expect(testDialog).toContainText("MCP_LAUNCH (launch)");
+      await expect(testDialog).toContainText("Other tools remain available");
+      await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+      await expect(testDialog).toHaveCount(0);
     }
-    await page.getByRole("button", { name: "Review troubleshooting report", exact: true }).click();
+    await mcpAction(page, "Review troubleshooting report");
     const report = page.getByRole("dialog", {
       name: "Safe MCP troubleshooting report",
       exact: true,
@@ -445,17 +448,22 @@ test("MCP troubleshooting: uncertain HTTP cleanup stays revoked until explicit v
     await onboard(page);
     await expect(page.getByRole("banner", { name: "Code60" })).toBeVisible();
     await app(page);
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(page.getByLabel("MCP connection controls")).toContainText(
-      "cleanup could not be verified",
-    );
+    await page
+      .getByRole("button", { name: /^Actions for / })
+      .first()
+      .click();
+    await page.getByRole("menuitem", { name: "Test connection", exact: true }).click();
+    const testDialog = page.getByRole("dialog", { name: /^Test connection —/ });
+    await expect(testDialog).toContainText("cleanup could not be verified");
+    await testDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(testDialog).toHaveCount(0);
     expect({ initializes, lists, calls, deletes }).toEqual({
       initializes: 1,
       lists: 1,
       calls: 0,
       deletes: 1,
     });
-    await page.getByRole("button", { name: "Review troubleshooting report", exact: true }).click();
+    await mcpAction(page, "Review troubleshooting report");
     const report = page.getByRole("dialog", {
       name: "Safe MCP troubleshooting report",
       exact: true,
@@ -463,7 +471,7 @@ test("MCP troubleshooting: uncertain HTTP cleanup stays revoked until explicit v
     expect(JSON.parse(await report.locator("pre").innerText()).unresolvedCleanup).toBe(1);
     await report.getByRole("button", { name: "Close report", exact: true }).click();
     const verify = async () => {
-      await page.getByRole("button", { name: "Verify cleanup", exact: true }).click();
+      await mcpAction(page, "Verify cleanup");
       await page
         .getByRole("dialog", { name: "Verify owned MCP cleanup?", exact: true })
         .getByRole("button", { name: "Confirm cleanup verification", exact: true })

@@ -461,6 +461,39 @@ export class ApplicationHost {
       this.authentication?.recheckOwners(),
     );
   }
+  private mcpSessionLabel(runId: string): string | undefined {
+    const relayLabel = this.relay?.sessionLabel(runId);
+    if (relayLabel) return relayLabel;
+    for (const owner of this.projectHost.all()) {
+      const projectName = owner.state.workspace ? basename(owner.state.workspace.dir) : undefined;
+      const chatIndex = owner.state.conversations.sessions.findIndex(
+        (session) => (session.run?.id ?? session.chat?.runs()[0]?.id) === runId,
+      );
+      if (chatIndex >= 0) {
+        const chat = owner.state.conversations.sessions[chatIndex];
+        const title = chat?.title?.trim() || `Chat ${chatIndex + 1}`;
+        return projectName ? `${projectName}: ${title}` : title;
+      }
+      const worker = owner.state.conversations.workers.get(runId);
+      let liveAgent: string | undefined;
+      for (const batch of owner.state.batches.keys()) {
+        const found = batch.runs().find((run) => run.id === runId);
+        if (found) {
+          liveAgent = found.agent;
+          break;
+        }
+      }
+      const historyAgent =
+        liveAgent ?? owner.state.history.find((entry) => entry.record.id === runId)?.record.agent;
+      if (worker || historyAgent) {
+        const name = worker?.label?.trim() || historyAgent;
+        if (projectName && name) return `${projectName} worker: ${name}`;
+        if (projectName) return `${projectName} worker`;
+        if (name) return `Worker: ${name}`;
+      }
+    }
+    return undefined;
+  }
   private connectorResources(role: McpConnectorRole, root?: string) {
     const owner = this.projectHost.current;
     let projectPin: string | undefined;
@@ -754,7 +787,10 @@ export class ApplicationHost {
         () => null,
       );
       return {
-        sessions: this.connectors.status(request.target.targetId),
+        sessions: this.connectors.status(request.target.targetId).map((session) => {
+          const label = this.mcpSessionLabel(session.runId);
+          return label ? { ...session, label } : session;
+        }),
         failures: this.connectors.failureStatus(request.target.targetId),
         unresolvedCleanup: this.connectors.cleanupCount(request.target.targetId),
         approved:

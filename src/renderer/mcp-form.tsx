@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import {
   MCP_TEXT_LIMITS,
   type McpConnectorDefinition,
@@ -216,16 +216,8 @@ function BindingFields({
     </fieldset>
   );
 }
-export interface McpFormDraft {
-  fields: McpFormFields;
-  paste: string;
-  pasteOpen: boolean;
-  error: string;
-}
 export function McpForm({
   initial,
-  draft,
-  onDraft,
   base,
   originalId,
   templates,
@@ -236,8 +228,6 @@ export function McpForm({
   onReload,
 }: {
   initial: McpFormFields;
-  draft?: McpFormDraft | undefined;
-  onDraft?(draft: McpFormDraft): void;
   base: McpConnectorDocument;
   originalId?: string | undefined;
   templates: readonly { id: string; definition: McpConnectorDefinition }[];
@@ -248,15 +238,10 @@ export function McpForm({
   onReload(): void;
 }) {
   const formId = useId();
-  const [fields, setFields] = useState(draft?.fields ?? initial);
-  const [paste, setPaste] = useState(draft?.paste ?? "");
-  const [pasteOpen, setPasteOpen] = useState(draft?.pasteOpen ?? false);
-  const [error, setError] = useState(draft?.error ?? "");
-  const persist = useRef(onDraft);
-  persist.current = onDraft;
-  useEffect(() => {
-    persist.current?.({ fields, paste, pasteOpen, error });
-  }, [fields, paste, pasteOpen, error]);
+  const [fields, setFields] = useState(initial);
+  const [paste, setPaste] = useState("");
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [error, setError] = useState("");
   const change = <K extends keyof McpFormFields>(key: K, value: McpFormFields[K]) =>
     setFields((f) => ({
       ...f,
@@ -266,11 +251,10 @@ export function McpForm({
         : {}),
     }));
   let document: McpConnectorDocument | undefined;
-  let problem = "";
   try {
     document = mcpFormDocument(fields, base, originalId);
-  } catch (cause) {
-    problem = cause instanceof Error ? cause.message : "Invalid MCP server definition.";
+  } catch {
+    document = undefined;
   }
   return (
     <form
@@ -490,33 +474,11 @@ export function McpForm({
             )}
           </>
         )}
-        <p>
-          Credential references are unverified by configuration editing. Use Manage authentication
-          after saving. Credentials are never stored in this file or copied by Move. Use literals
-          only for non-secret values.
-        </p>
-        <p>
-          {originalId
-            ? "The existing enabled state is preserved."
-            : "New servers are saved disabled."}{" "}
-          Saving does not launch or connect a server. Commands such as npx may download packages
-          when a connection or confirmed test starts.
-        </p>
         {error && <p role="alert">{error}</p>}
-        {problem && (
-          <p role="status">
-            {problem} Use a lowercase alphanumeric/hyphen ID, valid transport fields and explicit
-            non-secret or credential bindings.
-          </p>
-        )}
-        {stale && (
-          <p role="alert">
-            This configuration or project changed. Reload before saving. Your draft is retained.
-          </p>
-        )}
+        {stale && <p role="alert">This configuration or project changed. Reset before saving.</p>}
         <div className="dialog-actions">
           <Button variant="quiet" type="button" onClick={onReload}>
-            Reload and discard draft
+            Reset
           </Button>
           <ModalActions>
             <Button variant="secondary" disabled={busy} onClick={onCancel}>

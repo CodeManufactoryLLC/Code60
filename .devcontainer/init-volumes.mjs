@@ -21,6 +21,10 @@ export async function initializeVolumes(directory, uid, gid) {
   if (!(await lstat(home)).isDirectory()) throw new Error("Expected a provider home directory");
   await own(home, uid, gid);
   await chmod(home, 0o700);
+  const dev = join(directory, "dev");
+  if (!(await lstat(dev)).isDirectory()) throw new Error("Expected a development state directory");
+  await own(dev, uid, gid);
+  await chmod(dev, 0o700);
   for (const name of ["dependencies", "build", "npm", "browsers", "models"])
     await own(join(directory, name), uid, gid);
 }

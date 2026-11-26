@@ -46,6 +46,10 @@ it("builds Carbon themes and control foundations without global reset/fonts or e
   expect(css.indexOf(".carbon-app [hidden]")).toBeGreaterThan(
     css.indexOf(".carbon-app .code60-surface"),
   );
+  expect(css).toMatch(
+    /\.carbon-app \.cds--select-input\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*overflow:\s*clip;[^}]*overflow-clip-margin:\s*content-box;/,
+  );
+  expect(css).toMatch(/\.carbon-app \.cds--select-input::picker-icon\s*\{\s*display:\s*none;\s*\}/);
   expect(css).not.toContain("@font-face");
   expect(css).not.toContain("all: revert");
   expect(css).not.toMatch(/(?:url\(|@import)[^;\n]*https?:/);

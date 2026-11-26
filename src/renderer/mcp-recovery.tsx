@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type {
   ApplicationClient,
   McpRecoveryRequest,
@@ -10,19 +10,25 @@ import { randomId } from "./browser-platform.js";
 import { Button } from "./carbon/button.js";
 import { Modal } from "./modal.js";
 
-/** Reviewing recovery never replaces a working draft or grants connector authority. */
+export interface McpRecoveryActions {
+  open(): void;
+}
+
+/** Reviewing recovery never grants connector authority. */
 export function McpRecoveryPanel({
   api,
   target,
   active,
-  dirty,
   onChanged,
+  actionsRef,
+  onBusyChange,
 }: {
   api: ApplicationClient;
   target: McpTargetAddress;
   active: boolean;
-  dirty: boolean;
   onChanged(): void;
+  actionsRef?: Ref<McpRecoveryActions>;
+  onBusyChange?(busy: boolean): void;
 }) {
   const [opened, setOpened] = useState(false);
   const [pending, setPending] = useState<McpRecoveryResponse["pending"]>();
@@ -77,8 +83,8 @@ export function McpRecoveryPanel({
       if (value.result) {
         setNotice(
           value.result.status === "recovery-required"
-            ? "MCP_RECOVERY_REQUIRED: Recovery remains uncertain. Evidence and your draft are retained. Review again before another decision."
-            : "Recovery verified. Your draft is retained. Reload or compare before saving. Existing sessions and credentials are unchanged.",
+            ? "MCP_RECOVERY_REQUIRED: Recovery remains uncertain. Evidence is retained. Review again before another decision."
+            : "Recovery verified. Existing sessions and credentials are unchanged.",
         );
         setReview(undefined);
         setDecision(undefined);
@@ -89,7 +95,7 @@ export function McpRecoveryPanel({
     } catch {
       if (token !== epoch.current || capturedOwner.current !== owner) return;
       setNotice(
-        "MCP_RECOVERY_BLOCKED: Evidence, configuration or project ownership changed or is unavailable. No recovery is claimed. Keep your draft and evidence; reopen affected projects and review again. Other available tools remain usable.",
+        "MCP_RECOVERY_BLOCKED: Evidence, configuration or project ownership changed or is unavailable. No recovery is claimed. Reopen affected projects and review again. Other available tools remain usable.",
       );
       if (request.action === "recover") {
         setRetry(request);
@@ -101,19 +107,18 @@ export function McpRecoveryPanel({
       if (token === epoch.current) setBusy(false);
     }
   };
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
+  useImperativeHandle(actionsRef, () => ({
+    open() {
+      if (busy || !active) return;
+      setOpened(true);
+      void act({ action: "list", target });
+    },
+  }));
   return (
     <>
-      <Button
-        variant="quiet"
-        type="button"
-        disabled={busy || !active}
-        onClick={() => {
-          setOpened(true);
-          void act({ action: "list", target });
-        }}
-      >
-        Configuration recovery
-      </Button>
       {opened && (
         <Modal
           footer={
@@ -171,12 +176,6 @@ export function McpRecoveryPanel({
             replays them. Backups and transaction evidence stay private. Recovery affects only
             recorded configurations. Other available tools remain usable.
           </p>
-          {dirty && (
-            <p>
-              Your unsaved draft will be retained. Recovery changes saved files; compare or
-              explicitly reload afterward.
-            </p>
-          )}
           {notice && <p role="status">{notice}</p>}
           {pending?.length === 0 && <p>No pending configuration transactions.</p>}
           {pending?.map((entry) => (
