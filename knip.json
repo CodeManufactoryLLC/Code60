@@ -17,6 +17,7 @@
     "test/fixtures/automation-transcript.tsx",
     "test/fixtures/navigation-icons.tsx",
     "src/gateway/main.ts",
+    "src/gateway/container.ts",
     "src/management/main.ts",
     "src/application/mcp-server.ts",
     "src/application/rag-worker.ts",

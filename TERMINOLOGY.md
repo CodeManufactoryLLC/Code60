@@ -1,6 +1,6 @@
 # Code60 Terminology
 
-> **Applies to:** Code60 `v0.4.1` · **Last update:** `2026-11-25`
+> **Applies to:** Code60 `v0.5.0-beta` · **Last update:** `2026-11-26`
 > Open **Manage → About** or run `code60 status` to check the local Code60 version. See [Code60 FAQ](FAQ.md) for common questions.
 
 ## Terms

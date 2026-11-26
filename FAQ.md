@@ -1,6 +1,6 @@
 # Code60 FAQ
 
-> **Applies to:** Code60 `v0.4.1` · **Last update:** `2026-11-25`
+> **Applies to:** Code60 `v0.5.0-beta` · **Last update:** `2026-11-26`
 > Open **Manage → About** or run `code60 status` to check the local Code60 version. See [Code60 Terminology](TERMINOLOGY.md) for key terms.
 
 ## Contents
@@ -65,6 +65,8 @@ See [What are the system requirements for running Code60?](#what-are-the-system-
 No. Code60 installs, runs, and supports local development without Docker.
 
 Code60 runs natively on macOS Apple Silicon and Linux x64. It uses [Code60 Gateway](TERMINOLOGY.md#gateway) (a local Node.js 24 backend), a browser interface, and separate Git worktrees for coding agents.
+
+Code60 also provides a Linux `x64` Docker image (`mjholliday/code60`) on port `6060` for container setups. See the [Docker distribution guide](docs/distribution/docker.md) for setup and security options.
 
 Only optional contributor workflows require a local Linux Docker engine with Compose v2. Docker Desktop remains optional.
 

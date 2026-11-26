@@ -48,7 +48,7 @@ flowchart LR
   Application --> Storage[Existing stores and Node sidecars]
 ```
 
-The gateway always binds 127.0.0.1 on an allocated port. The explicit Web Server Beta feature below can add a separate private-LAN ingress on the same port. Private connection metadata
+The gateway binds 127.0.0.1 on an allocated port by default. The explicit Web Server Beta feature below can add a separate private-LAN ingress on the same port. An explicit container entrypoint (`src/gateway/container.ts`) may bind a configured port (`6060` by default) on `0.0.0.0` for Docker port publishing while preserving exact `Host`/`Origin` validation against `CODE60_ORIGIN`, restricting `/management/*` routes to container loopback sockets, disabling Web Server Beta, and forcing pairing on for any non-loopback origin. Private connection metadata
 contains the local management token; it is never sent to browsers. Browsers connect
 without a pairing code by default through a same-origin JSON handshake that issues
 an ephemeral session token. code60 open opens the token-free URL. Local

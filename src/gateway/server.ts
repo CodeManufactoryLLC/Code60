@@ -59,6 +59,11 @@ export interface GatewayConnection {
   token: string;
   pid: number;
 }
+export interface ContainerGatewayOptions {
+  port: number;
+  bindHost: "0.0.0.0" | "127.0.0.1";
+  origin: string;
+}
 export interface GatewayOptions {
   env?: NodeJS.ProcessEnv;
   deps?: CoreDeps;
@@ -67,6 +72,7 @@ export interface GatewayOptions {
   modelRoot?: string;
   developmentAssets?: string;
   developmentPort?: number;
+  container?: ContainerGatewayOptions;
   onStop?: () => Promise<void>;
   lanPublisher?: LanPublisher;
   lanAddress?: () => Promise<string | null>;
@@ -75,6 +81,38 @@ export interface GatewayOptions {
   providerDownload?: typeof import("../application/index.js").ProviderDownload;
   /** Trusted host composition only; browser/CLI requests cannot select a PATH. */
   refreshPath?: (signal: AbortSignal) => Promise<void>;
+}
+function parseStrictOrigin(value: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("Container origin must be a valid http:// or https:// origin.");
+  }
+  if (
+    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+    parsed.username ||
+    parsed.password ||
+    parsed.pathname !== "/" ||
+    parsed.search ||
+    parsed.hash ||
+    parsed.origin !== value
+  )
+    throw new Error(
+      "Container origin must be a normalized http:// or https:// origin without path, query or credentials.",
+    );
+  return parsed;
+}
+function isLoopbackHostname(hostname: string): boolean {
+  return (
+    hostname === "127.0.0.1" ||
+    hostname === "localhost" ||
+    hostname === "[::1]" ||
+    hostname === "::1"
+  );
+}
+function isLoopbackAddress(address: string | undefined): boolean {
+  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
 }
 const json = (value: unknown) => JSON.stringify(value ?? null);
 async function body(request: IncomingMessage): Promise<unknown> {
@@ -115,6 +153,24 @@ export async function startGateway(options: GatewayOptions = {}) {
       options.developmentPort > 65535)
   )
     throw new Error("A development port between 1 and 65535 requires development assets.");
+  let containerOrigin: URL | undefined;
+  let containerRequiresPairing = false;
+  if (options.container) {
+    if (options.developmentPort !== undefined || options.developmentAssets)
+      throw new Error(
+        "Container gateway mode cannot be combined with development assets or ports.",
+      );
+    if (
+      !Number.isInteger(options.container.port) ||
+      options.container.port < 1 ||
+      options.container.port > 65535
+    )
+      throw new Error("Container port must be an integer between 1 and 65535.");
+    if (options.container.bindHost !== "0.0.0.0" && options.container.bindHost !== "127.0.0.1")
+      throw new Error("Container bindHost must be 0.0.0.0 or 127.0.0.1.");
+    containerOrigin = parseStrictOrigin(options.container.origin);
+    containerRequiresPairing = !isLoopbackHostname(containerOrigin.hostname);
+  }
   const env = await prepareCodexEnvironment(options.env ?? process.env);
   const lanPublisher =
     options.lanPublisher ??
@@ -151,6 +207,7 @@ export async function startGateway(options: GatewayOptions = {}) {
   >();
   let sequence = 0;
   let origin = "";
+  let managementOrigin = "";
   let webServer: WebServerBeta | undefined;
   let lanGeneration = 0;
   const pairAttempts: number[] = [];
@@ -185,7 +242,7 @@ export async function startGateway(options: GatewayOptions = {}) {
   };
   const logs = new DesktopLogStore(join(stateHome(env), "code60", "logs"));
   let settings = await readGatewaySettings(root);
-  let requirePairing = settings?.requirePairing ?? false;
+  let requirePairing = containerRequiresPairing || (settings?.requirePairing ?? false);
   const roots = options.roots ?? settings?.roots ?? [userHome(env)];
   if (
     !Array.isArray(roots) ||
@@ -459,8 +516,15 @@ export async function startGateway(options: GatewayOptions = {}) {
           respond(response, { error: "Backend is stopping." }, 503);
           return;
         }
+        const isLocalManagement =
+          !remote &&
+          isLoopbackAddress(request.socket.remoteAddress) &&
+          typeof request.headers["x-code60-management"] === "string" &&
+          !request.headers.origin &&
+          Boolean(request.url?.startsWith("/management/"));
+        const expectedHostOrigin = isLocalManagement ? managementOrigin : origin;
         if (
-          request.headers.host !== new URL(origin).host ||
+          request.headers.host !== new URL(expectedHostOrigin).host ||
           (request.headers.origin && request.headers.origin !== origin) ||
           (request.headers["sec-fetch-site"] === "cross-site" &&
             !(
@@ -474,7 +538,11 @@ export async function startGateway(options: GatewayOptions = {}) {
           respond(response, { error: "Untrusted origin." }, 403);
           return;
         }
-        const url = new URL(request.url ?? "/", origin);
+        const url = new URL(request.url ?? "/", expectedHostOrigin);
+        if (isLocalManagement && !url.pathname.startsWith("/management/")) {
+          respond(response, { error: "Untrusted origin." }, 403);
+          return;
+        }
         const parameters = [...url.searchParams];
         // Animation replay keys select the same manifested GIF bytes, never a route,
         // file path or credential. Keep all other production query strings rejected.
@@ -501,7 +569,7 @@ export async function startGateway(options: GatewayOptions = {}) {
         }
         const path = url.pathname;
         if (path.startsWith("/management/")) {
-          if (remote) {
+          if (remote || !isLoopbackAddress(request.socket.remoteAddress)) {
             respond(response, { error: "Unauthorized." }, 403);
             return;
           }
@@ -528,6 +596,8 @@ export async function startGateway(options: GatewayOptions = {}) {
               if (changingPairing || transferring || quiescing || preparingUninstall)
                 throw new Error("Backend is busy. Try again.");
               const next = pairingPolicySchema.parse(value).requirePairing;
+              if (containerRequiresPairing && !next)
+                throw new Error("Pairing cannot be disabled for a non-loopback container origin.");
               if (next !== requirePairing || settings?.requirePairing !== next) {
                 changingPairing = true;
                 pairingChange = (async () => {
@@ -959,15 +1029,18 @@ export async function startGateway(options: GatewayOptions = {}) {
     return stopped;
   }
   try {
+    const bindHost = options.container?.bindHost ?? "127.0.0.1";
+    const listenPort = options.container?.port ?? options.developmentPort ?? 0;
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
-      server.listen(options.developmentPort ?? 0, "127.0.0.1", resolve);
+      server.listen(listenPort, bindHost, resolve);
     });
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("Could not bind the backend.");
     const unregister = registerPrivateListener(address.port);
     server.once("close", unregister);
-    origin = `http://127.0.0.1:${address.port}`;
+    managementOrigin = `http://127.0.0.1:${address.port}`;
+    origin = containerOrigin ? containerOrigin.origin : managementOrigin;
     // The exclusive writer lock is held. Replace only verified dead-owner metadata,
     // using the private storage CAS so an outside change cannot be overwritten.
     const previousConnection = await readGatewayConnection(env).catch((error) => {
@@ -988,7 +1061,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     }
     await writePrivateJson(
       join(root, "connection.json"),
-      { version: GATEWAY_VERSION, origin, token, pid: process.pid },
+      { version: GATEWAY_VERSION, origin: managementOrigin, token, pid: process.pid },
       previousConnection,
       4096,
     );
@@ -1000,10 +1073,11 @@ export async function startGateway(options: GatewayOptions = {}) {
       ...(lanPublisher ? { publisher: lanPublisher } : {}),
       ...(options.lanAddress ? { address: options.lanAddress } : {}),
       ...(options.lanIntervalMs === undefined ? {} : { intervalMs: options.lanIntervalMs }),
-      unsupported: env.CODE60_DEV_CONTAINER === "1" && !lanPublisher,
+      unsupported:
+        Boolean(options.container) || (env.CODE60_DEV_CONTAINER === "1" && !lanPublisher),
     });
     await application.restore();
-    await webServer.start(settings?.webServerEnabled ?? false);
+    await webServer.start(options.container ? false : (settings?.webServerEnabled ?? false));
     return {
       origin,
       application,

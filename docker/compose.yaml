@@ -1,0 +1,20 @@
+services:
+  code60:
+    image: mjholliday/code60:${CODE60_IMAGE_TAG:-latest}
+    platform: linux/amd64
+    restart: unless-stopped
+    ports:
+      # Bind only to host loopback so Code60 stays private to this machine.
+      - "127.0.0.1:${CODE60_HOST_PORT:-6060}:6060"
+    environment:
+      CODE60_PORT: "6060"
+      CODE60_ORIGIN: "http://127.0.0.1:${CODE60_HOST_PORT:-6060}"
+      CODE60_WORKSPACE_ROOTS: "/workspaces"
+    volumes:
+      # Private persistent home for Code60 databases, Relay state, and provider logins.
+      - code60-home:/home/node
+      # Mount your local project directory into the browser workspace chooser.
+      - "${CODE60_WORKSPACES:-./workspaces}:/workspaces"
+
+volumes:
+  code60-home:

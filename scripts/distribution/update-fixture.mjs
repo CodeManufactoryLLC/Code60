@@ -10,10 +10,12 @@ export async function updateFixture(identity, parent, transport, signal) {
   const staged = await acquirePayload(identity, { parent, transport, signal });
   try {
     const manifest = JSON.parse(await readFile(join(staged.root, "package.json"), "utf8"));
-    const [major, minor, patch] = identity.version.split(".").map(Number);
+    const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(.+))?$/.exec(identity.version);
+    if (!match) throw Error("Update fixture needs a semantic input version");
+    const [major, minor, patch] = match.slice(1, 4).map(Number);
     if (![major, minor, patch].every(Number.isSafeInteger))
-      throw Error("Update fixture needs a stable input version");
-    const version = `${major}.${minor}.${patch + 1}`;
+      throw Error("Update fixture needs a semantic input version");
+    const version = match[4] ? `${major}.${minor}.${patch}` : `${major}.${minor}.${patch + 1}`;
     manifest.version = version;
     await writeFile(join(staged.root, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
     const metadata = JSON.parse(await readFile(join(staged.root, "payload.json"), "utf8"));
