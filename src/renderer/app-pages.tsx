@@ -79,6 +79,9 @@ export function AppPages(props: AppPagesProps) {
     accept,
   } = props;
   const snapshot = state?.snapshot;
+  const [requestedWorkflow, setRequestedWorkflow] = useState<{ id: string; nonce: number } | null>(
+    null,
+  );
   usePageTransition(
     tabs.active,
     tabs.active === "settings"
@@ -255,6 +258,7 @@ export function AppPages(props: AppPagesProps) {
         active={!splash && tabs.active === "workflows"}
         paused={snapshot?.polling.paused ?? false}
         providerReady={snapshot?.agentSetup?.complete ?? false}
+        requestedWorkflow={requestedWorkflow}
         onProvider={() => void navigation.open({ kind: "page", id: "providers" })}
       />
     ),
@@ -287,6 +291,10 @@ export function AppPages(props: AppPagesProps) {
         api={api}
         active={!splash && tabs.active === "automations"}
         agents={snapshot?.agents ?? []}
+        onOpenWorkflow={(workflowId) => {
+          setRequestedWorkflow({ id: workflowId, nonce: Date.now() });
+          void navigation.open({ kind: "page", id: "workflows" });
+        }}
       />
     ),
     memories: (

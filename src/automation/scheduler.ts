@@ -7,27 +7,87 @@ import {
   type AutomationState,
   automationDraftSchema,
   type Execution,
+  type ExecutionArtifact,
   type ExecutionReason,
   type ServiceStatus,
 } from "../contracts/index.js";
 import { CODE60_VERSION, dueDecision, nextOccurrence } from "../core/index.js";
 import { AutomationError } from "./errors.js";
-import { type ExecutionOutcome, ExecutionRefused, type Executor } from "./executor.js";
+import {
+  type AbortKind,
+  type ActionExecutionContext,
+  type ActionExecutionOutcome,
+  type ActionHandler,
+  type ActionRegistry,
+  type ConcurrencySpec,
+  ExecutionRefused,
+} from "./handlers.js";
 import type { StateWriter } from "./store.js";
 
 type Active = {
   executionId: string;
   automationId: string;
+  concurrency: ConcurrencySpec;
   abort: AbortController;
+  abortReason: AbortKind;
   done: Promise<void>;
 };
+
+export type DispatchTrigger =
+  | { type: "schedule"; scheduledFor: string; missed: boolean }
+  | { type: "manual" };
+
 const unfinished = (execution: Execution) =>
   execution.status === "claimed" || execution.status === "running";
 
-/** Single writer with a short control queue. Agent turns never hold the queue. */
+function fallbackArtifact(automation: Automation): ExecutionArtifact {
+  if (automation.action.type === "workflow") {
+    return {
+      type: "workflow",
+      repository: { ...automation.action.repository },
+      evidence: null,
+      workflowId: null,
+      workflowRunId: null,
+      workflowStatus: null,
+      tasksCompleted: 0,
+      tasksTotal: automation.action.tasks.length,
+    };
+  }
+  return {
+    type: "prompt",
+    repository: { ...automation.action.repository },
+    evidence: null,
+    runId: null,
+    denials: 0,
+    changedFiles: null,
+  };
+}
+
+function summarizeHistoryEntry(execution: Execution) {
+  const { artifact, ...rest } = execution;
+  if (artifact.type === "prompt") {
+    return {
+      ...rest,
+      denials: artifact.denials,
+      runId: artifact.runId,
+      changedFiles: artifact.changedFiles,
+    };
+  }
+  return {
+    ...rest,
+    denials: 0,
+    runId: artifact.workflowRunId,
+    workflowId: artifact.workflowId,
+    workflowStatus: artifact.workflowStatus,
+    tasksCompleted: artifact.tasksCompleted,
+    tasksTotal: artifact.tasksTotal,
+  };
+}
+
+/** Single writer with a short control queue and lane/resource concurrency. Actions never hold the queue. */
 export class Scheduler {
   private tail: Promise<unknown> = Promise.resolve();
-  private active: Active | null = null;
+  private readonly active = new Map<string, Active>();
   private stopped = false;
   private removalReservation: symbol | null = null;
   private failed = false;
@@ -37,7 +97,7 @@ export class Scheduler {
 
   constructor(
     private readonly store: StateWriter,
-    private readonly executor: Executor,
+    private readonly registry: ActionRegistry,
     private readonly now: () => Date = () => new Date(),
   ) {
     this.startedAt = now().toISOString();
@@ -49,6 +109,7 @@ export class Scheduler {
     this.tail = task.catch(() => {});
     return task;
   }
+
   private async save(next: AutomationState) {
     if (this.failed)
       throw new AutomationError(
@@ -60,7 +121,7 @@ export class Scheduler {
       await this.store.save(next);
     } catch {
       this.failed = true;
-      this.active?.abort.abort();
+      this.abortAll("shutdown");
       throw new AutomationError(
         "unavailable",
         "Schedule persistence failed. No further launches are allowed.",
@@ -68,6 +129,7 @@ export class Scheduler {
     }
     this.notify();
   }
+
   private notify() {
     for (const listener of this.listeners) {
       try {
@@ -77,13 +139,46 @@ export class Scheduler {
       }
     }
   }
+
   onChange(listener: (revision: number) => void) {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
   }
+
+  private abortEntry(entry: Active, reason: Exclude<AbortKind, null>) {
+    entry.abortReason ??= reason;
+    entry.abort.abort();
+  }
+
+  private abortAll(reason: Exclude<AbortKind, null>) {
+    for (const entry of this.active.values()) this.abortEntry(entry, reason);
+  }
+
+  private hasActiveForAutomation(automationId: string): boolean {
+    for (const entry of this.active.values()) if (entry.automationId === automationId) return true;
+    return false;
+  }
+
+  private isConcurrencyBusy(spec: ConcurrencySpec): boolean {
+    for (const lane of spec.lanes) {
+      let count = 0;
+      for (const entry of this.active.values()) {
+        if (entry.concurrency.lanes.some((held) => held.name === lane.name)) count++;
+      }
+      if (count >= lane.limit) return true;
+    }
+    for (const resource of spec.resources) {
+      for (const entry of this.active.values()) {
+        if (entry.concurrency.resources.includes(resource)) return true;
+      }
+    }
+    return false;
+  }
+
   status(): ServiceStatus {
+    const activeExecutionIds = [...this.active.keys()];
     return {
       version: 1,
       appVersion: CODE60_VERSION,
@@ -94,9 +189,11 @@ export class Scheduler {
       block: this.failed
         ? { reason: "persistence_failed", executionId: null, runId: null }
         : this.store.state.block,
-      activeExecutionId: this.active?.executionId ?? null,
+      activeExecutionId: activeExecutionIds[0] ?? null,
+      activeExecutionIds,
     };
   }
+
   /** Fence new claims without changing saved pause state or cancelling approved work. */
   async reserveIdleForUninstall(signal?: AbortSignal): Promise<() => Promise<void>> {
     signal?.throwIfAborted();
@@ -106,7 +203,7 @@ export class Scheduler {
         this.removalReservation ||
         this.stopped ||
         this.failed ||
-        this.active ||
+        this.active.size > 0 ||
         this.store.state.block ||
         this.store.state.executions.some(unfinished)
       )
@@ -127,35 +224,85 @@ export class Scheduler {
         });
     });
   }
-  /** Restart always advances to future occurrences, even if downtime was brief. */
+
+  /** Restart advances future schedules and reconciles unfinished executions per handler. */
   async initialize(): Promise<void> {
     await this.serial(async () => {
       const state = structuredClone(this.store.state);
+      const reattachments: Array<{
+        execution: Execution;
+        handler: ActionHandler;
+        concurrency: ConcurrencySpec;
+        resume: (ctx: ActionExecutionContext) => Promise<ActionExecutionOutcome>;
+      }> = [];
       for (const execution of state.executions.filter(unfinished)) {
-        if ((await this.executor.inspect(execution)) === "blocked") {
+        const handler = this.registry.get(execution.actionType);
+        if (!handler) {
+          execution.status = "interrupted";
+          execution.reason = "service_restarted";
+          execution.endedAt = this.now().toISOString();
+          continue;
+        }
+        const decision = await handler.reconcileOnRestart(execution);
+        if (decision.kind === "blocked") {
           state.block = {
             reason: "leftover_agent",
             executionId: execution.id,
-            runId: execution.runId,
+            runId: decision.runId ?? null,
           };
           break;
         }
-        execution.status = "interrupted";
-        execution.reason = "service_restarted";
-        execution.endedAt = this.now().toISOString();
+        if (decision.kind === "interrupted") {
+          execution.status = "interrupted";
+          execution.reason = decision.reason ?? "service_restarted";
+          execution.endedAt = this.now().toISOString();
+          continue;
+        }
+        if (decision.kind === "settled") {
+          execution.status = decision.outcome.status;
+          execution.reason = decision.outcome.reason;
+          if (decision.outcome.artifact)
+            execution.artifact = decision.outcome.artifact(execution.artifact);
+          execution.endedAt = this.now().toISOString();
+          continue;
+        }
+        reattachments.push({
+          execution: structuredClone(execution),
+          handler,
+          concurrency: decision.concurrency,
+          resume: decision.resume,
+        });
       }
       for (const automation of state.automations)
-        automation.nextRunAt = automation.enabled
-          ? dueDecision(
-              automation.schedule,
-              null,
-              this.now(),
-              this.claimedThrough(automation),
-            ).nextRunAt.toISOString()
-          : null;
+        automation.nextRunAt =
+          automation.enabled && automation.trigger.type === "schedule"
+            ? dueDecision(
+                automation.trigger.schedule,
+                null,
+                this.now(),
+                this.claimedThrough(automation),
+              ).nextRunAt.toISOString()
+            : null;
       await this.save(state);
+      for (const item of reattachments) {
+        if (this.stopped) break;
+        const abort = new AbortController();
+        const active: Active = {
+          executionId: item.execution.id,
+          automationId: item.execution.automationId,
+          concurrency: item.concurrency,
+          abort,
+          abortReason: null,
+          done: Promise.resolve(),
+        };
+        this.active.set(item.execution.id, active);
+        active.done = Promise.resolve().then(() =>
+          this.settleRun(item.handler, item.execution, active, (ctx) => item.resume(ctx)),
+        );
+      }
     });
   }
+
   private find(state: AutomationState, id: string, revision?: number): Automation {
     const automation = state.automations.find((value) => value.id === id);
     if (!automation) throw new AutomationError("not_found", "Automation not found.");
@@ -163,6 +310,7 @@ export class Scheduler {
       throw new AutomationError("conflict", "The automation changed. Reload before saving.");
     return automation;
   }
+
   private claimedThrough(automation: Automation): Date | null {
     let latest: string | null = null;
     for (const execution of this.store.state.executions) {
@@ -176,25 +324,38 @@ export class Scheduler {
     }
     return latest ? new Date(latest) : null;
   }
+
   private async draft(draft: AutomationDraft, previous?: Automation): Promise<Automation> {
     const valid = automationDraftSchema.parse(draft);
-    const identity = await this.executor.validate(valid);
+    const handler = this.registry.get(valid.action.type);
+    if (!handler)
+      throw new AutomationError(
+        "refused",
+        `Action handler "${valid.action.type}" is unavailable in this runtime.`,
+      );
+    const persistedAction = await handler.validate(valid.action as never);
     const at = this.now().toISOString();
-    const { repository: _repository, ...fields } = valid;
     return {
-      ...fields,
-      ...identity,
       id: previous?.id ?? randomUUID(),
       revision: (previous?.revision ?? 0) + 1,
       createdAt: previous?.createdAt ?? at,
       updatedAt: at,
-      nextRunAt: valid.enabled ? nextOccurrence(valid.schedule, this.now()).toISOString() : null,
+      name: valid.name,
+      trigger: valid.trigger,
+      action: persistedAction,
+      enabled: valid.enabled,
+      nextRunAt:
+        valid.enabled && valid.trigger.type === "schedule"
+          ? nextOccurrence(valid.trigger.schedule, this.now()).toISOString()
+          : null,
     };
   }
+
   private addExecution(
     state: AutomationState,
     automation: Automation,
-    scheduledFor: string | null,
+    handler: ActionHandler | undefined,
+    trigger: DispatchTrigger,
     reason: ExecutionReason | null,
   ): Execution {
     // Explicit bound, never silently delete run evidence to make room.
@@ -203,52 +364,69 @@ export class Scheduler {
         "refused",
         "Execution metadata limit reached. Schedules are preserved; dispatch is paused.",
       );
+    const artifact = handler
+      ? handler.prepareClaim(automation.action as never, reason !== null)
+      : fallbackArtifact(automation);
     const execution: Execution = {
       id: randomUUID(),
       sequence: ++state.sequence,
       automationId: automation.id,
       automationName: automation.name,
-      repository: { ...automation.repository },
-      evidence: null,
+      actionType: automation.action.type,
       revision: automation.revision,
-      trigger: scheduledFor ? "schedule" : "manual",
-      scheduledFor,
+      trigger: trigger.type,
+      scheduledFor: trigger.type === "schedule" ? trigger.scheduledFor : null,
       claimedAt: this.now().toISOString(),
       startedAt: null,
       endedAt: reason ? this.now().toISOString() : null,
       status: reason ? "skipped" : "claimed",
       reason,
-      runId: reason ? null : `auto-${randomUUID()}`,
-      denials: 0,
-      changedFiles: null,
+      artifact,
     };
     state.executions.push(execution);
     return execution;
   }
-  private async claim(automation: Automation, scheduledFor: string | null, missed = false) {
+
+  /** Generalized dispatch seam shared by time ticks, manual runs, and future event triggers. */
+  private async dispatch(automation: Automation, trigger: DispatchTrigger) {
     const state = structuredClone(this.store.state);
     const current = this.find(state, automation.id);
-    if (scheduledFor) {
+    if (trigger.type === "schedule" && current.trigger.type === "schedule") {
       const claimedThrough = this.claimedThrough(current);
       const next = new Date(
-        Math.max(this.now().getTime(), Date.parse(scheduledFor), claimedThrough?.getTime() ?? 0),
+        Math.max(
+          this.now().getTime(),
+          Date.parse(trigger.scheduledFor),
+          claimedThrough?.getTime() ?? 0,
+        ),
       );
-      current.nextRunAt = nextOccurrence(current.schedule, next).toISOString();
-      if (claimedThrough && Date.parse(scheduledFor) <= claimedThrough.getTime()) {
+      current.nextRunAt = nextOccurrence(current.trigger.schedule, next).toISOString();
+      if (claimedThrough && Date.parse(trigger.scheduledFor) <= claimedThrough.getTime()) {
         await this.save(state);
         return null;
       }
     }
-    const reason = missed
-      ? "missed"
-      : state.block || this.failed
-        ? "blocked"
-        : state.pausedAll || this.stopped
-          ? "paused"
-          : this.active
-            ? "busy"
-            : null;
-    const execution = this.addExecution(state, automation, scheduledFor, reason);
+    const handler = this.registry.get(current.action.type);
+    const concurrency = handler ? handler.concurrency(current.action as never) : null;
+    let reason: ExecutionReason | null =
+      trigger.type === "schedule" && trigger.missed
+        ? "missed"
+        : state.block || this.failed
+          ? "blocked"
+          : state.pausedAll || this.stopped
+            ? "paused"
+            : !handler || !concurrency
+              ? "handler_unavailable"
+              : this.isConcurrencyBusy(concurrency)
+                ? "busy"
+                : null;
+    if (!reason && handler?.canDispatch) {
+      const available = await Promise.resolve(handler.canDispatch(current.action as never)).catch(
+        () => false,
+      );
+      if (!available) reason = "busy";
+    }
+    const execution = this.addExecution(state, current, handler, trigger, reason);
     await this.save(state); // Unique claim + advanced schedule are durable before launch.
     if (!reason && this.stopped) {
       execution.status = "cancelled";
@@ -257,26 +435,29 @@ export class Scheduler {
       await this.save(state);
       return execution;
     }
-    if (!reason) {
+    if (!reason && handler && concurrency) {
       const abort = new AbortController();
-      const snapshot = structuredClone(automation);
-      this.active = {
+      const snapshot = structuredClone(current);
+      const active: Active = {
         executionId: execution.id,
-        automationId: automation.id,
+        automationId: current.id,
+        concurrency,
         abort,
+        abortReason: null,
         done: Promise.resolve(),
       };
-      // Leave the control queue before preparation, cancellation or agent execution.
-      this.active.done = Promise.resolve().then(() =>
-        this.launch(snapshot, execution, abort.signal),
-      );
+      this.active.set(execution.id, active);
+      // Leave the control queue before preparation, cancellation or action execution.
+      active.done = Promise.resolve().then(() => this.launch(handler, snapshot, execution, active));
     }
     return execution;
   }
+
   private async launch(
+    handler: ActionHandler,
     automation: Automation,
     execution: Execution,
-    signal: AbortSignal,
+    active: Active,
   ): Promise<void> {
     try {
       await this.serial(async () => {
@@ -287,58 +468,93 @@ export class Scheduler {
         entry.startedAt = this.now().toISOString();
         await this.save(state);
       });
-      let outcome: ExecutionOutcome;
+    } catch {
+      this.failed = true;
+      this.active.delete(execution.id);
+      this.notify();
+      return;
+    }
+    await this.settleRun(handler, execution, active, (ctx) =>
+      handler.execute(automation, execution, ctx),
+    );
+  }
+
+  private async settleRun(
+    handler: ActionHandler,
+    execution: Execution,
+    active: Active,
+    run: (ctx: ActionExecutionContext) => Promise<ActionExecutionOutcome>,
+  ): Promise<void> {
+    const ctx: ActionExecutionContext = {
+      signal: active.abort.signal,
+      abortKind: () => active.abortReason,
+      updateArtifact: (updater) =>
+        this.serial(async () => {
+          const state = structuredClone(this.store.state);
+          const entry = state.executions.find((value) => value.id === execution.id);
+          if (!entry || active.abort.signal.aborted) throw new Error("Execution cancelled");
+          entry.artifact = updater(entry.artifact);
+          await this.save(state);
+        }),
+      notify: () => this.notify(),
+    };
+    try {
+      let outcome: ActionExecutionOutcome;
       try {
-        outcome = await this.executor.execute(
-          automation,
-          execution,
-          signal,
-          (evidence) =>
-            this.serial(async () => {
-              const state = structuredClone(this.store.state);
-              const entry = state.executions.find((value) => value.id === execution.id);
-              if (!entry || signal.aborted) throw new Error("Execution cancelled");
-              entry.evidence = evidence;
-              await this.save(state);
-            }),
-          () => this.notify(),
-        );
+        outcome = await run(ctx);
       } catch (error) {
         outcome = {
-          status: signal.aborted ? ("cancelled" as const) : ("failed" as const),
+          status: active.abort.signal.aborted ? ("cancelled" as const) : ("failed" as const),
           reason:
             error instanceof ExecutionRefused ? error.reason : ("preparation_failed" as const),
-          denials: 0,
-          changedFiles: null,
         };
       }
-      // A stopped turn is a cancellation, even when the interrupted agent reports failure.
+      if (outcome.detachedOnShutdown && active.abortReason === "shutdown") {
+        // Long-lived action (e.g., Workflow) preserves running state across backend restart.
+        return;
+      }
+      // A stopped execution is a cancellation, even when the interrupted runtime reports failure.
       if (
-        signal.aborted &&
+        active.abort.signal.aborted &&
         outcome.status !== "finished" &&
         outcome.reason !== "persistence_failed"
-      )
+      ) {
         outcome = {
           ...outcome,
           status: "cancelled",
-          reason: this.stopped ? "service_stopped" : "cancelled_by_user",
+          reason:
+            active.abortReason === "shutdown" || this.stopped
+              ? "service_stopped"
+              : "cancelled_by_user",
         };
+      }
       await this.serial(async () => {
         const state = structuredClone(this.store.state);
         const entry = state.executions.find((value) => value.id === execution.id);
         if (!entry) throw new Error("Missing execution");
-        Object.assign(entry, outcome, { endedAt: this.now().toISOString() });
+        entry.status = outcome.status;
+        entry.reason = outcome.reason;
+        if (outcome.artifact) entry.artifact = outcome.artifact(entry.artifact);
+        entry.endedAt = this.now().toISOString();
         if (outcome.reason === "low_disk" || outcome.reason === "persistence_failed")
           state.pausedAll = true;
         // Unknown leftover ownership blocks every later launch, regardless of outcome.
-        if ((await this.executor.inspect(entry)) !== "gone")
-          state.block = { reason: "leftover_agent", executionId: entry.id, runId: entry.runId };
+        if ((await handler.inspect(entry)) !== "gone") {
+          state.block = {
+            reason: "leftover_agent",
+            executionId: entry.id,
+            runId:
+              entry.artifact.type === "prompt"
+                ? entry.artifact.runId
+                : entry.artifact.workflowRunId,
+          };
+        }
         await this.save(state);
       });
     } catch {
       this.failed = true; // An uncertain save cannot authorize more execution.
     } finally {
-      this.active = null;
+      this.active.delete(execution.id);
       // Live ownership changes even when saving the final outcome failed.
       this.notify();
     }
@@ -352,19 +568,19 @@ export class Scheduler {
       if (this.stopped || this.failed || this.store.state.pausedAll || this.store.state.block)
         return;
       for (const saved of [...this.store.state.automations]) {
-        if (!saved.enabled) continue;
+        if (!saved.enabled || saved.trigger.type !== "schedule") continue;
         const decision = dueDecision(
-          saved.schedule,
+          saved.trigger.schedule,
           saved.nextRunAt ? new Date(saved.nextRunAt) : null,
           this.now(),
           this.claimedThrough(saved),
         );
         if (decision.type !== "wait") {
-          await this.claim(
-            saved,
-            decision.scheduledFor.toISOString(),
-            decision.type === "missed" || gap > 5000,
-          );
+          await this.dispatch(saved, {
+            type: "schedule",
+            scheduledFor: decision.scheduledFor.toISOString(),
+            missed: decision.type === "missed" || gap > 5000,
+          });
         } else if (saved.nextRunAt !== decision.nextRunAt.toISOString()) {
           const state = structuredClone(this.store.state);
           this.find(state, saved.id).nextRunAt = decision.nextRunAt.toISOString();
@@ -389,15 +605,44 @@ export class Scheduler {
         case "status":
           return this.status();
         case "list":
-          return state.automations.map(({ prompt: _prompt, repository, ...value }) => ({
-            ...value,
-            running:
-              this.active?.automationId === value.id &&
+          return state.automations.map((automation) => {
+            const handler = this.registry.get(automation.action.type);
+            const summary = handler
+              ? handler.summarize(automation.action as never)
+              : {
+                  agent:
+                    automation.action.type === "prompt"
+                      ? automation.action.agent
+                      : automation.action.provider,
+                  repository: {
+                    dev: automation.action.repository.dev,
+                    ino: automation.action.repository.ino,
+                  },
+                  ...(automation.action.type === "workflow"
+                    ? { taskCount: automation.action.tasks.length }
+                    : {}),
+                };
+            const running =
+              this.hasActiveForAutomation(automation.id) &&
               state.executions.some(
-                (entry) => entry.id === this.active?.executionId && unfinished(entry),
-              ),
-            repository: { dev: repository.dev, ino: repository.ino },
-          }));
+                (entry) =>
+                  entry.automationId === automation.id &&
+                  this.active.has(entry.id) &&
+                  unfinished(entry),
+              );
+            return {
+              id: automation.id,
+              revision: automation.revision,
+              createdAt: automation.createdAt,
+              updatedAt: automation.updatedAt,
+              name: automation.name,
+              actionType: automation.action.type,
+              enabled: automation.enabled,
+              nextRunAt: automation.nextRunAt,
+              running,
+              ...summary,
+            };
+          });
         case "get":
           return this.find(state, request.id);
         case "history":
@@ -409,7 +654,7 @@ export class Scheduler {
             )
             .slice(-(request.limit ?? 50))
             .reverse()
-            .map(({ repository: _repository, evidence: _evidence, ...value }) => value);
+            .map(summarizeHistoryEntry);
         case "create": {
           if (state.automations.length >= AUTOMATION_LIMIT)
             throw new AutomationError("refused", "Automation limit reached.");
@@ -430,42 +675,47 @@ export class Scheduler {
           automation.enabled = request.enabled;
           automation.revision++;
           automation.updatedAt = this.now().toISOString();
-          automation.nextRunAt = request.enabled
-            ? nextOccurrence(automation.schedule, this.now()).toISOString()
-            : null;
+          automation.nextRunAt =
+            request.enabled && automation.trigger.type === "schedule"
+              ? nextOccurrence(automation.trigger.schedule, this.now()).toISOString()
+              : null;
           await this.save(state);
           return automation;
         }
         case "delete":
           this.find(state, request.id, request.revision);
-          if (this.active?.automationId === request.id)
+          if (this.hasActiveForAutomation(request.id))
             throw new AutomationError("refused", "Cancel active work before deleting.");
           state.automations = state.automations.filter((value) => value.id !== request.id);
           await this.save(state);
           return null;
         case "runNow":
-          return this.claim(this.find(state, request.id), null);
+          return this.dispatch(this.find(state, request.id), { type: "manual" });
         case "cancel":
-          if (this.active?.automationId === request.id) this.active.abort.abort();
+          for (const entry of this.active.values()) {
+            if (entry.automationId === request.id) this.abortEntry(entry, "user");
+          }
           return null;
         case "pauseAll":
           state.pausedAll = true;
-          if (request.cancelActive) this.active?.abort.abort();
+          if (request.cancelActive) this.abortAll("user");
           await this.save(state);
           return null;
         case "resumeAll":
           state.pausedAll = false;
           for (const automation of state.automations)
-            automation.nextRunAt = automation.enabled
-              ? nextOccurrence(automation.schedule, this.now()).toISOString()
-              : null;
+            automation.nextRunAt =
+              automation.enabled && automation.trigger.type === "schedule"
+                ? nextOccurrence(automation.trigger.schedule, this.now()).toISOString()
+                : null;
           await this.save(state);
           return null;
         case "resolveBlock":
           for (const execution of state.executions.filter(
             (value) => unfinished(value) || value.id === state.block?.executionId,
           )) {
-            if ((await this.executor.inspect(execution)) !== "gone")
+            const handler = this.registry.get(execution.actionType);
+            if (!handler || (await handler.inspect(execution)) !== "gone")
               throw new AutomationError(
                 "refused",
                 "A leftover agent is alive or cannot be verified. Stop it manually, then retry.",
@@ -492,12 +742,13 @@ export class Scheduler {
     if (!value) throw new AutomationError("not_found", "Execution not found.");
     return structuredClone(value);
   }
+
   async stop(): Promise<void> {
     this.stopped = true;
-    this.active?.abort.abort();
+    this.abortAll("shutdown");
     await this.tail; // Fence claims that were still persisting when shutdown began.
-    this.active?.abort.abort();
-    await this.active?.done;
+    this.abortAll("shutdown");
+    await Promise.all([...this.active.values()].map((entry) => entry.done));
     await this.tail;
   }
 }

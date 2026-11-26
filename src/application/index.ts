@@ -15,4 +15,5 @@ export {
   DesktopWorkflows,
   inspectWorkflowRecordsForUninstall,
   verifyOfflineWorkflowsIdleForUninstall,
+  WorkflowCheckoutBusyError,
 } from "./workflows.js";

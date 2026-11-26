@@ -247,6 +247,7 @@ export class WorkflowEngine {
   private readonly disposals = new Map<string, Promise<void>>();
   private readonly pauses = new Map<string, Promise<WorkflowSnapshot>>();
   private readonly settling = new Set<string>();
+  private readonly listeners = new Set<(snapshot: WorkflowSnapshot) => void>();
   private readonly shutdown = new AbortController();
   private closing = false;
 
@@ -287,6 +288,30 @@ export class WorkflowEngine {
     return join(this.stateDir, r.id);
   }
 
+  onRunChange(listener: (snapshot: WorkflowSnapshot) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notifyListeners(id: string): void {
+    if (this.listeners.size === 0 || this.closing) return;
+    let snapshot: WorkflowSnapshot;
+    try {
+      snapshot = this.status(id);
+    } catch {
+      return;
+    }
+    for (const listener of this.listeners) {
+      try {
+        listener(snapshot);
+      } catch {
+        /* Observer errors must never disrupt workflow execution. */
+      }
+    }
+  }
+
   private save(r: StoredRun, kind: string, detail: object = {}): void {
     this.db.exec("BEGIN IMMEDIATE");
     try {
@@ -299,6 +324,7 @@ export class WorkflowEngine {
       this.db.exec("ROLLBACK");
       throw error;
     }
+    this.notifyListeners(r.id);
   }
 
   private event(r: StoredRun, kind: string, detail: object): void {
@@ -550,6 +576,7 @@ export class WorkflowEngine {
   async close(): Promise<void> {
     if (this.closing) return;
     this.closing = true;
+    this.listeners.clear();
     this.shutdown.abort();
     await Promise.all([...this.runs.values()].map((r) => this.dispose(r).catch(() => {})));
     await Promise.all([...this.pumps.values()].map((p) => p.catch(() => {})));

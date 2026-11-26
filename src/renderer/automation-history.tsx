@@ -18,7 +18,8 @@ import { automationDate } from "./automation-date.js";
 
 const columns = [
   { key: "automationName", title: "Scheduled job" },
-  { key: "status", title: "Turn outcome" },
+  { key: "actionType", title: "Type" },
+  { key: "status", title: "Outcome" },
   { key: "reason", title: "Reason" },
   { key: "scheduledFor", title: "Scheduled" },
   { key: "startedAt", title: "Started" },
@@ -28,6 +29,22 @@ const columns = [
 type HistoryKey = (typeof columns)[number]["key"];
 
 function display(row: AutomationHistoryEntry, key: HistoryKey): string {
+  if (key === "actionType") {
+    if (row.actionType === "workflow") {
+      return row.tasksTotal !== undefined
+        ? `Workflow (${row.tasksCompleted ?? 0}/${row.tasksTotal})`
+        : "Workflow";
+    }
+    return "Prompt";
+  }
+  if (
+    key === "status" &&
+    row.actionType === "workflow" &&
+    row.workflowStatus &&
+    row.status === "running"
+  ) {
+    return row.workflowStatus.replaceAll("_", " ");
+  }
   if (key === "scheduledFor" || key === "startedAt" || key === "endedAt")
     return row[key] ? automationDate(row[key]) : key === "scheduledFor" ? "Manual" : "—";
   return String(row[key] ?? "—").replaceAll("_", " ");

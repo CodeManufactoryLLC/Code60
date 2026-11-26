@@ -1,15 +1,43 @@
 import { randomUUID } from "node:crypto";
 import {
   type Automation,
+  type AutomationAction,
+  type AutomationActionDraft,
   type AutomationRequest,
   automationClient,
   automationRoot,
   schedulerControl,
   subscribeService,
 } from "../automation/index.js";
-import type { ConfirmationId } from "../bridge/index.js";
-import { type AutomationEditor, parseAutomationUiRequest } from "../bridge/index.js";
+import type {
+  AutomationEditor,
+  ConfirmationId,
+  RendererAutomationActionDraft,
+} from "../bridge/index.js";
+import { parseAutomationUiRequest } from "../bridge/index.js";
 import { upcomingOccurrences } from "../core/index.js";
+
+function toEditorAction(action: AutomationAction): RendererAutomationActionDraft {
+  if (action.type === "workflow") {
+    return {
+      type: "workflow",
+      provider: action.provider,
+      baseBranch: action.baseBranch,
+      tasks: structuredClone(action.tasks),
+      repairs: action.repairs,
+      retries: action.retries,
+      autoApprove: action.autoApprove,
+    };
+  }
+  return {
+    type: "prompt",
+    prompt: action.prompt,
+    agent: action.agent,
+    baseBranch: action.baseBranch,
+    allow: [...action.allow],
+    turnTimeout: action.turnTimeout,
+  };
+}
 
 /** Renderer capabilities resolve only here; a displayed path never grants execution. */
 export class DesktopAutomations {
@@ -58,6 +86,32 @@ export class DesktopAutomations {
       this.watching = false;
     }
   }
+  private resolveActionDraft(
+    action: RendererAutomationActionDraft,
+    previous: Automation | null,
+  ): { resolved: AutomationActionDraft; consumedToken?: string } {
+    const providerId = action.type === "prompt" ? action.agent : action.provider;
+    if (!this.providers().includes(providerId))
+      throw new Error("Choose an enabled, verified provider.");
+    const token = action.repositoryToken;
+    const choice = token ? this.repositories.get(token) : undefined;
+    if (token && (!choice || choice.expires < Date.now()))
+      throw new Error("Repository choice expired. Choose it again.");
+    const repository = choice?.path ?? previous?.action.repository.path;
+    if (!repository) throw new Error("Choose an automation repository.");
+    if (action.type === "workflow") {
+      const { repositoryToken: _token, ...fields } = action;
+      return {
+        resolved: { ...fields, repository },
+        ...(token ? { consumedToken: token } : {}),
+      };
+    }
+    const { repositoryToken: _token, ...fields } = action;
+    return {
+      resolved: { ...fields, repository },
+      ...(token ? { consumedToken: token } : {}),
+    };
+  }
   async request(value: unknown): Promise<unknown> {
     const request = parseAutomationUiRequest(value);
     const generation = this.generation;
@@ -88,7 +142,7 @@ export class DesktopAutomations {
         request.control !== "status" &&
         !(await this.dialogs.confirm(
           `${request.control}-scheduler`,
-          "The local service can run saved prompts while Code60 is quit. Your computer must be awake and logged in. Worktrees are not a sandbox. Stop/uninstall pauses schedules and preserves evidence.",
+          "The local service can run saved jobs while Code60 is quit. Your computer must be awake and logged in. Worktrees are not a sandbox. Stop/uninstall pauses schedules and preserves evidence.",
         ))
       )
         return null;
@@ -104,22 +158,22 @@ export class DesktopAutomations {
       return result;
     }
     if (request.action === "create" || request.action === "update") {
-      if (!this.providers().includes(request.draft.agent))
-        throw new Error("Choose an enabled, verified provider.");
-      const token = request.draft.repositoryToken;
-      const choice = token ? this.repositories.get(token) : undefined;
-      if (token && (!choice || choice.expires < Date.now()))
-        throw new Error("Repository choice expired. Choose it again.");
       const previous =
         request.action === "update"
           ? ((await client({ action: "get", id: request.id })) as Automation)
           : null;
-      const repository = choice?.path ?? previous?.repository.path;
-      if (!repository) throw new Error("Choose an automation repository.");
-      const { repositoryToken: _token, ...fields } = request.draft;
+      const { resolved, consumedToken } = this.resolveActionDraft(request.draft.action, previous);
       check();
-      const result = await client({ ...request, draft: { ...fields, repository } });
-      if (token) this.repositories.delete(token);
+      const result = await client({
+        ...request,
+        draft: {
+          name: request.draft.name,
+          trigger: request.draft.trigger,
+          enabled: request.draft.enabled,
+          action: resolved,
+        },
+      });
+      if (consumedToken) this.repositories.delete(consumedToken);
       await this.watch();
       return result ? { ok: true, id: (result as Automation).id } : null;
     }
@@ -140,16 +194,12 @@ export class DesktopAutomations {
       return {
         id: automation.id,
         revision: automation.revision,
-        repositoryLabel: automation.repository.path,
+        repositoryLabel: automation.action.repository.path,
         draft: {
           name: automation.name,
-          prompt: automation.prompt,
-          agent: automation.agent,
-          baseBranch: automation.baseBranch,
-          allow: automation.allow,
-          turnTimeout: automation.turnTimeout,
-          schedule: automation.schedule,
+          trigger: automation.trigger,
           enabled: automation.enabled,
+          action: toEditorAction(automation.action),
         },
       } satisfies AutomationEditor;
     }

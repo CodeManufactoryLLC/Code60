@@ -16,9 +16,10 @@ import { Select as CarbonSelect, TextInput as CarbonTextInput } from "./carbon/f
 import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
 import { ChatTurn, EmbeddedChat } from "./embedded-chat.js";
 import { Modal } from "./modal.js";
+import { emptyWorkflowTask, WorkflowTaskEditor } from "./workflow-task-editor.js";
 
 type Message = { id: string; role: "user" | "assistant"; text: string };
-const emptyTask = () => ({ name: "", instructions: "", verify: "", checks: [] as string[] });
+const emptyTask = emptyWorkflowTask;
 export function WorkflowForm({
   api,
   initialDefinition,
@@ -42,10 +43,6 @@ export function WorkflowForm({
 }) {
   const [formId] = useState(() => randomId());
   const revision = useRef(0);
-  const [initialKeys] = useState(() =>
-    Array.from({ length: initialDefinition?.tasks.length ?? 1 }, () => randomId()),
-  );
-  const taskKeys = useRef(initialKeys);
   const alive = useRef(true);
   const generation = useRef<string | null>(null);
   const [draft, setDraft] = useState<WorkflowDraft>(() => ({
@@ -97,11 +94,6 @@ export function WorkflowForm({
     setGenerating(false);
     void api.workflow({ action: "invalidate", formId, revision: revision.current }).catch(() => {});
   };
-  const taskChange = (index: number, update: Partial<WorkflowDraft["tasks"][number]>) =>
-    change({
-      ...draft,
-      tasks: draft.tasks.map((task, i) => (i === index ? { ...task, ...update } : task)),
-    });
   const perform = async (operation: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
@@ -146,7 +138,6 @@ export function WorkflowForm({
         ].slice(-20),
       );
       if (result.draft) {
-        taskKeys.current = result.draft.tasks.map(() => randomId());
         change({ ...draft, ...result.draft });
       }
       return true;
@@ -242,83 +233,7 @@ export function WorkflowForm({
           </AppButton>
           <span>{repository?.label ?? "No repository selected"}</span>
         </div>
-        <ol className="workflow-task-editor">
-          {draft.tasks.map((task, index) => (
-            <li key={taskKeys.current[index]}>
-              <div>
-                <CarbonTextInput
-                  labelText={<>Task name</>}
-                  value={task.name}
-                  maxLength={65_536}
-                  onChange={(event) => taskChange(index, { name: event.target.value })}
-                />
-              </div>
-              <div>
-                <CarbonTextArea
-                  labelText={<>Implementation instructions</>}
-                  value={task.instructions}
-                  maxLength={65_536}
-                  onChange={(event) => taskChange(index, { instructions: event.target.value })}
-                />
-              </div>
-              <div>
-                <CarbonTextArea
-                  labelText={<>Verification criteria</>}
-                  value={task.verify}
-                  maxLength={65_536}
-                  onChange={(event) => taskChange(index, { verify: event.target.value })}
-                />
-              </div>
-              <div>
-                <CarbonTextArea
-                  labelText={<>Check commands (one per line)</>}
-                  value={task.checks?.join("\n") ?? ""}
-                  onChange={(event) =>
-                    taskChange(index, { checks: event.target.value.split("\n").filter(Boolean) })
-                  }
-                />
-              </div>
-              <div className="workflow-actions">
-                <AppButton
-                  type="button"
-                  disabled={index === 0}
-                  onClick={() => {
-                    const tasks = [...draft.tasks];
-                    const current = tasks[index];
-                    const previous = tasks[index - 1];
-                    const key = taskKeys.current[index];
-                    const previousKey = taskKeys.current[index - 1];
-                    if (!current || !previous || !key || !previousKey) return;
-                    [tasks[index - 1], tasks[index]] = [current, previous];
-                    [taskKeys.current[index - 1], taskKeys.current[index]] = [key, previousKey];
-                    change({ ...draft, tasks });
-                  }}
-                >
-                  Move up
-                </AppButton>
-                <AppButton
-                  type="button"
-                  onClick={() => {
-                    taskKeys.current.splice(index, 1);
-                    change({ ...draft, tasks: draft.tasks.filter((_, i) => i !== index) });
-                  }}
-                >
-                  Remove task
-                </AppButton>
-              </div>
-            </li>
-          ))}
-        </ol>
-        <AppButton
-          type="button"
-          disabled={draft.tasks.length >= 100}
-          onClick={() => {
-            taskKeys.current.push(randomId());
-            change({ ...draft, tasks: [...draft.tasks, emptyTask()] });
-          }}
-        >
-          Add task
-        </AppButton>
+        <WorkflowTaskEditor tasks={draft.tasks} onChange={(tasks) => change({ ...draft, tasks })} />
         <div className="workflow-actions">
           <div>
             <CarbonTextInput

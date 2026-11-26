@@ -58,3 +58,7 @@ it("disables run controls when an older service cannot report live ownership", (
   expect(render({}, true)).toContain("Unknown");
   expect(render({}, true)).toMatch(/aria-label="Run Daily checks"[^>]+disabled=""/);
 });
+it("displays a Workflow tag for workflow scheduled jobs", () => {
+  expect(render({ actionType: "workflow", taskCount: 3 })).toContain(">Workflow<");
+  expect(render({ actionType: "prompt" })).toContain(">Prompt<");
+});
