@@ -1,0 +1,161 @@
+name: Publish Docker Hub image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag merged into main (for example v0.4.1)
+        required: true
+        type: string
+      push:
+        description: Push the verified linux/amd64 image to Docker Hub (false runs build and acceptance checks only)
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dockerhub-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.validate.outputs.sha }}
+      version: ${{ steps.tags.outputs.version }}
+      prerelease: ${{ steps.tags.outputs.prerelease }}
+      repository: ${{ steps.tags.outputs.repository }}
+      tags: ${{ steps.tags.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - id: validate
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: node scripts/release/preflight.mjs
+      - id: tags
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
+        run: node scripts/release/docker-tags.mjs
+
+  build-and-test:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      COMPOSE_BAKE: "false"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          package-manager-cache: false
+      - run: ONNXRUNTIME_NODE_INSTALL=skip npm ci
+      - name: Prepare isolated runner Docker engine
+        timeout-minutes: 2
+        run: |
+          sudo systemctl start docker
+          docker info
+      - run: npm run devcontainer -- up
+      - run: npm run devcontainer -- exec npm ci
+      - run: npm run devcontainer -- exec npm run prepare:models
+      - run: npm run devcontainer -- exec npm run package:payload
+      - run: npm run devcontainer -- down
+        if: always()
+      - run: npm run verify:artifact -- release/payloads/linux-x64.json
+      - run: npm run test:docker -- release/payloads/linux-x64.json
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: dockerhub-acceptance-evidence
+          path: |
+            test-results/artifact-handoff/
+            test-results/docker/
+          retention-days: 14
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: code60-linux-payload
+          path: release/payloads/
+          retention-days: 7
+          if-no-files-found: error
+
+  publish:
+    needs: [preflight, build-and-test]
+    if: ${{ inputs.push == true }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Configure this environment in GitHub Settings to allow deployments from main only.
+    environment: dockerhub_release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Require Docker Hub credentials
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          HAS_DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+        run: |
+          test -n "$DOCKERHUB_USERNAME" || { echo "Missing DOCKERHUB_USERNAME variable in dockerhub_release environment." >&2; exit 1; }
+          test "$HAS_DOCKERHUB_TOKEN" = "true" || { echo "Missing DOCKERHUB_TOKEN secret in dockerhub_release environment." >&2; exit 1; }
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: code60-linux-payload
+          path: release/payloads/
+      - run: npm run verify:artifact -- release/payloads/linux-x64.json
+      - run: npm run package:docker -- --stage-only release/docker-stage --require-clean release/payloads/linux-x64.json
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push linux/amd64 image to Docker Hub
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: release/docker-stage
+          file: release/docker-stage/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          sbom: true
+          tags: ${{ needs.preflight.outputs.tags }}
+          build-args: |
+            CODE60_VERSION=${{ needs.preflight.outputs.version }}
+            CODE60_REVISION=${{ needs.preflight.outputs.sha }}
+            CODE60_CREATED=${{ github.event.head_commit.timestamp }}
+      - name: Record published digest summary
+        env:
+          REPOSITORY: ${{ needs.preflight.outputs.repository }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+          TAGS: ${{ needs.preflight.outputs.tags }}
+        run: |
+          {
+            echo "## Docker Hub publication"
+            echo ""
+            echo "- Repository: \`$REPOSITORY\`"
+            echo "- Digest: \`$DIGEST\`"
+            echo "- Tags:"
+            printf '%s\n' "$TAGS" | sed 's/^/  - `/; s/$/`/'
+          } >> "$GITHUB_STEP_SUMMARY"

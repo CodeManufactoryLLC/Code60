@@ -91,3 +91,11 @@ payload acceptance. It verifies the downloaded producer artifact against the exa
 checkout before running both complete journeys. `CI passed` and manual bootstrap
 assembly require this job as well as the baseline. The existing 20-minute runner,
 nine-minute maintenance and 90-second cleanup bounds remain unchanged.
+
+## Docker Hub distribution
+
+The release workflow validates a `linux/amd64` Docker image built directly from the
+verified `linux-x64` payload using `npm run test:docker`, without requiring registry
+credentials. Publishing to Docker Hub (`mjholliday/code60`) is a separate manual
+dispatch of `.github/workflows/publish-docker.yml` from `main` gated by the
+`dockerhub_release` environment. See [Docker Hub distribution](docs/distribution/docker.md).

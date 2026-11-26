@@ -13,9 +13,13 @@ same-origin JSON handshake and per-tab tokens; never remove auth checks from
 application operations or events. Only private local management can change pairing
 policy. Changes revoke page sessions/decisions, not approved work.
 
-Explicit ports are a Node-only development option requiring development assets.
-Production keeps allocated loopback ports; forwarded development access must use
-the exact gateway origin. Never loosen Host/Origin validation for container access.
+Explicit ports are a Node-only development option requiring development assets,
+except in the dedicated container runtime entrypoint (`src/gateway/container.ts`)
+which accepts an explicit validated `container` bind/port/origin configuration.
+Host production keeps allocated loopback ports; forwarded development and
+container access must use the exact gateway origin. Never loosen Host/Origin
+validation for container access, restrict `/management/*` to loopback sockets,
+and require pairing for any non-loopback container origin.
 
 
 ## MCP connector guided management (phase 3)
