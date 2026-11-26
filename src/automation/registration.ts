@@ -349,15 +349,43 @@ function assertNativeResponder(status: Awaited<ReturnType<typeof registrationSta
 }
 
 function olderVersion(service: string, app: string): boolean {
-  // Release versions are three bounded numeric components. Unknown versions do
-  // not grant automatic downgrade/replacement authority.
-  const parse = (value: string) =>
-    /^([0-9]{1,8})\.([0-9]{1,8})\.([0-9]{1,8})$/.exec(value)?.slice(1).map(Number);
+  // Bounded semantic versions (X.Y.Z with optional prerelease). Unknown versions
+  // do not grant automatic downgrade/replacement authority.
+  const parse = (value: string) => {
+    const match =
+      /^([0-9]{1,8})\.([0-9]{1,8})\.([0-9]{1,8})(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(
+        value,
+      );
+    if (!match) return undefined;
+    const pre = match[4]?.split(".");
+    if (pre?.some((part) => /^\d+$/.test(part) && /^0\d/.test(part))) return undefined;
+    return { core: match.slice(1, 4).map(Number), pre };
+  };
   const left = parse(service),
     right = parse(app);
   if (!left || !right) return false;
   for (let i = 0; i < 3; i++) {
-    if (left[i] !== right[i]) return left[i]! < right[i]!;
+    const a = left.core[i] ?? 0;
+    const b = right.core[i] ?? 0;
+    if (a !== b) return a < b;
+  }
+  if (!left.pre && !right.pre) return false;
+  if (left.pre && !right.pre) return true;
+  if (!left.pre && right.pre) return false;
+  const leftPre = left.pre ?? [];
+  const rightPre = right.pre ?? [];
+  const max = Math.max(leftPre.length, rightPre.length);
+  for (let i = 0; i < max; i++) {
+    const a = leftPre[i];
+    const b = rightPre[i];
+    if (a === undefined) return true;
+    if (b === undefined) return false;
+    if (a === b) continue;
+    const aNum = /^\d+$/.test(a);
+    const bNum = /^\d+$/.test(b);
+    if (aNum && bNum) return BigInt(a) < BigInt(b);
+    if (aNum !== bNum) return aNum;
+    return a < b;
   }
   return false;
 }
