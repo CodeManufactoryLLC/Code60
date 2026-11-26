@@ -159,11 +159,11 @@ Undo restores checkpoint timing, clears anchors and freezes discarded plans.
 Owner teardown cancels timers; failed timing writes do not authorize or dispatch
 work. This adds no preference, agent-write field, IPC endpoint or dependency.
 
-## Transmission prototype
+## Native workflows
 
-Workflow requests accept opaque picker/form/workflow/request IDs, revisions and bounded definitions only. No paths, endpoints, executable/environment fields or generic execution authority. Draft output can change only name/tasks; workflow approval is a separate human action.
+Workflow requests accept opaque picker/form/workflow/request IDs, revisions, verified provider IDs and bounded definitions only. No paths, endpoints, executable/environment fields or generic execution authority. Draft output can change only name/tasks; workflow approval is a separate human action.
 
-Pause, resume and reconnect carry only the local workflow identity. The main process resolves the owning engine and run.
+Pause and resume carry only the local workflow identity. The main process resolves the workflow run and provider.
 
 
 ## MCP connector guided management (phase 3)

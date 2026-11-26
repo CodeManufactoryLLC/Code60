@@ -26,8 +26,8 @@ a narrow, authenticated loopback API. The application runs locally.
 ### Execution lifetime
 
 Closing or refreshing the browser leaves approved work running. Stopping the
-backend is a separate, explicit action. Approved Transmission workflows retain
-their independent engine ownership and can continue after backend shutdown.
+backend is a separate, explicit action that stops active backend-owned sessions
+and workflows.
 
 ### Development and distribution
 

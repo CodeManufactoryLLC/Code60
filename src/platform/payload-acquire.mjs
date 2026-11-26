@@ -127,19 +127,9 @@ async function verifyPayload(root, expected, entries, signal) {
   if (entries.some((entry) => !allowed.has(entry.path.split("/")[0])))
     throw new Error("Unexpected payload content");
   const inventory = new Map(metadata.files.map((entry) => [entry.path, entry]));
-  const engineFiles = metadata.files.filter((entry) => entry.path.startsWith("dist/engines/"));
-  if (expected.os === "linux" && metadata.transmissionBundle === undefined) {
-    if (engineFiles.length) throw Error("Linux payload contains an undeclared Transmission bundle");
-  } else if (
-    !/^[a-f0-9]{64}$/.test(metadata.transmissionBundle) ||
-    !inventory.has(`dist/engines/${metadata.transmissionBundle}/bundle.json`) ||
-    engineFiles.some(
-      (entry) => !entry.path.startsWith(`dist/engines/${metadata.transmissionBundle}/`),
-    )
-  )
-    throw Error(
-      `${expected.os === "darwin" ? "macOS" : "Linux"} payload requires its pinned Transmission bundle`,
-    );
+  if (metadata.files.some((entry) => entry.path.startsWith("dist/engines/"))) {
+    throw Error("Payload must not contain legacy external engine bundles");
+  }
   const actual = entries.filter((entry) => entry.type !== "5" && entry.path !== "payload.json");
   if (inventory.size !== metadata.files.length || inventory.size !== actual.length)
     throw new Error("Payload inventory mismatch");

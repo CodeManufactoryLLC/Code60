@@ -143,14 +143,14 @@ Browser tests run headlessly with fake providers and isolated state. Package che
 
 See [FAQ](FAQ.md), [terminology](TERMINOLOGY.md), [architecture](ARCHITECTURE.md), [capabilities](docs/capabilities.md), [MCP integration](MCP.md), [security](SECURITY.md), [contributing](CONTRIBUTING.md), [releases](RELEASING.md), [roadmap](ROADMAP.md) and [recovery runbooks](docs/runbooks/README.md).
 
-### Transmission workflow prototype
+### Workflows
 
 Apps → Workflows creates ordered coding workflows manually or with **Create with
-prompt**, then shows implementation, verification, repair and decision status.
-Execution uses pinned Transmission staging.20 on macOS in dedicated saved-file
-worktrees and continues after closing the browser or stopping the backend. See the
-[workflow guide](docs/transmission-workflows.md) for prerequisites, approval defaults,
-background ownership and the known server recovery limitation.
+prompt**, runs them natively inside Code60 Gateway with any verified ACP provider
+in dedicated saved-file worktrees, and shows implementation, verification, repair
+and decision status. Work continues after closing the browser while the backend
+stays running. See the [workflow guide](docs/transmission-workflows.md) for
+prerequisites, approval defaults, pause/resume behavior and recovery details.
 
 
 MCP servers can be configured under **Apps → MCP Servers** with guided forms or

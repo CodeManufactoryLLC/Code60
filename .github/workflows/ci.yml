@@ -186,19 +186,15 @@ jobs:
       - run: npm run devcontainer -- up
       - run: npm run devcontainer -- exec npm ci
       - run: npm run devcontainer -- exec npm run build
-      - if: contains(fromJSON(needs.impact.outputs.plan), 'engines') || contains(fromJSON(needs.impact.outputs.plan), 'update') || contains(fromJSON(needs.impact.outputs.plan), 'setup')
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'update') || contains(fromJSON(needs.impact.outputs.plan), 'setup')
         run: npm run devcontainer -- exec npx --no-install playwright install chromium
       - run: npm run devcontainer -- exec env CODE60_REQUIRE_NATIVE_PROCESS_INSPECTION=1 npx --no-install vitest run src/platform/process-identity.test.ts
-      - if: contains(fromJSON(needs.impact.outputs.plan), 'payload-smoke') && !contains(fromJSON(needs.impact.outputs.plan), 'engines')
+      - if: contains(fromJSON(needs.impact.outputs.plan), 'payload-smoke')
         run: npm run devcontainer -- exec npm run test:payload
-      - if: contains(fromJSON(needs.impact.outputs.plan), 'engines')
-        run: npm run devcontainer -- exec npm run test:payload -- --workflows
       - if: contains(fromJSON(needs.impact.outputs.plan), 'setup')
         run: npm run devcontainer -- exec npm run test:setup
       - if: contains(fromJSON(needs.impact.outputs.plan), 'update')
         run: npm run devcontainer -- exec npm run test:update
-      - if: contains(fromJSON(needs.impact.outputs.plan), 'uninstall-engines')
-        run: npm run devcontainer -- exec npm run test:uninstall:engines -- release/payloads/linux-x64.json
       - if: contains(fromJSON(needs.impact.outputs.plan), 'shell')
         run: npm run devcontainer -- exec npm run test:installation -- --require-fish
       - run: npm run devcontainer -- down
@@ -213,7 +209,6 @@ jobs:
             test-results/installation/
             test-results/setup/
             test-results/update/
-            test-results/uninstall-engines/
           retention-days: 7
           if-no-files-found: warn
   payload-clean-install:

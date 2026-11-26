@@ -25,8 +25,6 @@ export const HEALTH_GROUP_LABELS: Readonly<Record<HealthGroupId, string>> = {
 export const HEALTH_CHECK_IDS = [
   "backend-connection",
   "backend-version",
-  "transmission-status",
-  "transmission-version",
   "mcp-gateway",
   "scheduler-status",
   "scheduler-registration",

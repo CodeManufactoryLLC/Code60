@@ -1,11 +1,10 @@
 import { DirectionStraightRight, Pause, Play, Stop } from "@carbon/icons-react";
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import {
-  type ApplicationClient,
-  supportsWorkflowPause,
-  type WorkflowEvent,
-  type WorkflowRecord,
-  type WorkflowRequest,
+import type {
+  ApplicationClient,
+  WorkflowEvent,
+  WorkflowRecord,
+  WorkflowRequest,
 } from "../bridge/index.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { Select as CarbonSelect } from "./carbon/fields.js";
@@ -347,10 +346,10 @@ function AcceptedDiff({
 export function WorkflowPlayer({
   api,
   record,
+  providerLabel,
   active,
   polling,
   connected,
-  problem,
   actionError,
   activity,
   busy,
@@ -358,10 +357,10 @@ export function WorkflowPlayer({
 }: {
   api: ApplicationClient;
   record: WorkflowRecord;
+  providerLabel: string;
   active: boolean;
   polling: boolean;
   connected: boolean;
-  problem: string | undefined;
   actionError: string;
   activity: Activity;
   busy: string;
@@ -376,8 +375,6 @@ export function WorkflowPlayer({
   const terminal = status === "completed" || status === "failed" || status === "cancelled";
   const controllable = connected && !terminal && !!snapshot && !busy && !record.stopPending;
   const canStop = connected && !!snapshot && !busy && (!terminal || !!record.stopPending);
-  const modern = supportsWorkflowPause(record.engineVersion);
-  const legacyReason = modern ? undefined : "Pause and resume require Transmission staging.20";
   const command = (action: "pause" | "resume" | "cancel" | "recover") =>
     act({ action, id: record.id });
   useEffect(() => {
@@ -396,12 +393,6 @@ export function WorkflowPlayer({
   return (
     <section aria-label="Workflow status">
       {actionError && modal?.kind !== "steer" && <p role="alert">{actionError}</p>}
-      {problem && (
-        <p role="status">
-          {problem}{" "}
-          {record.updatedAt && <>Last verified {new Date(record.updatedAt).toLocaleString()}.</>}
-        </p>
-      )}
       {!snapshot && ["starting", "uncertain"].includes(record.state) && (
         <AppButton type="button" disabled={!!busy} onClick={() => void command("recover")}>
           Recover same start request
@@ -415,17 +406,13 @@ export function WorkflowPlayer({
               <Transport
                 icon="play"
                 label="Resume workflow"
-                reason={legacyReason}
-                disabled={!controllable || !modern || status !== "paused"}
+                disabled={!controllable || status !== "paused"}
                 onClick={() => void command("resume")}
               />
               <Transport
                 icon="pause"
                 label="Pause workflow"
-                reason={legacyReason}
-                disabled={
-                  !controllable || !modern || (status !== "running" && status !== "needs_input")
-                }
+                disabled={!controllable || (status !== "running" && status !== "needs_input")}
                 onClick={() => void command("pause")}
               />
               <Transport
@@ -533,6 +520,8 @@ export function WorkflowPlayer({
       <details>
         <summary>Workflow details</summary>
         <dl>
+          <dt>Provider</dt>
+          <dd>{providerLabel}</dd>
           <dt>Repository</dt>
           <dd>{record.repository}</dd>
           <dt>Execution worktree</dt>
@@ -597,7 +586,7 @@ export function WorkflowPlayer({
         >
           <p>
             Warning: this workflow cannot be resumed if stopped. Any existing changes will remain
-            in-place.{modern ? " 'Pause' instead if you wish to resume at a later time." : ""}
+            in-place. &apos;Pause&apos; instead if you wish to resume at a later time.
           </p>
         </WorkflowDialog>
       )}

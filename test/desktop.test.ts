@@ -7206,4 +7206,50 @@ describe("controller terminals", () => {
     await controller.shutdown();
     expect(controller.terminals.list()).toEqual([]);
   });
+
+  it("lists verified workflow providers and resolves provider specs with strict verification checks", async () => {
+    const listed = controller.workflowProviders();
+    expect(listed.defaultProvider).toBe("claude");
+    expect(listed.providers.find((p) => p.id === "claude")?.ready).toBe(true);
+    expect(listed.providers.find((p) => p.id === "codex")?.ready).toBe(true);
+    expect(listed.providers.find((p) => p.id === "kiro")?.ready).toBe(false);
+
+    expect(controller.resolveWorkflowProvider("", directory)).toMatchObject({
+      name: "claude",
+      cwd: directory,
+    });
+    expect(controller.resolveWorkflowProvider("codex", directory)).toMatchObject({
+      name: "codex",
+      cwd: directory,
+    });
+    expect(() => controller.resolveWorkflowProvider("kiro", directory)).toThrow();
+
+    // Unverified setup has no default workflow provider and refuses resolution.
+    await controller.shutdown();
+    const emptyState = await fs.mkdtemp(join(tmpdir(), "code60-wf-prov-"));
+    const fresh = new ApplicationHost(
+      controllerDeps(),
+      {
+        HOME: emptyState,
+        XDG_CONFIG_HOME: join(emptyState, "config"),
+        XDG_STATE_HOME: join(emptyState, "state"),
+        XDG_DATA_HOME: join(emptyState, "data"),
+        SHELL: "/bin/sh",
+      },
+      { confirm },
+      { openDatabase, preferences: { ...preferences, agentSetup: async () => null } },
+    );
+    try {
+      await fresh.restore();
+      const empty = fresh.workflowProviders();
+      expect(empty.defaultProvider).toBeNull();
+      expect(empty.providers.every((p) => !p.ready)).toBe(true);
+      expect(() => fresh.resolveWorkflowProvider("", directory)).toThrow(
+        "Connect a verified provider first.",
+      );
+    } finally {
+      await fresh.shutdown();
+      await fs.rm(emptyState, { recursive: true, force: true });
+    }
+  });
 });

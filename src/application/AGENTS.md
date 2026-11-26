@@ -302,11 +302,9 @@ Undo restores checkpoint timing, clears anchors and freezes discarded plans.
 Owner teardown cancels timers; failed timing writes do not authorize or dispatch
 work. This adds no preference, agent-write field, IPC endpoint or dependency.
 
-## Transmission prototype
+## Native workflows
 
-Transmission workflows are owned by DesktopWorkflows, independently of databases, projects and Relay. Keep the private registry locked, identity checks and durable start keys intact. Quit disconnects readers without stopping the engine; never silently bootstrap on reads. Draft helpers have no gateway, denied permissions and generation-scoped cancellation. See ARCHITECTURE.md for the approved exception.
-
-Route each record to its saved engine version. Records lacking a version belong to staging.18. Reconnect and recovery require explicit actions tied to that record.
+Workflows are owned by DesktopWorkflows, independently of databases, projects and Relay, using the in-process `WorkflowEngine` from `core` and Code60's verified ACP providers. Keep the private registry locked, identity checks and durable start keys intact. Draft helpers have no gateway, denied permissions and generation-scoped cancellation. See ARCHITECTURE.md for the approved exception.
 
 
 ## MCP connector guided management (phase 3)
@@ -391,16 +389,9 @@ Cleanup verification retries retained revoked handles for the captured scope onl
 coalesces concurrent attempts and retains ownership on failure. It never reconnects,
 launches a process, retries a business call or discovers/kills processes by name.
 
-Launch only preserved bundled entrypoints with their recorded Node, retaining the
-pinned release's MCP bootstrap and authenticated HTTP operations. Never run npm,
-npx or a compiler at execution time. A missing bundle may be cached from prepared
-local assets only on explicit start/reconnect; damaged bindings require recovery,
-never fallback. Keep Transmission provider authentication separate from Code60's
-verified provider membership. Backend shutdown does not cancel approved workflows.
 Uninstall inspection reads strict saved workflow evidence without acquiring a
-writer, connecting an engine or creating storage. Pending stops, uncertain starts,
-inconsistent terminal snapshots and duplicate ownership cannot authorize removal.
-Saved terminal state does not establish process quiescence.
+writer or creating storage. Pending stops, uncertain starts, inconsistent
+terminal snapshots and duplicate ownership cannot authorize removal.
 Idle uninstall reservations share the application action queue and closing gate;
 refuse live work before reserving. Releasing a refused overall preparation may
 reopen an idle owner, but must never reopen one whose shutdown has begun.
@@ -408,20 +399,11 @@ Workflow reservations also fence draft admission and queued starts; an active
 draft or another writer cannot be treated as idle.
 Refuse reservations promptly while application/workflow actions await completion;
 never wait behind a human operation whose answer an uninstall gate would block.
-Native uninstall preparation reads the pinned engine SQLite schema read-only and
-matches terminal runs to strict saved Code60 ownership before any stop. Never import
-the engine constructor for inspection: it reconciles and wakes stored work. Inspect
-all recorded supported versions first, then use authenticated fixed health/stop with verified Node,
-native process identity and private endpoint identity. Require positive process
-and open-file absence without an endpoint; preserve uncertain evidence. Only this
-explicit uninstall path may stop idle independent engines, never ordinary close.
 Stopped-backend uninstall preparation is called only while gateway owns the
-service-operation lock and has proved backend absence. Reserve an existing
-workflow writer without reclaiming stale evidence; refuse active/uncertain history
-before any engine stop. A fresh missing workflow root needs no creation. Release
-the writer afterward, preserving every registry, database and engine binding.
-Pin CODEX_PATH to the verified cached native Codex for new engines; application
-provider overrides must not replace this runtime. Preserve healthy existing engines.
+service-operation lock and has proved backend absence. Verify an existing
+workflow writer without reclaiming stale evidence; refuse active/uncertain history.
+A fresh missing workflow root needs no creation. Release the writer afterward,
+preserving every registry and database.
 
 ## Initial database preparation
 

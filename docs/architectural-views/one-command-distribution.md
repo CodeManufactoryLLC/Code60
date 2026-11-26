@@ -17,16 +17,17 @@ then open the browser for provider onboarding and project selection.
 
 ### Distribution
 
-Deliver compatible Code60 and Transmission components together, while preserving
-the workflow engine's independent execution lifetime. Make updates a single
-explicit operation that preserves user data and unfinished work.
+Deliver Code60 as a single self-contained payload with workflows built directly
+into the backend. Make updates a single explicit operation that preserves user
+data and unfinished work.
 
 ## Tradeoffs
 
 ### Pros
 
 - A familiar developer entry point reduces setup and maintenance work.
-- Coordinated releases remove the need to manage Transmission separately.
+- Shipping a single backend removes the need to package or manage a separate
+  workflow daemon.
 
 ### Cons
 

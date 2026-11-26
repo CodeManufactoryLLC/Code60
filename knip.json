@@ -25,7 +25,6 @@
     "scripts/devcontainer-tunnel.mjs",
     "scripts/devcontainer-session.mjs",
     ".devcontainer/init-volumes.mjs",
-    "test/fixtures/fake-transmission.mjs",
     "src/agents/mcp-adapter.ts",
     "src/platform/credential-helper.ts",
     "test/fixtures/mcp-upstream.mjs",

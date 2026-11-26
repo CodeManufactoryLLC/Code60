@@ -14,7 +14,7 @@ import { verifyPrivatePath } from "./private-state.js";
 const execute = promisify(execFile);
 function supportedNativeInspection() {
   if (process.platform !== "darwin" || process.arch !== "arm64")
-    throw Error("Transmission process inspection requires macOS Apple Silicon");
+    throw Error("Runtime process inspection requires macOS Apple Silicon");
 }
 export interface RuntimeProcessIdentity {
   pid: number;

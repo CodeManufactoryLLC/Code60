@@ -224,7 +224,6 @@ it("unregisters only the prepared runtime/PID after authenticated idle preparati
   const f = await removalFixture();
   expect(await backendControl(f.env, "uninstall", true, f.guard)).toMatchObject({
     installed: false,
-    enginePids: [],
   });
   expect(fake.exited).toHaveBeenCalledWith([42]);
   expect(fake.control.mock.calls.map((call) => call[1])).toEqual(["stop", "uninstall"]);
@@ -277,7 +276,6 @@ it("recovers metadata only after positive native/HTTP absence if the owned defin
   await unlink(f.definition.path);
   expect(await backendControl(f.env, "uninstall", true, { ...f.guard, pid: null })).toMatchObject({
     installed: false,
-    enginePids: [],
   });
   expect(fake.control).not.toHaveBeenCalled();
   expect(JSON.parse(await readFile(f.registration, "utf8")).installed).toBe(false);
@@ -336,7 +334,6 @@ it("checks fixed native absence for files-only installations and refuses unexpec
   fake.management.mockRejectedValue(Object.assign(Error("No metadata"), { code: "ENOENT" }));
   expect(await backendControl(f.env, "uninstall", true, guard)).toMatchObject({
     installed: false,
-    enginePids: [],
   });
   await expect(readFile(join(f.root, "registration.json"))).rejects.toMatchObject({
     code: "ENOENT",

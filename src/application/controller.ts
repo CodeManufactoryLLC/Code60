@@ -197,6 +197,7 @@ import {
   TaskLoop,
   type TaskProposal,
   type TaskSource,
+  WorkflowProviderError,
   type Workspace,
 } from "../core/index.js";
 import {
@@ -261,7 +262,7 @@ import {
 import { ProjectSessionStore } from "./project-session.js";
 import { type OpenProjectDatabase, type ProjectDatabase, SCHEMA } from "./projects.js";
 import { effectivePrompts, promptStates } from "./prompt-templates.js";
-import { desktopConfig, detectProvider } from "./provider-catalog.js";
+import { desktopConfig, detectProvider, PROVIDERS } from "./provider-catalog.js";
 import { createProviderRuntime, providerAgents } from "./provider-runtime.js";
 import { type RagExecutor, RagService } from "./rag-service.js";
 import { mergeRagEvents, ragProjectSources } from "./rag-sources.js";
@@ -5397,6 +5398,44 @@ export class ApplicationHost {
       (id) => this.config?.agents[id]?.command,
       this.agentSetup.record?.commands,
     );
+  }
+
+  workflowProviders(): {
+    providers: import("../bridge/index.js").WorkflowProviderOption[];
+    defaultProvider: string | null;
+  } {
+    const setup = this.agentSetup.record;
+    const enabled = new Set(setup?.enabled ?? []);
+    const primary = setup?.primary ?? null;
+    const providers = PROVIDERS.map((p) => ({
+      id: p.id,
+      name: p.name,
+      ready: enabled.has(p.id) && Boolean(this.config?.agents[p.id]),
+    }));
+    const defaultProvider =
+      primary && providers.some((p) => p.id === primary && p.ready)
+        ? primary
+        : (providers.find((p) => p.ready)?.id ?? null);
+    return { providers, defaultProvider };
+  }
+
+  resolveWorkflowProvider(providerId: string, cwd: string): import("../core/index.js").AgentSpec {
+    const target = providerId || this.agentSetup.record?.primary || "";
+    if (!target) {
+      throw new WorkflowProviderError("Connect a verified provider first.");
+    }
+    try {
+      this.requireEnabled(target);
+    } catch (error) {
+      throw new WorkflowProviderError(
+        error instanceof Error ? error.message : `Provider '${target}' is not verified.`,
+      );
+    }
+    const agent = this.config?.agents[target];
+    if (!agent) {
+      throw new WorkflowProviderError(`Provider '${target}' is unavailable.`);
+    }
+    return { name: target, command: agent.command, cwd };
   }
 
   healthRefreshPath(signal: AbortSignal): Promise<boolean> {

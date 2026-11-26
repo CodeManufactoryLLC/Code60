@@ -15,16 +15,13 @@ const suites = [
   "clean-setup",
   "update",
   "clean-update",
-  "uninstall-engines",
   "clean-uninstall",
-  "engines",
   "mac-package",
   "mac-payload",
   "mac-setup",
   "mac-shell",
   "mac-update",
   "mac-uninstall",
-  "mac-engines",
   "mac-full",
 ];
 const jobs = [
@@ -43,16 +40,8 @@ const npmPackage = ["package", "clean-install", "mac-package"];
 const payload = ["payload-smoke", "clean-payload", "mac-payload"];
 const setup = ["setup", "shell", "managed", "clean-setup", "mac-setup", "mac-shell"];
 const update = ["update", "clean-update", "mac-update"];
-const uninstall = ["uninstall-engines", "clean-uninstall", "mac-uninstall"];
-const engines = ["engines", "mac-engines", ...payload, ...update, ...uninstall];
-const acceptanceSuites = [
-  "payload-smoke",
-  "engines",
-  "setup",
-  "update",
-  "uninstall-engines",
-  "shell",
-];
+const uninstall = ["clean-uninstall", "mac-uninstall"];
+const acceptanceSuites = ["payload-smoke", "setup", "update", "shell"];
 const cleanPayloadSuites = ["clean-payload", "managed", "clean-setup"];
 
 function forPath(path) {
@@ -64,28 +53,6 @@ function forPath(path) {
   )
     return ["instructions"];
 
-  if (/^distribution\/transmission-linux\//.test(path))
-    return [
-      "check",
-      "browser",
-      "package",
-      "clean-install",
-      "payload-smoke",
-      "clean-payload",
-      "engines",
-      "update",
-      "clean-update",
-      "uninstall-engines",
-      "clean-uninstall",
-    ];
-  if (/^distribution\/transmission\//.test(path))
-    return ["check", "mac-package", "mac-payload", "mac-engines", "mac-update", "mac-uninstall"];
-  if (
-    /^(?:src\/(?:platform\/transmission-|application\/(?:transmission|workflows)|core\/workflow-)|scripts\/(?:prepare-engines|distribution\/transmission)|test\/(?:transmission-|update-native-workflow|fixtures\/(?:fake-transmission|transmission-)))/.test(
-      path,
-    )
-  )
-    return ["check", "browser", ...npmPackage, ...engines];
   if (
     /^(?:src\/(?:application|core)\/(?:rag[.-]|memory-worker\.)|scripts\/(?:prepare-models|test-rag-model|distribution\/probe-native)|models\/)/.test(
       path,
@@ -99,7 +66,7 @@ function forPath(path) {
   )
     return ["check", ...update];
   if (
-    /^(?:scripts\/test-(?:uninstall(?:-engines)?|concurrent-clean-install)\.mjs|test\/(?:uninstall-installed\.e2e\.ts|uninstall\.config\.ts|fixtures\/uninstall-journey\.mjs))$/.test(
+    /^(?:scripts\/test-(?:uninstall|concurrent-clean-install)\.mjs|test\/(?:uninstall-installed\.e2e\.ts|uninstall\.config\.ts|fixtures\/uninstall-journey\.mjs))$/.test(
       path,
     )
   )
@@ -116,7 +83,7 @@ function forPath(path) {
   if (/^(?:scripts\/test-installation|test\/installation\.test)/.test(path))
     return ["check", ...setup];
   if (/^scripts\/test-package\.mjs$/.test(path)) return ["check", ...npmPackage];
-  if (/^scripts\/test-payload\.mjs$/.test(path)) return ["check", ...engines];
+  if (/^scripts\/test-payload\.mjs$/.test(path)) return ["check", ...payload];
   // Shared fixtures, build inputs, packaging, CI and new top-level owners default to full.
   if (
     /^test\/(?:workflows|ci-impact|build|release(?:-git)?|distribution|clean-install(?:-supervisor)?|concurrent-clean-install|artifact-handoff|backend-supervisor|devcontainer[^/]*)\.test\./.test(

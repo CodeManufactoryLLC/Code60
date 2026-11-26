@@ -98,10 +98,9 @@ jobs:
       - run: npm run devcontainer -- exec env CODE60_REQUIRE_NATIVE_PROCESS_INSPECTION=1 npx --no-install vitest run src/platform/process-identity.test.ts
       - run: npm run devcontainer -- exec npm run package:payload
       - run: npm run devcontainer -- exec npx --no-install playwright install chromium
-      - run: npm run devcontainer -- exec npm run test:payload -- --workflows
+      - run: npm run devcontainer -- exec npm run test:payload
       - run: npm run devcontainer -- exec npm run test:update
       - run: npm run devcontainer -- exec npm run test:setup
-      - run: npm run devcontainer -- exec npm run test:uninstall:engines -- release/payloads/linux-x64.json
       - run: npm run devcontainer -- exec npm run test:installation -- --require-fish
       - run: npm run test:packaged:clean -- --payload release/payloads/linux-x64.json
       - run: npm run test:packaged:clean -- --managed release/payloads/linux-x64.json
@@ -120,7 +119,6 @@ jobs:
             test-results/installation/
             test-results/setup/
             test-results/update/
-            test-results/uninstall-engines/
           retention-days: 14
       - uses: actions/upload-artifact@v7.0.2
         with:

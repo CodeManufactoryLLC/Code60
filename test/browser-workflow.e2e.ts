@@ -68,7 +68,6 @@ test("browser: first use through accepted plan, automatic edits, diff, attachmen
           expect(await managementRequest(fixture.env, "prepare-uninstall")).toEqual({
             quiescent: true,
             pid: process.pid,
-            enginePids: [],
           });
           await expect
             .poll(() => providers.map(({ pid }) => runtimeProcessExists(pid)), {

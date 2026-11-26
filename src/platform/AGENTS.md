@@ -14,7 +14,7 @@ through `index.ts`. Bridge, renderer and contracts must never import this module
   descriptors without that field; never infer ownership of additional empty dirs.
 
 - Never use blanket `shell: true` or unverified PID kills.
-- Native Transmission process adoption follows supported engine targets: macOS
+- Native runtime process adoption follows supported targets: macOS
   Apple Silicon and Linux x64. Verify the canonical Node text mapping, exact argv, UID and
   stable start identity. macOS uses fixed system inspection commands; Linux uses
   bounded kernel procfs reads, exact NUL-separated argv, executable device/inode
@@ -121,13 +121,6 @@ HTTPS policy unchanged.
   File publication keeps its ordinary 1 MiB bound. Large private removal receipts
   must request the explicit bounded limit (at most 64 MiB), including CAS reads
   and the final identity snapshot; reject oversized content before publication.
-
-- Transmission bundle storage is a Node-only filesystem boundary. Validate exact
-  supported artifact identities and the complete regular-file inventory before
-  publication or launch. Version bindings and canonical Node are immutable; keep
-  published engines separate from application activation and workflow state.
-  Never acquire dependencies, compile helpers, reclaim uncertain locks or start
-  engines during inspection. Remove only verified staging owned by the attempt.
 
 - `index.bootstrap.ts` is the Node-only distribution variant of the public index.
   Keep its installation/removal-recovery closure free of credential schemas, native keyring

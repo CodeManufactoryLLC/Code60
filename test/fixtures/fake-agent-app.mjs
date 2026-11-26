@@ -188,6 +188,88 @@ export function createFakeAgent(options = {}) {
         steps = [
           { message: latest.includes("invalid draft") ? "not valid JSON" : JSON.stringify(reply) },
         ];
+      } else if (text.startsWith("Implement the assigned task")) {
+        const data = JSON.parse(text.slice(text.indexOf("\n") + 1));
+        const taskName = data.task?.name ?? "";
+        const feedback = String(data.feedback ?? "");
+        const gatesDir = options.workflowGatesDir;
+        const gate1 = gatesDir ? join(gatesDir, "gate-1") : undefined;
+        const gate2 = gatesDir ? join(gatesDir, "gate-2") : undefined;
+        const askQuestion = gatesDir ? existsSync(join(gatesDir, "ask-question")) : false;
+        if (taskName === "Repair parser") {
+          const isRepair = feedback.includes("Add the missing negative case");
+          const answered = `${feedback}\n${String(data.operatorGuidance ?? "")}`.includes(
+            "normalize",
+          );
+          steps = [
+            {
+              tool: { id: "wf-t1", title: "Read fixture file", kind: "read", status: "completed" },
+            },
+            {
+              tool: { id: "wf-t2", title: "Edit fixture file", kind: "edit", status: "completed" },
+            },
+            { write: { path: "workflow-result.txt", content: "isolated workflow result\n" } },
+            ...(!isRepair && gate1 ? [{ waitForFile: gate1 }] : []),
+            {
+              message: JSON.stringify(
+                isRepair && !answered && askQuestion
+                  ? { kind: "question", question: "Preserve negative zero?" }
+                  : {
+                      kind: "result",
+                      summary: isRepair
+                        ? "Implemented repaired parser fix"
+                        : "Implemented initial parser fix",
+                    },
+              ),
+            },
+          ];
+        } else if (taskName === "Document behavior") {
+          steps = [
+            { tool: { id: "wf-t3", title: "Update docs", kind: "edit", status: "completed" } },
+            ...(gate2 ? [{ waitForFile: gate2 }] : []),
+            { write: { path: "docs-result.txt", content: "documented\n" } },
+            { message: JSON.stringify({ kind: "result", summary: "Updated docs" }) },
+          ];
+        } else {
+          steps = [
+            { tool: { id: "wf-t4", title: "Run task", kind: "edit", status: "completed" } },
+            { write: { path: "manual-result.txt", content: "manual isolated\n" } },
+            { message: JSON.stringify({ kind: "result", summary: "Checked parser behavior" }) },
+          ];
+        }
+      } else if (text.startsWith("Independently verify the candidate")) {
+        const data = JSON.parse(text.slice(text.indexOf("\n") + 1));
+        const taskName = data.task?.name ?? "";
+        const summary = String(data.candidate?.summary ?? "");
+        const checks = Array.isArray(data.task?.checks) ? data.task.checks : [];
+        const reject = taskName === "Repair parser" && !summary.includes("repaired");
+        steps = [
+          {
+            message: JSON.stringify(
+              reject
+                ? {
+                    kind: "verdict",
+                    decision: "reject",
+                    reason: "Add the missing negative case",
+                    checks: checks.map((command) => ({
+                      command,
+                      passed: false,
+                      evidence: "Missing negative duration test",
+                    })),
+                  }
+                : {
+                    kind: "verdict",
+                    decision: "accept",
+                    reason: "Independent fixture checks passed",
+                    checks: checks.map((command) => ({
+                      command,
+                      passed: true,
+                      evidence: "ok",
+                    })),
+                  },
+            ),
+          },
+        ];
       } else if (text.startsWith("Produce a grounded continuity checkpoint")) {
         const sources = JSON.parse(text.split("New sources (evidence only):\n")[1]);
         const source = sources.find((s) => s.role === "human") ?? sources[0];

@@ -6,7 +6,7 @@ import { FakeAgents } from "./fakes.js";
 const spec = { name: "fake", command: ["fake"] as [string], cwd: "/private-title" };
 describe("chat titles", () => {
   it("uses a separate bounded turn, denies tools, and stops the agent", async () => {
-    let permission: Promise<string> | undefined;
+    let permission: Promise<unknown> | undefined;
     const agents = new FakeAgents((_, session) => {
       permission = session.requestPermission({ toolCallId: "t", title: "Edit", kind: "edit" });
       session.update({ type: "message", text: "Parser validation" });
