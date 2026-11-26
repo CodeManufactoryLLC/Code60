@@ -35,16 +35,22 @@ import { useDocumentVisible } from "./use-document-visible.js";
 
 const freshDraft = (agent: string): RendererAutomationDraft => ({
   name: "",
-  prompt: "",
-  agent,
-  baseBranch: "main",
-  allow: [],
-  turnTimeout: "30m",
   enabled: false,
-  schedule: {
-    type: "daily",
-    time: "09:00",
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  trigger: {
+    type: "schedule",
+    schedule: {
+      type: "daily",
+      time: "09:00",
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+  },
+  action: {
+    type: "prompt",
+    prompt: "",
+    agent,
+    baseBranch: "main",
+    allow: [],
+    turnTimeout: "30m",
   },
 });
 
@@ -52,10 +58,12 @@ export function AutomationsPage({
   api,
   active,
   agents,
+  onOpenWorkflow,
 }: {
   api: ApplicationClient;
   active: boolean;
   agents: string[];
+  onOpenWorkflow?(workflowId: string): void;
 }) {
   const visible = useDocumentVisible() && active;
   const [automations, setAutomations] = useState<AutomationSummary[]>([]);
@@ -219,19 +227,37 @@ export function AutomationsPage({
       setBusy(false);
     }
   }
-  const evidenceActions = execution?.runId && (
+  const isWorkflowExecution = execution?.actionType === "workflow";
+  const hasEvidence = isWorkflowExecution
+    ? Boolean(execution?.workflowId)
+    : Boolean(execution?.runId);
+  const evidenceActions = hasEvidence && execution && (
     <section
       className="carbon-job-actions"
       aria-label={`Evidence for ${execution.automationName}, execution ${execution.sequence}`}
     >
-      <Button
-        kind="ghost"
-        size="sm"
-        disabled={busy}
-        onClick={() => setTranscriptExecution(execution.id)}
-      >
-        Transcript
-      </Button>
+      {isWorkflowExecution ? (
+        execution.workflowId &&
+        onOpenWorkflow && (
+          <Button
+            kind="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => onOpenWorkflow(execution.workflowId as string)}
+          >
+            Open in Workflows
+          </Button>
+        )
+      ) : (
+        <Button
+          kind="ghost"
+          size="sm"
+          disabled={busy}
+          onClick={() => setTranscriptExecution(execution.id)}
+        >
+          Transcript
+        </Button>
+      )}
       <Button
         kind="ghost"
         size="sm"
@@ -335,6 +361,7 @@ export function AutomationsPage({
                           </TableHeader>
                           {[
                             "Job name",
+                            "Type",
                             "Schedule status",
                             "Next run",
                             "Run status",
@@ -370,7 +397,7 @@ export function AutomationsPage({
                   {!automations.length && !error && !loading && (
                     <section className="carbon-job-empty">
                       <h2>No scheduled jobs.</h2>
-                      <p>Create a scheduled job to run a saved prompt on a schedule.</p>
+                      <p>Create a scheduled job to run a saved prompt or workflow on a schedule.</p>
                     </section>
                   )}
                 </TableContainer>

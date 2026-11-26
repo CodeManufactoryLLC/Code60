@@ -1,12 +1,16 @@
 import { z } from "zod";
 import {
+  type AutomationActionType,
   automationScheduleSchema,
   parseValue,
   rendererAutomationDraftSchema,
+  type ScheduledWorkflowStatus,
 } from "../contracts/index.js";
 
 export type {
+  AutomationActionType,
   AutomationTranscript,
+  RendererAutomationActionDraft,
   RendererAutomationDraft,
   SchedulerStatus,
   ServiceStatus,
@@ -54,17 +58,20 @@ export interface AutomationSummary {
   id: string;
   revision: number;
   name: string;
+  actionType?: AutomationActionType;
   agent: string;
   enabled: boolean;
   nextRunAt: string | null;
   /** Live ownership, independent of the selected history page. Older services omit it. */
   running?: boolean;
+  taskCount?: number;
 }
 export interface AutomationHistoryEntry {
   id: string;
   sequence: number;
   automationId: string;
   automationName: string;
+  actionType?: AutomationActionType;
   status: string;
   scheduledFor: string | null;
   startedAt: string | null;
@@ -72,6 +79,10 @@ export interface AutomationHistoryEntry {
   reason: string | null;
   denials: number;
   runId: string | null;
+  workflowId?: string | null;
+  workflowStatus?: ScheduledWorkflowStatus | null;
+  tasksCompleted?: number;
+  tasksTotal?: number;
 }
 export interface AutomationEditor {
   id: string;

@@ -3,10 +3,12 @@
 Backend-owned scheduler runtime. Depend only on core, contracts and platform,
 through their public indexes. Never import application or gateway or expose a TCP listener.
 
-- Serialize mutations and persist occurrence claims before any agent launch.
-- Never replay uncertain work, retry failed runs or accumulate a backlog.
-- Use mandatory worktrees, explicit saved deny-by-default policy, one headless
+- Serialize mutations and persist occurrence claims before any action launch.
+- Never replay uncertain prompt work, retry skipped/failed occurrences or accumulate a backlog.
+- Enforce per-action concurrency lanes and per-resource mutual exclusion (`repo:<dev>:<ino>`), holding slots until terminal execution state.
+- Built-in `prompt` actions use mandatory worktrees, explicit saved deny-by-default policy, one headless
   turn, no MCP, no implicit memory and no automatic worktree cleanup.
+- Gateway-injected action handlers (such as `workflow`) register through `startSchedulerRuntime` without importing `application` here; unregistered handlers fail closed (`handler_unavailable`).
 - Pin repository and provider identities. Treat missing/unsafe state as recovery,
   never permission to erase history or displace a live/unverifiable writer.
 - Bound storage reads, protocol frames, clients and notices. Keep diagnostics

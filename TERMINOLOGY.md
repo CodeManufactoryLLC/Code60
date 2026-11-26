@@ -88,9 +88,9 @@ Relay operates in the orchestration layer of Code60's [Two-Layer Architecture](#
 
 ## Scheduled Job
 
-A **Scheduled Job** is a local recurring automation under **Automate → Scheduled Jobs** that [Code60 Gateway](#gateway) runs inside a separate Git worktree.
+A **Scheduled Job** is a local recurring automation under **Automate → Scheduled Jobs** that [Code60 Gateway](#gateway) runs in a separate Git worktree.
 
-Each run executes one headless turn under an explicit deny-by-default permission allowlist. Code60 leaves the worktree and changes on disk for manual review.
+Each job dispatches either a single-turn headless prompt under a deny-by-default tool allowlist or a multi-task [Workflow](#workflow) with `autoApprove` controls. Concurrency lanes and per-repository locks hold slots until each run ends, and Code60 leaves worktrees on disk for manual review.
 
 ## Two-Layer Architecture
 
@@ -103,4 +103,4 @@ Each run executes one headless turn under an explicit deny-by-default permission
 
 A **Workflow** is a sequence of coding tasks under **Develop → Workflows** that [Code60 Gateway](#gateway) runs in a separate Git worktree with any active [Agent Provider](#agent-provider). Each task specifies implementation instructions, independent verification criteria, and optional check and repair steps.
 
-A user reviews and starts a workflow manually. Execution runs without changing source files, `HEAD`, or the Git index.
+A workflow starts manually from current repository files or on a cadence through **Automate → Scheduled Jobs** from a local base branch. Execution runs without changing source files, `HEAD`, or the Git index.

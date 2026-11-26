@@ -664,13 +664,19 @@ used.
 
 A human selects a repository and verified provider (defaulting to the primary
 verified provider), reviews and explicitly starts ordered tasks with independent
-verification. Automatic permission approvals default on and are shown before
-approval. A dedicated Git worktree starts from current saved files using private
-task snapshots; source HEAD, index and files remain unchanged. No automatic
-apply, merge, push, worktree deletion or message Undo is provided. One active
-workflow owns each source checkout. Approved intent and idempotency keys precede
-dispatch in a private, locked, bounded registry; uncertain starts never become
-replacement workflows.
+verification, or schedules a recurring workflow through Scheduled Jobs.
+Automatic permission approvals default on and are shown before approval. A
+dedicated Git worktree starts from current saved files using private task
+snapshots for manual workflows, or from the saved local base branch resolved at
+launch for scheduled workflows; source HEAD, index and files remain unchanged.
+No automatic apply, merge, push, worktree deletion or message Undo is provided.
+One active workflow owns each source checkout across both manual and scheduled
+runs. Approved intent and idempotency keys precede dispatch in a private,
+locked, bounded registry (up to 1,000 retained entries within 16 MiB); uncertain
+starts never become replacement workflows. Scheduled workflow records carry
+read-only provenance linking back to their originating schedule and execution
+and remain viewable and interactable in Apps → Workflows with the same player
+controls as manual workflows.
 
 The native workflow engine owns task execution, independent verification,
 same-worker repair loops, fresh-session retries, steering, pause/resume, and
@@ -694,27 +700,47 @@ The renderer receives no execution configuration.
 
 ### Approved scheduled automations
 
-An Electron-independent `automation` module owns local scheduled execution, private
+An Electron-independent `automation` module owns local trigger dispatch,
+concurrency lanes and resource exclusivity, pluggable action handlers, private
 metadata, restart reconciliation and authenticated local IPC. Durable schedule
 metadata and persisted occurrence claims are approved exceptions to durable recovery
-being deferred. There is no durable task queue, catch-up, retry or exactly-once
-guarantee. Relay remains desktop-owned, not a daemon.
+being deferred. There is no durable task queue, catch-up, scheduler-level retry
+or exactly-once guarantee. Relay remains desktop-owned, not a daemon.
+
+Job definitions pair a discriminated trigger (starting with time schedules;
+extensible to future event triggers through `dispatch`) with a discriminated
+action payload. Built-in action types are `prompt` (single-turn headless agent
+execution in `automation`) and `workflow` (multi-task `WorkflowEngine` execution
+injected by `gateway` via `DesktopWorkflows`, preserving `automation`'s
+dependency boundary). Unregistered action handlers fail closed (`handler_unavailable`)
+without mutating or deleting saved jobs.
 
 Intervals are anchored elapsed time; daily/weekly schedules use a saved IANA zone.
 Skip nonexistent local times and use only the first repeated local time. Persist
-claims and advance recurrence before launch. Never replay uncertain work. Dispatch
-at most one automation globally and record busy/missed occurrences rather than queue
-them. Pause affects future runs; editing never changes an active snapshot.
+claims and advance recurrence before launch. Never replay uncertain prompt work.
+Concurrency is governed by per-action lanes (`prompt`: 1 globally; `workflow`: 2
+globally by default) and per-resource mutual exclusion (`repo:<dev>:<ino>`),
+holding lane and resource slots until terminal execution state and recording
+busy/missed occurrences rather than queueing them. Pause affects future runs;
+editing never changes an active snapshot.
 
 The service is the sole metadata writer under the private application state
-directory. Bound reads, check revisions, write atomically and hold an exclusive
-writer lock. Live or unverifiable ownership blocks recovery. Preserve history and
-worktrees. Persistence failure and low space stop dispatch.
+directory. State format 2 stores discriminated triggers, actions and execution
+artifacts while transparently upgrading legacy format 1 prompt records on load.
+Bound reads, check revisions, write atomically and hold an exclusive writer lock.
+Live or unverifiable ownership blocks recovery. Preserve history and worktrees.
+Persistence failure and low space stop dispatch.
 
-Use core headless single-turn execution with mandatory worktrees, the saved local
-base branch resolved at launch, explicit deny-by-default permissions and no MCP or
-implicit memory. Pin repository and provider identities; changes require review.
-Worktrees are not sandboxes. Never automatically merge, apply, commit or push.
+`prompt` actions use core headless single-turn execution with mandatory
+worktrees, the saved local base branch resolved at launch, explicit
+deny-by-default permissions and no MCP or implicit memory. `workflow` actions
+branch from the saved local base branch resolved at launch, expose workflow
+`autoApprove`, run with no MCP or implicit memory through `DesktopWorkflows` so
+every run is viewable and interactable in Apps → Workflows, and reconcile on
+gateway restart against `DesktopWorkflows` (re-attaching active/paused runs and
+settling already terminal runs). Pin repository and provider identities for both
+action types; changes require review. Worktrees are not sandboxes. Never
+automatically merge, apply, commit or push.
 
 Installation requires consent. Use per-user launchd or systemd
 without linger. No TCP or hosted service. Desktop controls use the automation public
