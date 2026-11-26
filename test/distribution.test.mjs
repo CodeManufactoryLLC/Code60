@@ -74,7 +74,7 @@ function value(os = "linux", arch = "x64") {
     },
   };
 }
-async function fixture(os = "linux", arch = "x64", bundleId = undefined) {
+async function fixture(os = "linux", arch = "x64") {
   const parent = await temp();
   const root = join(parent, "source");
   await mkdir(root);
@@ -102,11 +102,6 @@ async function fixture(os = "linux", arch = "x64", bundleId = undefined) {
     await mkdir(dirname(join(root, path)), { recursive: true });
     await writeFile(join(root, path), "synthetic fixture");
   }
-  if (bundleId) {
-    const bundlePath = join(root, `dist/engines/${bundleId}/bundle.json`);
-    await mkdir(dirname(bundlePath), { recursive: true });
-    await writeFile(bundlePath, JSON.stringify({ bundleId }));
-  }
   await writeFile(join(root, "package.json"), JSON.stringify({ name: "code60", version: "0.4.1" }));
   await writeFile(
     join(root, "dist/renderer/index.html"),
@@ -120,7 +115,6 @@ async function fixture(os = "linux", arch = "x64", bundleId = undefined) {
       JSON.stringify({
         ...expected,
         lockfileSha256: await sha256(join(root, "package-lock.json")),
-        ...(bundleId ? { transmissionBundle: bundleId } : {}),
         files: await inventory(root),
         ...(includeDirectories ? { directories: await inventoryDirectories(root) } : {}),
       }),
@@ -276,27 +270,14 @@ it("verifies and extracts a self-contained payload into owned staging in a path 
   expect(await readdir(result.owned)).toEqual(["application"]);
 });
 
-it("rejects undeclared engine components in a Linux payload", async () => {
+it("rejects unexpected engine bundle assets in a payload", async () => {
   const f = await fixture();
   await mkdir(join(f.root, "dist/engines/unsupported"), { recursive: true });
   await writeFile(join(f.root, "dist/engines/unsupported/engine.js"), "unsupported engine");
   await f.pack();
   await expect(
     acquirePayload(f.expected, { parent: f.parent, host, transport: f.transport }),
-  ).rejects.toThrow("undeclared Transmission bundle");
-});
-
-it("rejects a macOS payload missing its engine bundle declaration", async () => {
-  const f = await fixture();
-  Object.assign(f.expected, value("darwin", "arm64"));
-  await f.pack();
-  await expect(
-    acquirePayload(f.expected, {
-      parent: f.parent,
-      host: { platform: "darwin", arch: "arm64", versions: { node: "24.22.0" } },
-      transport: () => createReadStream(join(f.parent, f.expected.archive.name)),
-    }),
-  ).rejects.toThrow("macOS payload requires");
+  ).rejects.toThrow("legacy external engine bundles");
 });
 it.each(["hash", "size", "missing asset", "inventory", "identity", "extra file"])(
   "rejects %s without leaving owned staging",
@@ -558,7 +539,7 @@ it("round-trips empty, small, and large archive entries at custom compression le
   expect(await readFile(join(out, "run.sh"), "utf8")).toBe("#!/bin/sh\necho ok\n");
 
   const [hostOs, hostArch] = platform().split("-");
-  const f = await fixture(hostOs, hostArch, "a".repeat(64));
+  const f = await fixture(hostOs, hostArch);
   const candidate = await updateFixture(f.expected, f.parent, () => createReadStream(f.archive));
   const acquired = await acquirePayload(candidate.descriptor, {
     parent: f.parent,
@@ -567,5 +548,4 @@ it("round-trips empty, small, and large archive entries at custom compression le
   const metadata = JSON.parse(await readFile(join(acquired.root, "payload.json"), "utf8"));
   await rm(join(acquired.root, "payload.json"));
   expect(metadata.files).toEqual(await inventory(acquired.root));
-  expect(candidate.distinctEngineManifest).toBe(true);
 });

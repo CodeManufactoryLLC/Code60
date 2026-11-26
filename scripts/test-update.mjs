@@ -183,11 +183,6 @@ await runCommand(async (cancel) => {
     let beforePid = supervisor.pid();
     assert.ok(beforePid);
     const databaseHash = await sha256(custom, signal);
-    const engineBindings = {};
-    for (const version of process.platform === "linux"
-      ? ["0.1.1"]
-      : ["0.1.0-staging.18", "0.1.0-staging.20"])
-      engineBindings[version] = await readFile(join(root, "engines", `${version}.json`), "utf8");
     const requests = [];
     let announceMetadata;
     const metadataRequested = new Promise((resolveMetadata) => {
@@ -350,8 +345,6 @@ await runCommand(async (cancel) => {
     } finally {
       database.close();
     }
-    for (const [version, binding] of Object.entries(engineBindings))
-      assert.equal(await readFile(join(root, "engines", `${version}.json`), "utf8"), binding);
     const newPid = supervisor.pid();
     config.application = candidateApplication;
     await writeFile(configPath, JSON.stringify(config), { mode: 0o600 });
@@ -446,7 +439,6 @@ await runCommand(async (cancel) => {
       customDatabaseSha256: databaseHash,
       customSelectionPreserved: true,
       unrelatedPreferencesPreserved: true,
-      engineBindingsPreserved: Object.keys(engineBindings),
       cachesRemoved: true,
       noOpPreservesPid: true,
       concurrentAttemptRejectedBeforeAcquisition: true,

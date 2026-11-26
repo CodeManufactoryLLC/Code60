@@ -57,15 +57,6 @@ it("rejects execution commands and unknown flags; open requires existing enrollm
   await runManagement(["--help"], env);
   expect(String(output.mock.calls[0]?.[0])).toContain("code60 service");
   expect(String(output.mock.calls[0]?.[0])).toContain("code60 pairing");
-  expect(String(output.mock.calls[0]?.[0])).toContain("code60 workflows login");
-});
-it("workflow authentication never prompts or initializes storage without a terminal", async () => {
-  const { env, directory } = await environment();
-  Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: false });
-  await expect(runManagement(["workflows", "login"], env)).rejects.toThrow(
-    /interactive terminal|macOS Apple Silicon/,
-  );
-  expect(await readdir(directory)).toEqual([]);
 });
 
 it("exposes the default and persists consented pairing policy changes without installing a service", async () => {

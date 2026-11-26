@@ -3,6 +3,7 @@ import {
   type ApplicationClient,
   type WorkflowDraft,
   type WorkflowDraftReply,
+  type WorkflowProviderOption,
   type WorkflowRecord,
   type WorkflowRepository,
   type WorkflowReview,
@@ -11,7 +12,7 @@ import {
 import { randomId } from "./browser-platform.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { Checkbox as CarbonCheckbox } from "./carbon/choices.js";
-import { TextInput as CarbonTextInput } from "./carbon/fields.js";
+import { Select as CarbonSelect, TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { Textarea as CarbonTextArea } from "./carbon/textarea.js";
 import { ChatTurn, EmbeddedChat } from "./embedded-chat.js";
 import { Modal } from "./modal.js";
@@ -21,6 +22,8 @@ const emptyTask = () => ({ name: "", instructions: "", verify: "", checks: [] as
 export function WorkflowForm({
   api,
   initialDefinition,
+  providers,
+  defaultProvider,
   providerReady,
   active,
   onProvider,
@@ -29,6 +32,8 @@ export function WorkflowForm({
 }: {
   api: ApplicationClient;
   initialDefinition?: WorkflowRecord["definition"] | undefined;
+  providers: readonly WorkflowProviderOption[];
+  defaultProvider: string | null;
   providerReady: boolean;
   active: boolean;
   onProvider(): void;
@@ -46,6 +51,7 @@ export function WorkflowForm({
   const [draft, setDraft] = useState<WorkflowDraft>(() => ({
     name: "",
     repositoryToken: randomId(),
+    ...(defaultProvider ? { provider: defaultProvider } : {}),
     tasks: [emptyTask()],
     repairs: 2,
     retries: 2,
@@ -158,6 +164,19 @@ export function WorkflowForm({
       }
     }
   };
+  useEffect(() => {
+    if (!draft.provider && defaultProvider) {
+      setDraft((current) =>
+        current.provider ? current : { ...current, provider: defaultProvider },
+      );
+    }
+  }, [draft.provider, defaultProvider]);
+  const selectedProvider = draft.provider ?? defaultProvider ?? "";
+  const readyProviders = providers.filter((p) => p.ready);
+  const providerLabel = (id: string | undefined) => {
+    if (!id) return "No verified provider";
+    return providers.find((p) => p.id === id)?.name ?? id;
+  };
   const closeChat = () => {
     cancelDraft();
     setChat(false);
@@ -180,6 +199,27 @@ export function WorkflowForm({
             maxLength={160}
             onChange={(event) => change({ ...draft, name: event.target.value })}
           />
+        </div>
+        <div className="workflow-actions">
+          <CarbonSelect
+            id={`${formId}-provider`}
+            labelText="Provider"
+            value={selectedProvider}
+            disabled={!readyProviders.length}
+            onChange={(event) => change({ ...draft, provider: event.target.value || undefined })}
+          >
+            {!readyProviders.length && <option value="">No verified provider</option>}
+            {providers.map((provider) => (
+              <option key={provider.id} value={provider.id} disabled={!provider.ready}>
+                {provider.ready ? provider.name : `${provider.name} (connect in Providers)`}
+              </option>
+            ))}
+          </CarbonSelect>
+          {!readyProviders.length && (
+            <AppButton type="button" onClick={onProvider}>
+              Connect a provider
+            </AppButton>
+          )}
         </div>
         <div className="workflow-actions">
           <AppButton
@@ -336,12 +376,9 @@ export function WorkflowForm({
             <dt>Baseline</dt>
             <dd>Current saved files</dd>
             <dt>Execution</dt>
-            <dd>Dedicated worktree; continues after Code60 quits</dd>
-            <dt>Workflow provider</dt>
-            <dd>
-              Use <code>code60 workflows login</code> in a terminal if Codex authentication is
-              needed. Code60 provider connections are separate.
-            </dd>
+            <dd>Dedicated worktree; continues while the browser is closed</dd>
+            <dt>Provider</dt>
+            <dd>{providerLabel(review.draft.provider)}</dd>
             <dt>Automatic permission approvals</dt>
             <dd>{review.draft.autoApprove ? "Enabled" : "Disabled"}</dd>
             <dt>Repairs / retries</dt>

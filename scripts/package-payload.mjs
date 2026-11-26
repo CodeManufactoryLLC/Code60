@@ -1,15 +1,5 @@
 import { execFile } from "node:child_process";
-import {
-  cp,
-  mkdir,
-  mkdtemp,
-  readdir,
-  readFile,
-  rename,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -89,13 +79,6 @@ export async function packagePayload(root, { signal } = {}) {
       { cwd: temporary, env, signal, timeout: 120_000, maxBuffer: 2 * 1024 ** 2 },
     );
     const runtime = { node: nodeRange, libc: process.platform === "linux" ? "glibc" : null };
-    let transmissionBundle;
-    {
-      const bundles = await readdir(join(application, "dist/engines"));
-      if (bundles.length !== 1 || !/^[a-f0-9]{64}$/.test(bundles[0]))
-        throw Error("Platform payload requires its verified Transmission bundle");
-      transmissionBundle = bundles[0];
-    }
     const metadata = {
       schemaVersion: 1,
       version: manifest.version,
@@ -106,7 +89,6 @@ export async function packagePayload(root, { signal } = {}) {
       runtime,
       builtWithNode: process.version,
       lockfileSha256: await sha256(join(application, "package-lock.json")),
-      ...(transmissionBundle ? { transmissionBundle } : {}),
       files: await inventory(application),
       directories: await inventoryDirectories(application),
     };

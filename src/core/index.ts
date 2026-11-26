@@ -37,7 +37,7 @@ import {
 } from "./types.js";
 import { CODE60_VERSION } from "./version.js";
 
-export type { AgentMcpServer } from "../agents/index.js";
+export type { AgentMcpServer, AgentSpec } from "../agents/index.js";
 export { ACP_PROTOCOL_VERSION } from "../agents/index.js";
 export { defaultableSelections } from "../contracts/index.js";
 export type {
@@ -470,3 +470,8 @@ export { createRecordStore, directoryRunsDir } from "./records.js";
 export { summarizeSearch } from "./search-summary.js";
 
 export { draftWorkflow } from "./workflow-draft.js";
+export {
+  WorkflowEngine,
+  WorkflowProviderError,
+  type WorkflowProviderResolver,
+} from "./workflow-engine.js";

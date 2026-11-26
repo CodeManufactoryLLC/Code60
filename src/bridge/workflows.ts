@@ -5,6 +5,7 @@ export type {
   WorkflowDraftReply,
   WorkflowEvent,
   WorkflowList,
+  WorkflowProviderOption,
   WorkflowRead,
   WorkflowRecord,
   WorkflowRepository,
@@ -13,13 +14,9 @@ export type {
   WorkflowSnapshot,
 } from "../contracts/index.js";
 export {
-  defaultWorkflowEngine,
-  LEGACY_TRANSMISSION_VERSION,
-  supportsWorkflowPause,
   workflowDiffSchema,
   workflowDraftReplySchema,
   workflowDraftSchema,
-  workflowEngineVersion,
   workflowEventsSchema,
   workflowSnapshotSchema,
   workflowVerdictSchema,

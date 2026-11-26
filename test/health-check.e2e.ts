@@ -49,12 +49,12 @@ test("browser: Health Check runs passive checks, supports granular rechecks and 
     // Progress bar above the System Health tile shows completed count, percentage, and proportional status segments.
     const progress = page.locator(".health-progress-section");
     await expect(progress).toBeVisible();
-    await expect(progress.locator(".health-progress-numbers")).toContainText("19 of 20");
-    await expect(progress.locator(".health-progress-numbers")).toContainText("95%");
-    await expect(progress.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "19");
-    await expect(progress.getByRole("progressbar")).toHaveAttribute("aria-valuemax", "20");
+    await expect(progress.locator(".health-progress-numbers")).toContainText("17 of 18");
+    await expect(progress.locator(".health-progress-numbers")).toContainText("94%");
+    await expect(progress.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "17");
+    await expect(progress.getByRole("progressbar")).toHaveAttribute("aria-valuemax", "18");
     await expect(progress.locator('[data-segment="healthy"]')).toBeVisible();
-    await expect(progress.locator('[data-segment="warning"]')).toBeVisible();
+    await expect(progress.locator('[data-segment="not_configured"]')).toBeVisible();
 
     // System Health tile displays Carbon IconIndicator status metrics, last completed timestamp, and one completion toast.
     const kpiGrid = page.getByLabel("Health status breakdown");

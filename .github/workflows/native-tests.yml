@@ -43,14 +43,14 @@ jobs:
         run: brew install fish
       - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-shell')
         run: npm run test:installation -- --require-fish
-      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-engines') || contains(fromJSON(inputs.suites), 'mac-payload') || contains(fromJSON(inputs.suites), 'mac-setup') || contains(fromJSON(inputs.suites), 'mac-update') || contains(fromJSON(inputs.suites), 'mac-uninstall')
+      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-payload') || contains(fromJSON(inputs.suites), 'mac-setup') || contains(fromJSON(inputs.suites), 'mac-update') || contains(fromJSON(inputs.suites), 'mac-uninstall')
         run: npm run package:payload
       - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-payload')
         run: npm run test:payload
       - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-setup')
         run: npm run test:setup
       - uses: actions/upload-artifact@v7.0.2
-        if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-engines') || contains(fromJSON(inputs.suites), 'mac-payload') || contains(fromJSON(inputs.suites), 'mac-setup') || contains(fromJSON(inputs.suites), 'mac-update') || contains(fromJSON(inputs.suites), 'mac-uninstall')
+        if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-payload') || contains(fromJSON(inputs.suites), 'mac-setup') || contains(fromJSON(inputs.suites), 'mac-update') || contains(fromJSON(inputs.suites), 'mac-uninstall')
         with:
           name: code60-darwin-payload
           path: release/payloads/
@@ -65,7 +65,6 @@ jobs:
             test-results/setup/
             test-results/update/
             test-results/payload/
-            test-results/transmission-native/
           retention-days: 7
           if-no-files-found: warn
       - uses: actions/upload-artifact@v7.0.2
@@ -80,7 +79,7 @@ jobs:
   workflows:
     name: Native installed workflows (${{ matrix.name }})
     needs: test
-    if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-update') || contains(fromJSON(inputs.suites), 'mac-engines')
+    if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), 'mac-update')
     runs-on: macos-15
     timeout-minutes: 35
     strategy:
@@ -91,15 +90,6 @@ jobs:
           - name: update
             suite: mac-update
             command: npm run test:update
-          - name: regressions
-            suite: mac-engines
-            command: npm run test:transmission -- --grep-invert 'native update:' --output test-results/transmission-native/regressions
-          - name: update-1
-            suite: mac-engines
-            command: npm run test:transmission -- --grep 'native update:' --fully-parallel --shard=1/2 --output test-results/transmission-native/update-1
-          - name: update-2
-            suite: mac-engines
-            command: npm run test:transmission -- --grep 'native update:' --fully-parallel --shard=2/2 --output test-results/transmission-native/update-2
     steps:
       - uses: actions/checkout@v7
         with:
@@ -125,8 +115,6 @@ jobs:
       - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
         run: npm run build
       - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
-        run: npm run prepare:engines
-      - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
         run: npx --no-install playwright install chromium
       - if: contains(fromJSON(inputs.suites), 'mac-full') || contains(fromJSON(inputs.suites), matrix.suite)
         name: Run complete native journey
@@ -138,7 +126,6 @@ jobs:
           path: |
             test-results/artifact-handoff/
             test-results/update/
-            test-results/transmission-native/
           retention-days: 7
           if-no-files-found: warn
   uninstall:
@@ -166,7 +153,6 @@ jobs:
       - run: npm run build:distribution
       - run: npx --no-install playwright install chromium
       - run: npm run test:uninstall
-      - run: npm run test:uninstall:engines
       - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
@@ -174,6 +160,5 @@ jobs:
           path: |
             test-results/artifact-handoff/
             test-results/uninstall/
-            test-results/uninstall-engines/
           retention-days: 7
           if-no-files-found: warn

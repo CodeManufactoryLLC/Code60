@@ -80,14 +80,6 @@ They must never require live agents or credentials.
 assets, foreground backend and offline embedding model without service enrollment.
 `npm run test:rag:model` exercises the actual offline model and worker lifecycle.
 
-For Transmission development on native macOS arm64, run `npm run prepare:engines`
-after building to stage both pinned engines and their native Codex dependency from
-the separate committed lockfile. A full build clears these generated assets.
-Packaging prepares them automatically on macOS; Linux omits them. After native
-packaging, `npm run test:transmission` runs the real engine/ACP/Codex browser
-journey with an isolated fake model endpoint, never a live provider. It retains
-traces, identities and process cleanup evidence under `test-results/transmission-native`.
-
 For independent Linux installation acceptance, build the tarball and run
 `npm run test:packaged:clean` on the host. The [clean-install guide](test/clean-install/README.md)
 describes the fresh customer environment, separate browser driver, online installation
@@ -476,13 +468,9 @@ share the Node-only platform verifier without importing development dist.
 
 Follow [uninstall and recovery](docs/distribution/uninstall.md) and the QA workflow's
 state-preserving uninstall journey. Component tests cover owned file inventories,
-profile consent, guarded shutdown and the standalone recovery launcher. After a
-build, `npm run test:uninstall:engines` additionally checks actual empty bundled
-native engines and retained cache/history with a synthetic inert app; it is not
-full packaged application or native login-service validation. Supply an exact
-macOS descriptor as its optional argument. Never point tests at a real user
-service or profiles. Full installed golden/reinstall and isolated Linux/native
-delivery evidence remain required before Phase 8 is complete.
+profile consent, guarded shutdown and the standalone recovery launcher. Never point
+tests at a real user service or profiles. Full installed golden/reinstall and
+isolated Linux/native delivery evidence remain required before Phase 8 is complete.
 
 Run `npm run test:uninstall` against the native payload and
 `npm run test:packaged:clean -- --uninstall release/payloads/linux-x64.json`

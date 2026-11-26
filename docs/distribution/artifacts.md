@@ -114,22 +114,6 @@ Phase 5 adds the private candidate setup command; see [setup behavior](setup.md)
 The bootstrap remains dependency-free and below 1 MiB, with no production URL
 override, install hooks or publishing action.
 
-## Pinned workflow components
-
-macOS packaging additionally stages the two supported Transmission artifacts from
-`distribution/transmission/package-lock.json` into a fresh tree with scripts
-disabled. It verifies the prebuilt Apple Silicon Codex runtime before archiving,
-records exact package integrities, dependency inventory, native hashes, Node and
-lockfile identity, and includes dependency notices. These pinned releases have no
-native helper sources requiring compilation. Do not substitute helpers or APIs
-from the newer Transmission repository. Linux x64 payloads stage the pinned Transmission 0.1.1 tarball from `distribution/transmission-linux` with the Linux Codex executable. The lock records the candidate integrity. The bundle records the dependency inventory and native binary digest.
-
-Exclude dependency `.npmignore` and `.gitignore` metadata before recording the
-engine inventory, since npm strips or renames it when repacking. The installed
-npm-package smoke verifies both preserved engine bindings without launching them.
-
-Runtime acquisition is forbidden: installation and explicit workflow start may
-preserve verified local bundled files in independent engine storage, without npm,
-compilation or a public transport override. Immutable version bindings keep
-staging.18 and staging.20 routing separate from application activation. Preserve
-published bundles and old executable caches if setup fails or an app is replaced.
+Workflows run natively inside Code60 Gateway using Code60's verified ACP providers
+and local `node:sqlite`; payloads ship no external workflow engine bundle or
+provider binary.

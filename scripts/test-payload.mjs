@@ -31,11 +31,9 @@ const terminate = () => {
 process.once("SIGINT", interrupt);
 process.once("SIGTERM", terminate);
 try {
-  const workflows = process.argv[2] === "--workflows";
-  if (process.argv.length > (workflows ? 4 : 3))
-    throw new Error("Use npm run test:payload -- [--workflows] [descriptor.json]");
+  if (process.argv.length > 3) throw new Error("Use npm run test:payload -- [descriptor.json]");
   const input = resolve(
-    process.argv[workflows ? 3 : 2] ?? join(repository, "release/payloads", `${platform()}.json`),
+    process.argv[2] ?? join(repository, "release/payloads", `${platform()}.json`),
   );
   const descriptor = JSON.parse(await readFile(input, "utf8"));
   await mkdir(output, { recursive: true, mode: 0o700 });
@@ -45,29 +43,6 @@ try {
     signal: controller.signal,
     transport: () => createReadStream(join(dirname(input), descriptor.archive.name)),
   });
-  if (workflows) {
-    const result = await execute(
-      process.execPath,
-      [
-        join(repository, "node_modules/@playwright/test/cli.js"),
-        "test",
-        "--config",
-        "test/transmission-native.config.ts",
-        "transmission-native.e2e.ts",
-        "--output",
-        join(output, "workflow"),
-      ],
-      {
-        cwd: repository,
-        env: { ...process.env, CODE60_TEST_INSTALLED_ROOT: candidate.root },
-        signal: controller.signal,
-        timeout: 360_000,
-        maxBuffer: 4194304,
-      },
-    ).catch((error) => error);
-    await writeFile(join(output, "workflow.log"), result.stdout + result.stderr);
-    if (result instanceof Error) throw result;
-  }
   const home = join(temporary, "home");
   await mkdir(home, { mode: 0o700 });
   const env = {

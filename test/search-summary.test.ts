@@ -23,7 +23,7 @@ const request = (): SearchSummaryRequest => ({
 
 describe("search summary", () => {
   it("uses one evidence-only session, denies permissions, ignores thoughts and always stops", async () => {
-    let permission: Promise<string> | undefined;
+    let permission: Promise<unknown> | undefined;
     const agents = new FakeAgents((_, session) => {
       permission = session.requestPermission({ toolCallId: "edit", title: "Edit", kind: "edit" });
       session.update({ type: "thought", text: "private reasoning" });

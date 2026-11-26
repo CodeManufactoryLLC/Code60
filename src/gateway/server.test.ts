@@ -798,7 +798,6 @@ it("prepares uninstall only with private authentication and no payload, then kee
   expect(await managementRequest(env, "prepare-uninstall")).toEqual({
     quiescent: true,
     pid: process.pid,
-    enginePids: [],
   });
   expect((await fetch(`${gateway.origin}/api/connection`)).status).toBe(503);
   expect(await managementRequest(env, "status")).toMatchObject({
@@ -809,21 +808,20 @@ it("prepares uninstall only with private authentication and no payload, then kee
   expect(await managementRequest(env, "prepare-uninstall")).toEqual({
     quiescent: true,
     pid: process.pid,
-    enginePids: [],
   });
   expect(await managementRequest(env, "shutdown")).toEqual({ stopped: true });
 });
 
-it("releases all idle reservations when native state is uncertain, preserving a usable backend", async () => {
+it("releases all idle reservations when workflow state is uncertain, preserving a usable backend", async () => {
   const { env, directory, gateway } = await fixture();
-  const state = join(directory, "state/code60/workflows/transmission-0.1.0-staging.20");
+  const state = join(directory, "state/code60/workflows");
   await mkdir(state, { recursive: true, mode: 0o700 });
-  await writeFile(join(state, "evidence.txt"), "retained fixture evidence", { mode: 0o600 });
+  await writeFile(join(state, "registry.json"), "{corrupt-workflow-state", { mode: 0o600 });
   await expect(managementRequest(env, "prepare-uninstall")).rejects.toThrow(
-    /uncertain|cannot be verified/,
+    /unavailable|uncertain|cannot be verified/,
   );
-  expect(await readFile(join(state, "evidence.txt"), "utf8")).toBe("retained fixture evidence");
-  expect(await readdir(state)).toEqual(["evidence.txt"]);
+  expect(await readFile(join(state, "registry.json"), "utf8")).toBe("{corrupt-workflow-state");
+  expect(await readdir(state)).toEqual(["registry.json"]);
   expect((await fetch(`${gateway.origin}/api/connection`)).status).toBe(200);
   expect((await managementRequest(env, "status")).uninstallPrepared).toBe(false);
   expect(await managementRequest(env, "prepare-database")).toEqual({ state: "ready" });
@@ -858,8 +856,6 @@ it("refuses simultaneous uninstall preparation and returns an immutable complete
   const first = await preparing;
   try {
     expect(await managementRequest(f.env, "prepare-uninstall")).toEqual(first);
-    (first.enginePids as number[]).push(123);
-    expect((await managementRequest(f.env, "prepare-uninstall")).enginePids).toEqual([]);
     expect(spy).toHaveBeenCalledOnce();
   } finally {
     spy.mockRestore();
