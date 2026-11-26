@@ -259,8 +259,6 @@ dialog::backdrop {
   font-weight: 700;
   --text: var(--card-header-text);
   --muted: var(--card-header-muted);
-  --focus-line: var(--card-header-text);
-  --focus-outline: var(--card-header-text);
   --accent: var(--card-header-text);
   --hover-bg: var(--card-header-hover);
   --accent-bg: var(--card-header-hover);

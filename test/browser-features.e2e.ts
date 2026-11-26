@@ -1626,3 +1626,181 @@ test("browser: the worker prompt line owns its permission decision and follow-up
     await fixture.close();
   }
 });
+
+test("browser: removes focus highlight borders across Carbon controls, shadow chat, and settings", async ({
+  browser,
+}) => {
+  const fixture = await browserApp(browser);
+  try {
+    const { page } = await fixture.open();
+    await start(page, fixture.directory);
+    await page.evaluate(() => localStorage.setItem("code60.focusHighlight", "on"));
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1, name: "Relay", exact: true })).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.dataset.focusHighlight),
+    ).toBeUndefined();
+
+    const expectNoFocusBorder = async (label: string) => {
+      const samples = await page.evaluate(
+        () =>
+          new Promise<
+            {
+              frame: number;
+              tag: string;
+              className: string;
+              outlineStyle: string;
+              outlineWidth: string;
+              outlineColor: string;
+              boxShadow: string;
+            }[]
+          >((resolve) => {
+            const results: {
+              frame: number;
+              tag: string;
+              className: string;
+              outlineStyle: string;
+              outlineWidth: string;
+              outlineColor: string;
+              boxShadow: string;
+            }[] = [];
+            let frame = 0;
+            const capture = () => {
+              let active: Element | null = document.activeElement;
+              while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+              if (active) {
+                const style = getComputedStyle(active);
+                results.push({
+                  frame,
+                  tag: active.tagName.toLowerCase(),
+                  className: typeof active.className === "string" ? active.className : "",
+                  outlineStyle: style.outlineStyle,
+                  outlineWidth: style.outlineWidth,
+                  outlineColor: style.outlineColor,
+                  boxShadow: style.boxShadow,
+                });
+              }
+              frame += 1;
+              if (frame < 8) requestAnimationFrame(capture);
+              else resolve(results);
+            };
+            capture();
+          }),
+      );
+      expect(samples.length, `${label}: expected an active element`).toBeGreaterThan(0);
+      for (const state of samples) {
+        const outlineInvisible =
+          state.outlineStyle === "none" ||
+          state.outlineWidth === "0px" ||
+          state.outlineColor === "rgba(0, 0, 0, 0)";
+        expect(
+          outlineInvisible,
+          `${label} frame ${state.frame} outline: ${JSON.stringify(state)}`,
+        ).toBe(true);
+        expect(state.boxShadow, `${label} frame ${state.frame} box-shadow`).not.toMatch(
+          /inset 0px 0px 0px [12]px/,
+        );
+      }
+    };
+
+    const verifySurface = async (scheme: "light" | "dark") => {
+      await expandNavigation(page, "Personalize");
+      const appearanceTab = page.getByRole("tab", { name: "Appearance", exact: true });
+      await appearanceTab.click();
+      await expectNoFocusBorder(`${scheme} sidebar Appearance tab (click)`);
+      await appearanceTab.focus();
+      await expectNoFocusBorder(`${scheme} sidebar Appearance tab (focus)`);
+
+      const appearancePanel = page.locator("#panel-settings-appearance");
+      await expect(appearancePanel).toBeVisible();
+      await expect(
+        appearancePanel.getByRole("switch", { name: "Focus highlight border" }),
+      ).toHaveCount(0);
+
+      const themeSelect = appearancePanel.getByLabel("Theme", { exact: true });
+      await themeSelect.selectOption(scheme);
+      await expect(page.locator("html")).toHaveAttribute("data-color-scheme", scheme);
+      await themeSelect.focus();
+      await expectNoFocusBorder(`${scheme} Theme select`);
+
+      const signalsSwitch = appearancePanel.getByRole("switch", { name: "Signal colors" });
+      await signalsSwitch.focus();
+      await signalsSwitch.press("Space");
+      await expectNoFocusBorder(`${scheme} Signal colors switch`);
+      const switchAfterOutline = await appearancePanel
+        .locator(".cds--toggle__switch")
+        .first()
+        .evaluate((el) => {
+          const after = getComputedStyle(el, "::after");
+          return {
+            style: after.outlineStyle,
+            width: after.outlineWidth,
+            color: after.outlineColor,
+          };
+        });
+      expect(
+        switchAfterOutline.style === "none" ||
+          switchAfterOutline.width === "0px" ||
+          switchAfterOutline.color === "rgba(0, 0, 0, 0)",
+        `${scheme} Carbon switch ::after outline: ${JSON.stringify(switchAfterOutline)}`,
+      ).toBe(true);
+      await signalsSwitch.press("Space");
+
+      const headerBrand = page.getByRole("link", { name: "Code60", exact: true });
+      await headerBrand.focus();
+      await expectNoFocusBorder(`${scheme} header brand link`);
+
+      const commandsButton = page.getByRole("button", { name: "Commands", exact: true });
+      await commandsButton.click();
+      const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
+      await expect(palette).toBeVisible();
+      const paletteInput = palette.getByRole("combobox");
+      await paletteInput.fill("Focus highlight");
+      await expect(palette.getByRole("option", { name: /Focus highlight/i })).toHaveCount(0);
+      await expectNoFocusBorder(`${scheme} command palette input`);
+      await page.keyboard.press("Escape");
+      await expect(palette).toBeHidden();
+
+      const workspaceButton = page.getByRole("button", { name: "Workspace", exact: true });
+      await workspaceButton.click();
+      const workspaceDialog = page.getByRole("dialog", { name: "Workspace", exact: true });
+      await expect(workspaceDialog).toBeVisible();
+      const closeModal = workspaceDialog.locator(".cds--modal-close");
+      await closeModal.focus();
+      await expectNoFocusBorder(`${scheme} modal close button`);
+      await page.keyboard.press("Escape");
+      await expect(workspaceDialog).toBeHidden();
+
+      await page.getByRole("button", { name: "Relay", exact: true }).click();
+      const chat = page.locator(".orchestration-chat-page:visible");
+      const input = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
+      await input.click();
+      await expectNoFocusBorder(`${scheme} AI Chat composer input`);
+      await input.fill("Focus check");
+      const sendButton = chat.getByRole("button", { name: "Send", exact: true });
+      await sendButton.focus();
+      await expectNoFocusBorder(`${scheme} AI Chat shadow Send button`);
+      const modelButton = chat.getByRole("button", { name: "Model", exact: true });
+      await modelButton.focus();
+      await expectNoFocusBorder(`${scheme} chat Model button`);
+      const approvalButton = chat.getByRole("button", {
+        name: "Code60 auto-approval",
+        exact: true,
+      });
+      await approvalButton.focus();
+      await expectNoFocusBorder(`${scheme} chat auto-approval button`);
+      const filesToggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
+      await filesToggle.focus();
+      await expectNoFocusBorder(`${scheme} Toggle files panel button`);
+      await input.fill("");
+
+      await page.keyboard.press("Tab");
+      await expectNoFocusBorder(`${scheme} keyboard Tab focus`);
+    };
+
+    await verifySurface("light");
+    await verifySurface("dark");
+  } finally {
+    await fixture.close();
+  }
+});

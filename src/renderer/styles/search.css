@@ -141,13 +141,6 @@
   background: transparent;
 }
 
-.search-results .search-result-title:focus-visible,
-.search-overview .search-citation:focus-visible {
-  outline: 2px solid var(--focus-outline);
-  outline-offset: 3px;
-  box-shadow: var(--focus-shadow);
-}
-
 .search-overview .search-citation {
   display: inline;
   margin-inline: 2px;

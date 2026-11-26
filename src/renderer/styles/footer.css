@@ -86,12 +86,6 @@
   white-space: nowrap;
 }
 
-.poll-timestamp:focus-visible {
-  outline: 2px solid var(--focus-outline);
-  outline-offset: 2px;
-  box-shadow: var(--focus-shadow);
-}
-
 .footer-sidebar > .footer-polling {
   flex: 1;
 }

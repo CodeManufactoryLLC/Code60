@@ -347,11 +347,6 @@ label.check-label {
   background: var(--hover-bg);
 }
 
-.actions-menu [role="menuitem"]:focus-visible {
-  outline: 2px solid var(--focus-outline);
-  outline-offset: -3px;
-}
-
 .actions-menu [role="menuitem"].danger-text {
   color: var(--destructive);
 }
@@ -398,11 +393,6 @@ label.check-label {
   background: var(--primary);
   color: var(--primary-text);
   border-color: var(--control-border);
-}
-
-.neo-dropdown-menu [role^="menuitem"]:focus-visible {
-  outline: 2px solid var(--primary-text);
-  outline-offset: -4px;
 }
 
 /* Tooltip: inverted, with a muted-yellow top edge and a stem toward its control. */
@@ -482,12 +472,6 @@ label.check-label {
 .command-palette .palette-input input:focus-visible {
   outline: 0;
   box-shadow: none;
-}
-
-.command-palette .palette-input:has(input:focus-visible) {
-  outline: 2px solid var(--focus-outline);
-  outline-offset: -3px;
-  box-shadow: var(--focus-inset-shadow);
 }
 
 .command-palette [role="listbox"] {

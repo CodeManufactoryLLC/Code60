@@ -139,14 +139,6 @@
   box-shadow: none;
 }
 
-.prompt-editor-input:has(textarea:focus-visible) {
-  outline: 2px solid var(--focus-outline);
-  outline-offset: -3px;
-  box-shadow:
-    var(--focus-inset-shadow),
-    inset 0 -1px var(--control-border);
-}
-
 .prompt-editor-input[data-invalid="true"] {
   border-bottom: 2px solid var(--danger);
 }

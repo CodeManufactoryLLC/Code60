@@ -76,8 +76,8 @@
     --success: var(--cds-support-success);
     --warning-bg: var(--cds-layer-01);
     --warning-text: var(--cds-support-warning-inverse);
-    --focus-line: var(--cds-focus);
-    --focus-outline: var(--cds-focus);
+    --focus-line: var(--cds-link-primary);
+    --focus-outline: transparent;
     --card-shadow: none;
     --overlay-shadow: none;
     --button-shadow: none;
@@ -278,7 +278,6 @@
         user-select: none;
         &[data-hovered] { background: var(--cds-layer-hover); }
         &[data-selected] { background: var(--cds-layer-selected); box-shadow: inset 3px 0 var(--cds-border-interactive); }
-        &[data-focus-visible] { outline: 2px solid var(--cds-focus); outline-offset: -2px; }
         .file-entry-name { white-space: normal; overflow-wrap: anywhere; }
       }
       .picker-filename, [role='status'], [role='alert'] { margin-block-start: space.$spacing-05; }
@@ -517,7 +516,6 @@
     .chat-sidebar-entry .chat-sidebar-artwork {display:none;}
     .page-tab button[aria-selected=true],button[aria-current=true] {background:var(--cds-layer-selected-01);box-shadow:inset 3px 0 var(--cds-border-interactive);}
     button:not(:disabled):hover {background:var(--cds-layer-hover-01);}
-    .cds--btn:focus-visible {outline:2px solid var(--cds-focus);outline-offset:-2px;}
 
     .cds--side-nav__submenu {
       @include type.type-style('heading-compact-02');
@@ -631,5 +629,160 @@
   #app-updates .settings-card p {
     margin: 0 0 space.$spacing-05;
     max-inline-size: 70ch;
+  }
+}
+
+@layer carbon-app {
+  // Suppress all Carbon focus outlines, focus borders, focus inset shadows, and outline transition flashes.
+  .carbon-app {
+    // Keep outline width 0 and color transparent at rest on Carbon controls so transitioning to
+    // :focus/:active never interpolates from `2px solid transparent` to `3px none currentColor`.
+    :is(
+        .cds--btn,
+        .cds--side-nav__submenu,
+        .cds--side-nav__link,
+        .cds--side-nav a.cds--header__menu-item,
+        .cds--overflow-menu,
+        .cds--overflow-menu__trigger,
+        .cds--overflow-menu-options__btn,
+        .cds--tabs__nav-link,
+        .cds--tabs__nav-item--close-icon,
+        .cds--text-input,
+        .cds--text-area,
+        .cds--select-input,
+        .cds--search-input,
+        .cds--search-close,
+        .cds--search-button,
+        .cds--list-box__field,
+        .cds--list-box__menu-item__option,
+        .cds--dropdown,
+        .cds--table-sort,
+        .cds--pagination__button,
+        .cds--unstable-pagination__button,
+        .cds--inline-notification__close-button,
+        .cds--toast-notification__close-button,
+        .cds--actionable-notification__close-button,
+        .cds--accordion__heading,
+        .cds--accordion__arrow
+      ):not([data-invalid], .cds--text-input--invalid, .cds--text-area--invalid) {
+      outline: none;
+      outline-width: 0;
+      outline-color: transparent;
+    }
+
+    :is(:focus, :focus-visible),
+    .cds--checkbox:focus + .cds--checkbox-label::before,
+    .cds--checkbox-label__focus::before,
+    .cds--checkbox:checked:focus + .cds--checkbox-label::before,
+    .cds--checkbox:indeterminate:focus + .cds--checkbox-label::before,
+    .cds--radio-button:focus + .cds--radio-button__label .cds--radio-button__appearance,
+    .cds--toggle__button:focus + .cds--toggle__label .cds--toggle__switch::after,
+    .cds--toggle:not(.cds--toggle--disabled):active .cds--toggle__switch::after,
+    .cds--tile-input:focus + .cds--tile,
+    .cds--tabs__nav-link:is(:focus, :focus-visible, :active),
+    .cds--tabs__nav-item--close-icon:is(:focus, :focus-visible, :active),
+    .cds--side-nav__submenu:is(:focus, :focus-visible, :active),
+    .cds--side-nav__link:is(:focus, :focus-visible, :active),
+    .cds--overflow-menu:is(:focus, :focus-visible, :active),
+    .cds--overflow-menu__trigger:is(:focus, :focus-visible, :active),
+    .cds--overflow-menu-options__btn:is(:focus, :focus-visible, :active),
+    .cds--popover--tab-tip__button:is(:focus, :focus-visible, :active),
+    .cds--definition-term:is(:focus, :focus-visible, :active),
+    .cds--text-input:is(:focus, :focus-visible, :active),
+    .cds--text-area:is(:focus, :focus-visible, :active),
+    .cds--select-input:is(:focus, :focus-visible, :active),
+    .cds--search-input:is(:focus, :focus-visible, :active),
+    .cds--search-close:is(:focus, :focus-visible, :active),
+    .cds--search-button:is(:focus, :focus-visible, :active),
+    .cds--list-box__field:is(:focus, :focus-visible, :active),
+    .cds--dropdown:is(:focus, :focus-visible, :active),
+    .cds--tile--clickable:is(:focus, :focus-visible, :active),
+    .cds--tile--selectable:is(:focus, :focus-visible, :active),
+    .cds--tag--interactive:is(:focus, :focus-visible, :active),
+    .cds--inline-notification a:is(:focus, :focus-visible, :active),
+    .cds--toast-notification a:is(:focus, :focus-visible, :active),
+    .cds--actionable-notification a:is(:focus, :focus-visible, :active),
+    .cds--inline-notification__close-button:is(:focus, :focus-visible, :active),
+    .cds--toast-notification__close-button:is(:focus, :focus-visible, :active),
+    .cds--actionable-notification__close-button:is(:focus, :focus-visible, :active),
+    .cds--inline-notification__action-button.cds--btn--ghost:is(:focus, :focus-visible, :active),
+    .cds--actionable-notification__action-button.cds--btn--ghost:is(:focus, :focus-visible, :active),
+    .cds--action-list .cds--btn--primary:is(:focus, :focus-visible, :active),
+    .cds--batch-summary .cds--btn--primary:is(:focus, :focus-visible, :active) {
+      outline: none;
+      outline-width: 0;
+      outline-color: transparent;
+    }
+
+    .cds--btn:is(:focus, :focus-visible, :active):not(:disabled, .cds--btn--disabled),
+    .cds--btn--icon-only.cds--btn--ghost:is(:focus, :focus-visible, :active):not(
+        :disabled,
+        .cds--btn--disabled
+      ),
+    .cds--actionable-notification:not(.cds--actionable-notification--low-contrast)
+      .cds--actionable-notification__action-button.cds--btn--tertiary:is(
+        :focus,
+        :focus-visible,
+        :active
+      ),
+    .cds--overflow-menu-options__option--danger
+      .cds--overflow-menu-options__btn:is(:focus, :focus-visible, :active),
+    .cds--accordion__heading:is(:focus, :focus-visible, :active),
+    .cds--table-expand__button:is(:focus, :focus-visible, :active),
+    .cds--slider__thumb:is(:focus, :focus-visible, :active),
+    .cds--tag__close-icon:is(:focus, :focus-visible, :active) {
+      outline: none;
+      outline-width: 0;
+      outline-color: transparent;
+      box-shadow: none;
+    }
+
+    .cds--btn:is(
+        .cds--btn--primary,
+        .cds--btn--secondary,
+        .cds--btn--ghost,
+        .cds--btn--danger,
+        .cds--btn--danger--ghost
+      ):is(:focus, :focus-visible, :active):not(:disabled, .cds--btn--disabled),
+    .cds--modal-close:is(:focus, :focus-visible, :active),
+    .cds--dialog__close:is(:focus, :focus-visible, :active),
+    .cds--header__action:is(:focus, :focus-visible, :active),
+    a.cds--header__name:is(:focus, :focus-visible, :active),
+    a.cds--header__menu-item:is(:focus, :focus-visible, :active),
+    a.cds--header__menu-item[aria-current='page']:is(:focus, :focus-visible, :active),
+    a.cds--header__menu-item.cds--header__menu-item--current:is(:focus, :focus-visible, :active),
+    .cds--skip-to-content:is(:focus, :focus-visible, :active) {
+      outline: none;
+      outline-width: 0;
+      outline-color: transparent;
+      border-color: transparent;
+      box-shadow: none;
+    }
+
+    .cds--btn--tertiary:is(:focus, :focus-visible, :active):not(:disabled, .cds--btn--disabled) {
+      border-color: var(--cds-button-tertiary);
+    }
+
+    .cds--btn--danger--tertiary:is(:focus, :focus-visible, :active):not(
+        :disabled,
+        .cds--btn--disabled
+      ) {
+      border-color: var(--cds-button-danger-secondary);
+    }
+
+    .product-navigation .page-tab button[aria-selected='true']:is(:focus, :focus-visible, :active),
+    .product-navigation button[aria-current='true']:is(:focus, :focus-visible, :active),
+    .prompt-editor-list .cds--btn[aria-current='true']:is(:focus, :focus-visible, :active) {
+      box-shadow: inset 3px 0 var(--cds-border-interactive);
+    }
+
+    .product-navigation
+      :is([role='tab'][aria-selected='true'], [aria-current='page'], [aria-current='true']):is(
+        :focus,
+        :focus-visible,
+        :active
+      ) {
+      border-inline-start-color: var(--cds-border-interactive);
+    }
   }
 }

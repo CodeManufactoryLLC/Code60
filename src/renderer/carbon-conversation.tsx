@@ -62,6 +62,48 @@ const frame = { showFrame: false };
 const off = { isOn: false };
 const history = { isOn: false, showMobileMenu: false };
 
+const styledShadowRoots = new WeakSet<ShadowRoot>();
+let shadowFocusSheet: CSSStyleSheet | null | undefined;
+function getShadowFocusSheet(): CSSStyleSheet | null {
+  if (shadowFocusSheet !== undefined) return shadowFocusSheet;
+  if (typeof CSSStyleSheet !== "function" || !("replaceSync" in CSSStyleSheet.prototype)) {
+    shadowFocusSheet = null;
+    return null;
+  }
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(
+    "*,::before,::after{outline-color:transparent !important;}" +
+      ":focus,:focus-visible,:active{outline:none !important;outline-width:0 !important;outline-color:transparent !important;}" +
+      ":host .cds--btn:is(:focus,:focus-visible,:active)," +
+      ".cds--btn:is(:focus,:focus-visible,:active)," +
+      ":host .cds-custom--btn:is(:focus,:focus-visible,:active)," +
+      ".cds-aichat--input-container:focus-within," +
+      ".cds-aichat--chain-of-thought-accordion-item button.cds-aichat--chain-of-thought-accordion-item-header:is(:focus,:focus-visible,:active)" +
+      "{outline:none !important;outline-width:0 !important;outline-color:transparent !important;box-shadow:none !important;}" +
+      ":host .cds--btn:not(.cds--btn--tertiary,.cds--btn--danger--tertiary):is(:focus,:focus-visible,:active)," +
+      ".cds--btn:not(.cds--btn--tertiary,.cds--btn--danger--tertiary):is(:focus,:focus-visible,:active)" +
+      "{border-color:transparent !important;}",
+  );
+  shadowFocusSheet = sheet;
+  return sheet;
+}
+
+function suppressShadowFocus(root: ShadowRoot) {
+  const sheet = getShadowFocusSheet();
+  if (!sheet || !("adoptedStyleSheets" in root)) return;
+  const current = root.adoptedStyleSheets;
+  if (styledShadowRoots.has(root) && current[current.length - 1] === sheet) return;
+  styledShadowRoots.add(root);
+  root.adoptedStyleSheets = [...current.filter((item) => item !== sheet), sheet];
+}
+
+function suppressNestedShadowFocus(node: ParentNode) {
+  if (node instanceof ShadowRoot) suppressShadowFocus(node);
+  for (const element of node.querySelectorAll("*")) {
+    if (element.shadowRoot) suppressNestedShadowFocus(element.shadowRoot);
+  }
+}
+
 export default function CarbonConversation(props: EmbeddedChatProps) {
   const latest = useRef(props);
   latest.current = props;
@@ -141,11 +183,24 @@ export default function CarbonConversation(props: EmbeddedChatProps) {
     const intents = ["cds-aichat-input-send", "cds-aichat-prompt-send-intent"];
     for (const type of intents) element.addEventListener(type, submitting, true);
     element.addEventListener("cds-aichat-prompt-change", onInput);
+    const onShadowInteraction = (event: Event) => {
+      for (const target of event.composedPath()) {
+        if (target instanceof ShadowRoot) suppressShadowFocus(target);
+      }
+    };
+    element.addEventListener("pointerdown", onShadowInteraction, true);
+    element.addEventListener("focusin", onShadowInteraction, true);
+    suppressNestedShadowFocus(element);
     return () => {
       for (const type of intents) element.removeEventListener(type, submitting, true);
       element.removeEventListener("cds-aichat-prompt-change", onInput);
+      element.removeEventListener("pointerdown", onShadowInteraction, true);
+      element.removeEventListener("focusin", onShadowInteraction, true);
     };
   }, [onInput]);
+  useEffect(() => {
+    if (chat && container.current) suppressNestedShadowFocus(container.current);
+  }, [chat]);
 
   const messaging = useMemo(
     () => ({

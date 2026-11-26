@@ -194,10 +194,6 @@
   color: var(--accent);
 }
 
-.icon-select:has(> select:focus-visible) {
-  box-shadow: var(--focus-inset-shadow);
-}
-
 .table-control-group > button.icon-button:disabled,
 .table-pager .icon-button:disabled {
   opacity: 0.35;

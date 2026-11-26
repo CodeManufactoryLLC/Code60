@@ -111,12 +111,6 @@ button.splash-enter:active:not(:disabled) {
   box-shadow: 1px 1px 0 var(--shadow-color);
 }
 
-button.primary:focus-visible,
-button.destructive:focus-visible,
-button.splash-enter:focus-visible {
-  box-shadow: var(--button-shadow), var(--focus-shadow);
-}
-
 button.destructive {
   background: var(--destructive);
   color: var(--on-destructive);
@@ -307,33 +301,13 @@ input[type="checkbox"][role="switch"]:checked::after {
   color: var(--primary-text);
 }
 
-/* Keep an outline for the enhanced preference and forced colors. */
+/* Focus highlight borders and browser focus outlines are disabled globally.
+   Keep width at 0 and color transparent so Carbon's outline transitions never flash currentColor. */
+:focus,
 :focus-visible {
-  outline: 2px solid var(--focus-outline);
-  outline-offset: 2px;
-  box-shadow: var(--focus-shadow), var(--focus-rest-shadow, 0 0 transparent);
-}
-
-:where(:root[data-focus-highlight="on"]) :focus-visible {
-  outline-offset: 3px;
-}
-
-:where(:root[data-focus-highlight="on"])
-  :is(button.primary, button.destructive, input:checked):focus-visible {
-  box-shadow: 0 0 0 3px var(--bg);
-}
-
-/* Rows, menu items, and anything in a clipping or scrolling region use inset focus. */
-:is(
-  [role="menuitem"],
-  [role="option"],
-  .project-item,
-  .modal-heading button,
-  .page-tab [role="tab"],
-  .button-group > button
-):focus-visible {
-  outline-offset: -3px;
-  box-shadow: var(--focus-inset-shadow);
+  outline: none;
+  outline-width: 0;
+  outline-color: transparent;
 }
 
 pre {
@@ -407,12 +381,6 @@ kbd {
   border: 0;
   opacity: 0;
   cursor: pointer;
-}
-
-.segmented-option:has(input:focus-visible) {
-  outline: 2px solid var(--focus-outline);
-  outline-offset: -3px;
-  box-shadow: var(--segmented-selection, 0 0 transparent), var(--focus-inset-shadow);
 }
 
 /* Shared status labels for chat titles and palette hints. */

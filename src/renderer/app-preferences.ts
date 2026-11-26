@@ -57,9 +57,6 @@ export function useAppPreferences() {
     localStorage.setItem("code60.textStyles", JSON.stringify(saved));
     setStoredText(saved);
   };
-  const [focusHighlight, setFocusHighlight] = useState(
-    () => localStorage.getItem("code60.focusHighlight") === "on",
-  );
   const [showRelayDot, setShowRelayDot] = useState(
     () => localStorage.getItem("code60.showRelayDot") === "on",
   );
@@ -97,11 +94,6 @@ export function useAppPreferences() {
   }, [storedText.normalText.size]);
 
   useEffect(() => {
-    document.documentElement.dataset.focusHighlight = focusHighlight ? "on" : "off";
-    localStorage.setItem("code60.focusHighlight", focusHighlight ? "on" : "off");
-  }, [focusHighlight]);
-
-  useEffect(() => {
     document.documentElement.dataset.signals = signals ? "on" : "off";
     localStorage.setItem("code60.signals", signals ? "on" : "off");
   }, [signals]);
@@ -131,8 +123,6 @@ export function useAppPreferences() {
     setTextStyles,
     showRelayDot,
     setShowRelayDot,
-    focusHighlight,
-    setFocusHighlight,
     signals,
     setSignals,
     charts,

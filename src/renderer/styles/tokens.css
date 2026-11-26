@@ -192,17 +192,11 @@
   --focus-band: var(--hover-bg);
 }
 
-/* Keyboard focus stays distinct from the hard decorative shadows. */
+/* Focus borders and outlines are disabled across the application. */
 :root {
-  --focus-outline: var(--focus-line);
-  --focus-shadow: 0 0 0 2px var(--surface);
-  --focus-inset-shadow: inset 0 0 0 2px var(--focus-line);
-}
-
-:root[data-focus-highlight="on"] {
-  --focus-outline: var(--focus-line);
-  --focus-shadow: 0 0 0 3px var(--focus-band);
-  --focus-inset-shadow: inset 0 0 0 5px var(--focus-band);
+  --focus-outline: transparent;
+  --focus-shadow: none;
+  --focus-inset-shadow: none;
 }
 
 /* Signal colors are an opt-in setting; by default failure is neutral and carried by icon and rule. */
