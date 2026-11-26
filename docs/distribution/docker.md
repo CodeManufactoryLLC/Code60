@@ -25,7 +25,7 @@ Open `http://127.0.0.1:6060` in a browser. A ready-to-use Compose file lives in 
   - `docker exec code60 code60 pairing on --yes` — enable pairing codes.
   - `docker exec code60 code60-gateway pair` — print the browser URL and a fresh 60-second pairing code.
   - `docker exec code60 code60-gateway health` — run the container loopback health check.
-- **Persistence:** Mount a private named volume at `/home/node` (`0700`) so databases, Relay state, and provider logins survive container upgrades, and bind-mount project directories at `/workspaces` (or configure `CODE60_WORKSPACE_ROOTS`).
+- **Persistence:** Mount a private named volume at `/home/node` (`0700`) so databases, Relay state, and provider logins survive container upgrades, and bind-mount project directories at `/workspaces` (or configure `CODE60_WORKSPACE_ROOTS`). On first startup, gateway initialization automatically creates `/home/node/.local/share/code60/databases/default.sqlite` inside `/home/node` when no selection exists yet. [docker/compose.yaml](../../docker/compose.yaml) pins `volumes.code60-home.name` to `${CODE60_HOME_VOLUME:-code60-home}` so Compose sessions share the same volume across directories without directory-based prefixing.
 - **Upgrades:** Pull the newer image tag and recreate the container while keeping the `/home/node` volume. Host `code60 service` / `code60 update` commands do not manage Docker containers.
 
 ## Local build and acceptance test
@@ -42,7 +42,7 @@ npm run package:docker -- release/payloads/linux-x64.json
 npm run test:docker -- release/payloads/linux-x64.json
 ```
 
-`npm run test:docker` builds a uniquely labeled temporary image, verifies non-root execution, read-only `/opt/code60`, executable `code60-pty`, real offline 768-dimensional embeddings (`--network none`), published loopback HTTP access, `Host`/`Origin` and external `/management/*` rejections, in-container pairing, and graceful `SIGTERM` exit, then removes all owned containers, images, and volumes. Evidence is written under `test-results/docker/<run-id>/report.json`.
+`npm run test:docker` builds a uniquely labeled temporary image, verifies non-root execution, read-only `/opt/code60`, executable `code60-pty`, real offline 768-dimensional embeddings (`--network none`), published loopback HTTP access, `Host`/`Origin` and external `/management/*` rejections, automatic default database initialization, in-container pairing, graceful `SIGTERM` exit, and database/settings persistence across container deletion and recreation against the same named volume, then removes all owned containers, images, and volumes. Evidence is written under `test-results/docker/<run-id>/report.json`.
 
 ## One-time Docker Hub and GitHub setup
 

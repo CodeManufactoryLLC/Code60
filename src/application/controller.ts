@@ -5318,8 +5318,8 @@ export class ApplicationHost {
     });
   }
 
-  /** Reconnects to the database remembered from the previous launch, if any. */
-  restore(): Promise<void> {
+  /** Reconnects to the database remembered from the previous launch, optionally initializing the default database when none is selected. */
+  restore(options: { prepareDefaultDatabase?: boolean } = {}): Promise<void> {
     return this.exclusive(async () => {
       try {
         await this.modelDefaults.load();
@@ -5368,6 +5368,19 @@ export class ApplicationHost {
           : await this.storage.preferences.read();
       } catch (error) {
         this.databaseError = `Could not read the saved database setting: ${message(error)}`;
+      }
+      if (path === undefined && !this.databaseError && options.prepareDefaultDatabase) {
+        try {
+          path = await prepareSetupDatabase(this.env, this.storage.preferences);
+        } catch (error) {
+          emitLog(this.deps.log, {
+            event: "database.connect",
+            operationId: randomUUID(),
+            outcome: "failed",
+            errorCategory: "storage",
+          });
+          this.databaseError = `Could not initialize the default database. ${message(error)}`;
+        }
       }
       if (path !== undefined) {
         try {

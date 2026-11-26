@@ -19,7 +19,7 @@ docker run --rm -it \
   mjholliday/code60:latest
 ```
 
-Open `http://127.0.0.1:6060` in your browser. Install and sign in to coding-agent providers directly from Code60's UI; provider tools and logins persist in the `code60-home` volume.
+Open `http://127.0.0.1:6060` in your browser. On first startup, Code60 automatically initializes its default SQLite database at `/home/node/.local/share/code60/databases/default.sqlite` inside the `code60-home` volume (preserving any existing database selection on restarts). Install and sign in to coding-agent providers directly from Code60's UI; databases, provider tools, and logins persist in the `code60-home` volume.
 
 ## Docker Compose
 
@@ -37,6 +37,7 @@ services:
 
 volumes:
   code60-home:
+    name: code60-home
 ```
 
 ## Configuration
@@ -47,6 +48,7 @@ volumes:
 | `CODE60_BIND` | `0.0.0.0` | Container bind address (`0.0.0.0` or `127.0.0.1`). |
 | `CODE60_ORIGIN` | `http://127.0.0.1:<CODE60_PORT>` | Exact browser origin allowed by strict `Host`/`Origin` checks. Set this if you map a different host port (for example `-p 127.0.0.1:8080:6060` with `CODE60_ORIGIN=http://127.0.0.1:8080`). |
 | `CODE60_WORKSPACE_ROOTS` | `/workspaces` | Colon-separated absolute paths exposed to the browser workspace chooser. |
+| `CODE60_HOME_VOLUME` | `code60-home` | *(Compose only)* Named Docker volume mounted at `/home/node`. Pinning `name: code60-home` ensures `docker compose` sessions share the same SQLite database and settings across folders and container recreations (including `docker compose down`). |
 
 ## Security and pairing
 

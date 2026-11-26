@@ -42,13 +42,14 @@ The first default is `$XDG_DATA_HOME/code60/databases/default.sqlite`, using
 private. Releases, activation generations and databases occupy separate trees.
 The service retains XDG_DATA_HOME so it uses the same location as setup.
 
-Only explicit setup prepares a database. Strict preference checks distinguish no
-selection from damaged metadata. Valid custom selections are retained; missing,
-unsafe, corrupt, empty unrelated or newer-schema files are never replaced or
-silently bypassed. An existing default is validated before adoption after an
-interruption. New defaults are staged privately and published without overwriting.
-Database preparation is private management only, serialized with application
-operations, and accepts no caller-supplied path or browser Origin.
+Gateway startup and explicit setup prepare the default database when no selection
+exists yet. Strict preference checks distinguish no selection from damaged
+metadata. Valid custom selections are retained; missing, unsafe, corrupt, empty
+unrelated or newer-schema files are never replaced or silently bypassed. An
+existing default is validated before adoption after an interruption. New defaults
+are staged privately and published without overwriting. Database preparation is
+serialized with application operations, and the private management route accepts no
+caller-supplied path or browser Origin.
 
 Repeat setup reuses healthy matching files and database selection. It does not
 implicitly update releases, repair uncertain registration, verify a provider,

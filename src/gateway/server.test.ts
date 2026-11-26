@@ -746,7 +746,7 @@ it.each(["update-summary", "uninstall-summary"] as const)(
       expect(await readdir(join(directory, "state/code60"))).not.toContain("workflows");
     }
     expect(await readdir(join(directory, "state/code60/gateway"))).toEqual(before);
-    expect((await managementRequest(env, "status")).database).toEqual({ state: "not-selected" });
+    expect((await managementRequest(env, "status")).database).toEqual({ state: "ready" });
   },
 );
 
@@ -918,6 +918,40 @@ it("prepares a database only through authenticated payload-free private manageme
   const before = await readFile(path);
   await managementRequest(env, "prepare-database");
   expect(await readFile(path)).toEqual(before);
+});
+it("ordinary startup initializes the default database once and preserves an existing unsafe default file", async () => {
+  const { gateway, env, directory } = await fixture();
+  const path = join(directory, "data/code60/databases/default.sqlite");
+  expect(gateway.application.snapshot().database).toBe(path);
+  expect((await managementRequest(env, "status")).database).toEqual({ state: "ready" });
+  const before = await readFile(path);
+  await gateway.stop();
+
+  const restarted = await startGateway({
+    env,
+    assets: join(directory, "assets"),
+    roots: [directory],
+  });
+  const current = owned.at(-1);
+  if (!current) throw Error("Missing fixture");
+  current.gateway = restarted;
+  expect(restarted.application.snapshot().database).toBe(path);
+  expect(await readFile(path)).toEqual(before);
+  await restarted.stop();
+
+  await rm(join(directory, "state/code60/desktop.json"));
+  await writeFile(path, "", { mode: 0o600 });
+  const unsafe = await startGateway({
+    env,
+    assets: join(directory, "assets"),
+    roots: [directory],
+  });
+  current.gateway = unsafe;
+  expect(unsafe.application.snapshot().database).toBeNull();
+  expect(unsafe.application.snapshot().databaseError).toContain(
+    "Could not initialize the default database.",
+  );
+  expect(await readFile(path, "utf8")).toBe("");
 });
 it("normal startup preserves an empty selected file and private setup refuses to initialize it", async () => {
   const { gateway, env, directory } = await fixture();

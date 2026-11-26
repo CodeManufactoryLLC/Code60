@@ -76,7 +76,10 @@ export function AppFooter({
         <SidebarFooterActions
           returnDisabled={busy || !snapshot}
           databaseDisabled={busy || !snapshot || Boolean(snapshot.active)}
-          onDatabase={() => showPicker("database")}
+          onDatabase={() => {
+            closeWorkspace();
+            showPicker("database");
+          }}
           onReturn={onReturn}
         />
       </div>

@@ -3527,15 +3527,17 @@ required. Non-TTY operation edits no profiles; without Code60's --yes it returns
 explicit files-only success and a continuation command. No provider authority is
 seeded and no execution is resumed. Updates and public publication remain deferred.
 
-Only the fixed authenticated private prepare-database operation may initialize the
-default under XDG_DATA_HOME/code60/databases/default.sqlite. ApplicationHost owns
-serialization and strict selection metadata; existing files are validated read-only
-before initialization-capable paths. Missing/damaged/custom selections never cause
+Gateway startup and the fixed authenticated private prepare-database operation
+initialize the default under XDG_DATA_HOME/code60/databases/default.sqlite when no
+database selection exists yet. ApplicationHost owns serialization and strict
+selection metadata; existing files are validated read-only before
+initialization-capable paths. Missing/damaged/custom selections never cause
 replacement. New defaults publish exclusively from staged complete SQLite files.
-Normal startup/open do not create defaults. Setup has a separate non-reclaiming
-ownership lock; partial registration or active generations are preserved on failure.
-Read-only status reports bounded availability without repair, pairing or launches.
-See [setup behavior](docs/distribution/setup.md).
+Files-only setup (when service consent is declined) and read-only status do not
+create defaults. Setup has a separate non-reclaiming ownership lock; partial
+registration or active generations are preserved on failure. Read-only status
+reports bounded availability without repair, pairing or launches. See [setup
+behavior](docs/distribution/setup.md).
 
 ### Catalog harness installation and authentication
 

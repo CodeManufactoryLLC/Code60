@@ -34,7 +34,7 @@ test("browser: Health Check runs passive checks, supports granular rechecks and 
     );
     await expect(page.locator('[data-check-id="database-health"]')).toHaveAttribute(
       "data-status",
-      "not_configured",
+      "healthy",
     );
     await expect(page.locator('[data-check-id="disk-space"]')).not.toHaveAttribute(
       "data-status",

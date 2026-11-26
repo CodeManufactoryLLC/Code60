@@ -222,26 +222,55 @@ export async function runDockerAcceptance(options, { signal } = {}) {
       { signal },
     );
 
-    // 3. Wait for in-container loopback health check to pass.
-    const deadline = Date.now() + 60_000;
-    let healthy = false;
-    while (Date.now() < deadline) {
-      signal?.throwIfAborted();
-      try {
-        await docker(["exec", containerName, "code60-gateway", "health"], {
-          signal,
-          timeout: 10_000,
-        });
-        healthy = true;
-        break;
-      } catch {
-        await delay(500, undefined, { signal });
+    const waitForHealth = async (name) => {
+      const deadline = Date.now() + 60_000;
+      let healthy = false;
+      while (Date.now() < deadline) {
+        signal?.throwIfAborted();
+        try {
+          await docker(["exec", name, "code60-gateway", "health"], {
+            signal,
+            timeout: 10_000,
+          });
+          healthy = true;
+          break;
+        } catch {
+          await delay(500, undefined, { signal });
+        }
       }
-    }
-    if (!healthy) {
-      const logs = await docker(["logs", containerName]).catch(() => "(logs unavailable)");
-      throw new Error(`Container gateway did not become healthy in time.\n${logs}`);
-    }
+      if (!healthy) {
+        const logs = await docker(["logs", name]).catch(() => "(logs unavailable)");
+        throw new Error(`Container gateway (${name}) did not become healthy in time.\n${logs}`);
+      }
+    };
+
+    const inspectPersistedDatabase = async (name) => {
+      const raw = await docker(
+        [
+          "exec",
+          name,
+          "node",
+          "--input-type=module",
+          "-e",
+          [
+            'const fs = await import("node:fs/promises");',
+            'const { managementRequest } = await import("/opt/code60/dist/gateway/index.js");',
+            'const status = await managementRequest(process.env, "status");',
+            'const prefs = JSON.parse(await fs.readFile("/home/node/.local/state/code60/desktop.json", "utf8"));',
+            "const stat = await fs.stat(prefs.database);",
+            'const handle = await fs.open(prefs.database, "r");',
+            "const header = Buffer.alloc(16);",
+            "try { await handle.read(header, 0, 16, 0); } finally { await handle.close(); }",
+            'console.log(JSON.stringify({ database: status.database, path: prefs.database, ino: String(stat.ino), mode: stat.mode & 0o777, sqliteHeader: header.toString("utf8") }));',
+          ].join(" "),
+        ],
+        { signal },
+      );
+      return JSON.parse(raw);
+    };
+
+    // 3. Wait for in-container loopback health check to pass.
+    await waitForHealth(containerName);
 
     // 4. Verify browser HTML, /api/connection, strict Host/Origin, and external management block.
     const indexRes = await rawHttp(hostPort, "GET", "/", { Host: `127.0.0.1:${hostPort}` });
@@ -276,7 +305,14 @@ export async function runDockerAcceptance(options, { signal } = {}) {
     });
     assert.equal(externalMgmt.status, 403);
 
-    // 5. Enable pairing via loopback management CLI inside the container and verify fresh code.
+    // 5. Verify default database initialized on startup and enable pairing via loopback management CLI.
+    const expectedDatabasePath = "/home/node/.local/share/code60/databases/default.sqlite";
+    const initialDb = await inspectPersistedDatabase(containerName);
+    assert.deepEqual(initialDb.database, { state: "ready" });
+    assert.equal(initialDb.path, expectedDatabasePath);
+    assert.equal(initialDb.mode, 0o600);
+    assert.equal(initialDb.sqliteHeader, "SQLite format 3\0");
+
     const pairingOn = await docker(["exec", containerName, "code60", "pairing", "on", "--yes"], {
       signal,
     });
@@ -286,12 +322,61 @@ export async function runDockerAcceptance(options, { signal } = {}) {
     assert.ok(pairOutput.includes(`Open ${expectedOrigin}`));
     assert.match(pairOutput, /Pairing code \(valid for 60 seconds\): \S+/);
 
-    // 6. Verify graceful SIGTERM shutdown exits 0.
+    // 6. Verify graceful SIGTERM shutdown exits 0 and remove the original container.
     await docker(["stop", "--time", "20", containerName], { signal });
     const exitCode = (
       await docker(["inspect", "--format", "{{.State.ExitCode}}", containerName], { signal })
     ).trim();
     assert.equal(exitCode, "0");
+    await docker(["rm", containerName], { signal });
+
+    // 7. Recreate a fresh container against the same named volume and verify DB + settings persist.
+    const recreatedName = `${containerName}-recreated`;
+    await docker(
+      [
+        "run",
+        "-d",
+        "--platform",
+        "linux/amd64",
+        "--name",
+        recreatedName,
+        "--label",
+        label,
+        "-p",
+        `127.0.0.1:${hostPort}:6060`,
+        "-e",
+        "CODE60_PORT=6060",
+        "-e",
+        `CODE60_ORIGIN=${expectedOrigin}`,
+        "-e",
+        "CODE60_WORKSPACE_ROOTS=/workspaces",
+        "-v",
+        `${homeVolume}:/home/node`,
+        "-v",
+        `${workspaceDir}:/workspaces`,
+        imageRef,
+      ],
+      { signal },
+    );
+    await waitForHealth(recreatedName);
+
+    const persistedDb = await inspectPersistedDatabase(recreatedName);
+    assert.deepEqual(persistedDb.database, { state: "ready" });
+    assert.equal(persistedDb.path, expectedDatabasePath);
+    assert.equal(persistedDb.ino, initialDb.ino);
+    assert.equal(persistedDb.mode, 0o600);
+    assert.equal(persistedDb.sqliteHeader, "SQLite format 3\0");
+
+    const pairingStatus = await docker(["exec", recreatedName, "code60", "pairing", "status"], {
+      signal,
+    });
+    assert.equal(JSON.parse(pairingStatus).requirePairing, true);
+
+    await docker(["stop", "--time", "20", recreatedName], { signal });
+    const recreatedExitCode = (
+      await docker(["inspect", "--format", "{{.State.ExitCode}}", recreatedName], { signal })
+    ).trim();
+    assert.equal(recreatedExitCode, "0");
 
     const report = {
       runId,
@@ -308,8 +393,10 @@ export async function runDockerAcceptance(options, { signal } = {}) {
         browserAssetsAndConnection: true,
         hostAndOriginRejection: true,
         externalManagementRejected: true,
+        defaultDatabaseReady: true,
         pairingToggleAndCode: true,
         gracefulSigtermExit0: true,
+        recreatedContainerPersistence: true,
       },
       completedAt: new Date().toISOString(),
     };
