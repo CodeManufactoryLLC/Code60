@@ -46,16 +46,23 @@ export function EpisodicMemoryPage({
   runs,
   data,
   provider,
+  defaultPrompt = DEFAULT_EPISODIC_MEMORY_PROMPT,
 }: {
   api: Pick<ApplicationClient, "extractMemory" | "cancelMemoryExtraction">;
   directory: string | null;
   runs: readonly DesktopRun[];
   data: Transcripts;
   provider: string | null;
+  defaultPrompt?: string | undefined;
 }) {
-  const [prompt, setPrompt] = useState(
-    () => localStorage.getItem(promptKey) ?? DEFAULT_EPISODIC_MEMORY_PROMPT,
-  );
+  const [prompt, setPrompt] = useState(() => localStorage.getItem(promptKey) ?? defaultPrompt);
+  const previousDefault = useRef(defaultPrompt);
+  useEffect(() => {
+    if (previousDefault.current === defaultPrompt) return;
+    const prev = previousDefault.current;
+    previousDefault.current = defaultPrompt;
+    setPrompt((current) => (current === prev ? defaultPrompt : current));
+  }, [defaultPrompt]);
   const [eventLimit, setEventLimit] = useState(() => {
     const saved = localStorage.getItem(eventLimitKey) ?? "";
     return String(parseMemoryEventLimit(saved) ?? defaultEventLimit);
@@ -84,8 +91,9 @@ export function EpisodicMemoryPage({
     };
   }, [api]);
   useEffect(() => {
-    localStorage.setItem(promptKey, prompt);
-  }, [prompt]);
+    if (prompt === defaultPrompt) localStorage.removeItem(promptKey);
+    else localStorage.setItem(promptKey, prompt);
+  }, [prompt, defaultPrompt]);
   useEffect(() => {
     if (maxEvents !== undefined) localStorage.setItem(eventLimitKey, String(maxEvents));
   }, [maxEvents]);
@@ -196,8 +204,8 @@ export function EpisodicMemoryPage({
         <div>
           <AppButton
             type="button"
-            disabled={busy || prompt === DEFAULT_EPISODIC_MEMORY_PROMPT}
-            onClick={() => setPrompt(DEFAULT_EPISODIC_MEMORY_PROMPT)}
+            disabled={busy || prompt === defaultPrompt}
+            onClick={() => setPrompt(defaultPrompt)}
           >
             Reset prompt
           </AppButton>

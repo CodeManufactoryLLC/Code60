@@ -1285,6 +1285,10 @@ export class ApplicationHost {
     session.historyLoaded = true;
   }
 
+  private activePrompts(): PromptTemplates {
+    return effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts);
+  }
+
   private async sendTask(
     session: ChatSession,
     text: string,
@@ -1337,12 +1341,9 @@ export class ApplicationHost {
       closing: () => this.closing,
       changed: () => this.changed(),
       formatUpdates: (updates) =>
-        renderPrompt(
-          "workerUpdates",
-          effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
-            .workerUpdates,
-          { updates: updates.map(formatWorkerUpdate).join("\n") },
-        ),
+        renderPrompt("worker.updates.project", this.activePrompts()["worker.updates.project"], {
+          updates: updates.map(formatWorkerUpdate).join("\n"),
+        }),
       deliver: (session, text, origin, deliveredText) => {
         const run = session.chat?.runs()[0];
         if (!session.chat || !run) throw new Error("No orchestration session is available");
@@ -1758,7 +1759,9 @@ export class ApplicationHost {
           deliveryAttempted = true;
           const { dispatched } = await this.sendTask(
             session,
-            `Code60: the user accepted plan ${plan.id}. Read it with code60_read_plan, inspect any previous work, and execute the remaining tasks. Report each task's progress with evidence and responsible workerIds. Do not repeat completed work.`,
+            renderPrompt("plan.accepted.project", this.activePrompts()["plan.accepted.project"], {
+              planId: plan.id,
+            }),
             "automatic",
             session.tasks.find((task) => task.planIds.includes(plan.id))?.id ?? null,
           );
@@ -1990,7 +1993,11 @@ export class ApplicationHost {
         const conflicts = proposal.conflicts.map(
           ({ path, reason }) => `${JSON.stringify(path)}: ${reason}`,
         );
-        const feedback = `Revise this task so it can be applied to the current project. Preserve the user's current project edits. Read the current project files before revising your worker copies. Conflicting paths and reasons:\n${conflicts.join("\n")}\nProject: ${JSON.stringify(request.project)}\nUse owned workers and return a new review. Do not modify the project directly.`;
+        const feedback = renderPrompt(
+          "review.conflict-revision.project",
+          this.activePrompts()["review.conflict-revision.project"],
+          { conflicts: conflicts.join("\n"), project: JSON.stringify(request.project) },
+        );
         if (feedback.length > 8_000)
           throw new Error("Too many conflicts for one request. Send feedback in smaller groups.");
         await loop.requestRevision(review.id, proposal.id);
@@ -3258,6 +3265,8 @@ export class ApplicationHost {
             evidence.query,
             evidence.sources,
             abort.signal,
+            undefined,
+            this.activePrompts()["utility.search-overview"],
           );
           abort.signal.throwIfAborted();
           if (this.database !== database) throw new Error("The database changed. Search again.");
@@ -3876,10 +3885,7 @@ export class ApplicationHost {
           orchestrationAutoApproval: this.orchestrationAutoApproval,
           initialSettings: this.modelDefaults.selections(provider, "orchestrator"),
           promptContext: () =>
-            `${assembleOperatingContract(
-              effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
-                .operatingContract,
-            )}\n\n${this.knowledgeContext(session)}`,
+            `${assembleOperatingContract(this.activePrompts()["contract.operating"])}\n\n${this.knowledgeContext(session)}`,
         },
       );
       this.attachChat(session, chat);
@@ -4046,10 +4052,7 @@ export class ApplicationHost {
           mcpServers: await this.mcpAgentServer(session),
           sessionResources: this.connectorResources("project-chat", this.workspace?.dir),
           promptContext: () =>
-            `${assembleOperatingContract(
-              effectivePrompts(this.config?.prompts ?? DEFAULT_PROMPT_TEMPLATES, this.savedPrompts)
-                .operatingContract,
-            )}\n\n${this.knowledgeContext(session)}`,
+            `${assembleOperatingContract(this.activePrompts()["contract.operating"])}\n\n${this.knowledgeContext(session)}`,
         },
       );
       this.attachChat(session, chat);
@@ -4075,7 +4078,7 @@ export class ApplicationHost {
               }
             : record,
           events.filter((_, index) => session.checkpoints?.visible(record.id, index) !== false),
-          effectivePrompts(this.config.prompts, this.savedPrompts).handoffSummary,
+          this.activePrompts()["handoff.summary"],
         );
         await chat.handoff(
           record.id,
@@ -4338,21 +4341,10 @@ export class ApplicationHost {
         const task = session.tasks.find((task) => task.id === request.taskId);
         if (!task || task.project !== (this.workspace?.dir ?? null))
           throw new Error("Open this task's project before continuing");
+        const prompt = this.activePrompts()["task.continue"];
         if (!session.restored && session.chat && run?.status === "idle")
-          await this.sendTask(
-            session,
-            "Continue the originating task. Inspect previous evidence and report blockers; do not repeat completed work.",
-            "automatic",
-            task.id,
-          );
-        else
-          await this.continueChat(
-            session,
-            "Continue the originating task. Inspect previous evidence and report blockers; do not repeat completed work.",
-            "automatic",
-            undefined,
-            task.id,
-          );
+          await this.sendTask(session, prompt, "automatic", task.id);
+        else await this.continueChat(session, prompt, "automatic", undefined, task.id);
       } else if (request.type === "send") {
         let deliveredText: string | undefined;
         if (request.command !== undefined) {
@@ -4504,6 +4496,7 @@ export class ApplicationHost {
           first.text,
           reply,
           abort.signal,
+          this.activePrompts()["utility.chat-title"],
         );
         if (!abort.signal.aborted && !session.revoked && !session.title) {
           session.title = title;
@@ -6392,7 +6385,7 @@ export class ApplicationHost {
     const summary = buildHandoffPrompt(
       run.record,
       priorEvents,
-      effectivePrompts(prepared.config.prompts, saved).handoffSummary,
+      effectivePrompts(prepared.config.prompts, saved)["handoff.summary"],
     );
     const emitted: RunEvent[] = [];
     const off = prepared.orchestrator.onEvent((event) => emitted.push(event));

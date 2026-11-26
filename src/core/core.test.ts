@@ -67,9 +67,11 @@ describe("config", () => {
   });
 
   it("merges prompt template overrides over the built-in templates", () => {
-    const config = parseConfig({ prompts: { handoffTurn: "{{summary}}\n---\n{{message}}" } });
-    expect(config.prompts.handoffTurn).toBe("{{summary}}\n---\n{{message}}");
-    expect(config.prompts.handoffSummary).toBe(DEFAULT_CONFIG.prompts.handoffSummary);
+    const config = parseConfig({
+      prompts: { "handoff.first-turn": "{{summary}}\n---\n{{message}}" },
+    });
+    expect(config.prompts["handoff.first-turn"]).toBe("{{summary}}\n---\n{{message}}");
+    expect(config.prompts["handoff.summary"]).toBe(DEFAULT_CONFIG.prompts["handoff.summary"]);
   });
 
   it.each([
@@ -86,12 +88,15 @@ describe("config", () => {
     [{ agents: { x: { command: ["agent"], cwd: "/elsewhere" } } }, /unknown key 'cwd'/],
     [{ prompts: [] }, /prompts must be an object/],
     [{ prompts: { other: "x" } }, /prompts: unknown key 'other'/],
-    [{ prompts: { handoffSummary: 1 } }, /prompts.handoffSummary must be a string/],
+    [{ prompts: { "handoff.summary": 1 } }, /prompts\.handoff\.summary must be a string/],
     [
-      { prompts: { handoffSummary: "{{nope}}" } },
-      /prompts.handoffSummary: unknown merge field 'nope'/,
+      { prompts: { "handoff.summary": "{{nope}}" } },
+      /prompts\.handoff\.summary: unknown merge field 'nope'/,
     ],
-    [{ prompts: { handoffTurn: "{{summary}}" } }, /prompts.handoffTurn: must include/],
+    [
+      { prompts: { "handoff.first-turn": "{{summary}}" } },
+      /prompts\.handoff\.first-turn: must include/,
+    ],
   ])("rejects invalid config %j", (raw, message) => {
     expect(() => parseConfig(raw)).toThrow(message);
   });

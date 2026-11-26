@@ -17,7 +17,7 @@ const list = (lines: readonly string[]) => (lines.length ? lines.join("\n") : "(
 export function buildHandoffPrompt(
   record: RunRecord,
   events: readonly RunEvent[],
-  template: string = DEFAULT_PROMPT_TEMPLATES.handoffSummary,
+  template: string = DEFAULT_PROMPT_TEMPLATES["handoff.summary"],
   limit = HANDOFF_PROMPT_LIMIT,
 ): string {
   const prompts = events
@@ -28,7 +28,7 @@ export function buildHandoffPrompt(
     .filter((event): event is Extract<RunEvent, { type: "message" }> => event.type === "message")
     .map((event) => event.text);
 
-  const content = renderPrompt("handoffSummary", template, {
+  const content = renderPrompt("handoff.summary", template, {
     status: record.status,
     turns: String(record.turns),
     agent: record.agent,

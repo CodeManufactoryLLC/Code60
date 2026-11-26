@@ -16,6 +16,7 @@ export async function summarizeSearch(
   sources: readonly SearchSummarySource[],
   signal: AbortSignal,
   timeoutMs = 300_000,
+  instructions?: string,
 ): Promise<string> {
   if (!query.trim() || query.length > SEARCH_QUERY_LIMIT) throw new Error("Invalid search query");
   if (
@@ -50,7 +51,7 @@ export async function summarizeSearch(
         if (combined.aborted) onAbort();
       });
       const reason = await Promise.race([
-        session.prompt(renderSearchSummaryPrompt(query, sources)),
+        session.prompt(renderSearchSummaryPrompt(query, sources, instructions)),
         aborted,
         session.exited.then(() => {
           throw new Error("Overview worker exited unexpectedly");

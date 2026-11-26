@@ -216,4 +216,23 @@ environments.
 
 - Update relevant desktop and scheduler documentation when changing user-visible
   commands, options, defaults, output, or key bindings.
+- Keep [FAQ.md](FAQ.md) and [TERMINOLOGY.md](TERMINOLOGY.md) synchronized with
+  user-visible behavior. Update them whenever a change affects supported platforms,
+  built-in Agent Providers, CLI commands, concurrency or storage limits, security
+  boundaries, or core concepts; otherwise state in the PR why no FAQ or terminology
+  update is needed.
+- **Required skill for FAQ and terminology edits:** Use the
+  `refreshingly-simple-english` skill when authoring or revising `FAQ.md` or
+  `TERMINOLOGY.md`. Keep prose direct and active (no past participles, em dashes,
+  prose double hyphens, semicolons, negative-to-positive contrasts, or generic
+  second person in general explanations; at most 25 words per sentence, 3 sentences
+  per paragraph, and 250 prose words per section segment). Keep `##` term entries
+  in `TERMINOLOGY.md` in alphabetical order, and refer to **Code60 Gateway** and
+  **Code60 Transmission Server** in body prose while keeping short headings
+  (`## Gateway`, `## Transmission Server`).
+- Keep the visible `Applies to:` and `Last update:` header in `FAQ.md` and
+  `TERMINOLOGY.md` synchronized with `package.json` (`version`) and the latest
+  revision date (`YYYY-MM-DD`). `test/docs-freshness.test.ts` enforces header
+  format, version agreement, alphabetical terminology order, catalog/default sync,
+  and basic prose hygiene during `npm run check`.
 - Keep examples safe to copy and consistent with the actual product behavior.

@@ -445,6 +445,31 @@ test("browser: Carbon application navigation, appearance controls and retained d
     await expect(
       page.getByRole("heading", { name: "Internal Prompts", level: 1, exact: true }),
     ).toBeVisible();
+    const promptPanel = page.locator("#panel-prompts");
+    await expect(promptPanel.locator(".prompt-editor-id-badge")).toHaveText("contract.operating");
+    const promptFilter = promptPanel.getByLabel("Filter prompts");
+    await promptFilter.fill("plan.accepted.project");
+    await promptPanel.getByRole("button", { name: /plan\.accepted\.project/ }).click();
+    await expect(promptPanel.locator(".prompt-editor-id-badge")).toHaveText(
+      "plan.accepted.project",
+    );
+    await promptPanel.getByLabel("Template", { exact: true }).fill("Run accepted plan {{planId}}.");
+    await promptPanel.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(promptPanel.getByText("Source: Saved edit.")).toBeVisible();
+    await promptPanel.getByRole("button", { name: "Reset to default", exact: true }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Reset template", exact: true })
+      .click();
+    await expect(promptPanel.getByText("Source: Saved edit.")).toBeHidden();
+    await promptFilter.fill("contract.relay-addendum");
+    await promptPanel.getByRole("button", { name: /contract\.relay-addendum/ }).click();
+    await expect(promptPanel.locator(".prompt-editor-id-badge")).toHaveText(
+      "contract.relay-addendum",
+    );
+    await expect(promptPanel.locator(".prompt-editor-readonly-note")).toContainText("Read-only:");
+    await expect(promptPanel.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+    await promptFilter.fill("");
     await customize.getByRole("tab", { name: "Commands", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Commands", level: 1, exact: true }),
