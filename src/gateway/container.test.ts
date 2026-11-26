@@ -173,6 +173,10 @@ describe("container gateway server mode", () => {
 
     expect(gateway.origin).toBe(browserOrigin);
     expect(gateway.requirePairing).toBe(false);
+    expect(gateway.application.snapshot().database).toBe(
+      join(directory, "data/code60/databases/default.sqlite"),
+    );
+    expect((await managementRequest(env, "status")).database).toEqual({ state: "ready" });
 
     // connection.json keeps the container's loopback management address
     const connection = (await readPrivateJson(

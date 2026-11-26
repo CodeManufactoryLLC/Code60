@@ -407,11 +407,12 @@ preserving every registry and database.
 
 ## Initial database preparation
 
-Only explicit private management setup may prepare the default database under
-XDG_DATA_HOME/code60/databases/default.sqlite. Strictly distinguish absent selection
-from damaged metadata. Validate existing files read-only before initialization;
-never adopt empty/unrelated files or replace a missing/corrupt/custom selection.
-Serialize preparation with application actions and compare preference identities
-before committing. Publish new defaults exclusively from private staged SQLite
-files. Ordinary restore/open must not create replacement databases or provider
+Gateway startup and explicit private management setup may prepare the default
+database under XDG_DATA_HOME/code60/databases/default.sqlite when no database
+selection exists yet. Strictly distinguish absent selection from damaged metadata.
+Validate existing files read-only before initialization; never adopt empty/unrelated
+files or replace a missing/corrupt/custom selection. Serialize preparation with
+application actions and compare preference identities before committing. Publish
+new defaults exclusively from private staged SQLite files. Ordinary restore/open
+must never replace a missing/damaged/custom selection or seed provider
 verification/agent authority.

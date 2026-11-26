@@ -74,7 +74,13 @@ export async function reopenRetainedProject(page: Page, directory: string, datab
   ).toBeEditable();
 }
 export async function createDatabase(page: Page, directory: string) {
-  await page.getByRole("button", { name: "Connect to database", exact: true }).click();
+  const connect = page.getByRole("button", { name: "Connect to database", exact: true });
+  if (await connect.isVisible()) {
+    await connect.click();
+  } else {
+    await page.getByRole("button", { name: "Workspace", exact: true }).click();
+    await page.getByRole("button", { name: "Select or create database" }).click();
+  }
   await page
     .getByRole("dialog", { name: "Select database", exact: true })
     .getByRole("button", { name: "Create database…", exact: true })
