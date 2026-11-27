@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -8,7 +8,13 @@ import { DEFAULT_CONFIG } from "../src/core/index.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const readDoc = (name: string) => readFileSync(resolve(ROOT, name), "utf8");
+const stripFrontmatter = (doc: string) => doc.replace(/^---\n[\s\S]*?\n---\n+/, "");
 const PKG = JSON.parse(readDoc("package.json")) as { version: string };
+const FAQ_DIR = "knowledge/reference/faq";
+const FAQ_FILES = readdirSync(resolve(ROOT, FAQ_DIR))
+  .filter((name) => name.endsWith(".md") && name !== "INDEX.md")
+  .sort()
+  .map((name) => `${FAQ_DIR}/${name}`);
 
 const METADATA_RE =
   /^> \*\*Applies to:\*\* Code60 `v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)` · \*\*Last update:\*\* `(\d{4}-\d{2}-\d{2})`/m;
@@ -226,14 +232,13 @@ const sectionBody = (doc: string, heading: string) => {
 };
 
 describe("FAQ and Terminology freshness", () => {
-  const faq = readDoc("FAQ.md");
+  const faqDocs = FAQ_FILES.map((path) => [path, stripFrontmatter(readDoc(path))] as const);
+  const faqIndex = readDoc(`${FAQ_DIR}/INDEX.md`);
   const terminology = readDoc("TERMINOLOGY.md");
 
-  it("stamps both FAQ.md and TERMINOLOGY.md with the current package version and a valid date", () => {
-    for (const [name, content] of [
-      ["FAQ.md", faq],
-      ["TERMINOLOGY.md", terminology],
-    ] as const) {
+  it("stamps all FAQ documents and TERMINOLOGY.md with the current package version and a valid date", () => {
+    expect(faqDocs.length).toBeGreaterThan(0);
+    for (const [name, content] of [...faqDocs, ["TERMINOLOGY.md", terminology]] as const) {
       const match = METADATA_RE.exec(content);
       expect(match, `${name} must declare Applies to and Last update metadata`).not.toBeNull();
       expect(match?.[1], `${name} version must match package.json`).toBe(PKG.version);
@@ -258,36 +263,33 @@ describe("FAQ and Terminology freshness", () => {
     expect(indexed).toEqual(terms);
   });
 
-  it("keeps FAQ.md Contents aligned with Code60-level sections", () => {
-    const preProvider = faq.split("\n---\n")[0] ?? faq;
-    const sections = preProvider
-      .split("\n")
-      .filter((line) => line.startsWith("## "))
-      .map((line) => line.slice(3).trim());
-    expect(sections[0]).toBe("Contents");
-    const expected = sections.slice(1);
-    const contentsBody = sectionBody(faq, "## Contents");
-    const listed = [...contentsBody.matchAll(/^- \[([^\]]+)\]\(#[^)]+\)$/gm)].map((m) => m[1]);
-    expect(listed).toEqual(expected);
+  it("lists every FAQ document in knowledge/reference/faq/INDEX.md", () => {
+    for (const path of FAQ_FILES) {
+      const filename = path.split("/").at(-1) ?? path;
+      expect(faqIndex).toContain(`(${filename})`);
+    }
   });
 
   it("keeps built-in Agent Providers synchronized with the provider catalog", () => {
-    const providerSupport = sectionBody(faq, "## Provider Support");
+    const providerSupport = stripFrontmatter(readDoc(`${FAQ_DIR}/provider-support.md`));
+    const providerAuth = stripFrontmatter(readDoc(`${FAQ_DIR}/provider-authentication.md`));
     const agentProvider = sectionBody(terminology, "## Agent Provider");
     for (const provider of PROVIDERS) {
       expect(providerSupport).toContain(provider.name);
+      expect(providerAuth).toContain(`## ${provider.name}`);
       expect(agentProvider).toContain(provider.name);
     }
   });
 
   it("keeps documented concurrency and context-handoff defaults aligned with runtime constants", () => {
+    const orchestration = stripFrontmatter(readDoc(`${FAQ_DIR}/orchestration-and-workers.md`));
     const concurrency = sectionBody(
-      faq,
+      orchestration,
       "### Does Code60 limit the number of agents that I can run simultaneously?",
     );
     expect(concurrency).toContain(`**${DEFAULT_CONFIG.maxParallel}**`);
 
-    const contextSection = sectionBody(faq, "## Context and History");
+    const contextSection = stripFrontmatter(readDoc(`${FAQ_DIR}/context-and-history.md`));
     expect(contextSection).toContain(`${MEMORY_LIMITS.rolloverPercent}%`);
     expect(contextSection).toContain(MEMORY_LIMITS.capacity.toLocaleString("en-US"));
   });
@@ -298,12 +300,9 @@ describe("FAQ and Terminology freshness", () => {
     expect(gateway).toContain("Code60 Gateway");
   });
 
-  it("enforces Refreshingly Simple English mechanical hygiene in FAQ.md and TERMINOLOGY.md", () => {
+  it("enforces Refreshingly Simple English mechanical hygiene in FAQ docs and TERMINOLOGY.md", () => {
     const failures: string[] = [];
-    for (const [name, content] of [
-      ["FAQ.md", faq],
-      ["TERMINOLOGY.md", terminology],
-    ] as const) {
+    for (const [name, content] of [...faqDocs, ["TERMINOLOGY.md", terminology]] as const) {
       content.split("\n").forEach((line, index) => {
         const trimmed = line.trim();
         if (/^---+$/.test(trimmed) || /^\|\s*---/.test(trimmed)) return;

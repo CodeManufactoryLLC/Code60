@@ -57,6 +57,7 @@
     "knowledge/operations/runbooks/INDEX.md",
     "knowledge/reference/INDEX.md",
     "knowledge/reference/capabilities/INDEX.md",
+    "knowledge/reference/faq/INDEX.md",
     "knowledge/subsystems/INDEX.md"
   ],
   "documents": [
@@ -752,6 +753,300 @@
         "inspection",
         "experiments",
         "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-009",
+      "title": "FAQ: Overview, Requirements, and Setup",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on what Code60 is, supported platforms, system and software requirements, Docker, CLI, and app format.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/overview-and-setup.md",
+      "lines": 102,
+      "bytes": 6535,
+      "code_refs": [
+        "src/management/cli.ts",
+        "src/gateway/server.ts",
+        "src/platform/support.ts"
+      ],
+      "related": [
+        "KB-REF-010",
+        "KB-OPS-009",
+        "KB-OPS-012"
+      ],
+      "tags": [
+        "faq",
+        "setup",
+        "requirements"
+      ]
+    },
+    {
+      "id": "KB-REF-010",
+      "title": "FAQ: Workspaces, Worktrees, Data, and Storage",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on repository setup, Git worktree lifecycle, local storage locations, and disk usage.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/workspaces-and-storage.md",
+      "lines": 78,
+      "bytes": 5629,
+      "code_refs": [
+        "src/git/tasks.ts",
+        "src/application/health-check.ts",
+        "src/application/log-store.ts",
+        "src/contracts/usage.ts"
+      ],
+      "related": [
+        "KB-REF-009",
+        "KB-OPS-002"
+      ],
+      "tags": [
+        "faq",
+        "workspaces",
+        "worktrees",
+        "storage"
+      ]
+    },
+    {
+      "id": "KB-REF-011",
+      "title": "FAQ: Permissions and Sandboxing",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on Code60 auto-approval, agent sandboxing boundaries, and Agent Provider sandbox controls.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/permissions-and-sandboxing.md",
+      "lines": 63,
+      "bytes": 5054,
+      "code_refs": [
+        "src/core/config.ts",
+        "src/core/orchestrator.ts",
+        "src/gateway/server.ts"
+      ],
+      "related": [
+        "KB-REF-012",
+        "KB-REF-014"
+      ],
+      "tags": [
+        "faq",
+        "security",
+        "permissions",
+        "sandboxing"
+      ]
+    },
+    {
+      "id": "KB-REF-012",
+      "title": "FAQ: Security Measures and Secrets",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on Code60's browser, API, process, MCP, and packaging safeguards and how Code60 handles secrets.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/security-and-secrets.md",
+      "lines": 67,
+      "bytes": 5762,
+      "code_refs": [
+        "src/gateway/server.ts",
+        "src/application/mcp-gateway.ts",
+        "src/platform/credential-store.ts"
+      ],
+      "related": [
+        "KB-REF-011",
+        "KB-OPS-006"
+      ],
+      "tags": [
+        "faq",
+        "security",
+        "secrets"
+      ]
+    },
+    {
+      "id": "KB-REF-013",
+      "title": "FAQ: Licensing, Pricing, and Token Usage",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on Apache-2.0 commercial use, cost, token usage impact, and local usage monitoring.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/licensing-and-usage.md",
+      "lines": 72,
+      "bytes": 5182,
+      "code_refs": [
+        "src/contracts/usage.ts",
+        "src/core/usage-store.ts",
+        "src/management/cli.ts"
+      ],
+      "related": [
+        "KB-REF-010",
+        "KB-REF-014"
+      ],
+      "tags": [
+        "faq",
+        "licensing",
+        "usage"
+      ]
+    },
+    {
+      "id": "KB-REF-014",
+      "title": "FAQ: Orchestration, Workers, MCP, and Concurrency",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on Code60 workers versus provider subagents, browser automation, MCP support, and concurrency limits.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/orchestration-and-workers.md",
+      "lines": 77,
+      "bytes": 6355,
+      "code_refs": [
+        "src/core/orchestrator.ts",
+        "src/core/config.ts",
+        "src/contracts/automation.ts",
+        "src/application/mcp-gateway.ts"
+      ],
+      "related": [
+        "KB-REF-011",
+        "KB-REF-015",
+        "KB-REF-016"
+      ],
+      "tags": [
+        "faq",
+        "orchestration",
+        "workers",
+        "mcp"
+      ]
+    },
+    {
+      "id": "KB-REF-015",
+      "title": "FAQ: Context, History, and Compaction",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on context sent to agents, triggers, long conversation history, and automatic context handoff.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/context-and-history.md",
+      "lines": 66,
+      "bytes": 6052,
+      "code_refs": [
+        "src/application/memory-limits.ts",
+        "src/application/relay-service.ts",
+        "src/core/episodic-memory.ts"
+      ],
+      "related": [
+        "KB-REF-014",
+        "KB-OPS-004"
+      ],
+      "tags": [
+        "faq",
+        "context",
+        "memory",
+        "history"
+      ]
+    },
+    {
+      "id": "KB-REF-016",
+      "title": "FAQ: Plans, Workflows, and Scheduled Jobs",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on Code60 Plans versus Workflows, provider planning modes, and Scheduled Jobs execution and recovery.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/plans-workflows-and-schedules.md",
+      "lines": 84,
+      "bytes": 6950,
+      "code_refs": [
+        "src/core/workflow-engine.ts",
+        "src/application/plans.ts",
+        "src/automation/scheduler.ts"
+      ],
+      "related": [
+        "KB-REF-014",
+        "KB-OPS-001"
+      ],
+      "tags": [
+        "faq",
+        "plans",
+        "workflows",
+        "scheduler"
+      ]
+    },
+    {
+      "id": "KB-REF-017",
+      "title": "FAQ: Accessibility, Architecture, and Support",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on accessibility support, programming languages, bug reports, security disclosures, and feature requests.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/accessibility-and-support.md",
+      "lines": 70,
+      "bytes": 4912,
+      "code_refs": [
+        "src/renderer/app.tsx",
+        "package.json"
+      ],
+      "related": [
+        "KB-ARCH-001",
+        "KB-REF-012"
+      ],
+      "tags": [
+        "faq",
+        "accessibility",
+        "support"
+      ]
+    },
+    {
+      "id": "KB-REF-018",
+      "title": "FAQ: Provider Support, Local Models, and Skills",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on Code60's standard Agent Provider catalog, local model harnesses, and repository or user-level skills.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/provider-support.md",
+      "lines": 58,
+      "bytes": 4238,
+      "code_refs": [
+        "src/application/provider-catalog.ts",
+        "src/application/provider-setup-policy.ts"
+      ],
+      "related": [
+        "KB-REF-019",
+        "KB-REF-006"
+      ],
+      "tags": [
+        "faq",
+        "providers",
+        "skills"
+      ]
+    },
+    {
+      "id": "KB-REF-019",
+      "title": "FAQ: Provider Authentication",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Per-provider ACP authentication steps and credential boundaries for Antigravity, Claude, Codex, Copilot, Droid, Kiro, OpenCode, and Cursor.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/provider-authentication.md",
+      "lines": 107,
+      "bytes": 7132,
+      "code_refs": [
+        "src/application/provider-catalog.ts",
+        "src/application/provider-setup-policy.ts",
+        "src/application/provider-artifacts.ts",
+        "src/application/codex-provider.ts"
+      ],
+      "related": [
+        "KB-REF-018",
+        "KB-REF-012"
+      ],
+      "tags": [
+        "faq",
+        "providers",
+        "authentication"
       ]
     }
   ]

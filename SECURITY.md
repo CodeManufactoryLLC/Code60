@@ -1,6 +1,6 @@
 # Security Policy
 
-Code60 runs coding agents on the local machine. Its browser safeguards protect the application interface; they do not sandbox the agents launched by the user. For quick answers on auto-approval, sandboxing, and secret handling, see the [Security and Permissions FAQ](FAQ.md#security-and-permissions).
+Code60 runs coding agents on the local machine. Its browser safeguards protect the application interface; they do not sandbox the agents launched by the user. For quick answers on auto-approval, sandboxing, and secret handling, see the [Permissions and Sandboxing FAQ](knowledge/reference/faq/permissions-and-sandboxing.md) and [Security Measures and Secrets FAQ](knowledge/reference/faq/security-and-secrets.md).
 
 > The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), as mandated by [CONSTITUTION.md](CONSTITUTION.md). Each normative stipulation appears on its own line with a unique identifier (`SEC-<section>.<subsection>.<number>`).
 
