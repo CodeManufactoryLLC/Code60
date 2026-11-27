@@ -240,7 +240,7 @@ an entry point or dynamic asset.
 Desktop operational logs use fixed, allowlisted metadata only. Do not add prompts,
 provider/tool payloads, paths, commands, environment values or raw error objects.
 See [diagnostic logging](ARCHITECTURE.md#desktop-diagnostic-logging) and
-[the security policy](SECURITY.md#desktop-diagnostic-logs) before instrumentation.
+[the security policy](SECURITY.md#32-application-diagnostic-logs) before instrumentation.
 
 ### Investigating flaky tests
 

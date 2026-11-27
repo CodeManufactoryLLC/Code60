@@ -442,7 +442,7 @@ Search existing issues first, then open the **Bug report** form on [GitHub Issue
 Email **[support@code60.dev](mailto:support@code60.dev)** privately. Do not open a public issue or publish exploit details before coordinating disclosure.
 
 - **Details to include:** Share the Code60 version, platform, reproduction steps, potential impact, and a minimal example without credentials, private prompts, or sensitive data. Only the latest release receives security fixes.
-- **Response target:** Maintainers aim to acknowledge reports within five business days before reviewing and coordinating fixes. That five-day window is a response target and does not guarantee a fix date. See [Reporting a vulnerability](SECURITY.md#reporting-a-vulnerability).
+- **Response target:** Maintainers aim to acknowledge reports within five business days before reviewing and coordinating fixes. That five-day window is a response target and does not guarantee a fix date. See [Reporting a vulnerability](SECURITY.md#52-reporting-a-vulnerability).
 
 ### How do I request a feature?
 
