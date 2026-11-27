@@ -437,7 +437,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Connect → Providers → More actions beside a provider → Disconnect or Set as Primary",
     "none",
     "read",
-    "Database-independent. Add Provider verifies catalog connectors. After connection, choose Close or Add another provider. Standard Codex setup offers explicit installation of pinned @openai/codex@0.171.0 and device-code sign-in; A non-root backend user is required; Codex and the Claude ACP adapter require npm. The controlling setup dialog alone receives temporary codes and official HTTPS sign-in links; authorization-code paste-back and the fixed Copilot private-file storage confirmation are ephemeral. Login requires enabled ChatGPT device-code authentication, then a fresh ACP probe and automatic save. Closing, reload, takeover or shutdown cancels setup without logout. Other standard harnesses offer fixed pinned installations and browser sign-in: Antigravity with code paste-back, Claude subscription or Anthropic Console with code paste-back, Copilot and Kiro device codes, Droid device pairing, and OpenCode ChatGPT or GitHub Copilot OAuth. Custom launch commands and enterprise endpoints use manual setup. Credentials and managed tools persist in the backend user's home, including the container home volume. No account switching, logout, API-key entry or management MCP tools. Set as Primary preserves other memberships and uses saved command verification; Disconnect removes only Code60 membership and retains model defaults, history and external login. Both actions require stopped interactive agent work and no setup transaction. The primary cannot disconnect until another provider is primary. Verified membership is not live connection health.",
+    "Database-independent. Add Provider verifies catalog connectors. After connection, choose Close or Add another provider. Standard Codex setup offers explicit installation of pinned @openai/codex@0.171.0 and device-code sign-in. A non-root backend user is required; Codex and the Claude ACP adapter require npm. The controlling setup dialog alone receives temporary codes and official HTTPS sign-in links; authorization-code paste-back and the fixed Copilot private-file storage confirmation are ephemeral. Login requires enabled ChatGPT device-code authentication, then a fresh ACP probe and automatic save. Closing, reload, takeover or shutdown cancels setup without logout. Other standard harnesses offer fixed pinned installations and browser sign-in: Antigravity with code paste-back, Claude subscription or Anthropic Console with code paste-back, Copilot and Kiro device codes, Droid device pairing, and OpenCode ChatGPT or GitHub Copilot OAuth. Custom launch commands and enterprise endpoints use manual setup. Credentials and managed tools persist in the backend user's home, including the container home volume. No account switching, logout, API-key entry or management MCP tools. Set as Primary preserves other memberships and uses saved command verification; Disconnect removes only Code60 membership and retains model defaults, history and external login. Both actions require stopped interactive agent work and no setup transaction. The primary cannot disconnect until another provider is primary. Verified membership is not live connection health.",
     "Installation and login are explicit human-only setup actions. Install [provider] and sign in authorizes the fixed release installation and continuation into browser login; authorization happens on the official provider website.",
   ),
   feature(
@@ -491,7 +491,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "system-manager",
     "System Manager",
     "Inspect Backend Service scheduling health on the Services tab and active right-sidebar terminal sessions with their associated project on the Terminals tab.",
-    "Apps → System Manager (Services and Terminals tabs)",
+    "Manage → System Manager (also Apps → System Manager; Services and Terminals tabs)",
     "none",
     "human-only",
     "Services automatically checks scheduler health every two seconds (respecting global Pause polling and backing off to sixty seconds on failure), with manual refresh. Install, repair, start, stop and uninstall use local code60 service commands. Terminals lists all live interactive shells with their project/Relay association, working directory, shell, PID, start time, and Close terminal control. No database is required; awareness never probes or controls services or terminals.",
@@ -530,7 +530,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "settings",
     "Settings",
     "Choose Light, Dark or System, interface text size, signal colors and table defaults. Table defaults start at Low density (Carbon 64px rows), with row, column and heading lines off. Saved table settings retain their column order, visibility and density. Apply saves the draft, including a Reset to defaults. Cancel or Escape discards it. Browser-native window management is outside Code60.",
-    "Personalize → Text, Table Defaults or Appearance, Manage → Polling, Workspace → Color theme",
+    "Personalize → Text, Table Defaults or Appearance, Manage → About or Polling, Workspace → Color theme",
     "none",
     "human-only",
     "Navigation groups expand or collapse independently. Project and conversation disclosures retain their own state. System follows the operating system. In Appearance, use the Accent color picker to change the default verdigris or reset it. This browser remembers the accent across light and dark themes. Legacy decorative preferences remain stored.",
@@ -543,7 +543,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "none",
     "human-only",
     "Managed installations require Node >=24.22.0 <25 on macOS arm64 or Linux x64. code60 update resolves the stable npm bootstrap, verifies registry integrity and exact platform payloads before shutdown, then activates atomically and repairs service registration. code60 update status is read-only; code60 update recover explicitly repairs the current activation after interruption without database downgrade or replay. Setup never updates. No automatic downloads or checks from browser awareness, native installers or bundled Node.",
-    "Local terminal consent is required before interrupting interactive/scheduled work; non-TTY changes require Code60's --yes. Prior releases, histories, custom databases, worktrees, settings and pinned engine/runtime bindings are preserved. The browser shows installed version and terminal instructions only.",
+    "Local terminal consent is required before interrupting interactive/scheduled work; non-TTY changes require Code60's --yes. Prior releases, histories, custom databases, worktrees and settings are preserved. The browser shows installed version and terminal instructions only.",
   ),
   feature(
     "browser-runtime",
@@ -552,7 +552,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Terminal → code60 setup, status or open; Workspace → Stop Code60 Backend",
     "none",
     "human-only",
-    "macOS Apple Silicon and Linux x64 setup requires Node >=24.22.0 <25, npm and Git; Linux needs a working user systemd session for service enrollment. The private distribution candidate supports code60 setup [--yes] [--no-open] and read-only code60 status. Setup installs a durable launcher, separately requests shell-profile approval and default-no service consent, preserves valid custom selections and opens the browser for provider verification. Gateway startup and setup initialize the default database under XDG_DATA_HOME/code60/databases/default.sqlite (default ~/.local/share) when no selection exists yet. No provider authority or agent work is seeded. Without a TTY, service changes require Code60’s trailing --yes; no profiles are edited. Declined service consent returns files-only success with explicit incomplete status and a continuation command. --no-open skips the opener; opener failure retains a usable URL. Repeated setup reuses healthy files and selections without implicit updates. Status never repairs or starts services/engines. Packages remain unpublished until release preparation. The opt-in per-user backend starts at login. Browsers connect without a code by default, with per-tab sessions and one controlling browser. Local code60 pairing on/off/status makes the code requirement optional; setting changes require consent and revoke browser sessions without cancelling approved work. When enabled, the code is single-use and expires after sixty seconds. Closing or refreshing a browser preserves approved work. Workspace chooser roots default to the user's home and require local configuration to expand. No Electron, public hosting or general agent execution CLI.",
+    "macOS Apple Silicon and Linux x64 setup requires Node >=24.22.0 <25, npm and Git; Linux needs a working user systemd session for service enrollment. Managed installations support code60 setup [--yes] [--no-open] and read-only code60 status. A Linux x64 Docker image (mjholliday/code60) is also available on port 6060 for containerized browser access. Setup installs a durable launcher, separately requests shell-profile approval and default-no service consent, preserves valid custom selections and opens the browser for provider verification. Gateway startup and setup initialize the default database under XDG_DATA_HOME/code60/databases/default.sqlite (default ~/.local/share) when no selection exists yet. No provider authority or agent work is seeded. Without a TTY, service changes require Code60’s trailing --yes; no profiles are edited. Declined service consent returns files-only success with explicit incomplete status and a continuation command. --no-open skips the opener; opener failure retains a usable URL. Repeated setup reuses healthy files and selections without implicit updates. Status never repairs or starts services. The opt-in per-user backend starts at login. Browsers connect without a code by default, with per-tab sessions and one controlling browser. Local code60 pairing on/off/status makes the code requirement optional; setting changes require consent and revoke browser sessions without cancelling approved work. When enabled, the code is single-use and expires after sixty seconds. Closing or refreshing a browser preserves approved work. Workspace chooser roots default to the user's home and require local configuration to expand. No Electron, public hosting or general agent execution CLI.",
     "Take control explicitly replaces another browser's control; stale page confirmations are rejected. Stopping the backend confirms cancellation of all interactive and scheduled work. Restart never replays uncertain tasks.",
   ),
   feature(
@@ -562,7 +562,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Local terminal → code60 uninstall [--yes]",
     "none",
     "human-only",
-    "Requires a receipted installation and Node >=24.22.0 <25 on macOS arm64 or Linux x64. Linux workflow removal requires readable native procfs ownership evidence; restricted or unverifiable emulated process mappings refuse removal. Active or uncertain application, scheduled or independent workflow ownership refuses removal. The command quiesces verified idle owners, unregisters only its backend and removes receipted application releases and launcher. Databases, configuration, run records, engine cache/evidence and project worktrees remain. Unrelated global/npm installations and changed launchers or profile blocks are preserved. No data-purge option. A printed absolute recovery launcher survives partial application/cache deletion; unfinished removal must be recovered before reinstalling. Reinstall validates retained ownership and data through normal setup; an old recovery cannot remove a later activation.",
+    "Requires a receipted installation and Node >=24.22.0 <25 on macOS arm64 or Linux x64. Linux workflow removal requires readable native procfs ownership evidence; restricted or unverifiable emulated process mappings refuse removal. Active or uncertain application, scheduled or independent workflow ownership refuses removal. The command quiesces verified idle owners, unregisters only its backend and removes receipted application releases and launcher. Databases, configuration, run records and project worktrees remain. Unrelated global/npm installations and changed launchers or profile blocks are preserved. No data-purge option. A printed absolute recovery launcher survives partial application/cache deletion; unfinished removal must be recovered before reinstalling. Reinstall validates retained ownership and data through normal setup; an old recovery cannot remove a later activation.",
     "Default-no local terminal consent is required; non-TTY operation needs Code60's trailing --yes. Shell-profile removal has its own exact preview and explicit interactive approval; --yes never approves profiles. Awareness cannot run uninstall, inspect service/process ownership or modify files.",
   ),
   feature(
@@ -591,7 +591,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "contributor-tools",
     "Contributor Tools",
     "Reserved contributor destination.",
-    "Settings → Advanced → Contributor Tools",
+    "Contributor Tools",
     "none",
     "human-only",
     "Placeholder, not an implemented tool.",
@@ -611,7 +611,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
     "logs",
     "Diagnostic logs",
-    "Inspect private, typed desktop diagnostics.",
+    "Inspect private, typed application diagnostics.",
     "Apps → Data Viewer → Logs; title actions → Pause/Resume viewing, Refresh logs or Clear logs",
     "none",
     "human-only",
@@ -733,12 +733,29 @@ const references = (capability: string) => ({
 });
 export const capabilityReferences = references;
 
-/** Deterministic bundled reference; `docs/capabilities.md` must equal this output. */
+/** Deterministic bundled reference; `knowledge/reference/capabilities.md` must equal this output. */
 export function capabilityReference(): string {
   const list = (values: string[]) =>
     values.length ? values.map((v) => `\`${v}\``).join(", ") : "none";
   return [
-    "# Desktop capability reference",
+    "---",
+    "id: KB-REF-001",
+    "title: Capability Reference",
+    "domain: reference",
+    "kind: reference",
+    "status: active",
+    "summary: Generated catalog of Code60 browser capabilities, access paths, prerequisites, limits, and agent-visible tools.",
+    "updated: 2026-11-27",
+    "code_refs:",
+    "  - src/contracts/knowledge.ts",
+    "  - src/contracts/navigation.ts",
+    "tags:",
+    "  - capabilities",
+    "  - self-knowledge",
+    "  - reference",
+    "---",
+    "",
+    "# Capability Reference",
     "",
     "Generated from `src/contracts/knowledge.ts`. Do not edit by hand; run `npm run generate:capabilities`.",
     "",

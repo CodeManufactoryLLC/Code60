@@ -43,6 +43,6 @@ Testing done or Relevant context section rather than implying it was tested. -->
 - [ ] Behavior changes have been verified with `npm run test:browser`.
 - [ ] CLI help and relevant documentation reflect user-visible changes.
 - [ ] `FAQ.md` and `TERMINOLOGY.md` reflect user-visible changes (using `refreshingly-simple-english`, alphabetical terminology, and updated metadata), or the description explains why no update is needed.
-- [ ] Capability-affecting changes update `src/contracts/knowledge.ts` and `docs/capabilities.md` (`npm run generate:capabilities`), or the description explains why no knowledge change is needed.
+- [ ] Capability-affecting changes update `src/contracts/knowledge.ts` and `knowledge/reference/capabilities.md` (`npm run generate:capabilities`), or the description explains why no knowledge change is needed.
 - [ ] Changes follow `ARCHITECTURE.md` and the applicable `AGENTS.md` instructions.
 - [ ] Each commit includes the Developer Certificate of Origin sign-off required by `CONTRIBUTING.md`.

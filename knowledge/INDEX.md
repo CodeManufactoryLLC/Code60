@@ -12,5 +12,7 @@ Start here to locate canonical Code60 documentation without reading full specifi
 ## Indexed Documents
 
 <!-- BEGIN:KB_INDEX -->
-_No domain documents indexed yet. Add documents under `governance/`, `architecture/`, `subsystems/`, `operations/`, or `reference/` using [templates/](templates/)._
+| ID | Title | Domain | Kind | Status | Updated | Summary |
+| --- | --- | --- | --- | --- | --- | --- |
+| `KB-REF-001` | [Capability Reference](reference/capabilities.md) | `reference` | `reference` | `active` | `2026-11-27` | Generated catalog of Code60 browser capabilities, access paths, prerequisites, limits, and agent-visible tools. |
 <!-- END:KB_INDEX -->

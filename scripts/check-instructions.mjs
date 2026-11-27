@@ -193,6 +193,7 @@ export async function checkInstructions(directory = repository) {
   };
   await collect(".factory/skills", true);
   await collect("docs", true);
+  await collect("knowledge", true);
   const names = new Set();
   for (const file of [...documents].sort()) {
     let text;

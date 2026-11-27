@@ -54,7 +54,9 @@ describe("browser capability catalog", () => {
     expect(capability?.limitations).toContain(
       "unverifiable emulated process mappings refuse removal",
     );
-    expect(capability?.limitations).toContain("engine cache/evidence");
+    expect(capability?.limitations).toContain(
+      "Databases, configuration, run records and project worktrees remain",
+    );
     expect(capability?.limitations).toContain("absolute recovery launcher");
     expect(capability?.confirmation).toContain("--yes never approves profiles");
   });
@@ -444,7 +446,11 @@ describe("browser capability catalog", () => {
   });
 
   it("matches the generated bundled reference", async () => {
-    await expect(capabilityReference()).toMatchFileSnapshot("../docs/capabilities.md");
+    const reference = capabilityReference();
+    expect(reference).toContain("id: KB-REF-001");
+    expect(reference).toContain("# Capability Reference");
+    expect(reference).toContain("mjholliday/code60");
+    await expect(reference).toMatchFileSnapshot("../knowledge/reference/capabilities.md");
   });
 
   it("describes session-owned file tabs without changing their runtime prerequisite", () => {

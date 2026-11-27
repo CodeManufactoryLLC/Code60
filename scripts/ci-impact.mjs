@@ -47,7 +47,7 @@ const cleanPayloadSuites = ["clean-payload", "managed", "clean-setup"];
 function forPath(path) {
   if (
     /^(?:[A-Z][A-Z0-9_-]*\.md|src\/[a-z]+\/AGENTS\.md)$/.test(path) ||
-    /^(?:docs|ad-hoc-plans|\.factory\/skills)\/.+\.md$/.test(path) ||
+    /^(?:docs|knowledge|ad-hoc-plans|\.factory\/skills)\/.+\.md$/.test(path) ||
     /^(?:\.devcontainer|test\/clean-install)\/README\.md$/.test(path) ||
     /^docs\/review\/.+\.(?:png|webp|jpe?g)$/.test(path)
   )
