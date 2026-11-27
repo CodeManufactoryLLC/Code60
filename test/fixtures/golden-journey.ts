@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { createDatabase, onboard, openProject } from "./browser-actions.js";
+import { createDatabase, onboard, openChat, openProject } from "./browser-actions.js";
 import { commitFixture } from "./git-repository.js";
 
 interface GoldenApplication {
@@ -111,7 +111,7 @@ export async function goldenJourney(fixture: GoldenApplication, setupDatabase?: 
       page.getByRole("list", { name: "Attached code references", exact: true }),
     ).toContainText("result.txt:1-1");
     await page.reload();
-    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await openChat(page);
     await expect(composer).toHaveValue("An existing unsent draft.");
     expect(
       (await page.evaluate(() => window.code60.snapshot())).runs.map((run) => run.record.id),

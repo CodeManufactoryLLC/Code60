@@ -13,7 +13,7 @@ export function HomePage({
   database: string | null;
   relayAvailable: boolean;
   onOpenRelay(): Promise<void>;
-  onOpenPage(id: "custom-agents" | "search" | "projects" | "apps" | "sessions"): void;
+  onOpenPage(id: "custom-agents" | "search" | "apps" | "sessions"): void;
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -44,7 +44,7 @@ export function HomePage({
     },
     ...(page === "assistants"
       ? (["custom-agents"] as const)
-      : (["custom-agents", "search", "projects", "apps", "sessions"] as const)
+      : (["custom-agents", "search", "apps", "sessions"] as const)
     ).map((id) => {
       const page = pageDefinitions[id];
       return {
@@ -53,7 +53,6 @@ export function HomePage({
         task: {
           "custom-agents": "Configure an assistant or open its conversation",
           search: "Find messages, plans and files",
-          projects: "Open a repository or resume a conversation",
           apps: "Browse automation and management tools",
           sessions: "Inspect a worker run",
         }[id],

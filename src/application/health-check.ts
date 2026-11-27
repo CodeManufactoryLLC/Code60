@@ -221,7 +221,7 @@ const CHECK_CATALOG: readonly CheckMeta[] = [
     title: "Git & worktree readiness",
     question: "Is Git installed and are open projects ready for worktrees?",
     mode: "passive",
-    deepLink: { kind: "page", id: "projects", label: "Projects" },
+    deepLink: { kind: "page", id: "chat", label: "Chat" },
   },
   {
     id: "relay-health",
@@ -237,7 +237,7 @@ const CHECK_CATALOG: readonly CheckMeta[] = [
     title: "Project database",
     question: "Is the project database connected and healthy?",
     mode: "passive",
-    deepLink: { kind: "page", id: "projects", label: "Projects" },
+    deepLink: { kind: "page", id: "chat", label: "Chat" },
   },
   {
     id: "storage-safety",

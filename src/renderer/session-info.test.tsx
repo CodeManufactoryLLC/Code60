@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { SessionState } from "../core/index.js";
-import { contextUsage, SessionExtras, SessionInfo } from "./session-info.js";
+import { contextUsage, SessionInfo } from "./session-info.js";
 import { transcript } from "./transcript.js";
 import { replyTurns } from "./unread.js";
 
@@ -26,45 +26,34 @@ const state: SessionState = {
     ],
   },
 };
-const render = (
-  overrides: Partial<Parameters<typeof SessionInfo>[0] & Parameters<typeof SessionExtras>[0]> = {},
-) =>
+const render = (overrides: Partial<Parameters<typeof SessionInfo>[0]> = {}) =>
   renderToStaticMarkup(
-    <>
-      <SessionInfo
-        sessionId="session-one"
-        state={state}
-        ended={false}
-        editable
-        changing={false}
-        onMode={() => {}}
-        {...overrides}
-      />
-      <SessionExtras
-        harness="droid"
-        active
-        ended={false}
-        autoApproval
-        onAutoApprovalChange={async () => {}}
-        {...overrides}
-      />
-    </>,
+    <SessionInfo
+      harness="droid"
+      sessionId="session-one"
+      state={state}
+      ended={false}
+      editable
+      changing={false}
+      onMode={() => {}}
+      {...overrides}
+    />,
   );
 
 describe("session information", () => {
-  it("shows separate model, context, harness mode and Code60 approval state", () => {
+  it("shows provider logo before model, context, and harness mode without auto-approval toggle", () => {
     const html = render();
+    expect(html).toContain('aria-label="Current provider: Droid"');
+    expect(html.indexOf('aria-label="Current provider: Droid"')).toBeLessThan(
+      html.indexOf('aria-label="Model"'),
+    );
     expect(html).toContain('class="mode-value">Model One</span>');
     expect(html).toContain("26.5%");
     expect(html).toContain("Harness mode");
     expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain('width="20"');
     expect(html).toContain('stroke-dasharray="26.5 100"');
-    expect(html).toContain('aria-label="Code60 auto-approval" aria-pressed="true"');
-    expect(render({ autoApproval: false, editable: false })).toContain(
-      'aria-label="Code60 auto-approval" aria-pressed="false" data-tooltip=',
-    );
-    expect(render({ onAutoApprovalChange: undefined })).not.toContain('data-slot="toggle"');
+    expect(html).not.toContain("Code60 auto-approval");
     expect(html).toContain('aria-disabled="false"');
     expect(html).not.toContain("<select");
   });

@@ -69,18 +69,9 @@ it.each<[PageId, boolean, boolean, boolean, boolean]>([
   ["chat", true, false, false, false],
   ["chat", false, true, false, false],
   ["search", false, false, false, false],
-  ...(
-    [
-      "home",
-      "projects",
-      "project",
-      "apps",
-      "tables",
-      "settings",
-      "advanced",
-      "experiments",
-    ] as const
-  ).map((id): [PageId, boolean, boolean, boolean, boolean] => [id, false, false, false, false]),
+  ...(["home", "apps", "tables", "settings", "advanced", "experiments"] as const).map(
+    (id): [PageId, boolean, boolean, boolean, boolean] => [id, false, false, false, false],
+  ),
 ])(
   "gates retained workspace reads for %s, pending %s, splash %s",
   (active, pending, splash, transcriptsActive, filesActive) => {

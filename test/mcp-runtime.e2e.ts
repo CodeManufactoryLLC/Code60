@@ -1,7 +1,7 @@
 import { mkdir, open, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { openMcpServers } from "./fixtures/browser-actions.js";
+import { openChat, openMcpServers } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
 
 async function apps(page: Page) {
@@ -99,7 +99,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
       .poll(async () => (await events()).filter((event) => event.event === "spawn").length)
       .toBe(before + 1);
     await expect(page.getByLabel("MCP connection controls")).toContainText("fixture: connected");
-    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await openChat(page);
     const chat = page.locator(".orchestration-chat-page:visible");
     const composer = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
     await composer.fill(
@@ -143,7 +143,7 @@ test("MCP runtime: future enablement, test confirmation, approval, disconnect an
     await troubleshooting.getByRole("button", { name: "Close report", exact: true }).click();
     await writeFile(userFile, savedConfiguration);
     await apps(page);
-    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await openChat(page);
     await chat.getByRole("button", { name: "Stop", exact: true }).click();
     await expect(composer).toBeEditable();
     await apps(page);

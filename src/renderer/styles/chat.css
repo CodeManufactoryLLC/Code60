@@ -157,9 +157,10 @@
   font-synthesis: weight style;
 }
 
-/* Agent bubbles share human padding; metadata follows the inner text edge. */
+/* Agent bubbles align flush with the Carbon header; metadata follows the inner text edge. */
 .agent-message-bubble {
   width: 100%;
+  padding: 12px 18px 12px 0;
 }
 
 .event.message.search-match > .agent-message-bubble {
@@ -169,8 +170,8 @@
 
 .event.message > .message-copy {
   margin-top: 4px;
-  margin-left: 20px;
-  max-width: calc(100% - 20px);
+  margin-left: 0;
+  max-width: 100%;
 }
 
 .chat-markdown :is(p, ul, ol, blockquote, pre, .chat-markdown-table) {
@@ -332,8 +333,7 @@
   border: 0;
 }
 
-.event.prompt:where(:not(.automatic)) pre,
-.agent-message-bubble {
+.event.prompt:where(:not(.automatic)) pre {
   padding: 12px 18px;
 }
 
@@ -758,7 +758,7 @@
 
 .orchestration-chat-body .composer-footer {
   justify-content: flex-end;
-  padding: 8px 12px 12px 18px;
+  padding: 4px 12px 2px 18px;
   background: transparent;
   border: 0;
 }
@@ -846,15 +846,15 @@
   gap: 4px 12px;
 }
 
-.session-extras .composer-harness {
-  margin-inline-start: auto;
-}
-
 .chat-prompt-controls {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
+}
+
+.chat-prompt-controls .composer-harness {
+  margin-inline-end: 2px;
 }
 
 .mode-trigger {

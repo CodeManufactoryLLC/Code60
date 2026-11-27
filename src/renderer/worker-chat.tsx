@@ -15,7 +15,7 @@ import { TurnTimer } from "./message-controls.js";
 import { PageTitle } from "./page-title.js";
 import { PendingApprovals } from "./pending-approvals.js";
 import { continueBlocker } from "./recovery.js";
-import { SessionExtras, SessionInfo } from "./session-info.js";
+import { SessionInfo } from "./session-info.js";
 import { statusSpec } from "./session-presentation.js";
 import { transcript } from "./transcript.js";
 import { useWorkerActions } from "./worker-actions.js";
@@ -36,7 +36,6 @@ export function WorkerChat({
   historyError,
   onRetry,
   onCopied,
-  autoApproval = true,
   notice,
 }: {
   api: ApplicationClient;
@@ -53,7 +52,6 @@ export function WorkerChat({
   historyError: string | undefined;
   onRetry(): void;
   onCopied?: (() => void) | undefined;
-  autoApproval?: boolean;
   notice?: ReactNode;
 }) {
   const id = run.record.id;
@@ -133,6 +131,7 @@ export function WorkerChat({
   }
   const promptControls = (
     <SessionInfo
+      harness={run.record.agent}
       state={run.view?.sessionState ?? run.record.sessionState}
       sessionId={id}
       active={active}
@@ -151,22 +150,10 @@ export function WorkerChat({
       }}
     />
   );
-  const extras = (
-    <SessionExtras
-      harness={run.record.agent}
-      ended={ended}
-      active={active}
-      autoApproval={autoApproval}
-      onAutoApprovalChange={
-        orchestrated ? (value) => api.setOrchestrationAutoApproval(value) : undefined
-      }
-    />
-  );
   const footer = inactive ? (
     <Card className="composer composer-inactive" role="status">
       <p>Agent is inactive. Its worktree was deleted.</p>
       {promptControls}
-      {extras}
     </Card>
   ) : (
     <Card as="section" className="composer" aria-label="Worker composer">
@@ -175,7 +162,6 @@ export function WorkerChat({
           {blocker}
         </span>
       )}
-      {extras}
     </Card>
   );
   return (

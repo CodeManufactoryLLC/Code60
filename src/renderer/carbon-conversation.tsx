@@ -23,19 +23,37 @@ import { commandSuggestions } from "./command-composer.js";
 import { chatEntries, type EmbeddedChatProps } from "./embedded-chat.js";
 
 const Viewport = createContext<EmbeddedChatProps["onViewport"]>(undefined);
-function bindViewport(element: HTMLElement | null, onViewport: EmbeddedChatProps["onViewport"]) {
-  if (!onViewport) return;
-  while (element) {
-    if (element instanceof HTMLDivElement && getComputedStyle(element).overflowY === "auto") {
-      onViewport(element);
-      return;
+function bindTurnHost(
+  element: HTMLElement | null,
+  isUser: boolean,
+  onViewport: EmbeddedChatProps["onViewport"],
+): boolean {
+  let node: HTMLElement | null = element;
+  let messageMarked = false;
+  let viewportBound = !onViewport;
+  while (node && (!messageMarked || !viewportBound)) {
+    if (!messageMarked && node.classList.contains("cds-aichat--message")) {
+      if (isUser) node.setAttribute("data-code60-user-turn", "");
+      else node.removeAttribute("data-code60-user-turn");
+      const root = node.getRootNode();
+      if (root instanceof ShadowRoot) suppressShadowFocus(root);
+      messageMarked = true;
     }
-    const root = element.getRootNode();
-    element =
-      element.assignedSlot ??
-      element.parentElement ??
+    if (
+      !viewportBound &&
+      node instanceof HTMLDivElement &&
+      getComputedStyle(node).overflowY === "auto"
+    ) {
+      onViewport?.(node);
+      viewportBound = true;
+    }
+    const root = node.getRootNode();
+    node =
+      node.assignedSlot ??
+      node.parentElement ??
       (root instanceof ShadowRoot && root.host instanceof HTMLElement ? root.host : null);
   }
+  return messageMarked;
 }
 const Entries = createContext<{
   turns: ReturnType<typeof chatEntries>;
@@ -43,14 +61,22 @@ const Entries = createContext<{
 } | null>(null);
 function Entry({ id, slot }: { id: string; slot: unknown }) {
   const onViewport = useContext(Viewport);
-  const bind = useCallback(
-    (el: HTMLDivElement | null) => bindViewport(el, onViewport),
-    [onViewport],
-  );
   const entries = useContext(Entries);
-  return entries?.transcript.isCurrent(id, slot) ? (
-    <div ref={bind}>{entries.turns.get(id)?.children}</div>
-  ) : null;
+  const turn = entries?.turns.get(id);
+  const isUserProp = turn?.from === "user";
+  const current = entries?.transcript.isCurrent(id, slot) ?? false;
+  const ref = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    if (!current || !ref.current) return;
+    const isUser =
+      isUserProp || Boolean(ref.current.querySelector("article.event.prompt:not(.automatic)"));
+    if (bindTurnHost(ref.current, isUser, onViewport)) return;
+    const frame = requestAnimationFrame(() => {
+      if (ref.current) bindTurnHost(ref.current, isUser, onViewport);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [current, isUserProp, onViewport]);
+  return current ? <div ref={ref}>{turn?.children}</div> : null;
 }
 function renderEntry(state: RenderUserDefinedState) {
   const key = state.fullMessage?.id;
@@ -62,6 +88,7 @@ const frame = { showFrame: false };
 const off = { isOn: false };
 const history = { isOn: false, showMobileMenu: false };
 
+const CODE60_SHADOW_SHEET = Symbol.for("code60.shadow-focus-sheet");
 const styledShadowRoots = new WeakSet<ShadowRoot>();
 let shadowFocusSheet: CSSStyleSheet | null | undefined;
 function getShadowFocusSheet(): CSSStyleSheet | null {
@@ -71,6 +98,7 @@ function getShadowFocusSheet(): CSSStyleSheet | null {
     return null;
   }
   const sheet = new CSSStyleSheet();
+  (sheet as unknown as Record<symbol, boolean>)[CODE60_SHADOW_SHEET] = true;
   sheet.replaceSync(
     "*,::before,::after{outline-color:transparent !important;}" +
       ":focus,:focus-visible,:active{outline:none !important;outline-width:0 !important;outline-color:transparent !important;}" +
@@ -82,7 +110,22 @@ function getShadowFocusSheet(): CSSStyleSheet | null {
       "{outline:none !important;outline-width:0 !important;outline-color:transparent !important;box-shadow:none !important;}" +
       ":host .cds--btn:not(.cds--btn--tertiary,.cds--btn--danger--tertiary):is(:focus,:focus-visible,:active)," +
       ".cds--btn:not(.cds--btn--tertiary,.cds--btn--danger--tertiary):is(:focus,:focus-visible,:active)" +
-      "{border-color:transparent !important;}",
+      "{border-color:transparent !important;}" +
+      ":host .cds-aichat--message--request .cds-aichat--message__avatar-line," +
+      ":host .cds-aichat--message[data-code60-user-turn] .cds-aichat--message__avatar-line" +
+      "{display:none !important;}" +
+      ":host .cds-aichat--message--request," +
+      ":host .cds-aichat--message[data-code60-user-turn]" +
+      "{padding-block-start:1.75rem;}" +
+      ":host .cds-aichat--input-container--expanded," +
+      ".cds-aichat--input-container--expanded" +
+      "{align-content:flex-start !important;padding-block-start:0 !important;}" +
+      ":host .cds-aichat--input-container--expanded .cds-aichat--input-text-area," +
+      ".cds-aichat--input-container--expanded .cds-aichat--input-text-area" +
+      "{align-items:flex-start !important;margin-block-start:0 !important;padding-block-start:10px !important;min-block-size:clamp(3rem,9dvh,4.75rem) !important;}" +
+      ":host([content-max-width]:not([show-workspace])) .input-and-messages:not(.at-max-width)>.input-after," +
+      ".input-and-messages>.input-after" +
+      "{margin-block-end:0.5rem !important;}",
   );
   shadowFocusSheet = sheet;
   return sheet;
@@ -94,7 +137,10 @@ function suppressShadowFocus(root: ShadowRoot) {
   const current = root.adoptedStyleSheets;
   if (styledShadowRoots.has(root) && current[current.length - 1] === sheet) return;
   styledShadowRoots.add(root);
-  root.adoptedStyleSheets = [...current.filter((item) => item !== sheet), sheet];
+  root.adoptedStyleSheets = [
+    ...current.filter((item) => item !== sheet && !(CODE60_SHADOW_SHEET in item)),
+    sheet,
+  ];
 }
 
 function suppressNestedShadowFocus(node: ParentNode) {

@@ -121,7 +121,7 @@ test("development: Fast Refresh preserves the backend and backend edits restart 
     await createDatabase(page, directory);
     await openProject(page, directory, "sample-project");
     await expect(
-      page.getByRole("group", { name: `Project controls for ${project}`, exact: true }),
+      page.locator('cds-aichat-history-panel-menu[data-history-group="sample-project"]'),
     ).toBeVisible();
     expect(execFileSync("git", ["status", "--porcelain"], { cwd: project, encoding: "utf8" })).toBe(
       "",

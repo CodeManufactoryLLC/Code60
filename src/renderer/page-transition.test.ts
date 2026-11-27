@@ -105,11 +105,9 @@ it("moves destination content without dimming its shell or replaying background 
   render("settings", "appearance");
   expect(animation.cancel).toHaveBeenCalledOnce();
   render("settings", "about");
-  render("project", "project-a");
-  render("project", "project-b");
   render("chat", "conversation-a");
   render("chat", "worker-b");
-  expect(content.animate).toHaveBeenCalledTimes(7);
+  expect(content.animate).toHaveBeenCalledTimes(5);
 });
 
 it("does not replay an entrance when a visible page receives its initial identity", () => {

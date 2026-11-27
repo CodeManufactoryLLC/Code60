@@ -30,15 +30,12 @@ const currentDestination = ({
   tabs,
   settingsSection,
   workerId,
-}: HistoryDependencies): Destination => {
-  if (tabs.active === "project" && tabs.projectId)
-    return { page: "project", project: tabs.projectId };
-  return destination(
+}: HistoryDependencies): Destination =>
+  destination(
     tabs.active,
     settingsSection,
     workerId ?? (snapshot && conversationId(snapshot.chat)),
   );
-};
 
 export function useHistoryNavigation(dependencies: HistoryDependencies) {
   return historyNavigation(useNavigationHistory(currentDestination(dependencies)), dependencies);
@@ -53,9 +50,6 @@ export function historyNavigation(recorder: NavigationRecorder, dependencies: Hi
   const chatById = (id: string) => snapshot?.chats.find((chat) => conversationId(chat) === id);
   const available = (entry: Destination) => {
     if (!pageAvailable(entry.page, database)) return false;
-    if (entry.project)
-      return Boolean(snapshot?.openProjects?.some((project) => project.id === entry.project));
-    if (entry.page === "project") return false;
     if (!entry.chat) return true;
     const chat = chatById(entry.chat);
     if (chat) return !chat.archived && (Boolean(database) || chat.kind === "relay");
@@ -70,11 +64,9 @@ export function historyNavigation(recorder: NavigationRecorder, dependencies: Hi
   const restore = async (entry: Destination) => {
     const target: NavigationTarget = entry.chat
       ? { kind: "conversation", id: entry.chat }
-      : entry.project
-        ? { kind: "project", id: entry.project }
-        : entry.section
-          ? { kind: "settings", id: entry.section }
-          : { kind: "page", id: entry.page };
+      : entry.section
+        ? { kind: "settings", id: entry.section }
+        : { kind: "page", id: entry.page };
     if (!(await navigation.open(target)))
       throw new Error("Unable to restore navigation destination.");
   };
@@ -96,8 +88,6 @@ export function historyNavigation(recorder: NavigationRecorder, dependencies: Hi
             entry.page === "chat" &&
             Boolean(entry.chat && chatById(entry.chat)?.customAgentId === target.id)
           );
-        case "project":
-          return entry.page === "project" && entry.project === target.id;
         case "settings":
           return entry.page === "settings" && entry.section === target.id;
         case "page":

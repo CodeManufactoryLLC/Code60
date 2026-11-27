@@ -4,8 +4,6 @@ import { expect, type Page } from "@playwright/test";
 export async function expandNavigation(
   page: Page,
   group:
-    | "Chat"
-    | "Develop"
     | "Automate"
     | "Connect"
     | "Customize"
@@ -28,6 +26,24 @@ export async function openMcpServers(page: Page) {
     .click();
 }
 
+export async function openChat(page: Page) {
+  await page
+    .getByRole("navigation", { name: "Product navigation" })
+    .getByRole("tab", { name: "Chat", exact: true })
+    .click();
+  await expect(page.locator("cds-aichat-history-shell")).toBeVisible();
+}
+
+export async function openNewChatModal(page: Page) {
+  if (!(await page.locator("cds-aichat-history-toolbar").isVisible())) {
+    await openChat(page);
+  }
+  await page.locator("cds-aichat-history-toolbar cds-icon-button").click();
+  const dialog = page.getByRole("dialog", { name: "New chat", exact: true });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
 export async function onboard(page: Page) {
   const wizard = page.locator(".agent-setup-dialog");
   await expect(wizard).toBeVisible();
@@ -46,12 +62,8 @@ export async function reopenRetainedProject(page: Page, directory: string, datab
   await expect
     .poll(async () => (await page.evaluate(() => window.code60.snapshot())).database)
     .toBe(database);
-  await expandNavigation(page, "Develop");
-  await page.getByRole("tab", { name: "Projects", exact: true }).click();
-  await page
-    .locator("#panel-projects")
-    .getByRole("button", { name: "New Project", exact: true })
-    .click();
+  const newChat = await openNewChatModal(page);
+  await newChat.getByRole("button", { name: "Open Project Folder", exact: true }).click();
   const repo = join(directory, "project with spaces");
   const recent = page
     .getByRole("dialog", { name: "Open Project", exact: true })
@@ -66,7 +78,7 @@ export async function reopenRetainedProject(page: Page, directory: string, datab
   await expect
     .poll(async () => (await page.evaluate(() => window.code60.snapshot())).directory)
     .toBe(repo);
-  await page.getByRole("button", { name: "Relay", exact: true }).click();
+  await openChat(page);
   await expect(
     page
       .locator(".orchestration-chat-page:visible")
@@ -92,12 +104,8 @@ export async function createDatabase(page: Page, directory: string) {
   await expect(chooser).toHaveCount(0);
 }
 export async function openProject(page: Page, directory: string, name: string) {
-  await expandNavigation(page, "Develop");
-  await page.getByRole("tab", { name: "Projects", exact: true }).click();
-  await page
-    .locator("#panel-projects")
-    .getByRole("button", { name: "New Project", exact: true })
-    .click();
+  const newChat = await openNewChatModal(page);
+  await newChat.getByRole("button", { name: "Open Project Folder", exact: true }).click();
   await page
     .getByRole("dialog", { name: "Open Project", exact: true })
     .getByRole("button", { name: "Open Folder", exact: true })
@@ -113,4 +121,11 @@ export async function openProject(page: Page, directory: string, name: string) {
   await expect
     .poll(async () => (await page.evaluate(() => window.code60.snapshot())).directory)
     .toBe(join(directory, name));
+}
+
+export async function newProjectSession(page: Page, name: string) {
+  const newChat = await openNewChatModal(page);
+  const row = newChat.locator(".chat-history-project-row").filter({ hasText: name }).first();
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: "New Session", exact: true }).click();
 }

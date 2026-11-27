@@ -5,7 +5,6 @@ export type { PageId, SettingsSectionId } from "./navigation.js";
 export interface PageTabs {
   open: PageId[];
   active: PageId;
-  projectId?: string;
 }
 
 export const initialTabs: PageTabs = {
@@ -13,13 +12,9 @@ export const initialTabs: PageTabs = {
   active: "chat",
 };
 
-export type TabAction =
-  | { type: "open" | "select" | "close"; id: PageId }
-  | { type: "project"; projectId: string };
+export type TabAction = { type: "open" | "select" | "close"; id: PageId };
 
 export function updateTabs(state: PageTabs, action: TabAction): PageTabs {
-  if (action.type === "project")
-    return { open: state.open, active: "project", projectId: action.projectId };
   action = { ...action, id: resolvePage(action.id) };
   switch (action.type) {
     case "open":

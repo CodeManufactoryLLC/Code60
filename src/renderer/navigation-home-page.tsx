@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { PageAction } from "./content-page-header.js";
 import { type NavigationCardAction, NavigationCards } from "./navigation-cards.js";
 import type { NavigationIconName } from "./navigation-icons.js";
 import { PageTitle, type PageTitleId } from "./page-title.js";
@@ -19,6 +20,7 @@ export function NavigationHomePage<
   onOpen,
   intro,
   actions,
+  titleActions,
   empty = "No items",
   error,
   hidden = false,
@@ -32,6 +34,7 @@ export function NavigationHomePage<
   onOpen(card: Card): void;
   intro?: ReactNode;
   actions?: ReactNode;
+  titleActions?: readonly PageAction[] | undefined;
   empty?: string;
   error?: string | undefined;
   hidden?: boolean;
@@ -40,7 +43,7 @@ export function NavigationHomePage<
   return (
     <main className="home-page" aria-labelledby={`${id}-title`} hidden={hidden}>
       <div className="table-controls">
-        <PageTitle page={page} className="table-title" id={`${id}-title`}>
+        <PageTitle page={page} className="table-title" id={`${id}-title`} actions={titleActions}>
           {label}
         </PageTitle>
         {actions}

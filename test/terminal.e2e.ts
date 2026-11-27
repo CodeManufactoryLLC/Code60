@@ -2,7 +2,13 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { expandNavigation } from "./fixtures/browser-actions.js";
-import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
+import {
+  browserApp,
+  createDatabase,
+  newProjectSession,
+  onboard,
+  openProject,
+} from "./fixtures/browser-app.js";
 
 test("browser: right sidebar terminal opens in project folder and appears in System Manager Terminals", async ({
   browser,
@@ -16,7 +22,7 @@ test("browser: right sidebar terminal opens in project folder and appears in Sys
     await onboard(page);
     await createDatabase(page, fixture.directory);
     await openProject(page, fixture.directory, projectName);
-    await page.getByRole("button", { name: `New Session in ${projectName}`, exact: true }).click();
+    await newProjectSession(page, projectName);
 
     // Open the right sidebar on the open project's chat.
     const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });

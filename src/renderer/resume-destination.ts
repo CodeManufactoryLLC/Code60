@@ -26,10 +26,9 @@ export function readResume(storage: Storage, key: string): Destination | undefin
         : isSettingsSection(value.section)
           ? { page, section: value.section }
           : undefined;
-    const field = page === "chat" ? "chat" : page === "project" ? "project" : undefined;
-    if (!field) return { page };
-    return typeof value[field] === "string" && value[field].length > 0
-      ? { page, [field]: value[field] }
+    if (page !== "chat") return { page };
+    return typeof value.chat === "string" && value.chat.length > 0
+      ? { page, chat: value.chat }
       : undefined;
   } catch {
     return;

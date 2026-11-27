@@ -114,7 +114,7 @@ test("workflow: native engine prompt creation, provider selection, pause/resume,
     application = await launchWorkflowBrowser(browser, directory);
     const page = await application.firstWindow();
     const openWorkflows = async () => {
-      await expandNavigation(page, "Develop");
+      await expandNavigation(page, "Automate");
       await page.locator("#tab-workflows").click();
     };
     const menu = (label: string) =>

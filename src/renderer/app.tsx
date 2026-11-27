@@ -84,6 +84,7 @@ export function App({
   const providerManagement = useProviderManagement(api, snapshot);
 
   const [relayListening, setRelayListening] = useState(false);
+  const [chatHistoryOpen, setChatHistoryOpen] = useState(true);
   const [palette, setPalette] = useState(false);
   const [notifications, setNotifications] = useState<ToastMessage[]>([]);
   const notificationId = useRef(0);
@@ -207,8 +208,6 @@ export function App({
     selectedId: navigationSelectedId,
     onPage: selectPage,
     onSection: setSettingsSection,
-    onProject: (projectId) =>
-      setTabs((current) => updateTabs(current, { type: "project", projectId })),
     selectWorker,
     onArchived: () => notify("Chat archived."),
     onNavigate: (target) => history.expectTarget(target),
@@ -230,14 +229,6 @@ export function App({
     builtinRelayId(snapshot?.chats ?? []),
     setError,
   );
-  useEffect(() => {
-    if (
-      snapshot &&
-      tabs.active === "project" &&
-      !snapshot.openProjects?.some((project) => project.id === tabs.projectId)
-    )
-      setTabs((current) => updateTabs(current, { type: "select", id: "projects" }));
-  }, [snapshot, tabs.active, tabs.projectId]);
 
   useLayoutEffect(() => {
     // Reveal nested sidebar ancestors before focus, without waiting for another frame.
@@ -245,9 +236,7 @@ export function App({
     const id =
       tabs.active === "settings" && settingsSection !== null
         ? `tab-settings-${settingsSection}`
-        : tabs.active === "chat" && navigationSelectedId
-          ? `conversation-${navigationSelectedId}`
-          : sidebarPageElementId(tabs.active, tabs.projectId);
+        : sidebarPageElementId(tabs.active);
     return focusNavigation(
       tabs.active === "automations"
         ? "jobs-page-heading"
@@ -255,7 +244,7 @@ export function App({
           ? id
           : `panel-${tabs.active}`,
     );
-  }, [tabs.active, tabs.projectId, settingsSection, splash, navigationSelectedId]);
+  }, [tabs.active, settingsSection, splash]);
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -399,6 +388,10 @@ export function App({
             relayListening={relayListening}
             showRelayDot={preferences.showRelayDot}
             onShowRelayDotChange={preferences.setShowRelayDot}
+            autoApproval={snapshot?.orchestration.allowAll ?? true}
+            onAutoApprovalChange={
+              snapshot ? (value) => api.setOrchestrationAutoApproval(value) : undefined
+            }
             commands={() => setPalette(true)}
             workspace={(close) => (
               <>
@@ -412,22 +405,16 @@ export function App({
             tabs={tabs}
             settingsSection={settingsSection}
             navigation={navigation}
-            openProjects={snapshot?.openProjects}
-            selectedProjectId={snapshot?.projectInstanceId}
-            customAgents={snapshot?.customAgents ?? []}
             chats={snapshot?.chats ?? []}
-            selectedId={navigationSelectedId}
-            navigationSerial={chatRequest?.serial}
-            runs={navigationRuns}
             database={database}
-            eventsByRun={{ ...transcripts.events, ...state?.chatEventsByRun }}
-            onOpenProject={() => showPicker("project")}
-            onConnectDatabase={() => showPicker("database")}
             onSettingsSectionSelect={setSettingsSection}
-            projectDisabled={
-              busy || !snapshot || Boolean(snapshot.active && !snapshot.openProjects)
-            }
             onSelect={selectPage}
+            onOpenChat={() => {
+              setChatHistoryOpen(true);
+              const id = builtinRelayId(snapshot?.chats ?? []);
+              if (id) void navigation.open({ kind: "conversation", id });
+              else selectPage("chat");
+            }}
             canGoBack={history.canGoBack}
             canGoForward={history.canGoForward}
             onBack={history.back}
@@ -461,11 +448,14 @@ export function App({
           openChat={openChat}
           openReview={openReview}
           openRelay={async () => {
+            setChatHistoryOpen(true);
             const id = builtinRelayId(snapshot?.chats ?? []);
             if (!id) throw new Error("Relay is unavailable. Try again shortly.");
             if (!(await navigation.open({ kind: "conversation", id })))
               throw new Error("Unable to open Relay. Try again shortly.");
           }}
+          chatHistoryOpen={chatHistoryOpen}
+          onChatHistoryOpenChange={setChatHistoryOpen}
           act={act}
           fileAction={fileAction}
           accept={accept}

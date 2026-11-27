@@ -54,7 +54,7 @@ describe("Home destinations", () => {
       expect(onOpenPage).toHaveBeenCalledExactlyOnceWith("custom-agents");
     },
   );
-  it.each(["apps", "settings", "projects"] as const)(
+  it.each(["apps", "settings"] as const)(
     "does not add Home's welcome to the %s navigation home",
     (page) => {
       const html = renderToStaticMarkup(
@@ -71,7 +71,7 @@ describe("Home destinations", () => {
     ["/database.sqlite", false],
     ["/database.sqlite", true],
   ] as const)(
-    "shows exactly six ordered cards with independent gating (%s, Relay %s)",
+    "shows exactly five ordered cards with independent gating (%s, Relay %s)",
     (database, relayAvailable) => {
       const html = renderToStaticMarkup(
         <HomePage
@@ -85,11 +85,10 @@ describe("Home destinations", () => {
         "Relay",
         "Custom Assistants",
         "Search",
-        "Projects",
         "Apps",
         "Sessions",
       ]);
-      expect(html.match(/class="navigation-list-row"/g)).toHaveLength(6);
+      expect(html.match(/class="navigation-list-row"/g)).toHaveLength(5);
       expect(html).not.toContain("Welcome to Code60");
       expect(html).toContain('id="home-title" class="content-page-title"');
       expect(html).not.toContain("home-card-description");
@@ -97,7 +96,6 @@ describe("Home destinations", () => {
         ["relay", "app-steering-wheel", relayAvailable],
         ["custom-agents", "app-custom-agents", true],
         ["search", "app-search", Boolean(database)],
-        ["projects", "app-backlog", true],
         ["apps", "app-apps", true],
         ["sessions", "app-table", Boolean(database)],
       ] as const) {
@@ -153,7 +151,6 @@ describe("Home destinations", () => {
     expect(onOpenPage.mock.calls.map(([id]) => id)).toEqual([
       "custom-agents",
       "search",
-      "projects",
       "apps",
       "sessions",
     ]);

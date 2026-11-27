@@ -40,7 +40,7 @@ import { PageTitle } from "./page-title.js";
 import { PendingApprovals } from "./pending-approvals.js";
 import { RelayInputFocus } from "./relay-pulse.js";
 import type { ReviewPreview } from "./review-actions.js";
-import { SessionExtras, SessionInfo } from "./session-info.js";
+import { SessionInfo } from "./session-info.js";
 import { statusSpec } from "./session-presentation.js";
 import { TacticsControl } from "./tactics.js";
 import { type Block, transcript } from "./transcript.js";
@@ -77,7 +77,6 @@ export function ChatPage({
   onReview,
   onRevisionPreview,
   onCopied,
-  autoApproval = true,
   notice,
   request,
   selectionPending = false,
@@ -97,7 +96,6 @@ export function ChatPage({
   onReview?(id: string): void;
   onRevisionPreview?(preview: ReviewPreview): void;
   onCopied?: (() => void) | undefined;
-  autoApproval?: boolean;
   notice?: ReactNode;
   request?: OpenChat | undefined;
 }) {
@@ -455,6 +453,7 @@ export function ChatPage({
   );
   const promptControls = (
     <SessionInfo
+      harness={run?.agent ?? "N/A"}
       sessionId={run?.id ?? ""}
       active={active}
       state={run?.sessionState}
@@ -503,14 +502,8 @@ export function ChatPage({
           No matching command. This message will be sent as plain text.
         </p>
       )}
-      <SessionExtras
-        harness={run?.agent ?? "N/A"}
-        ended={!!ended}
-        active={active}
-        autoApproval={autoApproval}
-        onAutoApprovalChange={(value) => api.setOrchestrationAutoApproval(value)}
-      >
-        {!relay && (
+      {!relay && (
+        <div className="composer-footer session-extras">
           <TacticsControl
             selection={chat?.tactic}
             disabled={!database || !run || busy}
@@ -522,8 +515,8 @@ export function ChatPage({
                 : Promise.resolve(false)
             }
           />
-        )}
-      </SessionExtras>
+        </div>
+      )}
     </Card>
   );
   return (

@@ -3,6 +3,7 @@ import {
   Fragment,
   isValidElement,
   lazy,
+  type ReactElement,
   type ReactNode,
   Suspense,
   useEffect,
@@ -44,6 +45,17 @@ interface TurnProps {
 export function ChatTurn({ children }: TurnProps) {
   return children;
 }
+ChatTurn.displayName = "ChatTurn";
+
+function isChatTurn(child: ReactNode): child is ReactElement<TurnProps> {
+  if (!isValidElement<TurnProps>(child)) return false;
+  if (child.type === ChatTurn) return true;
+  if (typeof child.type === "function") {
+    const fn = child.type as { name?: string; displayName?: string };
+    if (fn.displayName === "ChatTurn" || fn.name === "ChatTurn") return true;
+  }
+  return child.props.from === "user" || child.props.from === "assistant";
+}
 
 export function chatEntries(children: ReactNode) {
   const entries = new Map<string, TurnProps>();
@@ -53,12 +65,7 @@ export function chatEntries(children: ReactNode) {
       if (isValidElement<TurnProps>(child) && child.type === Fragment) {
         collect(child.props.children, `${key}/`);
       } else {
-        entries.set(
-          key,
-          isValidElement<TurnProps>(child) && child.type === ChatTurn
-            ? child.props
-            : { children: child },
-        );
+        entries.set(key, isChatTurn(child) ? child.props : { children: child });
       }
     }
   }

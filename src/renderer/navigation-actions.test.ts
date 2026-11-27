@@ -9,7 +9,7 @@ function fixture() {
       projectAction: vi.fn(async () => {}),
       orchestrationChatAction: vi.fn(async () => {}),
     } as unknown as ApplicationClient,
-    tabs: { ...initialTabs, active: "projects" },
+    tabs: { ...initialTabs, active: "home" },
     database: "/db",
     databaseEpoch: 1,
     projects: [{ id: "a", path: "/a", active: true, chatIds: ["chat"], workerIds: ["worker"] }],
@@ -21,7 +21,6 @@ function fixture() {
     selectedId: "chat",
     onPage: vi.fn(),
     onSection: vi.fn(),
-    onProject: vi.fn(),
     selectWorker: vi.fn(),
     onArchived: vi.fn(),
   };
@@ -72,55 +71,20 @@ describe("shared navigation actions", () => {
     expect(context.selectWorker).not.toHaveBeenCalled();
   });
 
-  it("selects a project home without opening/creating a conversation or clearing its worker", async () => {
-    const { actions, context, status } = fixture();
-    expect(await actions.open({ kind: "project", id: "a" })).toBe(true);
-    expect(context.api.projectAction).toHaveBeenCalledExactlyOnceWith({
-      type: "select",
-      projectId: "a",
-    });
-    expect(context.onProject).toHaveBeenCalledExactlyOnceWith("a");
-    expect(context.api.orchestrationChatAction).not.toHaveBeenCalled();
-    expect(context.selectWorker).not.toHaveBeenCalled();
-    expect(status.mock.calls).toEqual([
-      [true, "", true, false],
-      [false, "", false],
-    ]);
-    expect(await actions.open({ kind: "project", id: "closed" })).toBe(false);
-  });
-  it.each(["database", "epoch", "page", "close", "invalidate", "raw-page"] as const)(
-    "discards late project selection after %s changes",
-    async (change) => {
-      const { actions, context } = fixture(),
-        gate = deferred();
-      vi.mocked(context.api.projectAction).mockImplementation(() => gate.promise);
-      const pending = actions.open({ kind: "project", id: "a" });
-      expect(await actions.open({ kind: "project", id: "a" })).toBe(false);
-      if (change === "database") context.database = "/other";
-      if (change === "epoch") context.databaseEpoch = 2;
-      if (change === "page") await actions.open({ kind: "page", id: "apps" });
-      if (change === "raw-page") context.tabs = { ...initialTabs, active: "settings" };
-      if (change === "close") context.projects = [];
-      if (change === "invalidate") actions.invalidate();
-      gate.resolve();
-      expect(await pending).toBe(false);
-      expect(context.onProject).not.toHaveBeenCalled();
-    },
-  );
   it("reports failures, releases in-flight guards, and resets Settings to its home", async () => {
     const { actions, context, status } = fixture();
-    vi.mocked(context.api.projectAction).mockRejectedValueOnce(new Error("Selection failed"));
-    expect(await actions.open({ kind: "project", id: "a" })).toBe(false);
-    expect(status).toHaveBeenCalledWith(true, "Selection failed", true, false);
-    expect(await actions.open({ kind: "project", id: "a" })).toBe(true);
+    vi.mocked(context.api.projectAction).mockRejectedValueOnce(new Error("Stop failed"));
+    expect(await actions.projectAction({ type: "stop-folder", projectId: "a" })).toBe(false);
+    expect(status).toHaveBeenCalledWith(true, "Stop failed", false, true);
+    expect(await actions.projectAction({ type: "stop-folder", projectId: "a" })).toBe(true);
     await actions.open({ kind: "page", id: "settings" });
     expect(context.onSection).toHaveBeenLastCalledWith(null);
     await actions.open({ kind: "settings", id: "updates" });
     expect(context.onSection).toHaveBeenLastCalledWith("updates");
     expect(context.onPage).toHaveBeenLastCalledWith("settings");
-    await actions.projectAction({ type: "select", projectId: "a" });
-    expect(context.api.projectAction).toHaveBeenCalledTimes(3);
+    expect(context.api.projectAction).toHaveBeenCalledTimes(2);
   });
+
   it("shares conversation selection and permits only Relay without a database", async () => {
     const { actions, context } = fixture();
     expect(await actions.open({ kind: "conversation", id: "chat" })).toBe(true);
@@ -133,22 +97,19 @@ describe("shared navigation actions", () => {
     expect(context.selectWorker).toHaveBeenLastCalledWith(undefined, null);
     expect(await actions.open({ kind: "conversation", id: "unknown" })).toBe(false);
   });
-  it.each(["project", "chat", "relay", "worker"] as const)(
+
+  it.each(["chat", "relay", "worker"] as const)(
     "keeps %s selection single-flight without dimming unrelated navigation",
     async (target) => {
       const { actions, context, status, reveal } = fixture();
       const gate = deferred();
-      vi.mocked(context.api.projectAction).mockImplementation(() => gate.promise);
       vi.mocked(context.api.orchestrationChatAction).mockImplementation(() =>
         gate.promise.then(() => undefined),
       );
       context.selectWorker = vi.fn(() => gate.promise.then(() => true));
-      const destination =
-        target === "project"
-          ? ({ kind: "project", id: "a" } as const)
-          : ({ kind: "conversation", id: target } as const);
+      const destination = { kind: "conversation", id: target } as const;
       const selection = actions.open(destination);
-      expect(status).toHaveBeenCalledWith(true, "", target === "project", false);
+      expect(status).toHaveBeenCalledWith(true, "", false, false);
       expect(await actions.open(destination)).toBe(false);
       expect(reveal).not.toHaveBeenCalled();
       gate.resolve();
@@ -157,17 +118,19 @@ describe("shared navigation actions", () => {
       expect(status).toHaveBeenLastCalledWith(false, "", false);
     },
   );
+
   it("keeps destructive chat actions blocking and reveals only their successful destination", async () => {
     const { actions, context, status, reveal } = fixture();
     expect(await actions.chatAction({ type: "new", projectId: "a" })).toBe(true);
     expect(status).toHaveBeenCalledWith(true, "", false, true);
-    expect(reveal).toHaveBeenCalledExactlyOnceWith({ kind: "project", id: "a" });
+    expect(context.onPage).toHaveBeenCalledWith("chat");
     reveal.mockClear();
     vi.mocked(context.api.orchestrationChatAction).mockRejectedValueOnce(new Error("Unavailable"));
     expect(await actions.chatAction({ type: "select", id: "relay" })).toBe(false);
     expect(status).toHaveBeenCalledWith(true, "Unavailable", false, false);
     expect(reveal).not.toHaveBeenCalled();
   });
+
   it("guards asynchronous worker navigation against later destinations", async () => {
     const { actions, context } = fixture(),
       gate = deferred();
@@ -181,6 +144,7 @@ describe("shared navigation actions", () => {
     expect(await pending).toBe(false);
     expect(context.onPage).toHaveBeenCalledExactlyOnceWith("experiments");
   });
+
   it("selects workers through the same guarded action without creating chats", async () => {
     const { actions, context } = fixture();
     expect(await actions.open({ kind: "conversation", id: "worker" })).toBe(true);
@@ -188,6 +152,7 @@ describe("shared navigation actions", () => {
     expect(context.onPage).toHaveBeenCalledWith("chat");
     expect(context.api.orchestrationChatAction).not.toHaveBeenCalled();
   });
+
   it("does not open a conversation whose owner closed while selection was pending", async () => {
     const { actions, context } = fixture(),
       gate = deferred();
@@ -200,65 +165,22 @@ describe("shared navigation actions", () => {
     expect(await pending).toBe(false);
     expect(context.onPage).not.toHaveBeenCalled();
   });
-  it("archives the displayed conversation through Relay when another project chat remains", async () => {
-    const { actions, context } = fixture();
-    context.chats = [
-      ...context.chats,
-      { ...context.chats[1], run: { id: "other" } } as OrchestrationChat,
-    ];
+
+  it("archives the displayed conversation through Relay without creating a replacement chat", async () => {
+    const { actions, context, reveal } = fixture();
     await actions.chatAction({ type: "archive", id: "chat" });
     expect(context.onPage).not.toHaveBeenCalled();
     context.tabs = initialTabs;
-    await actions.chatAction({ type: "archive", id: "chat" });
+    expect(await actions.chatAction({ type: "archive", id: "chat" })).toBe(true);
     expect(context.api.orchestrationChatAction).toHaveBeenLastCalledWith({
       type: "select",
       id: "relay",
     });
     expect(context.onArchived).toHaveBeenCalledOnce();
     expect(context.onPage).toHaveBeenCalledWith("chat");
+    expect(reveal).toHaveBeenCalledExactlyOnceWith({ kind: "conversation", id: "relay" });
   });
-  it("returns the last displayed project chat to its home without opening or creating a chat", async () => {
-    const { actions, context, reveal } = fixture();
-    context.tabs = initialTabs;
-    context.chats = [
-      ...context.chats,
-      { ...context.chats[1], run: { id: "old" }, archived: true } as OrchestrationChat,
-    ];
-    expect(await actions.chatAction({ type: "archive", id: "chat" })).toBe(true);
-    expect(context.api.orchestrationChatAction).toHaveBeenCalledExactlyOnceWith({
-      type: "archive",
-      id: "chat",
-    });
-    expect(context.api.projectAction).toHaveBeenCalledExactlyOnceWith({
-      type: "select",
-      projectId: "a",
-    });
-    expect(context.onProject).toHaveBeenCalledExactlyOnceWith("a");
-    expect(context.selectWorker).toHaveBeenCalledExactlyOnceWith(undefined, "a");
-    expect(context.onPage).not.toHaveBeenCalled();
-    expect(context.onArchived).toHaveBeenCalledOnce();
-    expect(reveal).toHaveBeenCalledExactlyOnceWith({ kind: "project", id: "a" });
-    await actions.chatAction({ type: "new", projectId: "a" });
-    expect(context.api.orchestrationChatAction).toHaveBeenLastCalledWith({
-      type: "new",
-      projectId: "a",
-    });
-    expect(context.onPage).toHaveBeenCalledExactlyOnceWith("chat");
-  });
-  it("ignores other projects when deciding whether the displayed chat is last", async () => {
-    const { actions, context } = fixture();
-    context.tabs = initialTabs;
-    context.chats = [
-      ...context.chats,
-      { ...context.chats[1], projectId: "b", run: { id: "other-project" } } as OrchestrationChat,
-    ];
-    expect(await actions.chatAction({ type: "archive", id: "chat" })).toBe(true);
-    expect(context.onProject).toHaveBeenCalledExactlyOnceWith("a");
-    expect(context.api.orchestrationChatAction).toHaveBeenCalledExactlyOnceWith({
-      type: "archive",
-      id: "chat",
-    });
-  });
+
   it("archives a background last chat without navigating or creating a session", async () => {
     const { actions, context, reveal } = fixture();
     context.tabs = initialTabs;
@@ -269,40 +191,13 @@ describe("shared navigation actions", () => {
       id: "chat",
     });
     expect(context.api.projectAction).not.toHaveBeenCalled();
-    expect(context.onProject).not.toHaveBeenCalled();
     expect(context.onPage).not.toHaveBeenCalled();
     expect(context.onArchived).not.toHaveBeenCalled();
     expect(reveal).not.toHaveBeenCalled();
   });
-  it.each(["page", "database", "epoch", "close", "reopen", "failure"] as const)(
-    "discards last-chat home selection after %s during project selection",
-    async (change) => {
-      const { actions, context, status, reveal } = fixture();
-      const gate = deferred();
-      context.tabs = initialTabs;
-      vi.mocked(context.api.projectAction).mockImplementation(() => gate.promise);
-      if (change === "failure")
-        vi.mocked(context.api.projectAction).mockRejectedValueOnce(
-          new Error("Home selection failed"),
-        );
-      const pending = actions.chatAction({ type: "archive", id: "chat" });
-      await vi.waitFor(() => expect(context.api.projectAction).toHaveBeenCalledOnce());
-      if (change === "page") await actions.open({ kind: "page", id: "apps" });
-      if (change === "database") context.database = "/replacement";
-      if (change === "epoch") context.databaseEpoch = 2;
-      if (change === "close") context.projects = [];
-      if (change === "reopen") context.projects = [{ ...context.projects[0]!, id: "new-a" }];
-      gate.resolve();
-      expect(await pending).toBe(false);
-      expect(context.onProject).not.toHaveBeenCalled();
-      expect(context.onArchived).not.toHaveBeenCalled();
-      expect(reveal).not.toHaveBeenCalled();
-      if (change === "failure")
-        expect(status).toHaveBeenCalledWith(true, "Home selection failed", true, true);
-    },
-  );
-  it.each(["page", "epoch", "close", "failure"] as const)(
-    "does not navigate a last-chat archive after %s",
+
+  it.each(["page", "epoch", "failure"] as const)(
+    "does not navigate an archived chat after %s",
     async (change) => {
       const { actions, context, status } = fixture(),
         gate = deferred();
@@ -317,14 +212,11 @@ describe("shared navigation actions", () => {
       const pending = actions.chatAction({ type: "archive", id: "chat" });
       if (change === "page") await actions.open({ kind: "page", id: "apps" });
       if (change === "epoch") context.databaseEpoch = 2;
-      if (change === "close") context.projects = [];
       gate.resolve();
       expect(await pending).toBe(false);
-      expect(context.api.projectAction).not.toHaveBeenCalled();
-      expect(context.onProject).not.toHaveBeenCalled();
       expect(context.onArchived).not.toHaveBeenCalled();
       if (change === "failure")
-        expect(status).toHaveBeenCalledWith(true, "Archive failed", true, true);
+        expect(status).toHaveBeenCalledWith(true, "Archive failed", false, true);
     },
   );
 });

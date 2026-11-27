@@ -9,13 +9,15 @@ it.each([
   '{"page":"files"}',
   '{"page":"settings","section":"bogus"}',
   '{"page":"provider","provider":{}}',
+  '{"page":"projects"}',
+  '{"page":"project","project":"a"}',
 ])("ignores invalid saved routes %s", (raw) =>
   expect(readResume(storage(raw), "db")).toBeUndefined(),
 );
 it("only returns the identity fields for the saved destination", () => {
   expect(
-    readResume(storage('{"page":"project","project":"a","chat":"other","action":"run"}'), "db"),
-  ).toEqual({ page: "project", project: "a" });
+    readResume(storage('{"page":"chat","chat":"chat-a","project":"a","action":"run"}'), "db"),
+  ).toEqual({ page: "chat", chat: "chat-a" });
 });
 it("reopens a former provider detail destination on Providers", () => {
   expect(readResume(storage('{"page":"provider","provider":"claude"}'), "db")).toEqual({

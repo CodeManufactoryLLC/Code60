@@ -260,7 +260,7 @@ describe("DesktopKnowledge", () => {
         agentAccess: "human-only",
         availability: expect.objectContaining({
           status: "available",
-          action: expect.stringContaining("beside Harness mode"),
+          action: expect.stringContaining("Workspace header → auto-approve"),
         }),
       }),
     );

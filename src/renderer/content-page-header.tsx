@@ -1,10 +1,12 @@
 import { type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DropdownMenu } from "./carbon/dropdown-menu.js";
+import type { IconName } from "./icons.js";
 
 export interface PageAction {
   id: string;
   label: string;
+  icon?: IconName;
   disabled?: boolean | undefined;
   reason?: string | undefined;
   danger?: boolean | undefined;
