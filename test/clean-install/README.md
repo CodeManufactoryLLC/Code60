@@ -123,7 +123,7 @@ on a developer's Mac.
 
 After building a Linux candidate in the pinned amd64 container, run
 `npm run test:packaged:clean -- --payload release/payloads/linux-x64.json` on the
-host. See the [artifact workflow](../../docs/distribution/artifacts.md).
+host. See the [artifact workflow](../../knowledge/operations/distribution/artifacts.md).
 This mode verifies descriptor/platform/hash/inventory before using the same
 installed golden journey and fault/process probes. Extraction uses the local
 artifact server with external networking disabled and performs no npm install,

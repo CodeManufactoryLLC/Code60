@@ -40,10 +40,10 @@ definition for credential entry or reviewed OAuth sign-in. Configuration recover
 owned cleanup verification and safe troubleshooting reports are available below.
 Dedicated integrations, Code60-owned OAuth
 registrations/client IDs/secrets, hosted authentication and legacy SSE are excluded.
-See the [FAQ](FAQ.md#does-code60-support-mcp), [terminology](TERMINOLOGY.md#mcp),
+See the [FAQ](knowledge/reference/faq/orchestration-and-workers.md#does-code60-support-mcp),
 [implementation plan](ad-hoc-plans/mcp-connectors-plan.md),
-[architecture](ARCHITECTURE.md#mcp-connector-foundation-and-target-runtime) and
-[recovery runbook](docs/runbooks/mcp-configuration.md).
+[architecture](ARCHITECTURE.md) and
+[MCP storage recovery](knowledge/operations/runbooks/mcp-storage.md) and [MCP runtime recovery](knowledge/operations/runbooks/mcp-runtime-auth.md).
 
 ## Browser modes in chat
 
@@ -256,7 +256,7 @@ no credentials or approvals. Closed repositories are not scanned.
 
 Conflicts retain the draft; reload explicitly before saving against the new
 revision. Invalid files and pending recovery block guided changes. Preserve evidence
-and follow [configuration recovery](docs/runbooks/mcp-configuration.md). The direct
+and follow [configuration recovery](knowledge/operations/runbooks/mcp-storage.md). The direct
 JSON editor, backup restore, reset and reviewed transaction recovery are described below.
 
 
@@ -290,7 +290,7 @@ Unsafe/oversized originals remain blocked. Missing/empty targets are not rewritt
 Reset preserves other project files, unrelated settings, built-ins, credentials and
 running agents/connections. Interrupted changes require reviewed Complete or
 Roll back through **Configuration recovery**; preserve evidence and follow the
-[recovery runbook](docs/runbooks/mcp-configuration.md). Runtime activation and
+[MCP storage recovery](knowledge/operations/runbooks/mcp-storage.md) and [MCP runtime recovery](knowledge/operations/runbooks/mcp-runtime-auth.md). Runtime activation and
 sign-in are described in this document.
 
 
@@ -379,5 +379,5 @@ metadata. **Copy safe report** copies only the reviewed allowlist; nothing is up
 Validity, approval, authentication and connection health remain independent facts.
 Definitions, labels/IDs, paths, endpoints, references, credentials, raw errors and
 server output are excluded. Never share private transaction journals or backups as
-diagnostic reports. See the [recovery runbook](docs/runbooks/mcp-configuration.md)
+diagnostic reports. See the [MCP runtime recovery runbook](knowledge/operations/runbooks/mcp-runtime-auth.md)
 for failure-specific actions and stop/escalation conditions.

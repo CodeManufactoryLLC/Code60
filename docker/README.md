@@ -26,18 +26,22 @@ Open `http://127.0.0.1:6060` in your browser. On first startup, Code60 automatic
 ```yaml
 services:
   code60:
-    image: mjholliday/code60:latest
+    image: mjholliday/code60:${CODE60_IMAGE_TAG:-latest}
     platform: linux/amd64
     restart: unless-stopped
     ports:
-      - "127.0.0.1:6060:6060"
+      - "127.0.0.1:${CODE60_HOST_PORT:-6060}:6060"
+    environment:
+      CODE60_PORT: "6060"
+      CODE60_ORIGIN: "http://127.0.0.1:${CODE60_HOST_PORT:-6060}"
+      CODE60_WORKSPACE_ROOTS: "/workspaces"
     volumes:
       - code60-home:/home/node
-      - "$HOME/projects:/workspaces"
+      - "${CODE60_WORKSPACES:-./workspaces}:/workspaces"
 
 volumes:
   code60-home:
-    name: code60-home
+    name: ${CODE60_HOME_VOLUME:-code60-home}
 ```
 
 ## Configuration
@@ -48,7 +52,10 @@ volumes:
 | `CODE60_BIND` | `0.0.0.0` | Container bind address (`0.0.0.0` or `127.0.0.1`). |
 | `CODE60_ORIGIN` | `http://127.0.0.1:<CODE60_PORT>` | Exact browser origin allowed by strict `Host`/`Origin` checks. Set this if you map a different host port (for example `-p 127.0.0.1:8080:6060` with `CODE60_ORIGIN=http://127.0.0.1:8080`). |
 | `CODE60_WORKSPACE_ROOTS` | `/workspaces` | Colon-separated absolute paths exposed to the browser workspace chooser. |
-| `CODE60_HOME_VOLUME` | `code60-home` | *(Compose only)* Named Docker volume mounted at `/home/node`. Pinning `name: code60-home` ensures `docker compose` sessions share the same SQLite database and settings across folders and container recreations (including `docker compose down`). |
+| `CODE60_IMAGE_TAG` | `latest` | *(Compose only)* Image tag pulled for `mjholliday/code60`. |
+| `CODE60_HOST_PORT` | `6060` | *(Compose only)* Host loopback port mapped to container port `6060` and propagated to `CODE60_ORIGIN`. |
+| `CODE60_WORKSPACES` | `./workspaces` | *(Compose only)* Host directory bind-mounted to `/workspaces`. |
+| `CODE60_HOME_VOLUME` | `code60-home` | *(Compose only)* Named Docker volume mounted at `/home/node`. Pinning `name` ensures `docker compose` sessions share the same SQLite database and settings across folders and container recreations (including `docker compose down`). |
 
 ## Security and pairing
 
