@@ -65,6 +65,7 @@ import {
   type GitSetupFileRequest,
   type GitSetupIdentity,
   isActivityTool,
+  isCodebaseSearchTool,
   isKnowledgeTool,
   isMcpControlTool,
   type KnowledgeOwner,
@@ -214,6 +215,11 @@ import { BrowserAutomation } from "./browser-automation.js";
 import { ChatCheckpoints } from "./chat-checkpoints.js";
 import { savedChatReferences } from "./chat-reference.js";
 import { ChatStore } from "./chat-store.js";
+import {
+  CodebaseIndexService,
+  type CodebaseWorkerClient,
+  composeSessionResources,
+} from "./codebase-service.js";
 import { createCodexProvider } from "./codex-provider.js";
 import {
   type ChatSession,
@@ -287,6 +293,7 @@ export interface DesktopStorage {
   relay?: boolean;
   ragModelRoot?: string;
   ragExecutor?: RagExecutor;
+  codebaseWorker?: CodebaseWorkerClient;
   /** Enable the application-owned memory integration for this desktop host. */
   memory?: boolean;
   openDatabase: OpenProjectDatabase;
@@ -370,6 +377,7 @@ interface Batch {
 export class ApplicationHost {
   readonly mcp: McpManagement;
   readonly terminals: ApplicationTerminals;
+  readonly codebase: CodebaseIndexService;
   private readonly connectors: McpRuntime;
   private readonly authentication: McpAuthentication | undefined;
   mcpRecovery(value: McpRecoveryRequest) {
@@ -493,6 +501,9 @@ export class ApplicationHost {
       }
     }
     return undefined;
+  }
+  codebaseSessionResources(repositoryPath: string) {
+    return this.codebase.sessionResources(repositoryPath, this.storage.mcpRuntime?.expose);
   }
   private connectorResources(role: McpConnectorRole, root?: string) {
     const owner = this.projectHost.current;
@@ -2541,9 +2552,17 @@ export class ApplicationHost {
     const deps = { ...dependencies, agents: providerAgents(dependencies.agents, this.env) };
     this.deps = deps;
     this.modelDefaults = new ModelDefaults(storage.preferences, () => this.changed(null));
+    const modelRoot =
+      storage.ragModelRoot ?? fileURLToPath(new URL("../../models/", import.meta.url));
+    this.codebase = new CodebaseIndexService(
+      join(stateHome(env), "code60", "codebase-index"),
+      modelRoot,
+      deps.git,
+      ...(storage.codebaseWorker ? [{ worker: storage.codebaseWorker }] : []),
+    );
     this.memory = new MemoryService(
       join(stateHome(env), "code60", "memory"),
-      storage.ragModelRoot ?? fileURLToPath(new URL("../../models/", import.meta.url)),
+      modelRoot,
       deps,
       () => {
         const name = this.orchestration.provider;
@@ -2581,6 +2600,8 @@ export class ApplicationHost {
               return snapshot;
             }, warning);
           },
+          this.codebase,
+          (cwd) => this.codebaseSessionResources(cwd),
         )
       : undefined;
     this.relay?.attachKnowledge(this.knowledge);
@@ -3492,6 +3513,10 @@ export class ApplicationHost {
       session.browser ??= new BrowserAutomation(session.chatDirectory, this.env);
       session.browserChat = session.chat;
       return session.browser.call(args, signal);
+    }
+    if (isCodebaseSearchTool(name)) {
+      if (!this.workspace?.dir) throw new Error("Open a Git project before searching the codebase");
+      return this.codebase.callTool("bound", name, args, this.workspace.dir, signal);
     }
     if (isKnowledgeTool(name))
       return this.knowledge.call(name, args, this.knowledgeCaller(session));
@@ -5756,6 +5781,7 @@ export class ApplicationHost {
     const history = await listRuns(commandDeps(this.deps, workspace));
     await this.clearWorkspace();
     this.workspace = workspace;
+    this.codebase.trackRepository(workspace.dir);
     this.gitState = await this.probeGit(workspace.dir);
     try {
       this.reviews = await ReviewStore.open(
@@ -5848,6 +5874,7 @@ export class ApplicationHost {
     const owner = this.projectHost.open(dir);
     await this.projectHost.run(owner, async () => {
       this.workspace = workspace;
+      this.codebase.trackRepository(dir);
       this.history = history;
       this.gitState = await this.probeGit(dir);
       try {
@@ -6420,7 +6447,10 @@ export class ApplicationHost {
         this.workerOverrides(id),
         enabledConfig,
         this.modelDefaults.selections(run.record.agent, "worker"),
-        this.connectorResources("worker", workspace.dir),
+        composeSessionResources(
+          this.connectorResources("worker", workspace.dir),
+          this.codebaseSessionResources(workspace.dir),
+        ),
       );
     } catch (error) {
       if (
@@ -6478,7 +6508,10 @@ export class ApplicationHost {
       this.workerOverrides(id),
       enabledConfig,
       this.modelDefaults.selections(run.record.agent, "worker"),
-      this.connectorResources("worker", workspace.dir),
+      composeSessionResources(
+        this.connectorResources("worker", workspace.dir),
+        this.codebaseSessionResources(workspace.dir),
+      ),
     );
     const summary = buildHandoffPrompt(
       run.record,
@@ -6556,7 +6589,10 @@ export class ApplicationHost {
         env: this.env,
         mode: "interactive",
         requireIsolation: true,
-        sessionResources: this.connectorResources("worker", workspace.dir),
+        sessionResources: composeSessionResources(
+          this.connectorResources("worker", workspace.dir),
+          this.codebaseSessionResources(workspace.dir),
+        )!,
         ...(registerWorkers ? { orchestrationAutoApproval: this.orchestrationAutoApproval } : {}),
         initialSettings: (provider) => this.modelDefaults.selections(provider, "worker"),
       },
@@ -7465,6 +7501,7 @@ export class ApplicationHost {
         .then(() => this.queue)
         .then(() => this.mcp.close()),
       this.memory.close(),
+      this.codebase.close(),
       this.clearSearch(),
       this.cancelRag(),
       this.shutdownAgents(force),

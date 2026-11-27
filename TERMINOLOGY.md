@@ -1,6 +1,6 @@
 # Code60 Terminology
 
-> **Applies to:** Code60 `v0.5.0-beta` · **Last update:** `2026-11-26`
+> **Applies to:** Code60 `v0.5.0-beta` · **Last update:** `2026-11-27`
 > Open **Manage → About** or run `code60 status` to check the local Code60 version. See [Code60 FAQ](FAQ.md) for common questions.
 
 ## Terms
@@ -19,6 +19,7 @@
 - [Scheduled Job](#scheduled-job)
 - [Two-Layer Architecture](#two-layer-architecture)
 - [Usage Monitoring](#usage-monitoring)
+- [Vector Codebase Search](#vector-codebase-search)
 - [Workflow](#workflow)
 
 ## ACP
@@ -61,7 +62,9 @@ A user can edit or reset 10 project and utility templates for the active databas
 
 **MCP** (Model Context Protocol) is the protocol that gives coding agents access to external tools and Code60 capabilities.
 
-In Code60's [Two-Layer Architecture](#two-layer-architecture), Code60 exposes its orchestration MCP tools to the orchestration layer and omits them from the worker layer. Those tools cover worker control, planning, reviews, and browser automation. A user can also connect external MCP tool servers under **Connect → MCP Servers**.
+In Code60's [Two-Layer Architecture](#two-layer-architecture), Code60 exposes orchestration MCP tools to the orchestration layer and omits them from the worker layer. Those tools cover worker control, planning, reviews, and browser automation.
+
+Code60 also provides read-only [Vector Codebase Search](#vector-codebase-search) tools across orchestrators, workers, **Workflows**, and **Scheduled Jobs**. A user can also connect external MCP tool servers under **Connect → MCP Servers**.
 
 ## Memory Capture
 
@@ -105,6 +108,12 @@ Each job dispatches either a single-turn headless prompt under a deny-by-default
 **Usage Monitoring** is Code60's local, read-only system for tracking token burn rates and inspecting heavy chats and workflows across every [Agent Provider](#agent-provider).
 
 [Code60 Gateway](#gateway) logs quantitative [ACP](#acp) turn metrics into `$XDG_STATE_HOME/code60/usage/usage.sqlite` without storing prompts, replies, file paths, or secrets. A user can inspect reports under **Manage → Usage** or run `code60 usage` in a terminal.
+
+## Vector Codebase Search
+
+**Vector Codebase Search** is Code60's local, read-only semantic and lexical search engine for Git repositories. It runs the local ONNX embedding engine (`jina-embeddings-v2-base-code`) alongside SQLite `FTS5` search in a separate Node.js worker process.
+
+[Code60 Gateway](#gateway) fetches `origin/main` when a remote exists, reads commit blobs directly without touching working files, and saves the private index in `$XDG_STATE_HOME/code60/codebase-index/index.sqlite`. **Relay**, **Custom Assistants**, project orchestrators, workers, **Workflows**, and **Scheduled Jobs** call `code60_search_codebase` and `code60_codebase_index_status` to search repository code.
 
 ## Workflow
 

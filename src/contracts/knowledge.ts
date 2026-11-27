@@ -628,6 +628,16 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Presentation only; reports never change work or permissions. Sidebar names follow live connection, work and worker-monitoring states; approval, stopping, idle and saved entries stay static. Hidden views, reduced motion and forced colors disable the spotlight.",
   ),
   feature(
+    "codebase-search",
+    "Vector codebase search",
+    "Automatically index the latest main branch of Git repositories with Code60's bundled offline ONNX embedding engine and run hybrid semantic and lexical code search.",
+    "Relay, Custom Assistants, project chats, subagents, Workflow Engine, and Scheduled Agents → code60_search_codebase and code60_codebase_index_status",
+    "git",
+    "read",
+    "Indexes tracked text files on main (non-mutating origin fetch when configured, falling back to local main or default branch) without modifying the working tree or branches. Shared across linked worktrees via git-common-dir. Private SQLite + FTS5 index under application state; runs ONNX inference in a dedicated lazy Node sidecar. Relay and Custom Assistants require an explicit cwd; project chats, subagents, Workflow Engine, and Scheduled Agents are strictly bound to their target repository. Retrieved code is untrusted data.",
+    "Read-only; never modifies repositories, branches, or working trees.",
+  ),
+  feature(
     "knowledge",
     "Self-knowledge",
     "Discover capabilities, open-state metadata and effective customizations.",
@@ -685,6 +695,8 @@ export const SETTINGS_CAPABILITIES = {
 /** Every agent-visible tool belongs to exactly one capability. */
 export const TOOL_CAPABILITIES: Record<string, string> = {
   code60_browser: "browser",
+  code60_search_codebase: "codebase-search",
+  code60_codebase_index_status: "codebase-search",
   code60_get_capabilities: "knowledge",
   code60_get_app_state: "knowledge",
   code60_list_customizations: "knowledge",

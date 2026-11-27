@@ -310,6 +310,10 @@ export async function startGateway(options: GatewayOptions = {}) {
       list: () => application.workflowProviders(),
       resolve: (providerId, cwd) => application.resolveWorkflowProvider(providerId, cwd),
     },
+    {
+      sessionResources: (repository) => application.codebaseSessionResources(repository),
+      trackRepository: (repository) => application.codebase.trackRepository(repository),
+    },
   );
   let resolveAppReady!: () => void;
   const appReady = new Promise<void>((resolve) => {
@@ -327,6 +331,8 @@ export async function startGateway(options: GatewayOptions = {}) {
         agents: providerAgents(schedulerDeps.agents, env),
       },
       {
+        codeTools: (repository) => application.codebaseSessionResources(repository),
+        onRepositoryActive: (repository) => application.codebase.trackRepository(repository),
         handlers: [
           createWorkflowActionHandler({
             deps: schedulerDeps,

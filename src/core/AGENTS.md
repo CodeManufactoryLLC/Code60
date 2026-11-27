@@ -16,8 +16,11 @@
   current context never implicitly authorizes durable learning or saved recall.
 - RAG owns exact-span tokenizer-aware chunking, streamed-message reconstruction
   and stable cosine ranking through injected query/document embedding operations.
-  Never import Transformers.js here. Read-only snapshots must not reconcile run
-  state; strict listings must surface corrupt history instead of skipping it.
+  Codebase search (`codebase-chunker.ts`) owns line-aware code chunking, FTS5
+  query sanitization, hybrid RRF ranking and structured `code60-code` permission
+  matching without importing Transformers.js or Node SQLite. Read-only snapshots
+  must not reconcile run state; strict listings must surface corrupt history
+  instead of skipping it.
 - Optional desktop diagnostic sinks must be inert when absent or throwing.
   Correlate turns with generated operation IDs and emit fixed metadata once per
   meaningful boundary, never prompts, event payloads, paths, commands or errors.

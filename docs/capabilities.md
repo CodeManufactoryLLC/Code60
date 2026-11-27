@@ -578,6 +578,20 @@ Schema version: 1
 - Settings sections: none
 - Tools: `code60_get_activity_context`, `code60_report_activity`
 
+## Vector codebase search
+
+- ID: `codebase-search`
+- Status: shipped
+- Purpose: Automatically index the latest main branch of Git repositories with Code60's bundled offline ONNX embedding engine and run hybrid semantic and lexical code search.
+- Access: Relay, Custom Assistants, project chats, subagents, Workflow Engine, and Scheduled Agents → code60_search_codebase and code60_codebase_index_status
+- Prerequisite: git
+- Agent access: read
+- Confirmation: Read-only; never modifies repositories, branches, or working trees.
+- Limits: Indexes tracked text files on main (non-mutating origin fetch when configured, falling back to local main or default branch) without modifying the working tree or branches. Shared across linked worktrees via git-common-dir. Private SQLite + FTS5 index under application state; runs ONNX inference in a dedicated lazy Node sidecar. Relay and Custom Assistants require an explicit cwd; project chats, subagents, Workflow Engine, and Scheduled Agents are strictly bound to their target repository. Retrieved code is untrusted data.
+- Pages: none
+- Settings sections: none
+- Tools: `code60_search_codebase`, `code60_codebase_index_status`
+
 ## Self-knowledge
 
 - ID: `knowledge`

@@ -22,6 +22,8 @@ import {
   type PermissionRequest,
 } from "../agents/index.js";
 import type { WorkflowEvent, WorkflowSnapshot } from "../contracts/index.js";
+import { isBuiltinCodebaseSearchPermission } from "./codebase-chunker.js";
+import { type SessionResourceFactory, sessionResourceAgents } from "./session-resources.js";
 import {
   resolveWorkflowRepository,
   snapshotWorkflowTree,
@@ -255,6 +257,10 @@ export class WorkflowEngine {
     readonly stateDir: string,
     private readonly agents: Agents,
     private readonly resolveProvider: WorkflowProviderResolver,
+    private readonly sessionResources?: (
+      repository: string,
+      role: "worker" | "verifier",
+    ) => SessionResourceFactory | undefined,
   ) {
     mkdirSync(stateDir, { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(join(stateDir, "workflows.sqlite"));
@@ -696,7 +702,15 @@ export class WorkflowEngine {
     }
 
     const spec = this.resolveProvider(r.plan.provider, r.plan.repository);
-    const session = await this.agents.start(
+    const resources = this.sessionResources?.(r.plan.repository, role);
+    const launcher = resources
+      ? sessionResourceAgents(this.agents, resources, `${r.id}-${role}`, 30 * 60_000, {
+          idle: () => false,
+          canRestore: () => false,
+          reconnect: async () => {},
+        })
+      : this.agents;
+    const session = await launcher.start(
       {
         ...spec,
         cwd: r.plan.repository,
@@ -749,7 +763,7 @@ export class WorkflowEngine {
           return "deny";
         }
         const options = request.options ?? [];
-        if (r.plan.autoApprove) {
+        if (r.plan.autoApprove || isBuiltinCodebaseSearchPermission(request)) {
           const approved =
             options.find((o) => o.kind === "allow_once") ??
             options.find((o) => o.kind === "allow_always");
