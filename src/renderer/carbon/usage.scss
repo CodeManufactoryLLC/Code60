@@ -60,67 +60,20 @@
       text-align: center;
     }
 
-    .usage-dashboard {
-      display: flex;
-      flex-direction: column;
-      gap: space.$spacing-07;
-    }
-
-    .usage-dashboard-group {
-      display: flex;
-      flex-direction: column;
-      gap: space.$spacing-04;
-
-      &:not(:first-child) {
-        padding-block-start: space.$spacing-06;
-        border-block-start: 1px solid var(--cds-border-subtle-01);
-      }
-
-      .usage-section-heading {
-        margin: 0;
-      }
-    }
-
-    .usage-figure-grid {
-      margin: 0;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-      gap: space.$spacing-05 space.$spacing-07;
-    }
-
-    .usage-figure {
-      display: flex;
-      flex-direction: column;
-      gap: space.$spacing-02;
-      min-inline-size: 0;
-    }
-
-    .usage-figure-label {
-      @include type.type-style('label-01');
-      margin: 0;
-      color: var(--cds-text-secondary);
-    }
-
-    .usage-figure-value {
-      @include type.type-style('productive-heading-04');
-      margin: 0;
-      color: var(--cds-text-primary);
-      font-variant-numeric: tabular-nums;
-    }
-
     .usage-section {
       margin-block-start: space.$spacing-05;
-    }
-
-    .usage-section-heading {
-      @include type.type-style('heading-compact-02');
-      margin: 0 0 space.$spacing-03;
-      color: var(--cds-text-primary);
     }
 
     .usage-table-wrap {
       overflow-x: auto;
       margin-block-end: space.$spacing-06;
+    }
+
+    .usage-total-row td {
+      font-weight: 600;
+      background: var(--cds-layer-accent-01, var(--cds-layer-02));
+      border-block-end: 2px solid var(--cds-border-strong-01);
+      color: var(--cds-text-primary);
     }
 
     .usage-num {
@@ -132,11 +85,6 @@
     .usage-mono {
       font-family: var(--cds-code-01-font-family, monospace);
       font-size: 0.8125rem;
-    }
-
-    .usage-model-row td:first-child {
-      padding-inline-start: space.$spacing-07;
-      color: var(--cds-text-secondary);
     }
 
     .usage-turn-detail {

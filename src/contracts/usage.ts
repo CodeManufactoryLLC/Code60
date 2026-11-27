@@ -204,11 +204,11 @@ export const usageReportQuerySchema = z.strictObject({
   provider: shortLabel.optional(),
   surface: usageSurfaceSchema.optional(),
   model: modelLabel.optional(),
+  confidence: usageConfidenceSchema.optional(),
 });
 export type UsageReportQuery = z.infer<typeof usageReportQuerySchema>;
 
 export const usageTurnsQuerySchema = usageReportQuerySchema.extend({
-  confidence: usageConfidenceSchema.optional(),
   method: usageMethodSchema.optional(),
   sessionId: modelLabel.optional(),
   runId: opaqueId.optional(),
@@ -291,6 +291,7 @@ export interface UsageHotspot {
   contextWindowSize: number | null;
   peakContextPercent: number | null;
   maxToolWaves: number;
+  totalToolWaves?: number;
   totalToolCalls: number;
   compactions: number;
   exactTurns: number;
@@ -328,12 +329,15 @@ export interface UsageReport {
     provider: string | null;
     surface: UsageSurface | null;
     model: string | null;
+    confidence?: UsageConfidence | null;
   };
   status: UsageStoreStatus;
   totals: UsageAggregateMetrics;
   providers: UsageProviderSummary[];
   surfaces: UsageSurfaceSummary[];
   hotspots: UsageHotspot[];
+  workflows?: UsageHotspot[];
+  sessions?: UsageHotspot[];
   timeline: UsageTimelineBucket[];
 }
 

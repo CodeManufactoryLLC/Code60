@@ -32,39 +32,41 @@ test("browser: Usage page records live turns, supports hotspot drill-down, expor
 
     const page = local.page.locator("section.usage-page");
     await expect(page).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Summary" })).toBeVisible();
     await expect(page.locator(".cds--tile")).toHaveCount(0);
-    const summary = page.locator(".usage-dashboard");
-    await expect(page.getByText("Turns recorded")).toHaveCount(0);
-    await expect(page.getByText("Retained turns")).toHaveCount(0);
-    await expect(page.getByText("Provider-reported cost")).toHaveCount(0);
-    await expect(summary.getByText("Estimated total tokens", { exact: true })).toBeVisible();
-    await expect(summary.getByText("New input", { exact: true })).toBeVisible();
-    await expect(summary.getByText("Cached / re-read", { exact: true })).toBeVisible();
-    await expect(summary.getByText("Output", { exact: true })).toBeVisible();
-    await expect(summary.getByText("Total turns", { exact: true })).toBeVisible();
-    await expect(summary.getByText("Net context added", { exact: true })).toBeVisible();
-    await expect(summary.getByText("Tool calls", { exact: true })).toBeVisible();
-    await expect(summary.getByText("Tool waves", { exact: true })).toBeVisible();
-    await expect(summary.getByText("Compactions", { exact: true })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Summary" })).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: "By Provider" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "By Model" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "By Surface" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "By Turn" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "By Workflow" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "By Session" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Usage Timeline" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Export" })).toBeVisible();
 
-    // Switch to Provider burn rate tab and verify live recorded turn.
-    await page.getByRole("tab", { name: "Provider burn rate" }).click();
-    await expect(page.getByText("Burn rate by provider and model")).toHaveCount(0);
-    // Should record at least 1 turn from the Relay exchange.
-    await expect(page.locator("table[aria-label='Provider burn rate']")).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.locator("table[aria-label='Provider burn rate']")).toContainText("claude");
+    // By Provider opens first with a TOTAL row at the top and the live recorded provider.
+    const providerTable = page.locator("table[aria-label='Usage by provider']");
+    await expect(providerTable).toBeVisible({ timeout: 15_000 });
+    await expect(providerTable.locator("tbody tr").first()).toContainText("TOTAL");
+    await expect(providerTable).toContainText("claude");
 
-    // Switch to Usage Timeline tab and verify timeline renders without the old heading.
-    await page.getByRole("tab", { name: "Usage Timeline" }).click();
-    await expect(page.locator(".usage-timeline-bars")).toBeVisible();
-    await expect(page.getByText("Burn timeline")).toHaveCount(0);
+    // By Model shows a TOTAL row at the top and model usage.
+    await page.getByRole("tab", { name: "By Model" }).click();
+    const modelTable = page.locator("table[aria-label='Usage by model']");
+    await expect(modelTable).toBeVisible();
+    await expect(modelTable.locator("tbody tr").first()).toContainText("TOTAL");
+
+    // By Surface shows a TOTAL row at the top and Relay surface usage.
+    await page.getByRole("tab", { name: "By Surface" }).click();
+    const surfaceTable = page.locator("table[aria-label='Usage by surface']");
+    await expect(surfaceTable).toBeVisible();
+    await expect(surfaceTable.locator("tbody tr").first()).toContainText("TOTAL");
+    await expect(surfaceTable).toContainText("Relay");
 
     // Uses Carbon Dropdowns (no native <select>) with no UA list bullets/indentation.
     await expect(page.locator(".usage-filters select")).toHaveCount(0);
-    await expect(page.locator(".usage-filters .cds--dropdown")).toHaveCount(3);
+    await expect(page.locator(".usage-filters .cds--dropdown")).toHaveCount(4);
+    await expect(page.locator(".usage-filters #usage-confidence-select")).toBeVisible();
+    await expect(page.locator("[role='tabpanel'] #usage-confidence-select")).toHaveCount(0);
     const rangeTrigger = page.locator("#usage-range-select button.cds--list-box__field");
     await rangeTrigger.click();
     const rangeMenu = page.locator("#usage-range-select .cds--list-box__menu");
@@ -88,20 +90,29 @@ test("browser: Usage page records live turns, supports hotspot drill-down, expor
     });
     await rangeTrigger.press("Escape");
 
-    // Switch to Chats & workflows tab and drill into Turn inspector.
-    await page.getByRole("tab", { name: "Chats & workflows" }).click();
-    await expect(page.locator("table[aria-label='Usage by surface']")).toContainText("Relay");
-    await page.getByRole("button", { name: "Inspect turns" }).first().click();
+    // By Session shows a TOTAL row at the top and drills into By Turn.
+    await page.getByRole("tab", { name: "By Session" }).click();
+    const sessionTable = page.locator("table[aria-label='Usage by session']");
+    await expect(sessionTable).toBeVisible();
+    await expect(sessionTable.locator("tbody tr").first()).toContainText("TOTAL");
+    await sessionTable.getByRole("button", { name: "Inspect turns" }).first().click();
 
-    // Turn inspector opens scoped to the hotspot and expands calculation details.
+    // By Turn opens scoped to the session with a TOTAL row at the top and expandable details.
     await expect(page.locator(".usage-scope-banner")).toBeVisible();
-    await expect(page.locator("table[aria-label='Turn-level usage audit log']")).toBeVisible();
+    const turnTable = page.locator("table[aria-label='Usage by turn']");
+    await expect(turnTable).toBeVisible();
+    await expect(turnTable.locator("tbody tr").first()).toContainText("TOTAL");
     await page
       .getByRole("button", { name: /Inspect turn/i })
       .first()
       .click();
     await expect(page.getByText("Estimation Breakdown")).toBeVisible();
     await expect(page.getByText("Context & Tools")).toBeVisible();
+
+    // Switch to Usage Timeline tab and verify timeline renders without the old heading.
+    await page.getByRole("tab", { name: "Usage Timeline" }).click();
+    await expect(page.locator(".usage-timeline-bars")).toBeVisible();
+    await expect(page.getByText("Burn timeline")).toHaveCount(0);
 
     // Switch to Export tab and trigger Markdown download toast.
     await page.getByRole("tab", { name: "Export" }).click();

@@ -666,12 +666,15 @@ export class UsageStore {
         provider: query?.provider ?? null,
         surface: query?.surface ?? null,
         model: query?.model ?? null,
+        confidence: query?.confidence ?? null,
       },
       status: storeStatus,
       totals: emptyMetrics(),
       providers: [],
       surfaces: [],
       hotspots: [],
+      workflows: [],
+      sessions: [],
       timeline: [],
     };
     if (!this.db) return empty;
@@ -864,6 +867,7 @@ export class UsageStore {
       peakContextUsed: number | null;
       contextWindowSize: number | null;
       maxToolWaves: number;
+      totalToolWaves: number;
       totalToolCalls: number;
       compactions: number;
       exactTurns: number;
@@ -871,46 +875,8 @@ export class UsageStore {
       lowerBoundTurns: number;
     };
 
-    const hotspotRows = this.db
-      .prepare(
-        `SELECT
-          COALESCE(workflow_id, conversation_id, run_id, session_id) AS targetKey,
-          surface,
-          helper_kind AS helperKind,
-          provider,
-          MAX(model) AS model,
-          MAX(session_id) AS sessionId,
-          MAX(run_id) AS runId,
-          MAX(conversation_id) AS conversationId,
-          MAX(workflow_id) AS workflowId,
-          MAX(schedule_id) AS scheduleId,
-          MAX(project_id) AS projectId,
-          MIN(at) AS firstAt,
-          MAX(at) AS lastAt,
-          COUNT(*) AS turns,
-          COALESCE(SUM(est_total_tokens), 0) AS totalTokens,
-          COALESCE(SUM(est_new_input_tokens), 0) AS newInputTokens,
-          COALESCE(SUM(est_cached_or_reread_tokens), 0) AS cachedOrRereadInputTokens,
-          COALESCE(SUM(est_output_tokens), 0) AS outputTokens,
-          COALESCE(SUM(COALESCE(net_context_delta, 0)), 0) AS netContextDelta,
-          MAX(peak_used) AS peakContextUsed,
-          MAX(window_size) AS contextWindowSize,
-          COALESCE(MAX(tool_waves), 0) AS maxToolWaves,
-          COALESCE(SUM(tool_calls), 0) AS totalToolCalls,
-          COALESCE(SUM(compacted), 0) AS compactions,
-          COALESCE(SUM(CASE WHEN confidence = 'exact' THEN 1 ELSE 0 END), 0) AS exactTurns,
-          COALESCE(SUM(CASE WHEN confidence = 'derived' THEN 1 ELSE 0 END), 0) AS derivedTurns,
-          COALESCE(SUM(CASE WHEN confidence = 'lower_bound' THEN 1 ELSE 0 END), 0) AS lowerBoundTurns
-        FROM usage_turns
-        ${where}
-        GROUP BY targetKey, surface, helper_kind, provider
-        ORDER BY totalTokens DESC
-        LIMIT 50`,
-      )
-      .all(...params) as HotspotRow[];
-
-    const hotspots: UsageHotspot[] = hotspotRows.map((row) => ({
-      key: `${row.surface}:${row.provider}:${row.targetKey}`,
+    const mapHotspotRow = (row: HotspotRow, key: string): UsageHotspot => ({
+      key,
       surface: row.surface,
       helperKind: row.helperKind,
       provider: row.provider,
@@ -936,12 +902,96 @@ export class UsageStore {
           ? Number(((row.peakContextUsed / row.contextWindowSize) * 100).toFixed(1))
           : null,
       maxToolWaves: row.maxToolWaves,
+      totalToolWaves: row.totalToolWaves,
       totalToolCalls: row.totalToolCalls,
       compactions: row.compactions,
       exactTurns: row.exactTurns,
       derivedTurns: row.derivedTurns,
       lowerBoundTurns: row.lowerBoundTurns,
-    }));
+    });
+
+    const hotspotColumns = `
+          surface,
+          helper_kind AS helperKind,
+          provider,
+          MAX(model) AS model,
+          MAX(session_id) AS sessionId,
+          MAX(run_id) AS runId,
+          MAX(conversation_id) AS conversationId,
+          MAX(workflow_id) AS workflowId,
+          MAX(schedule_id) AS scheduleId,
+          MAX(project_id) AS projectId,
+          MIN(at) AS firstAt,
+          MAX(at) AS lastAt,
+          COUNT(*) AS turns,
+          COALESCE(SUM(est_total_tokens), 0) AS totalTokens,
+          COALESCE(SUM(est_new_input_tokens), 0) AS newInputTokens,
+          COALESCE(SUM(est_cached_or_reread_tokens), 0) AS cachedOrRereadInputTokens,
+          COALESCE(SUM(est_output_tokens), 0) AS outputTokens,
+          COALESCE(SUM(COALESCE(net_context_delta, 0)), 0) AS netContextDelta,
+          MAX(peak_used) AS peakContextUsed,
+          MAX(window_size) AS contextWindowSize,
+          COALESCE(MAX(tool_waves), 0) AS maxToolWaves,
+          COALESCE(SUM(tool_waves), 0) AS totalToolWaves,
+          COALESCE(SUM(tool_calls), 0) AS totalToolCalls,
+          COALESCE(SUM(compacted), 0) AS compactions,
+          COALESCE(SUM(CASE WHEN confidence = 'exact' THEN 1 ELSE 0 END), 0) AS exactTurns,
+          COALESCE(SUM(CASE WHEN confidence = 'derived' THEN 1 ELSE 0 END), 0) AS derivedTurns,
+          COALESCE(SUM(CASE WHEN confidence = 'lower_bound' THEN 1 ELSE 0 END), 0) AS lowerBoundTurns`;
+
+    const hotspotRows = this.db
+      .prepare(
+        `SELECT
+          COALESCE(workflow_id, conversation_id, run_id, session_id) AS targetKey,
+          ${hotspotColumns}
+        FROM usage_turns
+        ${where}
+        GROUP BY targetKey, surface, helper_kind, provider
+        ORDER BY totalTokens DESC
+        LIMIT 50`,
+      )
+      .all(...params) as HotspotRow[];
+
+    const hotspots: UsageHotspot[] = hotspotRows.map((row) =>
+      mapHotspotRow(row, `${row.surface}:${row.provider}:${row.targetKey}`),
+    );
+
+    const workflowWhere = where
+      ? `${where} AND workflow_id IS NOT NULL`
+      : "WHERE workflow_id IS NOT NULL";
+    const workflowRows = this.db
+      .prepare(
+        `SELECT
+          workflow_id AS targetKey,
+          ${hotspotColumns}
+        FROM usage_turns
+        ${workflowWhere}
+        GROUP BY workflow_id, provider
+        ORDER BY totalTokens DESC
+        LIMIT 100`,
+      )
+      .all(...params) as HotspotRow[];
+
+    const workflows: UsageHotspot[] = workflowRows.map((row) =>
+      mapHotspotRow(row, `workflow:${row.provider}:${row.targetKey}`),
+    );
+
+    const sessionRows = this.db
+      .prepare(
+        `SELECT
+          session_id AS targetKey,
+          ${hotspotColumns}
+        FROM usage_turns
+        ${where}
+        GROUP BY session_id, surface, helper_kind, provider
+        ORDER BY totalTokens DESC
+        LIMIT 100`,
+      )
+      .all(...params) as HotspotRow[];
+
+    const sessions: UsageHotspot[] = sessionRows.map((row) =>
+      mapHotspotRow(row, `session:${row.surface}:${row.provider}:${row.targetKey}`),
+    );
 
     // 4. Timeline buckets (hourly for <=48h, daily otherwise)
     const spanMs = window.sinceMs !== null ? (window.untilMs ?? nowMs) - window.sinceMs : null;
@@ -968,6 +1018,8 @@ export class UsageStore {
       providers,
       surfaces,
       hotspots,
+      workflows,
+      sessions,
       timeline: timelineRows,
     };
   }

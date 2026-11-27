@@ -88,7 +88,14 @@ function formatSurfaceLabel(surface: UsageSurface, helperKind: string | null): s
   return helperKind ? `${base} (${helperKind})` : base;
 }
 
-function formatMix(metrics: UsageAggregateMetrics): string {
+type UsageProviderSummaryModel = UsageReport["providers"][number]["models"][number];
+
+function formatMix(metrics: {
+  turns: number;
+  exactTurns: number;
+  derivedTurns: number;
+  lowerBoundTurns: number;
+}): string {
   if (metrics.turns === 0) return "No turns";
   const pct = (count: number) => Math.round((count / metrics.turns) * 100);
   const parts: string[] = [];
@@ -98,8 +105,62 @@ function formatMix(metrics: UsageAggregateMetrics): string {
   return parts.join(" · ");
 }
 
-function hotspotTargetId(spot: UsageHotspot): string {
-  return spot.workflowId ?? spot.conversationId ?? spot.runId ?? spot.sessionId;
+interface HotspotTotals {
+  turns: number;
+  totalTokens: number;
+  newInputTokens: number;
+  cachedOrRereadInputTokens: number;
+  outputTokens: number;
+  netContextDelta: number;
+  peakContextPercent: number | null;
+  totalToolCalls: number;
+  totalToolWaves: number;
+  maxToolWaves: number;
+  compactions: number;
+  exactTurns: number;
+  derivedTurns: number;
+  lowerBoundTurns: number;
+}
+
+function summarizeHotspots(items: UsageHotspot[]): HotspotTotals {
+  const sum: HotspotTotals = {
+    turns: 0,
+    totalTokens: 0,
+    newInputTokens: 0,
+    cachedOrRereadInputTokens: 0,
+    outputTokens: 0,
+    netContextDelta: 0,
+    peakContextPercent: null,
+    totalToolCalls: 0,
+    totalToolWaves: 0,
+    maxToolWaves: 0,
+    compactions: 0,
+    exactTurns: 0,
+    derivedTurns: 0,
+    lowerBoundTurns: 0,
+  };
+  for (const item of items) {
+    sum.turns += item.turns;
+    sum.totalTokens += item.totalTokens;
+    sum.newInputTokens += item.newInputTokens;
+    sum.cachedOrRereadInputTokens += item.cachedOrRereadInputTokens;
+    sum.outputTokens += item.outputTokens;
+    sum.netContextDelta += item.netContextDelta;
+    if (item.peakContextPercent !== null) {
+      sum.peakContextPercent =
+        sum.peakContextPercent === null
+          ? item.peakContextPercent
+          : Math.max(sum.peakContextPercent, item.peakContextPercent);
+    }
+    sum.totalToolCalls += item.totalToolCalls;
+    sum.totalToolWaves += item.totalToolWaves ?? item.maxToolWaves;
+    sum.maxToolWaves = Math.max(sum.maxToolWaves, item.maxToolWaves);
+    sum.compactions += item.compactions;
+    sum.exactTurns += item.exactTurns;
+    sum.derivedTurns += item.derivedTurns;
+    sum.lowerBoundTurns += item.lowerBoundTurns;
+  }
+  return sum;
 }
 
 function triggerDownload(filename: string, mimeType: string, content: string): void {
@@ -115,10 +176,8 @@ function triggerDownload(filename: string, mimeType: string, content: string): v
 }
 
 type TurnScope =
-  | { kind: "workflow"; id: string; label: string }
-  | { kind: "conversation"; id: string; label: string }
-  | { kind: "run"; id: string; label: string }
-  | { kind: "session"; id: string; label: string };
+  | { kind: "workflow"; id: string; label: string; totals: HotspotTotals }
+  | { kind: "session"; id: string; label: string; totals: HotspotTotals };
 
 export function UsagePage({
   api,
@@ -154,8 +213,9 @@ export function UsagePage({
       range,
       ...(providerFilter !== "all" ? { provider: providerFilter } : {}),
       ...(surfaceFilter !== "all" ? { surface: surfaceFilter as UsageSurface } : {}),
+      ...(confidenceFilter !== "all" ? { confidence: confidenceFilter as UsageConfidence } : {}),
     }),
-    [range, providerFilter, surfaceFilter],
+    [range, providerFilter, surfaceFilter, confidenceFilter],
   );
 
   const loadData = useCallback(async () => {
@@ -171,12 +231,7 @@ export function UsagePage({
         api.usageReport(queryBase),
         api.usageTurns({
           ...queryBase,
-          ...(confidenceFilter !== "all"
-            ? { confidence: confidenceFilter as UsageConfidence }
-            : {}),
           ...(turnScope?.kind === "workflow" ? { workflowId: turnScope.id } : {}),
-          ...(turnScope?.kind === "conversation" ? { conversationId: turnScope.id } : {}),
-          ...(turnScope?.kind === "run" ? { runId: turnScope.id } : {}),
           ...(turnScope?.kind === "session" ? { sessionId: turnScope.id } : {}),
           limit: TURN_PAGE_SIZE,
           offset: turnOffset,
@@ -191,7 +246,7 @@ export function UsagePage({
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
-  }, [api, queryBase, confidenceFilter, turnScope, turnOffset]);
+  }, [api, queryBase, turnScope, turnOffset]);
 
   useEffect(() => {
     if (!active) return;
@@ -243,21 +298,27 @@ export function UsagePage({
     }
   };
 
-  const inspectHotspot = (spot: UsageHotspot) => {
-    const scope: TurnScope = spot.workflowId
-      ? { kind: "workflow", id: spot.workflowId, label: `Workflow ${spot.workflowId}` }
-      : spot.conversationId
-        ? {
-            kind: "conversation",
-            id: spot.conversationId,
-            label: `Conversation ${spot.conversationId}`,
-          }
-        : spot.runId
-          ? { kind: "run", id: spot.runId, label: `Run ${spot.runId}` }
-          : { kind: "session", id: spot.sessionId, label: `Session ${spot.sessionId}` };
-    setTurnScope(scope);
+  const inspectWorkflow = (spot: UsageHotspot) => {
+    const id = spot.workflowId ?? spot.sessionId;
+    setTurnScope({
+      kind: spot.workflowId ? "workflow" : "session",
+      id,
+      label: spot.workflowId ? `Workflow ${id}` : `Session ${id}`,
+      totals: summarizeHotspots([spot]),
+    });
     setTurnOffset(0);
-    setTabIndex(4);
+    setTabIndex(3);
+  };
+
+  const inspectSession = (spot: UsageHotspot) => {
+    setTurnScope({
+      kind: "session",
+      id: spot.sessionId,
+      label: `Session ${spot.sessionId}`,
+      totals: summarizeHotspots([spot]),
+    });
+    setTurnOffset(0);
+    setTabIndex(3);
   };
 
   const knownProviders = useMemo(() => {
@@ -267,12 +328,49 @@ export function UsagePage({
     return [...names].sort();
   }, [providerFilter, report]);
 
+  const modelRows = useMemo(() => {
+    const rows: Array<{ provider: string; model: UsageProviderSummaryModel }> = [];
+    for (const provider of report?.providers ?? []) {
+      for (const model of provider.models) {
+        rows.push({ provider: provider.provider, model });
+      }
+    }
+    return rows.sort((a, b) => b.model.totalTokens - a.model.totalTokens);
+  }, [report]);
+
+  const workflows = useMemo(
+    () => report?.workflows ?? (report?.hotspots ?? []).filter((spot) => spot.workflowId !== null),
+    [report],
+  );
+
+  const workflowTotals = useMemo(() => summarizeHotspots(workflows), [workflows]);
+
+  const sessions = useMemo(() => report?.sessions ?? report?.hotspots ?? [], [report]);
+
+  const sessionTotals = useMemo(() => summarizeHotspots(sessions), [sessions]);
+
   const maxTimelineTokens = useMemo(
     () => Math.max(1, ...(report?.timeline.map((b) => b.totalTokens) ?? [1])),
     [report],
   );
 
   const totals = report?.totals;
+  const turnTotals = turnScope
+    ? {
+        turns: turnScope.totals.turns,
+        totalTokens: turnScope.totals.totalTokens,
+        newInputTokens: turnScope.totals.newInputTokens,
+        cachedOrRereadInputTokens: turnScope.totals.cachedOrRereadInputTokens,
+        outputTokens: turnScope.totals.outputTokens,
+        netContextDelta: turnScope.totals.netContextDelta,
+        toolCalls: turnScope.totals.totalToolCalls,
+        toolWaves: turnScope.totals.totalToolWaves,
+        compactions: turnScope.totals.compactions,
+        exactTurns: turnScope.totals.exactTurns,
+        derivedTurns: turnScope.totals.derivedTurns,
+        lowerBoundTurns: turnScope.totals.lowerBoundTurns,
+      }
+    : totals;
 
   return (
     <section className="usage-page" aria-label="Usage">
@@ -371,85 +469,45 @@ export function UsagePage({
               }
             }}
           />
+
+          <Dropdown
+            id="usage-confidence-select"
+            titleText="Confidence tier"
+            label="Confidence tier"
+            size="sm"
+            className="usage-filter-select"
+            items={["all", "exact", "derived", "lower_bound"]}
+            selectedItem={confidenceFilter}
+            itemToString={(item) => {
+              if (item === "all") return "All tiers";
+              if (item === "exact") return "Exact (ACP reported)";
+              if (item === "derived") return "Derived (context / wave)";
+              if (item === "lower_bound") return "Lower bound (wire text)";
+              return "";
+            }}
+            onChange={({ selectedItem }) => {
+              if (selectedItem) {
+                setConfidenceFilter(selectedItem);
+                setTurnOffset(0);
+              }
+            }}
+          />
         </div>
       </div>
 
       <Tabs selectedIndex={tabIndex} onChange={({ selectedIndex }) => setTabIndex(selectedIndex)}>
         <TabList aria-label="Usage report sections" contained>
-          <Tab>Summary</Tab>
-          <Tab>Provider burn rate</Tab>
+          <Tab>By Provider</Tab>
+          <Tab>By Model</Tab>
+          <Tab>By Surface</Tab>
+          <Tab>By Turn</Tab>
+          <Tab>By Workflow</Tab>
+          <Tab>By Session</Tab>
           <Tab>Usage Timeline</Tab>
-          <Tab>Chats &amp; workflows</Tab>
-          <Tab>Turn inspector</Tab>
           <Tab>Export</Tab>
         </TabList>
         <TabPanels>
-          {/* Tab 1: Summary */}
-          <TabPanel>
-            <div className="usage-section usage-dashboard">
-              <section className="usage-dashboard-group" aria-labelledby="usage-summary-tokens">
-                <h2 id="usage-summary-tokens" className="usage-section-heading">
-                  Tokens
-                </h2>
-                <dl className="usage-figure-grid">
-                  <div className="usage-figure">
-                    <dt className="usage-figure-label">Estimated total tokens</dt>
-                    <dd className="usage-figure-value">{formatNumber(totals?.totalTokens ?? 0)}</dd>
-                  </div>
-                  <div className="usage-figure">
-                    <dt className="usage-figure-label">New input</dt>
-                    <dd className="usage-figure-value">
-                      {formatNumber(totals?.newInputTokens ?? 0)}
-                    </dd>
-                  </div>
-                  <div className="usage-figure">
-                    <dt className="usage-figure-label">Cached / re-read</dt>
-                    <dd className="usage-figure-value">
-                      {formatNumber(totals?.cachedOrRereadInputTokens ?? 0)}
-                    </dd>
-                  </div>
-                  <div className="usage-figure">
-                    <dt className="usage-figure-label">Output</dt>
-                    <dd className="usage-figure-value">
-                      {formatNumber(totals?.outputTokens ?? 0)}
-                    </dd>
-                  </div>
-                </dl>
-              </section>
-
-              <section className="usage-dashboard-group" aria-labelledby="usage-summary-activity">
-                <h2 id="usage-summary-activity" className="usage-section-heading">
-                  Context &amp; activity
-                </h2>
-                <dl className="usage-figure-grid">
-                  <div className="usage-figure">
-                    <dt className="usage-figure-label">Total turns</dt>
-                    <dd className="usage-figure-value">{formatNumber(totals?.turns ?? 0)}</dd>
-                  </div>
-                  <div className="usage-figure">
-                    <dt className="usage-figure-label">Net context added</dt>
-                    <dd className="usage-figure-value">
-                      {formatNumber(totals?.netContextDelta ?? 0)}
-                    </dd>
-                  </div>
-                  <div className="usage-figure">
-                    <dt className="usage-figure-label">Tool calls</dt>
-                    <dd className="usage-figure-value">{formatNumber(totals?.toolCalls ?? 0)}</dd>
-                  </div>
-                  <div className="usage-figure">
-                    <dt className="usage-figure-label">Tool waves</dt>
-                    <dd className="usage-figure-value">{formatNumber(totals?.toolWaves ?? 0)}</dd>
-                  </div>
-                  <div className="usage-figure">
-                    <dt className="usage-figure-label">Compactions</dt>
-                    <dd className="usage-figure-value">{formatNumber(totals?.compactions ?? 0)}</dd>
-                  </div>
-                </dl>
-              </section>
-            </div>
-          </TabPanel>
-
-          {/* Tab 2: Provider Burn Rate */}
+          {/* Tab 1: By Provider */}
           <TabPanel>
             <section className="usage-section">
               {!report || report.providers.length === 0 ? (
@@ -459,77 +517,91 @@ export function UsagePage({
                 </div>
               ) : (
                 <TableContainer className="usage-table-wrap">
-                  <Table size="md" aria-label="Provider burn rate">
+                  <Table size="md" aria-label="Usage by provider">
                     <TableHead>
                       <TableRow>
-                        <TableHeader>Provider / Model</TableHeader>
+                        <TableHeader>Provider</TableHeader>
                         <TableHeader className="usage-num">Turns</TableHeader>
                         <TableHeader className="usage-num">Est. Total</TableHeader>
                         <TableHeader className="usage-num">New Input</TableHeader>
                         <TableHeader className="usage-num">Cached / Re-read</TableHeader>
                         <TableHeader className="usage-num">Output</TableHeader>
                         <TableHeader className="usage-num">Net Context Δ</TableHeader>
+                        <TableHeader className="usage-num">Tool Calls</TableHeader>
+                        <TableHeader className="usage-num">Tool Waves</TableHeader>
+                        <TableHeader className="usage-num">Compactions</TableHeader>
                         <TableHeader className="usage-num">Reported Cost</TableHeader>
                         <TableHeader>Measurement Mix</TableHeader>
                       </TableRow>
                     </TableHead>
                     <TableBody>
+                      {totals && (
+                        <TableRow className="usage-total-row">
+                          <TableCell>TOTAL</TableCell>
+                          <TableCell className="usage-num">{formatNumber(totals.turns)}</TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.totalTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.newInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.cachedOrRereadInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.outputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.netContextDelta)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.toolCalls)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.toolWaves)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.compactions)}
+                          </TableCell>
+                          <TableCell className="usage-num">{formatCosts(totals)}</TableCell>
+                          <TableCell>{formatMix(totals)}</TableCell>
+                        </TableRow>
+                      )}
                       {report.providers.map((provider) => (
-                        <Fragment key={provider.provider}>
-                          <TableRow>
-                            <TableCell>
-                              <strong>{provider.provider}</strong>
-                            </TableCell>
-                            <TableCell className="usage-num">
-                              {formatNumber(provider.turns)}
-                            </TableCell>
-                            <TableCell className="usage-num">
-                              <strong>{formatNumber(provider.totalTokens)}</strong>
-                            </TableCell>
-                            <TableCell className="usage-num">
-                              {formatNumber(provider.newInputTokens)}
-                            </TableCell>
-                            <TableCell className="usage-num">
-                              {formatNumber(provider.cachedOrRereadInputTokens)}
-                            </TableCell>
-                            <TableCell className="usage-num">
-                              {formatNumber(provider.outputTokens)}
-                            </TableCell>
-                            <TableCell className="usage-num">
-                              {formatNumber(provider.netContextDelta)}
-                            </TableCell>
-                            <TableCell className="usage-num">{formatCosts(provider)}</TableCell>
-                            <TableCell>{formatMix(provider)}</TableCell>
-                          </TableRow>
-                          {provider.models.map((model) => (
-                            <TableRow
-                              key={`${provider.provider}:${model.model}`}
-                              className="usage-model-row"
-                            >
-                              <TableCell className="usage-mono">↳ {model.model}</TableCell>
-                              <TableCell className="usage-num">
-                                {formatNumber(model.turns)}
-                              </TableCell>
-                              <TableCell className="usage-num">
-                                {formatNumber(model.totalTokens)}
-                              </TableCell>
-                              <TableCell className="usage-num">
-                                {formatNumber(model.newInputTokens)}
-                              </TableCell>
-                              <TableCell className="usage-num">
-                                {formatNumber(model.cachedOrRereadInputTokens)}
-                              </TableCell>
-                              <TableCell className="usage-num">
-                                {formatNumber(model.outputTokens)}
-                              </TableCell>
-                              <TableCell className="usage-num">
-                                {formatNumber(model.netContextDelta)}
-                              </TableCell>
-                              <TableCell className="usage-num">{formatCosts(model)}</TableCell>
-                              <TableCell>{formatMix(model)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </Fragment>
+                        <TableRow key={provider.provider}>
+                          <TableCell>
+                            <strong>{provider.provider}</strong>
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(provider.turns)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            <strong>{formatNumber(provider.totalTokens)}</strong>
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(provider.newInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(provider.cachedOrRereadInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(provider.outputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(provider.netContextDelta)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(provider.toolCalls)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(provider.toolWaves)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(provider.compactions)}
+                          </TableCell>
+                          <TableCell className="usage-num">{formatCosts(provider)}</TableCell>
+                          <TableCell>{formatMix(provider)}</TableCell>
+                        </TableRow>
                       ))}
                     </TableBody>
                   </Table>
@@ -538,37 +610,108 @@ export function UsagePage({
             </section>
           </TabPanel>
 
-          {/* Tab 3: Usage Timeline */}
+          {/* Tab 2: By Model */}
           <TabPanel>
-            <section className="usage-section" aria-label="Usage timeline">
-              {!report || report.timeline.length === 0 ? (
-                <div className="usage-empty">No timeline data recorded in the selected window.</div>
+            <section className="usage-section">
+              {!report || modelRows.length === 0 ? (
+                <div className="usage-empty">No model data recorded in the selected window.</div>
               ) : (
-                <div className="usage-timeline-bars">
-                  {report.timeline.map((bucket) => (
-                    <div key={bucket.bucket} className="usage-timeline-row">
-                      <span className="usage-mono">{bucket.bucket}</span>
-                      <div className="usage-timeline-track" aria-hidden="true">
-                        <div
-                          className="usage-timeline-fill"
-                          style={{
-                            width: `${Math.max(2, Math.round((bucket.totalTokens / maxTimelineTokens) * 100))}%`,
-                          }}
-                        />
-                      </div>
-                      <span className="usage-num">{formatNumber(bucket.totalTokens)} tok</span>
-                      <span className="usage-num">{formatNumber(bucket.turns)} turns</span>
-                    </div>
-                  ))}
-                </div>
+                <TableContainer className="usage-table-wrap">
+                  <Table size="md" aria-label="Usage by model">
+                    <TableHead>
+                      <TableRow>
+                        <TableHeader>Model</TableHeader>
+                        <TableHeader>Provider</TableHeader>
+                        <TableHeader className="usage-num">Turns</TableHeader>
+                        <TableHeader className="usage-num">Est. Total</TableHeader>
+                        <TableHeader className="usage-num">New Input</TableHeader>
+                        <TableHeader className="usage-num">Cached / Re-read</TableHeader>
+                        <TableHeader className="usage-num">Output</TableHeader>
+                        <TableHeader className="usage-num">Net Context Δ</TableHeader>
+                        <TableHeader className="usage-num">Tool Calls</TableHeader>
+                        <TableHeader className="usage-num">Tool Waves</TableHeader>
+                        <TableHeader className="usage-num">Compactions</TableHeader>
+                        <TableHeader className="usage-num">Reported Cost</TableHeader>
+                        <TableHeader>Measurement Mix</TableHeader>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {totals && (
+                        <TableRow className="usage-total-row">
+                          <TableCell>TOTAL</TableCell>
+                          <TableCell>—</TableCell>
+                          <TableCell className="usage-num">{formatNumber(totals.turns)}</TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.totalTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.newInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.cachedOrRereadInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.outputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.netContextDelta)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.toolCalls)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.toolWaves)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.compactions)}
+                          </TableCell>
+                          <TableCell className="usage-num">{formatCosts(totals)}</TableCell>
+                          <TableCell>{formatMix(totals)}</TableCell>
+                        </TableRow>
+                      )}
+                      {modelRows.map(({ provider, model }) => (
+                        <TableRow key={`${provider}:${model.model}`}>
+                          <TableCell className="usage-mono">{model.model}</TableCell>
+                          <TableCell>{provider}</TableCell>
+                          <TableCell className="usage-num">{formatNumber(model.turns)}</TableCell>
+                          <TableCell className="usage-num">
+                            <strong>{formatNumber(model.totalTokens)}</strong>
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(model.newInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(model.cachedOrRereadInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(model.outputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(model.netContextDelta)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(model.toolCalls)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(model.toolWaves)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(model.compactions)}
+                          </TableCell>
+                          <TableCell className="usage-num">{formatCosts(model)}</TableCell>
+                          <TableCell>{formatMix(model)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               )}
             </section>
           </TabPanel>
 
-          {/* Tab 4: Chats & Workflows Hotspots */}
+          {/* Tab 3: By Surface */}
           <TabPanel>
             <section className="usage-section">
-              <h2 className="usage-section-heading">Breakdown by surface</h2>
               {!report || report.surfaces.length === 0 ? (
                 <div className="usage-empty">No surface data recorded in this window.</div>
               ) : (
@@ -582,11 +725,47 @@ export function UsagePage({
                         <TableHeader className="usage-num">New Input</TableHeader>
                         <TableHeader className="usage-num">Cached / Re-read</TableHeader>
                         <TableHeader className="usage-num">Output</TableHeader>
+                        <TableHeader className="usage-num">Net Context Δ</TableHeader>
+                        <TableHeader className="usage-num">Tool Calls</TableHeader>
                         <TableHeader className="usage-num">Tool Waves</TableHeader>
                         <TableHeader className="usage-num">Compactions</TableHeader>
+                        <TableHeader className="usage-num">Reported Cost</TableHeader>
+                        <TableHeader>Measurement Mix</TableHeader>
                       </TableRow>
                     </TableHead>
                     <TableBody>
+                      {totals && (
+                        <TableRow className="usage-total-row">
+                          <TableCell>TOTAL</TableCell>
+                          <TableCell className="usage-num">{formatNumber(totals.turns)}</TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.totalTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.newInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.cachedOrRereadInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.outputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.netContextDelta)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.toolCalls)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.toolWaves)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(totals.compactions)}
+                          </TableCell>
+                          <TableCell className="usage-num">{formatCosts(totals)}</TableCell>
+                          <TableCell>{formatMix(totals)}</TableCell>
+                        </TableRow>
+                      )}
                       {report.surfaces.map((entry) => (
                         <TableRow key={`${entry.surface}:${entry.helperKind ?? ""}`}>
                           <TableCell>
@@ -606,70 +785,19 @@ export function UsagePage({
                             {formatNumber(entry.outputTokens)}
                           </TableCell>
                           <TableCell className="usage-num">
+                            {formatNumber(entry.netContextDelta)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(entry.toolCalls)}
+                          </TableCell>
+                          <TableCell className="usage-num">
                             {formatNumber(entry.toolWaves)}
                           </TableCell>
                           <TableCell className="usage-num">
                             {formatNumber(entry.compactions)}
                           </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-
-              <h2 className="usage-section-heading">Heavy sessions &amp; workflows (hotspots)</h2>
-              {!report || report.hotspots.length === 0 ? (
-                <div className="usage-empty">No session or workflow hotspots recorded yet.</div>
-              ) : (
-                <TableContainer className="usage-table-wrap">
-                  <Table size="md" aria-label="Heavy sessions and workflows">
-                    <TableHead>
-                      <TableRow>
-                        <TableHeader>Target</TableHeader>
-                        <TableHeader>Surface</TableHeader>
-                        <TableHeader>Provider / Model</TableHeader>
-                        <TableHeader className="usage-num">Turns</TableHeader>
-                        <TableHeader className="usage-num">Est. Total</TableHeader>
-                        <TableHeader className="usage-num">Net Context Δ</TableHeader>
-                        <TableHeader className="usage-num">Peak Fill</TableHeader>
-                        <TableHeader className="usage-num">Max Waves</TableHeader>
-                        <TableHeader className="usage-num">Compactions</TableHeader>
-                        <TableHeader>Audit</TableHeader>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {report.hotspots.map((spot) => (
-                        <TableRow key={spot.key}>
-                          <TableCell className="usage-mono">{hotspotTargetId(spot)}</TableCell>
-                          <TableCell>{formatSurfaceLabel(spot.surface, spot.helperKind)}</TableCell>
-                          <TableCell>
-                            {spot.provider}
-                            {spot.model ? ` / ${spot.model}` : ""}
-                          </TableCell>
-                          <TableCell className="usage-num">{formatNumber(spot.turns)}</TableCell>
-                          <TableCell className="usage-num">
-                            <strong>{formatNumber(spot.totalTokens)}</strong>
-                          </TableCell>
-                          <TableCell className="usage-num">
-                            {formatNumber(spot.netContextDelta)}
-                          </TableCell>
-                          <TableCell className="usage-num">
-                            {spot.peakContextPercent !== null
-                              ? `${spot.peakContextPercent.toFixed(1)}%`
-                              : "—"}
-                          </TableCell>
-                          <TableCell className="usage-num">
-                            {formatNumber(spot.maxToolWaves)}
-                          </TableCell>
-                          <TableCell className="usage-num">
-                            {formatNumber(spot.compactions)}
-                          </TableCell>
-                          <TableCell>
-                            <Button kind="ghost" size="sm" onClick={() => inspectHotspot(spot)}>
-                              Inspect turns
-                            </Button>
-                          </TableCell>
+                          <TableCell className="usage-num">{formatCosts(entry)}</TableCell>
+                          <TableCell>{formatMix(entry)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -679,34 +807,9 @@ export function UsagePage({
             </section>
           </TabPanel>
 
-          {/* Tab 3: Turn Inspector */}
+          {/* Tab 4: By Turn */}
           <TabPanel>
             <section className="usage-section">
-              <div className="usage-toolbar">
-                <Dropdown
-                  id="usage-confidence-select"
-                  titleText="Confidence tier"
-                  label="Confidence tier"
-                  size="sm"
-                  className="usage-filter-select"
-                  items={["all", "exact", "derived", "lower_bound"]}
-                  selectedItem={confidenceFilter}
-                  itemToString={(item) => {
-                    if (item === "all") return "All tiers";
-                    if (item === "exact") return "Exact (ACP reported)";
-                    if (item === "derived") return "Derived (context / wave)";
-                    if (item === "lower_bound") return "Lower bound (wire text)";
-                    return "";
-                  }}
-                  onChange={({ selectedItem }) => {
-                    if (selectedItem) {
-                      setConfidenceFilter(selectedItem);
-                      setTurnOffset(0);
-                    }
-                  }}
-                />
-              </div>
-
               {turnScope && (
                 <div className="usage-scope-banner" role="status">
                   <span>
@@ -730,7 +833,7 @@ export function UsagePage({
               ) : (
                 <>
                   <TableContainer className="usage-table-wrap">
-                    <Table size="md" aria-label="Turn-level usage audit log">
+                    <Table size="md" aria-label="Usage by turn">
                       <TableHead>
                         <TableRow>
                           <TableExpandHeader
@@ -743,12 +846,52 @@ export function UsagePage({
                           <TableHeader className="usage-num">Turn</TableHeader>
                           <TableHeader>Confidence</TableHeader>
                           <TableHeader className="usage-num">Est. Total</TableHeader>
+                          <TableHeader className="usage-num">New Input</TableHeader>
+                          <TableHeader className="usage-num">Cached / Re-read</TableHeader>
+                          <TableHeader className="usage-num">Output</TableHeader>
                           <TableHeader className="usage-num">Net Δ</TableHeader>
+                          <TableHeader className="usage-num">Tool Calls</TableHeader>
                           <TableHeader className="usage-num">Waves</TableHeader>
                           <TableHeader>Compacted</TableHeader>
                         </TableRow>
                       </TableHead>
                       <TableBody>
+                        {turnTotals && (
+                          <TableRow className="usage-total-row">
+                            <TableCell />
+                            <TableCell>TOTAL</TableCell>
+                            <TableCell>—</TableCell>
+                            <TableCell>—</TableCell>
+                            <TableCell className="usage-num">
+                              {formatNumber(turnTotals.turns)}
+                            </TableCell>
+                            <TableCell>{formatMix(turnTotals)}</TableCell>
+                            <TableCell className="usage-num">
+                              {formatNumber(turnTotals.totalTokens)}
+                            </TableCell>
+                            <TableCell className="usage-num">
+                              {formatNumber(turnTotals.newInputTokens)}
+                            </TableCell>
+                            <TableCell className="usage-num">
+                              {formatNumber(turnTotals.cachedOrRereadInputTokens)}
+                            </TableCell>
+                            <TableCell className="usage-num">
+                              {formatNumber(turnTotals.outputTokens)}
+                            </TableCell>
+                            <TableCell className="usage-num">
+                              {formatNumber(turnTotals.netContextDelta)}
+                            </TableCell>
+                            <TableCell className="usage-num">
+                              {formatNumber(turnTotals.toolCalls)}
+                            </TableCell>
+                            <TableCell className="usage-num">
+                              {formatNumber(turnTotals.toolWaves)}
+                            </TableCell>
+                            <TableCell className="usage-num">
+                              {formatNumber(turnTotals.compactions)}
+                            </TableCell>
+                          </TableRow>
+                        )}
                         {turnPage.turns.map((turn: UsageTurnRecord) => {
                           const isExpanded = Boolean(expandedTurns[turn.id]);
                           const conf = CONFIDENCE_LABELS[turn.estimate.confidence];
@@ -788,17 +931,29 @@ export function UsagePage({
                                   <strong>{formatNumber(turn.estimate.totalTokens)}</strong>
                                 </TableCell>
                                 <TableCell className="usage-num">
+                                  {formatNumber(turn.estimate.newInputTokens)}
+                                </TableCell>
+                                <TableCell className="usage-num">
+                                  {formatNumber(turn.estimate.cachedOrRereadInputTokens)}
+                                </TableCell>
+                                <TableCell className="usage-num">
+                                  {formatNumber(turn.estimate.outputTokens)}
+                                </TableCell>
+                                <TableCell className="usage-num">
                                   {turn.estimate.netContextDelta !== null
                                     ? formatNumber(turn.estimate.netContextDelta)
                                     : "—"}
                                 </TableCell>
                                 <TableCell className="usage-num">
-                                  {turn.observed.toolWaves}
+                                  {formatNumber(turn.observed.toolCallCount)}
+                                </TableCell>
+                                <TableCell className="usage-num">
+                                  {formatNumber(turn.observed.toolWaves)}
                                 </TableCell>
                                 <TableCell>{turn.context.compacted ? "Yes" : "No"}</TableCell>
                               </TableExpandRow>
                               {isExpanded && (
-                                <TableExpandedRow colSpan={10}>
+                                <TableExpandedRow colSpan={14}>
                                   <div className="usage-turn-detail">
                                     <div className="usage-detail-group">
                                       <h3 className="usage-detail-title">Estimation Breakdown</h3>
@@ -938,7 +1093,267 @@ export function UsagePage({
             </section>
           </TabPanel>
 
-          {/* Tab 6: Export */}
+          {/* Tab 5: By Workflow */}
+          <TabPanel>
+            <section className="usage-section">
+              {!report || workflows.length === 0 ? (
+                <div className="usage-empty">No workflow usage recorded in this window.</div>
+              ) : (
+                <TableContainer className="usage-table-wrap">
+                  <Table size="md" aria-label="Usage by workflow">
+                    <TableHead>
+                      <TableRow>
+                        <TableHeader>Workflow</TableHeader>
+                        <TableHeader>Provider / Model</TableHeader>
+                        <TableHeader className="usage-num">Turns</TableHeader>
+                        <TableHeader className="usage-num">Est. Total</TableHeader>
+                        <TableHeader className="usage-num">New Input</TableHeader>
+                        <TableHeader className="usage-num">Cached / Re-read</TableHeader>
+                        <TableHeader className="usage-num">Output</TableHeader>
+                        <TableHeader className="usage-num">Net Context Δ</TableHeader>
+                        <TableHeader className="usage-num">Peak Fill</TableHeader>
+                        <TableHeader className="usage-num">Tool Calls</TableHeader>
+                        <TableHeader className="usage-num">Tool Waves</TableHeader>
+                        <TableHeader className="usage-num">Compactions</TableHeader>
+                        <TableHeader>Audit</TableHeader>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      <TableRow className="usage-total-row">
+                        <TableCell>TOTAL</TableCell>
+                        <TableCell>—</TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(workflowTotals.turns)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(workflowTotals.totalTokens)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(workflowTotals.newInputTokens)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(workflowTotals.cachedOrRereadInputTokens)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(workflowTotals.outputTokens)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(workflowTotals.netContextDelta)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {workflowTotals.peakContextPercent !== null
+                            ? `${workflowTotals.peakContextPercent.toFixed(1)}%`
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(workflowTotals.totalToolCalls)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(workflowTotals.totalToolWaves)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(workflowTotals.compactions)}
+                        </TableCell>
+                        <TableCell>—</TableCell>
+                      </TableRow>
+                      {workflows.map((spot) => (
+                        <TableRow key={spot.key}>
+                          <TableCell className="usage-mono">
+                            {spot.workflowId ?? spot.sessionId}
+                          </TableCell>
+                          <TableCell>
+                            {spot.provider}
+                            {spot.model ? ` / ${spot.model}` : ""}
+                          </TableCell>
+                          <TableCell className="usage-num">{formatNumber(spot.turns)}</TableCell>
+                          <TableCell className="usage-num">
+                            <strong>{formatNumber(spot.totalTokens)}</strong>
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.newInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.cachedOrRereadInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.outputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.netContextDelta)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {spot.peakContextPercent !== null
+                              ? `${spot.peakContextPercent.toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.totalToolCalls)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.totalToolWaves ?? spot.maxToolWaves)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.compactions)}
+                          </TableCell>
+                          <TableCell>
+                            <Button kind="ghost" size="sm" onClick={() => inspectWorkflow(spot)}>
+                              Inspect turns
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </section>
+          </TabPanel>
+
+          {/* Tab 6: By Session */}
+          <TabPanel>
+            <section className="usage-section">
+              {!report || sessions.length === 0 ? (
+                <div className="usage-empty">No session usage recorded in this window.</div>
+              ) : (
+                <TableContainer className="usage-table-wrap">
+                  <Table size="md" aria-label="Usage by session">
+                    <TableHead>
+                      <TableRow>
+                        <TableHeader>Session</TableHeader>
+                        <TableHeader>Surface</TableHeader>
+                        <TableHeader>Provider / Model</TableHeader>
+                        <TableHeader className="usage-num">Turns</TableHeader>
+                        <TableHeader className="usage-num">Est. Total</TableHeader>
+                        <TableHeader className="usage-num">New Input</TableHeader>
+                        <TableHeader className="usage-num">Cached / Re-read</TableHeader>
+                        <TableHeader className="usage-num">Output</TableHeader>
+                        <TableHeader className="usage-num">Net Context Δ</TableHeader>
+                        <TableHeader className="usage-num">Peak Fill</TableHeader>
+                        <TableHeader className="usage-num">Tool Calls</TableHeader>
+                        <TableHeader className="usage-num">Tool Waves</TableHeader>
+                        <TableHeader className="usage-num">Compactions</TableHeader>
+                        <TableHeader>Audit</TableHeader>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      <TableRow className="usage-total-row">
+                        <TableCell>TOTAL</TableCell>
+                        <TableCell>—</TableCell>
+                        <TableCell>—</TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(sessionTotals.turns)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(sessionTotals.totalTokens)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(sessionTotals.newInputTokens)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(sessionTotals.cachedOrRereadInputTokens)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(sessionTotals.outputTokens)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(sessionTotals.netContextDelta)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {sessionTotals.peakContextPercent !== null
+                            ? `${sessionTotals.peakContextPercent.toFixed(1)}%`
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(sessionTotals.totalToolCalls)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(sessionTotals.totalToolWaves)}
+                        </TableCell>
+                        <TableCell className="usage-num">
+                          {formatNumber(sessionTotals.compactions)}
+                        </TableCell>
+                        <TableCell>—</TableCell>
+                      </TableRow>
+                      {sessions.map((spot) => (
+                        <TableRow key={spot.key}>
+                          <TableCell className="usage-mono">{spot.sessionId}</TableCell>
+                          <TableCell>{formatSurfaceLabel(spot.surface, spot.helperKind)}</TableCell>
+                          <TableCell>
+                            {spot.provider}
+                            {spot.model ? ` / ${spot.model}` : ""}
+                          </TableCell>
+                          <TableCell className="usage-num">{formatNumber(spot.turns)}</TableCell>
+                          <TableCell className="usage-num">
+                            <strong>{formatNumber(spot.totalTokens)}</strong>
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.newInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.cachedOrRereadInputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.outputTokens)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.netContextDelta)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {spot.peakContextPercent !== null
+                              ? `${spot.peakContextPercent.toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.totalToolCalls)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.totalToolWaves ?? spot.maxToolWaves)}
+                          </TableCell>
+                          <TableCell className="usage-num">
+                            {formatNumber(spot.compactions)}
+                          </TableCell>
+                          <TableCell>
+                            <Button kind="ghost" size="sm" onClick={() => inspectSession(spot)}>
+                              Inspect turns
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </section>
+          </TabPanel>
+
+          {/* Tab 7: Usage Timeline */}
+          <TabPanel>
+            <section className="usage-section" aria-label="Usage timeline">
+              {!report || report.timeline.length === 0 ? (
+                <div className="usage-empty">No timeline data recorded in the selected window.</div>
+              ) : (
+                <div className="usage-timeline-bars">
+                  {report.timeline.map((bucket) => (
+                    <div key={bucket.bucket} className="usage-timeline-row">
+                      <span className="usage-mono">{bucket.bucket}</span>
+                      <div className="usage-timeline-track" aria-hidden="true">
+                        <div
+                          className="usage-timeline-fill"
+                          style={{
+                            width: `${Math.max(2, Math.round((bucket.totalTokens / maxTimelineTokens) * 100))}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="usage-num">{formatNumber(bucket.totalTokens)} tok</span>
+                      <span className="usage-num">{formatNumber(bucket.turns)} turns</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </TabPanel>
+
+          {/* Tab 8: Export */}
           <TabPanel>
             <section className="usage-section" aria-label="Export usage report">
               <div className="usage-export-grid">
