@@ -410,6 +410,20 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
+## Heartbeat
+
+- ID: `heartbeat`
+- Status: shipped
+- Purpose: Inspect recurring and manual Core Heartbeat sweeps, view all eight maintenance actions with initiation, termination and duration timestamps, initiate manual or dry-run sweeps, browse recent sweep history, and configure autonomous hygiene policies.
+- Access: Manage → Heartbeat (also Apps → Heartbeat) and local terminal → code60 heartbeat
+- Prerequisite: none
+- Agent access: read
+- Confirmation: Manual Run heartbeat, Dry run, Cancel, and Policy changes are human-only in Manage → Heartbeat or local code60 heartbeat CLI.
+- Limits: No database is required. Stores bounded policy and the last 50 sweeps in $XDG_STATE_HOME/code60/heartbeat/state.json (up to 512 KiB) without consuming the 5,000-entry Scheduled Jobs execution budget. Autonomously runs passive health sweeps, reconciles dead-owner runs, stops verified orphan processes, clears verified leftover-agent blocks, restarts capped stateless sidecars, applies 2 GiB/4 GiB low-disk pause/resume hysteresis, prunes stale temp/Git metadata, and removes terminal zero-diff or already-discarded code60/* worktrees past the configured age limit while preserving worktrees with edits, locks, and history. Never replays uncertain work, commits, merges, or pushes. Agents can read redacted aggregate status via code60_get_heartbeat_status without paths, hostnames, IPs, raw logs, or policy/trigger authority.
+- Pages: `heartbeat`
+- Settings sections: none
+- Tools: `code60_get_heartbeat_status`
+
 ## Usage
 
 - ID: `usage`

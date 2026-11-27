@@ -27,7 +27,10 @@
 - Headless runs are exactly one turn. Only the desktop app (`interactive` mode) sends follow-up prompts, and only after the previous turn ended.
 - Never decide from an agent's message text whether it asked a question or is done.
 - Never commit to project branches, merge Git branches, push, or remove a worktree
-  without an explicit user command. Desktop task snapshots may use internal refs.
+  without an explicit user command, except under the approved Core Heartbeat
+  7-guard clean-worktree pruning rule (terminal `code60/*` worktrees with zero
+  unpreserved changes or `discardedAt`, verified dead agent, unpinned, past
+  minimum age, keeping `run.json` and `events.jsonl`). Desktop task snapshots may use internal refs.
   Authorized desktop requests automatically integrate isolated working-file edits
   through guarded journals; message Undo requires human confirmation. Serialize
   complete preparation/write transactions per checkout. Direct-folder preimages
@@ -35,7 +38,7 @@
   desktop owns their bounded private storage and manual-edit warning.
 - Mark a run `interrupted` only when its owning process is gone. Never guess a different outcome.
 - Write `run.json` atomically and append to `events.jsonl`. Create both with mode `0600`.
-- Stay within the non-goals in ARCHITECTURE.md. Retries, durable queues, budgets, and automatic recovery are out of scope.
+- Stay within the non-goals in ARCHITECTURE.md. Retries, durable queues, budgets, and automatic recovery are out of scope outside the approved Core Heartbeat bounded reconciliation and hygiene rules.
 - Desktop may read saved orchestration history without starting agents, then
   explicitly restore or hand off an ended chat with trusted operating/task
   context. Retain typed transcript text separately from delivered instructions.

@@ -11,6 +11,7 @@
 - [Computer Use](#computer-use)
 - [Continuity Checkpoint](#continuity-checkpoint)
 - [Gateway](#gateway)
+- [Heartbeat](#heartbeat)
 - [Internal Prompts](#internal-prompts)
 - [MCP](#mcp)
 - [Memory Capture](#memory-capture)
@@ -57,6 +58,12 @@ It carries recent context forward as evidence only, without restoring old permis
 **Code60 Gateway** is Code60's local Node.js 24 backend service. It serves the browser interface, enforces browser and network security boundaries, manages agent sessions, and runs **Scheduled Jobs** and **Workflows**.
 
 Code60 Gateway runs in the background as a per-user service. Active agents, **Scheduled Jobs**, and **Workflows** continue running after closing or refreshing the browser.
+
+## Heartbeat
+
+**Heartbeat** is [Code60 Gateway's](#gateway) recurring maintenance process under **Manage → Heartbeat** that runs health sweeps, resolves stale state, and cleans empty worktrees.
+
+Each sweep tracks initiation time, termination time, duration, and per-action outcomes in `$XDG_STATE_HOME/code60/heartbeat/state.json`. Heartbeat keeps worktrees with edits, never deletes locks, and never replays past prompts.
 
 ## Internal Prompts
 

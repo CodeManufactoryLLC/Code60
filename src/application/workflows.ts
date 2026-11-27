@@ -255,6 +255,11 @@ export class DesktopWorkflows {
     this.root = join(stateHome(env), "code60", "workflows");
   }
 
+  /** Worktrees currently owned by workflow records so maintenance never prunes them. */
+  pinnedWorktrees(): string[] {
+    return this.entries.map((entry) => entry.worktree).filter((p) => p.length > 0);
+  }
+
   private ensureEngine(): WorkflowEngine {
     if (!this.engine) {
       this.engine = new WorkflowEngine(

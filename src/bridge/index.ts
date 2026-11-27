@@ -44,6 +44,7 @@ export * from "./custom-agents.js";
 export * from "./database.js";
 export * from "./details.js";
 export * from "./health-check.js";
+export * from "./heartbeat.js";
 export * from "./logs.js";
 export * from "./model-defaults.js";
 export * from "./plans.js";
@@ -480,6 +481,12 @@ export interface ApplicationClient {
     request: import("./alerts.js").AlertRequest,
   ): Promise<import("./alerts.js").AlertSnapshot>;
   onAlertsChanged?(listener: (snapshot: import("./alerts.js").AlertSnapshot) => void): () => void;
+  heartbeat?(
+    request: import("./heartbeat.js").HeartbeatRequest,
+  ): Promise<import("./heartbeat.js").HeartbeatSnapshot>;
+  onHeartbeatChanged?(
+    listener: (snapshot: import("./heartbeat.js").HeartbeatSnapshot) => void,
+  ): () => void;
   usageReport?(
     query?: import("./usage.js").UsageReportQuery,
   ): Promise<import("./usage.js").UsageReport>;
