@@ -229,7 +229,6 @@ export class HeartbeatService {
     if (this.stopped) return;
     await this.loadState();
     this.scheduleNext();
-    this.emit();
   }
 
   async stop(): Promise<void> {
@@ -249,8 +248,6 @@ export class HeartbeatService {
     if (this.loaded) return;
     this.loaded = true;
     try {
-      const root = heartbeatRoot(this.ports.env);
-      await privateDirectory(root);
       const raw = await readPrivateJson(this.statePath, HEARTBEAT_STATE_MAX_BYTES);
       const migrated = migrateLegacyState(raw, this.now());
       if (migrated) {
@@ -267,7 +264,7 @@ export class HeartbeatService {
       if (fileCode(error) === "ENOENT") {
         this.state = defaultPersistedState(this.now());
         this.diskState = undefined;
-        await this.persistState();
+        this.storageWarning = null;
       } else {
         // Preserve corrupt/unsafe state untouched and surface warning without crashing Gateway.
         this.state = defaultPersistedState(this.now());
