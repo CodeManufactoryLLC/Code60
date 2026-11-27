@@ -4,7 +4,7 @@ Code60 runs coding agents in isolated Git worktrees, with a browser interface an
 
 The opt-in per-user backend starts at login. Closing the browser keeps approved agents and scheduled jobs running. Stop all in Chat stops interactive work; Stop Code60 Backend stops interactive and scheduled work together. Your computer must be awake and logged in for scheduling.
 
-For common questions and core concepts, see the [FAQ](FAQ.md) and [Terminology](TERMINOLOGY.md).
+For common questions, see the [FAQ](knowledge/reference/faq/INDEX.md).
 
 ## Install and open
 
@@ -85,10 +85,10 @@ code60 service uninstall
 Status is read-only. Stop, repair and uninstall require consent and preserve histories, databases, worktrees and settings. Repair refreshes the registered Node/application paths after an update or runtime move. Only one backend can own application state. An existing scheduler service is transferred only with installation consent and verified shutdown; uncertain work is never replayed.
 
 For a managed installation, `code60 uninstall` also removes its owned application
-releases and launcher after verifying idle ownership. It preserves user data and
-engine evidence. Service/application consent and interactive profile approval are
+releases and launcher after verifying idle ownership. It preserves user data.
+Service/application consent and interactive profile approval are
 separate; non-TTY removal requires `--yes` and retains profiles. Keep the printed
-absolute recovery command if cleanup is interrupted. See [uninstall and recovery](docs/distribution/uninstall.md).
+absolute recovery command if cleanup is interrupted. See [uninstall and recovery](knowledge/operations/distribution/uninstall.md).
 
 Workspace chooser roots default to the user's home directory. To add another root, stop the backend and edit private `gateway/settings.json` under the Code60 state directory with `{"roots":["/absolute/workspace/root"]}`, then start it again. Use only directories you intend Code60 to access. The chooser lists the backend computer's files; it is not an upload dialog.
 
@@ -141,7 +141,7 @@ npm run test:packaged
 
 Browser tests run headlessly with fake providers and isolated state. Package checks install the npm tarball into a temporary prefix. Native service tests need an isolated, explicitly authorized supervisor environment; ordinary checks never register a real service.
 
-See [FAQ](FAQ.md), [terminology](TERMINOLOGY.md), [architecture](ARCHITECTURE.md), [capabilities](docs/capabilities.md), [MCP integration](MCP.md), [security](SECURITY.md), [contributing](CONTRIBUTING.md), [releases](RELEASING.md), [roadmap](ROADMAP.md) and [recovery runbooks](docs/runbooks/README.md).
+See [FAQ](knowledge/reference/faq/INDEX.md), [architecture](ARCHITECTURE.md), [capabilities](knowledge/reference/capabilities/INDEX.md), [MCP integration](MCP.md), [security](SECURITY.md), [releases](knowledge/operations/releasing.md) and [recovery runbooks](knowledge/operations/runbooks/INDEX.md).
 
 ### Workflows
 
@@ -149,7 +149,7 @@ Apps → Workflows creates ordered coding workflows manually or with **Create wi
 prompt**, runs them natively inside Code60 Gateway with any verified ACP provider
 in dedicated saved-file worktrees, and shows implementation, verification, repair
 and decision status. Work continues after closing the browser while the backend
-stays running. See the [workflow guide](docs/transmission-workflows.md) for
+stays running. See [Scheduled Jobs and Workflows](knowledge/reference/capabilities/automation.md) for
 prerequisites, approval defaults, pause/resume behavior and recovery details.
 
 
@@ -158,7 +158,7 @@ validated JSON, scoped to User or an open project. The page includes activation,
 project approval, connection tests, secure credentials/OAuth, backup/reset, reviewed
 transaction recovery and safe troubleshooting reports. Configuration validity,
 authentication and observed connection health are separate. See
-[MCP configuration](MCP.md) and the [recovery runbook](docs/runbooks/mcp-configuration.md).
+[MCP configuration](MCP.md) and the [MCP recovery runbooks](knowledge/operations/runbooks/mcp-storage.md).
 
 ### Chat
 
@@ -176,5 +176,4 @@ Execution history shows all schedules by default. View history on a job applies 
 
 Code60 uses upstream Carbon controls and White/G100 themes across its browser UI. Under **Personalize → Appearance**, use **Accent color** to change the default verdigris. The browser remembers your choice across themes. Home, Apps, Settings and project/provider homes
 use destination rows with direct creation buttons. Backend operations, retained
-conversations and saved appearance records are preserved. See the
-[migration ledger](docs/carbon-migration.md) for implementation, validation and explicit QA limits.
+conversations and saved appearance records are preserved.

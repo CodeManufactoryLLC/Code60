@@ -47,7 +47,7 @@ Use the existing harness, not a new QA plugin or a live agent.
 
 ## Run safely
 
-- Follow the [shared-host rules](../../../AGENTS.md#concurrent-work-on-a-shared-host).
+- Follow shared-host isolation rules ([AGENTS.md](../../../AGENTS.md), [CONSTITUTION.md](../../../CONSTITUTION.md)).
   Record the assigned checkout/branch, selected host/container environment, owned
   process/container identities, ports and evidence paths before execution. Do not
   stop another task's listener or container, change shared Docker/Git settings,
@@ -77,14 +77,14 @@ Use the existing harness, not a new QA plugin or a live agent.
   after packaging. Follow the [harness guide](../../../test/clean-install/README.md).
   Its separate driver reuses the golden scenario against an installed, offline
   customer runtime; preserve run-specific traces and verified Docker cleanup.
-- Platform payload changes additionally follow the [artifact workflow](../../../docs/distribution/artifacts.md):
+- Platform payload changes additionally follow the [artifact workflow](../../../knowledge/operations/distribution/artifacts.md):
   run `npm run test:payload` on each supported target and the explicit Linux
   payload mode of the clean-install harness. Preserve the existing tarball journey.
   Verify extraction needs no npm/compiler/scripts and record both targets' exact
   descriptors, model results and owned staging/process cleanup. Bootstrap help and
   version checks alone do not prove acquisition, installation or setup; exercise
   the affected managed/setup journeys as well.
-- Managed installation changes follow the [installation internals](../../../docs/distribution/installation.md).
+- Managed installation changes follow the [installation internals](../../../knowledge/operations/distribution/installation.md).
   Exercise the managed clean-install mode after cache removal and real login/
   interactive shells. Keep artifact-only and legacy journeys independent. Assert
   owned receipts/current pointer, command identity, preserved profile contents,

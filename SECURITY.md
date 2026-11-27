@@ -1,380 +1,229 @@
 # Security Policy
 
-Code60 runs coding agents on your machine. Its browser safeguards protect the
-application interface; they do not sandbox the agents you launch. Read the
-limitations below before giving an agent access to sensitive repositories.
-For quick answers on auto-approval, sandboxing, and secret handling, see the
-[Security and Permissions FAQ](FAQ.md#security-and-permissions).
+Code60 runs coding agents on the local machine. Its browser safeguards protect the application interface; they do not sandbox the agents launched by the user. For quick answers on auto-approval, sandboxing, and secret handling, see the [Permissions and Sandboxing FAQ](knowledge/reference/faq/permissions-and-sandboxing.md) and [Security Measures and Secrets FAQ](knowledge/reference/faq/security-and-secrets.md).
 
-## Runtime safeguards and limits
+> The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), as mandated by [CONSTITUTION.md](CONSTITUTION.md). Each normative stipulation appears on its own line with a unique identifier (`SEC-<section>.<subsection>.<number>`).
 
-- **Authenticated browser interface.** The Node backend binds only to
-  `127.0.0.1` on an ephemeral port and serves bundled assets. By default a same-origin JSON handshake creates a tab session without a code.
-  Local `code60 pairing on` can require a short-lived, single-use code instead;
-  `code60 pairing off` restores direct entry. With pairing off, browsers on this
-  computer can connect without private filesystem access. Session tokens remain
-  in session storage and never enter a URL or cookie. Explicit headers authenticate API
-  and event requests. Host/Origin checks and same-origin JSON mutation requests
-  reject cross-site use. A CSP limits executable content to bundled assets.
-- **Validated application requests.** A fixed operation map validates inputs and
-  checks workspace/run ownership. One browser controls mutations; takeover is
-  explicit and revokes pending page decisions. Host selection uses opaque IDs
-  under locally configured roots. No generic shell or filesystem RPC is exposed.
-- **Separate local management.** Private filesystem metadata authenticates the
-  management CLI separately from browsers. Installation, repair, stop and uninstall
-  require explicit local consent. Pairing policy changes are local management
-  actions and revoke current browser sessions without cancelling approved work.
-  Closing a tab preserves approved execution;
-  stopping the backend stops application and scheduler work. Restart restores
-  evidence without replaying uncertain work or approvals.
-- **Scoped local agent controls.** The orchestration MCP sidecar connects to a
-  token-authenticated gateway bound to `127.0.0.1`. Requests have size and time
-  limits. Worker mutations require the current chat/project scope and ownership;
-  workers do not receive the Code60 MCP server.
-- **Private run records.** Newly created run directories and files use
-  restrictive filesystem permissions. See [local data](#local-data-and-sensitive-records)
-  for what they contain and where they live.
+## Contents
 
-These controls are not a guarantee that agent actions are safe. An agent runs
-with your operating-system permissions. A worktree separates Git changes, not
-filesystem or network access. Without a Git repository containing a commit,
-agents work directly in the selected directory; parallel runs can overwrite
-each other's changes.
+1. [Runtime safeguards and trust boundaries](#1-runtime-safeguards-and-trust-boundaries)
+2. [Agent permissions and execution policy](#2-agent-permissions-and-execution-policy)
+3. [Local data, transcripts, and diagnostic logs](#3-local-data-transcripts-and-diagnostic-logs)
+4. [External providers, MCP connectors, and updates](#4-external-providers-mcp-connectors-and-updates)
+5. [Security governance and vulnerability reporting](#5-security-governance-and-vulnerability-reporting)
 
-Prompts, repository content, agent responses, and tool output can be malicious
-or misleading. Behavioral instructions such as the Operating Contract are not
-security boundaries. Review agent changes yourself; a `finished` run means the
-agent ended its turn normally, not that its changes were verified.
+## 1. Runtime safeguards and trust boundaries
 
-Technical details: [browser security](ARCHITECTURE.md#browser-security),
-[module boundaries](ARCHITECTURE.md#modules), and
-[runs without a worktree](ARCHITECTURE.md#runs-without-a-worktree).
+### 1.1 Authenticated browser interface
 
-## Agent permissions
+- `SEC-1.1.1` By default, the Node backend MUST bind only to `127.0.0.1` on an ephemeral port and serve bundled assets.
+- `SEC-1.1.2` When local pairing is off, a same-origin JSON handshake MAY create a tab session without a code, allowing any browser on the local computer to connect without private filesystem access.
+- `SEC-1.1.3` Operators MAY run `code60 pairing on` to require a short-lived, single-use pairing code for local browser connections, and MAY run `code60 pairing off` to restore direct entry.
+- `SEC-1.1.4` Browser session tokens MUST remain in session storage and MUST NOT enter a URL or cookie.
+- `SEC-1.1.5` API and event requests MUST authenticate using explicit request headers.
+- `SEC-1.1.6` The gateway MUST enforce Host/Origin checks and same-origin JSON mutation checks to reject cross-site requests.
+- `SEC-1.1.7` A Content Security Policy (CSP) MUST limit executable content to bundled assets.
 
-Code60 answers permission requests reported by the agent through ACP. This
-policy is not an operating-system sandbox and cannot constrain actions an
-agent does not submit for approval.
+### 1.2 Validated application requests and local management
 
-- **Manual application runs:** the default policy allows `read`, `search`,
-  `think`, and `edit`, and asks for other kinds. Configuration and explicit application permission choices can change these decisions.
-- **Scheduled automations:** use the saved explicit allowlist and deny other
-  requests. The internal headless executor never prompts.
-- **Orchestration chats and their workers:** Code60 auto-approval defaults on.
-  Turn it off beside **Harness mode** in the chat or worker composer to review each new ACP request
-  in the originating Relay, custom assistant, project chat or worker. Choose **Allow
-  once** or **Deny**. The setting persists across restarts and applies to live
-  sessions. A request already awaiting review still requires a decision after
-  you turn auto-approval back on.
-- **Once-only decisions:** Code60 chooses the corresponding once-only
-  allow/deny option, never an always-allow grant. If no matching once-only
-  option exists, the request is answered as cancelled. Once-only does not
-  mean harmless; orchestration can approve repeated requests automatically.
+- `SEC-1.2.1` The gateway MUST validate all inputs against a fixed operation map and MUST verify workspace and run ownership.
+- `SEC-1.2.2` The gateway MUST allow only one controlling browser to perform mutations at a time.
+- `SEC-1.2.3` Control takeover MUST be explicit and MUST revoke pending page decisions.
+- `SEC-1.2.4` Host file selection MUST use opaque IDs scoped to locally configured roots.
+- `SEC-1.2.5` The gateway MUST NOT expose any generic shell or filesystem RPC.
+- `SEC-1.2.6` Private filesystem metadata MUST authenticate the management CLI separately from browsers.
+- `SEC-1.2.7` Service installation, repair, stop, and uninstall MUST require explicit local consent.
+- `SEC-1.2.8` Pairing policy changes MUST be executed as local management actions and MUST revoke active browser sessions without cancelling approved work.
+- `SEC-1.2.9` Closing a browser tab MUST preserve approved execution, whereas stopping the backend MUST stop application and scheduler work together.
+- `SEC-1.2.10` Backend restart MUST restore persisted evidence without replaying uncertain work or approvals.
 
-The provider's **Harness mode** is separate from Code60's approval policy.
-Choosing an Ask mode does not turn off Code60 auto-approval in orchestration
-chats or workers. Any provider sandbox or other restrictions depend on that
-provider and its configuration.
+### 1.3 Scoped local agent controls and non-sandbox limits
 
-Model and reasoning changes accept only current connector-advertised values
-between turns. Saving a role default derives confirmed selections in main, not
-from renderer-supplied values. Defaults do not change approval policy or grant
-new worker authority.
+Non-sandbox boundary: these safeguards do not sandbox agent processes. Agents run with the local user's operating-system permissions. A Git worktree separates repository changes, not filesystem or network access; without a Git repository containing an initial commit, agents work directly in the selected directory and parallel runs can overwrite each other's changes. Prompts, repository content, agent responses, and tool output can be malicious or misleading, and behavioral instructions such as the Operating Contract are not security boundaries. See [ARCHITECTURE.md](ARCHITECTURE.md) for system architecture and module boundaries.
 
-See [permissions](ARCHITECTURE.md#permissions) and
-[harness modes](ARCHITECTURE.md#session-information-and-harness-modes).
+- `SEC-1.3.1` The orchestration MCP sidecar MUST connect only to a token-authenticated gateway bound to `127.0.0.1`.
+- `SEC-1.3.2` Orchestration MCP requests MUST enforce size and time limits.
+- `SEC-1.3.3` Worker mutations MUST enforce current chat and project scope and ownership.
+- `SEC-1.3.4` Worker agents MUST NOT receive the Code60 orchestration MCP server.
+- `SEC-1.3.5` Newly created run directories and files MUST use restrictive filesystem permissions (see [3.1 Run records and transcripts](#31-run-records-and-transcripts)).
+- `SEC-1.3.6` Users SHOULD read these non-sandbox limitations before granting an agent access to sensitive repositories.
+- `SEC-1.3.7` Users SHOULD review agent changes themselves; a `finished` run indicates only that the agent ended its turn normally, not that its changes were verified.
 
-## Local data and sensitive records
+### 1.4 Web Server (Beta) private-LAN access
 
-Code60 stores run records and transcripts as local `run.json` and
-`events.jsonl` files:
+Scope: LAN HTTP traffic is unencrypted; TLS, passwords, public hosting, and automatic firewall changes are out of scope for this beta. Paired LAN devices receive full application authority (including agent dispatch and backend-owned file choosers), subject to the same confirmations and single-controller rules. Provider storage and approved execution records remain independent of this policy.
+
+- `SEC-1.4.1` An explicit localhost-only switch MAY publish the Code60 application on the host's primary RFC1918 IPv4 address and existing gateway port.
+- `SEC-1.4.2` The LAN switch MUST default to off and MUST store only the enabled preference in private gateway settings.
+- `SEC-1.4.3` The gateway MUST NOT bind wildcard or public addresses, configure a router or firewall, or install another service when LAN access is enabled.
+- `SEC-1.4.4` Operators SHOULD enable LAN access only on trusted private networks.
+- `SEC-1.4.5` LAN access MUST always require a single-use 60-second pairing code, independently of local pairing policy.
+- `SEC-1.4.6` LAN pairing codes MUST be bound to an exact LAN activation and origin, and MUST be invalidated on rotation, disable, address change, or backend restart.
+- `SEC-1.4.7` The gateway MUST rate-limit LAN pairing submissions to at most ten per minute.
+- `SEC-1.4.8` LAN pairing codes MUST use six cryptographically random digits displayed as `123-456` and MUST accept entry with or without the hyphen (local pairing retains its hexadecimal format).
+- `SEC-1.4.9` LAN code rotation MUST exclude the immediately previous code, and code generation MUST reject active collisions within a finite retry limit.
+- `SEC-1.4.10` Sessions MUST be ingress- and origin-bound, MUST use per-tab session storage, and MUST require explicit control takeover.
+- `SEC-1.4.11` A local session MUST NOT be replayable on LAN, and a LAN session MUST NOT be replayable on localhost.
+- `SEC-1.4.12` Only the controlling localhost page MUST be permitted to change LAN policy or generate a pairing code.
+- `SEC-1.4.13` Pairing codes MUST NOT enter shared snapshots, diagnostics, transcripts, persistent settings, or links.
+- `SEC-1.4.14` The LAN ingress MUST reject private management routes even when presented with a management token.
+- `SEC-1.4.15` The LAN ingress MUST continue enforcing Host/Origin/schema checks, CSP, and existing quotas.
+- `SEC-1.4.16` Top-level LAN navigation MUST serve only the bundled asset manifest and MUST NOT expose source maps, Vite/HMR, or a development filesystem proxy.
+- `SEC-1.4.17` Disabling LAN or losing the host address MUST cancel affected view reads and pending human/setup interactions and MUST invalidate remote sessions while approved execution, scheduled work, and local access continue.
+- `SEC-1.4.18` In dev-container forwarding, the owned host launcher MUST communicate with the container loopback ingress over a private user-owned Unix socket and bounded stdio channel carrying only fixed address, publish, withdraw, and heartbeat messages.
+- `SEC-1.4.19` Browser requests MUST NOT control dev-container forwarding commands, ports, paths, or environments.
+- `SEC-1.4.20` Dev-container forwarding protocol requests MUST enforce ten-second deadlines, and the host MUST withdraw unrenewed publication after fifteen seconds or upon backend or launcher loss.
+- `SEC-1.4.21` Dev-container forwarding cleanup uncertainty MUST be reported as an error rather than claiming exposure stopped.
+
+## 2. Agent permissions and execution policy
+
+Scope: Code60 answers permission requests reported by an agent through ACP. This policy is not an operating-system sandbox and cannot constrain actions an agent does not submit for approval.
+
+### 2.1 Approval modes by execution context
+
+- `SEC-2.1.1` For manual application runs, the default policy allows `read`, `search`, `think`, and `edit` and prompts for other kinds; configuration and explicit application permission choices MAY alter these decisions.
+- `SEC-2.1.2` Scheduled jobs MUST enforce their saved explicit allowlist and MUST deny all other permission requests.
+- `SEC-2.1.3` The internal headless scheduler executor MUST NOT prompt for interactive approval.
+- `SEC-2.1.4` For orchestration chats and their workers, auto-approval defaults to on; users MAY turn off **auto-approve** in the top **Workspace** header to review each new ACP request in the originating Relay, custom assistant, project chat, or worker and choose **Allow once** or **Deny**.
+- `SEC-2.1.5` The **auto-approve** setting MUST persist across restarts and MUST apply to live sessions.
+- `SEC-2.1.6` A permission request already awaiting review MUST still require an explicit user decision even after **auto-approve** is turned back on.
+
+### 2.2 Once-only decisions, harness modes, and model defaults
+
+- `SEC-2.2.1` When answering an ACP permission request, Code60 MUST select the matching once-only allow or deny option and MUST NOT grant an always-allow option.
+- `SEC-2.2.2` If no matching once-only option exists for an ACP permission request, Code60 MUST answer the request as cancelled.
+- `SEC-2.2.3` The provider's **Harness mode** MUST remain independent of Code60's approval policy; selecting an Ask mode MUST NOT be treated as disabling Code60 auto-approval, and any provider-side sandbox depends on that provider and its configuration.
+- `SEC-2.2.4` Model and reasoning changes MUST accept only current connector-advertised values between turns.
+- `SEC-2.2.5` Saving a role default MUST derive confirmed selections in the backend and MUST NOT trust renderer-supplied values.
+- `SEC-2.2.6` Saved model and reasoning defaults MUST NOT alter approval policy or grant new worker authority.
+
+## 3. Local data, transcripts, and diagnostic logs
+
+### 3.1 Run records and transcripts
+
+Code60 stores run records and transcripts as unencrypted local `run.json` and `events.jsonl` files, plus project metadata and saved configurations in the connected SQLite database (for non-Git runs, the directory key is derived from the directory's absolute path). Filesystem permissions do not protect against processes running as the same user, administrator access, backups, or copies. Records can contain initial and follow-up prompts, agent messages, thoughts, raw ACP updates, tool inputs/outputs, stderr, and process metadata.
 
 | Run type | Record directory |
 | --- | --- |
 | Project runs in a Git repository | `<git-common-dir>/code60/runs/<run-id>/` |
 | Runs outside a Git repository | `$XDG_STATE_HOME/code60/dirs/<key>/runs/<run-id>/` (default state home: `~/.local/state`) |
-| Desktop orchestration chats | `.code60_workspace/<chat-folder>/.code60/runs/<run-id>/` beside the connected SQLite database |
+| Orchestration chats | `.code60_workspace/<chat-folder>/.code60/runs/<run-id>/` beside the connected SQLite database |
 
-The directory key for non-Git runs is derived from the directory's absolute
-path. Desktop project metadata and saved configurations also live in the
-user-selected SQLite database. See [files](ARCHITECTURE.md#files) for the full
-storage contract.
+- `SEC-3.1.1` On macOS and Linux, newly created run directories MUST use mode `0700` and record files MUST use mode `0600`.
+- `SEC-3.1.2` Transcripts are private records and MUST NOT be automatically scrubbed, rewritten, or expired.
+- `SEC-3.1.3` Operational errors and stderr MUST receive best-effort credential redaction before clipping, covering common credential assignments, authorization headers, URL user information, known token formats, and private-key blocks (this is not a general secret detector, PII anonymizer, or guarantee against disclosure).
+- `SEC-3.1.4` Stored stderr MUST retain at most a 64 KiB scrubbed tail, and oversized lines MUST be omitted.
+- `SEC-3.1.5` CLI progress output MUST omit tool/permission titles and status reasons, and ACP provider failures MUST use generic messages rather than echoing raw provider error text (preserving result fields and exit-code semantics).
+- `SEC-3.1.6` Users SHOULD NOT attach whole run directories or raw logs to public issues.
+- `SEC-3.1.7` Users SHOULD inspect and redact any shared material (including prompts, tokens, private paths, source code, and personal information) before sharing it.
+- `SEC-3.1.8` Users SHOULD NOT place credentials in prompts or configured command arguments; agents authenticate through their own CLIs.
 
-On macOS and Linux, new run directories use mode `0700` and record files use
-`0600`. Filesystem permissions do
-not protect against processes running as you, administrator access, backups,
-or copies you make. The JSON transcript files are not encrypted by Code60.
+### 3.2 Application diagnostic logs
 
-Records can contain your first prompt, later prompts, agent messages,
-thoughts, raw ACP updates, tool inputs/outputs, stderr, and process metadata.
-**Transcripts are private records, not automatically scrubbed or expired.**
-Prompts, messages, tool payloads, and raw ACP updates remain intact; existing
-records are not rewritten.
+**Apps → Data Viewer → Logs** stores local operational history as unencrypted JSONL files under `$XDG_STATE_HOME/code60/logs` (default `~/.local/state/code60/logs`), separate from the Events table and `events.jsonl` transcripts. Diagnostic capture can lose data after a crash, storage failure, or queue overflow; it is not an audit or recovery authority, and failure/drop counts describe the current launch only.
 
-Operational errors and stderr receive best-effort credential redaction before
-clipping. This covers common credential assignments, authorization headers,
-URL user information, known token formats, and private-key blocks. Stderr keeps
-at most a 64 KiB scrubbed tail; oversized lines are omitted. CLI progress omits
-tool/permission titles and status reasons, and ACP provider failures use generic
-messages rather than echoing provider error text. Result fields and exit-code
-semantics are unchanged, but diagnostic reasons may be redacted.
+- `SEC-3.2.1` Diagnostic logs MUST enforce a seven-day, 20 MiB total retention cap (including active files); reads and writes MUST prune retained data and queries MUST hide expired records.
+- `SEC-3.2.2` Clearing diagnostic logs MUST require explicit confirmation and MUST delete diagnostic logs only.
+- `SEC-3.2.3` Diagnostic retention and log clearing MUST NOT expire, scrub, or delete transcripts, run records, reviews, or SQLite data.
+- `SEC-3.2.4` Diagnostic records MUST use only fixed messages and allowlisted identifiers, event names, severity, outcomes, durations, and error categories/codes (project IDs are hashes, not a guarantee of anonymity).
+- `SEC-3.2.5` Diagnostic records MUST NOT contain prompts, transcripts, raw ACP/tool payloads, environment values, command arguments, absolute paths, or arbitrary exception text.
+- `SEC-3.2.6` Free-form diagnostic text MUST NOT be accepted without explicit policy approval; any future approved diagnostic text MUST receive credential redaction before bounded UTF-8 truncation.
+- `SEC-3.2.7` Diagnostic storage MUST enforce private POSIX mode and ownership checks and MUST reject unsafe storage paths or links.
+- `SEC-3.2.8` Concurrent diagnostic log rotation and quota enforcement MUST be protected by cross-process locking.
+- `SEC-3.2.9` Diagnostic queues, records, queries, and shutdown flushing MUST be bounded; persistence failures and dropped records MUST be surfaced visibly, and malformed or truncated records MUST be skipped with a partial-history notice.
+- `SEC-3.2.10` Only narrow, validated gateway query, detail, and clear operations MUST be allowed to access diagnostic logs.
+- `SEC-3.2.11` The gateway MUST NOT expose generic path/filesystem log access or grant agent or MCP log access.
 
-This is not a general secret detector, PII anonymizer, or guarantee against
-disclosure. Per-update and stderr limits are not a total log-size or retention
-limit. Diagnostics and screenshots can still expose sensitive data.
+## 4. External providers, MCP connectors, and updates
 
-Do not attach whole run directories or raw logs to public issues. Inspect
-and redact any material you share, including prompts, tokens, private paths,
-source code, and personal information. Avoid putting credentials into
-prompts or configured command arguments; agents authenticate through their
-own CLIs.
+### 4.1 Provider data transmission and continuation
 
-## Desktop diagnostic logs
+Local record storage does not mean task data remains on the local machine: Code60 sends prompts and context to the configured agent process, which can transmit prompts, repository content, and tool output to external services. Search overviews and memory extraction also send selected evidence (including project-file excerpts for search overviews) to the configured agent; temporary working directories and denied helper permission requests are not filesystem sandboxes.
 
-Tables → Logs is a local application operational history, available without a project
-database. It is separate from the Events table and `events.jsonl` transcripts.
-Local JSONL files live under `$XDG_STATE_HOME/code60/logs` (default
-`~/.local/state/code60/logs`) and persist across app restarts.
+- `SEC-4.1.1` Users SHOULD review each configured provider's privacy, retention, and training policies separately.
+- `SEC-4.1.2` Session continuation MAY restore a provider session or send a handoff summary built from saved prompts, messages, and tool-call summaries.
 
-**Only diagnostic logs** have a seven-day, 20 MiB total retention cap, including
-active files. Reads and writes prune retained data and queries hide expired
-records. Clear logs requires native confirmation and deletes diagnostic logs
-only. Existing transcripts, run records, reviews and SQLite data are not expired,
-scrubbed or deleted by either policy.
+### 4.2 Scoped provider and Codex setup
 
-Diagnostic records use fixed messages and allowlisted identifiers, event names,
-severity, outcomes, durations and error categories/codes. They do not contain
-prompts, transcripts, raw ACP/tool payloads, environment values, command arguments,
-absolute paths or arbitrary exception text. Project IDs are hashes, not a promise
-of anonymity. No free-form diagnostic text is currently accepted. Any future
-approved diagnostic text must receive existing credential redaction before bounded
-UTF-8 truncation. Redaction is best effort, not a secret detector or PII anonymizer.
+Custom launch overrides retain external setup. Providers own their persistent credentials, and dev-container homes retain managed binaries and credentials.
 
-Private POSIX modes/ownership and Windows owner/SYSTEM ACL checks reject unsafe
-storage and links. Cross-process locking protects concurrent rotation and quota
-enforcement. Queues, records, queries and shutdown flushing are bounded; failed
-persistence and dropped records are visible, and malformed/truncated records are
-skipped with a partial-history notice. Diagnostic capture can lose data after a
-crash, storage failure or queue overflow; it is not an audit or recovery authority.
-Counts of write failures/drops describe this app launch, not a durable audit total.
-Logs are unencrypted and readable by processes running as you. Inspect copied
-records and screenshots before sharing.
+- `SEC-4.2.1` An explicit human setup action MAY install only the catalog harness release artifacts fixed in application policy into versioned private Code60 storage.
+- `SEC-4.2.2` Before atomic activation of a catalog harness, Code60 MUST verify integrity, archive containment, ownership, and executable layout.
+- `SEC-4.2.3` Catalog harness setup MUST refuse root execution, external overwrites, lifecycle scripts, and shell-profile or service edits.
+- `SEC-4.2.4` Provider authentication MUST belong to the controlling page's single setup attempt (including over LAN) and MUST allow only fixed provider login operations and validated HTTPS destinations.
+- `SEC-4.2.5` Device codes, OAuth URLs, and pasted authorization codes MUST be treated as ephemeral owner-bound values and MUST NOT enter shared state, request-receipt caches, diagnostics, transcripts, or browser storage.
+- `SEC-4.2.6` Provider setup MUST NOT expose a generic terminal, shell, provider-server proxy, package selector, or credential reader.
+- `SEC-4.2.7` Operators MUST treat persistent dev-container homes containing managed binaries and provider credentials as private user state, not a disposable cache.
+- `SEC-4.2.8` Cancelling provider setup MUST NOT log out the provider or remove already-issued credentials.
+- `SEC-4.2.9` Provider setup cleanup failures MUST block further setup attempts until owned processes stop.
+- `SEC-4.2.10` As a narrow exception to package installation restrictions, the authenticated controlling browser MAY explicitly request installation of the fixed `@openai/codex@0.171.0` package from `https://registry.npmjs.org`.
+- `SEC-4.2.11` Browser setup operations MUST NOT accept a command, path, package name, or environment override.
+- `SEC-4.2.12` Managed Codex installation MUST run as the non-root backend user with npm lifecycle scripts disabled, isolated npm configuration, private staging, and atomic activation under `~/.local/share/code60/providers/codex/0.171.0`, preserving existing CLIs and user configuration.
+- `SEC-4.2.13` The owned Codex app-server process MUST perform only initialization and structured ChatGPT device-code login over bounded stdio and MUST accept only `https://auth.openai.com/codex/device`.
+- `SEC-4.2.14` The backend MUST run at most one setup attempt at a time and MUST enforce deadlines of ten minutes for installation, fifteen minutes for login, and fifteen seconds for protocol requests.
+- `SEC-4.2.15` Cancel, dismissal, reload, control loss, configuration replacement, and shutdown MUST abort owned setup work and await process-group cleanup.
+- `SEC-4.2.16` Normal agent work and fresh post-login verification MUST use ACP without login-process tools.
 
-Only narrow, validated preload query/detail/clear methods can access logs.
-There is no generic path/filesystem method and no agent/MCP log access. The CLI
-does not enable capture and gains no flags, output or recording changes.
+### 4.3 MCP connectors, credentials, and guarded file writes
 
-## Providers and network access
+Scope: MCP tools run with the local user's permissions and are not sandboxed. SHA-256 in MCP identity/review metadata binds configuration, public discovery, client identity, and scope. Guarded writes do not claim atomic compare-and-swap against a non-cooperating editor. See [MCP configuration](MCP.md), [MCP storage recovery](knowledge/operations/runbooks/mcp-storage.md), and [MCP runtime and auth recovery](knowledge/operations/runbooks/mcp-runtime-auth.md).
 
-Local record storage does not mean that your task data stays on your machine:
+- `SEC-4.3.1` User and project `mcp.json` definitions MUST remain backend-owned.
+- `SEC-4.3.2` Each owning ACP session MUST receive only fixed local stdio adapters with ephemeral connector capabilities and MUST NOT receive upstream commands, endpoints, or credentials.
+- `SEC-4.3.3` Application policy MUST restrict MCP connector authority to authorized owning turns while keeping ACP permissions independent.
+- `SEC-4.3.4` MCP session adapters MUST expose tools only.
+- `SEC-4.3.5` Stdio MCP connectors MUST run without a shell in owned process groups with an allowlisted environment.
+- `SEC-4.3.6` HTTP MCP connectors MUST use validated DNS and socket destinations, MUST enforce bounded requests, and MUST NOT automatically replay business calls.
+- `SEC-4.3.7` Users SHOULD configure only trusted MCP servers and providers and SHOULD review project approval against its exact canonical identity and revision.
+- `SEC-4.3.8` MCP credentials MUST use a bounded private-pipe Keychain/Secret Service helper or explicitly accepted temporary RAM.
+- `SEC-4.3.9` MCP OAuth flows MUST remain backend-owned, and the gateway MUST NOT expose a browser secret-read endpoint.
+- `SEC-4.3.10` Recovery Complete and Roll back MUST recheck reviewed files, journals, and owners, and MUST NOT override newer edits or restore session or credential authority.
+- `SEC-4.3.11` MCP journals and backups retain exact user-entered bytes privately and MUST NOT be shared as troubleshooting reports.
+- `SEC-4.3.12` OPTIONAL MCP troubleshooting reports MUST contain only counts, fixed codes, and states, and MUST NOT contain definitions, identifiers, paths, endpoints, references, or raw errors.
+- `SEC-4.3.13` MCP cleanup verification MUST retry only retained revoked handles and MUST NOT perform process-name searches or lock deletion.
+- `SEC-4.3.14` Authentication and credential-write replay fingerprints containing secret inputs MUST remain in backend memory only and MUST NOT be persisted as password verifiers.
+- `SEC-4.3.15` Guarded file staging MUST validate pathnames, open with `O_NOFOLLOW`, perform full native identity and content checks on that same handle, re-check target revision and stage identity before rename, and verify after publication.
+- `SEC-4.3.16` Guarded writes MUST fail without modifying the destination if the staged path is replaced by a regular file, symlink, or hard link between `lstat` and `open`.
+- `SEC-4.3.17` Uncertain guarded-write publication MUST retain recovery evidence.
 
-- Code60 sends prompts and context to the configured agent process. Depending
-  on that agent's tools, provider, and configuration, prompts, repository
-  content, and tool output may be transmitted to external services. Review
-  the provider's privacy, retention, and training policies separately.
-- User/project `mcp.json` definitions remain backend-owned. Each owning ACP session
-  receives fixed local stdio adapters with ephemeral connector capabilities, never
-  upstream commands, endpoints or credentials. Application policy limits authority
-  to authorized owning turns; ACP permissions remain independent. Only tools are
-  exposed. Stdio runs without a shell in owned process groups with an allowlisted
-  environment; HTTP uses validated DNS/socket destinations, bounded requests and
-  no automatic business-call replay. MCP tools run with the user's permissions and
-  are not sandboxed. Only configure trusted servers/providers. Review project
-  approval against its exact canonical identity/revision. Credentials use a bounded
-  private-pipe Keychain/Secret Service helper or explicitly accepted temporary RAM;
-  OAuth remains backend-owned. No browser secret-read endpoint exists.
-  Recovery Complete/Roll back rechecks reviewed files/journal/owners; it cannot
-  override newer edits or restore session/credential authority. Journals/backups
-  retain exact user-entered bytes privately and must never be shared as reports.
-  Optional reports contain only counts, fixed codes and states; no definitions,
-  identifiers, paths, endpoints, references or raw errors. Cleanup verification
-  retries only retained revoked handles, never process-name searches or lock deletion.
-  See [MCP configuration](MCP.md) and the
-  [recovery runbook](docs/runbooks/mcp-configuration.md).
-- Desktop continuation may restore a provider session or send a handoff
-  summary built from saved prompts, messages, and tool-call summaries.
-  Search overviews and memory extraction also send selected evidence to
-  the configured agent; search overviews can include project-file excerpts.
-  Temporary working directories and denied helper permission requests are
-  not filesystem sandboxes.
-- Updates are manual npm tarball installations. The browser does not check for,
-  download or install packages. Stop work, install the reviewed package, repair
-  the local backend registration and start it again. Provider network access is
-  independent of the update process.
+### 4.4 Application updates
 
-See [ended-run recovery](ARCHITECTURE.md#ended-run-recovery),
-[consolidated search](ARCHITECTURE.md#desktop-app), and
-[desktop distribution](ARCHITECTURE.md#desktop-distribution).
+- `SEC-4.4.1` The browser MUST NOT silently download or install application updates.
+- `SEC-4.4.2` Managed installations MUST update explicitly via `code60 update` using verified release metadata and checksums (see [updates](knowledge/operations/distribution/updates.md)), while manual tarball installations stop work, install the reviewed package, repair local backend registration, and restart the service.
+- `SEC-4.4.3` Provider network access MUST remain independent of the application update process.
 
-## Supported versions
+## 5. Security governance and vulnerability reporting
 
-Only the latest released version of Code60 receives security fixes. Upgrade to
-the latest release before reporting an issue when practical.
+### 5.1 Supported versions
 
-## Reporting a vulnerability
+- `SEC-5.1.1` Only the latest released version of Code60 is REQUIRED to receive security fixes.
+- `SEC-5.1.2` Reporters SHOULD upgrade to the latest release before reporting an issue when practical.
 
-Report suspected vulnerabilities privately to
-**[support@code60.dev](mailto:support@code60.dev)**.
-Do not open a public issue or publish exploit details before coordinated disclosure.
+### 5.2 Reporting a vulnerability
 
-Include the affected version, platform, steps to reproduce, and the potential
-impact. Provide a minimal example when possible, without credentials, private
-prompts, or other sensitive data.
+- `SEC-5.2.1` Reporters MUST submit suspected vulnerabilities privately to **[support@code60.dev](mailto:support@code60.dev)**.
+- `SEC-5.2.2` Reporters MUST NOT open a public issue or publish exploit details before coordinated disclosure.
+- `SEC-5.2.3` Vulnerability reports SHOULD include the affected version, platform, steps to reproduce, potential impact, and a minimal example when possible.
+- `SEC-5.2.4` Vulnerability reports MUST NOT include credentials, private prompts, or other sensitive data.
+- `SEC-5.2.5` Maintainers SHOULD acknowledge vulnerability reports within five business days, then share an assessment and coordinate fixes and disclosure with the reporter (this target is not a guarantee of a fix date).
 
-We aim to acknowledge reports within five business days. After reviewing the
-report, we will share our assessment and coordinate fixes and disclosure with
-you. This is a response target, not a guarantee of a fix date.
+### 5.3 Automated security reviews
 
-## Automated security reviews
+The **Security review** workflow (`.github/workflows/security-review.yml`) runs on every pull request, every push to `main`, Mondays at 07:23 UTC, and manual dispatch. CodeQL (`security-extended`, SARIF in `codeql-security-report`) and the lockfile dependency audit (`npm-security-report`) retain artifacts for 30 days even on failure; secret-scan locations appear in workflow logs. GitHub's native secret scanning and push protection are not enabled by this repository configuration.
 
-The **Security review** workflow (`.github/workflows/security-review.yml`) runs
-on every pull request, every push to `main`, Mondays at 07:23 UTC, and manual
-dispatch. Scheduled scans also catch newly published advisories when the code
-has not changed.
+- `SEC-5.3.1` CodeQL MUST scan JavaScript and TypeScript with the `security-extended` query suite without building or running the application.
+- `SEC-5.3.2` The dependency security report MUST audit the lockfile (including development dependencies) without installing packages or running lifecycle scripts.
+- `SEC-5.3.3` High or critical dependency advisories and registry errors MUST fail the dependency security job and MUST NOT be treated as clean scans.
+- `SEC-5.3.4` Secret scanning MUST use checksum-pinned Gitleaks across all fetched Git history and current files (including untracked files in local scans), excluding only generated directories.
+- `SEC-5.3.5` Inline allow comments and ignore fingerprints MUST NOT bypass secret scanning.
+- `SEC-5.3.6` Secret-scan findings MUST report rule, path, line, and commit, and MUST NOT output matched credential values.
+- `SEC-5.3.7` Any secret-scan finding or incomplete scan MUST fail the job.
+- `SEC-5.3.8` Maintainers SHOULD review and triage CodeQL findings before merging; automation supplements, but does not replace, manual security review.
+- `SEC-5.3.9` Operators running local scans MUST NOT treat a download, checksum, execution, or report error (exit code `2`) as clean (`0` = no findings, `1` = findings, `2` = incomplete).
 
-- **CodeQL** scans JavaScript and TypeScript with the `security-extended` query
-  suite, without building or running the application. Findings include locations,
-  explanations, and remediation guidance in **Security > Code scanning** and
-  the pull request's code scanning check. The `codeql-security-report` artifact
-  retains the full SARIF assessment, including scans with no findings.
-- **Dependency security report** audits the lockfile, including development
-  dependencies, without installing packages or running lifecycle scripts. The
-  Actions job summary contains the readable npm report with affected packages,
-  advisory links, dependency paths, and available fixes. The
-  `npm-security-report` artifact retains the full text report.
-- **Secret scanning** uses checksum-pinned Gitleaks to scan all fetched Git
-  history and current files, including untracked files during local scans.
-  Only generated directories are excluded; tests and environment files are
-  scanned. Inline allow comments and ignore fingerprints cannot bypass it.
-  Findings report rule, path, line, and commit, never matched credential values.
-  A finding or an incomplete scan fails the job. GitHub's native secret scanning
-  and push protection are not enabled by this repository change.
-
-CodeQL and dependency reports are retained for 30 days, including when a scan
-fails. Secret-scan locations appear in workflow logs. High or critical
-dependency advisories fail the dependency job; lower-severity advisories remain
-visible in the report. Registry errors also fail the job and are not treated as
-clean scans. CodeQL findings are reviewed in code scanning; successful query
-execution alone does not mean that there are no findings. Review and triage
-findings before merging. Automation supplements, but does not replace, manual
-security review.
-
-To reproduce the dependency assessment locally:
+Local reproduction commands:
 
 ```sh
 npm audit --package-lock-only --ignore-scripts --include=dev --audit-level=high
-```
-
-To scan secrets locally, with full Git history, GitHub access, and `tar` available:
-
-```sh
 npm run scan:secrets
 ```
-
-The command downloads the pinned scanner without installing npm dependencies.
-Exit code 0 means no findings, 1 means findings, and 2 means the scan could not
-complete. Do not treat a download, checksum, execution, or report error as clean.
-
-
-## Scoped Codex setup
-
-The authenticated controlling browser can explicitly request installation of the
-fixed `@openai/codex@0.171.0` package from `https://registry.npmjs.org`. No browser
-operation accepts a command, path, package name or environment override. This is
-a narrow exception to application/package installation restrictions, not a general
-installer. Installation runs as the non-root backend user, with npm lifecycle
-scripts disabled, isolated npm configuration, private staging and atomic activation
-under `~/.local/share/code60/providers/codex/0.171.0`. Existing CLIs and user
-configuration are preserved. The managed copy is preferred by the standard connector.
-
-A short-lived owned Codex app-server process performs only initialization and
-structured ChatGPT device-code login over bounded stdio. Only the exact HTTPS
-verification destination `https://auth.openai.com/codex/device` is accepted. The
-provider owns credentials in its normal backend-user storage. Code60 receives a
-temporary device challenge, not the account password or credentials. Challenges
-are returned only by setup/attempt-bound requests owned by the controlling page;
-they are excluded from shared snapshots, browser storage, diagnostics and transcripts.
-Provider output and errors are discarded or mapped to fixed messages. Normal agent
-work and the fresh post-login verification use ACP, without login-process tools.
-
-One setup attempt runs at a time. Installation has a ten-minute deadline, login
-fifteen minutes and protocol requests fifteen seconds. Cancel, dismissal, reload,
-control loss, configuration replacement and shutdown abort owned work and await
-process-group cleanup. Late/stale results cannot verify membership. Cancellation
-does not log out the provider or erase credentials it has already issued. The
-persistent dev-container home retains both managed binaries and credentials;
-it must be treated as private user state, not a disposable cache. Custom commands
-require manual authentication; standard catalog harnesses use the scoped provider setup policy below.
-
-
-## Web Server Beta
-
-An explicit localhost-only switch can publish the same Code60 application on the
-host's primary RFC1918 IPv4 address and existing gateway port. This is a scoped
-exception to loopback-only access; it does not bind wildcard/public addresses,
-configure a router/firewall or install another service. HTTP is unencrypted and
-intended only for trusted LANs. The switch is off by default and stores only the
-enabled preference in private gateway settings.
-
-LAN always requires a single-use 60-second pairing code, independently of local
-pairing policy. Codes belong to an exact LAN activation/origin; rotation, disable,
-address change and backend restart invalidate them. Ten pairing submissions per
-minute are permitted. Codes use six cryptographically random digits, displayed
-as `123-456`, and accept entry with or without the hyphen. Local pairing retains
-its existing hexadecimal format. Rotation excludes the immediately previous code
-and generation rejects active collisions with a finite retry limit.
-Sessions are ingress/origin-bound, use the existing per-tab
-session storage and require explicit control takeover. A local session cannot be
-replayed on LAN, nor a LAN session on localhost. Only the controlling localhost
-page can change LAN policy or generate a code; codes never enter shared snapshots,
-diagnostics, transcripts, persistent settings or links. The LAN ingress rejects
-private management routes even with a management token. Host/Origin/schema checks,
-CSP and existing quotas remain enforced. Top-level LAN navigation serves only the
-bundled asset manifest, with no maps, Vite/HMR or development filesystem proxy.
-
-Paired devices receive the full application authority, including agent dispatch
-and backend-owned file choosers, subject to the same confirmations and single
-controller rules. Disabling LAN or losing its address cancels affected view reads
-and pending human/setup interactions and invalidates remote sessions, while
-approved execution and scheduled work continue. Local access remains available.
-
-For dev containers, the owned host launcher derives the host address/port and
-forwards to a separate loopback ingress in its own container. A private user-owned
-Unix socket and bounded stdio channel carry fixed address/publish/withdraw/heartbeat
-messages. No browser controls commands, ports, paths or environments. Protocol
-requests have ten-second deadlines; the host withdraws unrenewed publication after
-fifteen seconds and on backend/launcher loss. Cleanup uncertainty remains an error,
-not a claim that exposure stopped. Provider storage and approved execution records
-are independent of this policy. TLS, passwords, public hosting and automatic
-firewall changes are outside this beta.
-
-## Scoped provider setup
-
-An explicit human setup action may install only the catalog harness release artifacts
-fixed in application policy into versioned private Code60 storage. Verify integrity,
-archive containment, ownership and executable layout before atomic activation; refuse
-root, external overwrite, lifecycle scripts and shell-profile/service edits.
-Authentication belongs to the controlling page's single setup attempt, including LAN.
-Allow only fixed provider login operations and validated HTTPS destinations. Device
-codes, OAuth URLs and pasted codes are ephemeral owner-bound responses/inputs, excluded
-from shared state, request-receipt caches, diagnostics, transcripts and browser storage.
-No generic terminal, shell, provider-server proxy, package selector or credential reader
-is exposed. Providers own persistent credentials and container home retains them.
-Cancelling never logs out or removes credentials. Cleanup failures block further setup
-until owned processes stop. Custom launch overrides retain external setup.
-
-## MCP fingerprint and guarded-file review
-
-SHA-256 in MCP identity/review metadata binds configuration, public discovery,
-client identity and scope. Authentication and credential-write replay fingerprints
-that include secret inputs remain in backend memory only. They are never persisted
-as password verifiers; tokens, client secrets and credential values use the secure
-store or explicitly accepted temporary memory. This is separate from password
-storage and its password-derivation requirements.
-
-A guarded stage's pathname check is followed by O_NOFOLLOW open, full native
-identity/content checks on that same handle, another target revision and stage
-identity check before rename, and verification after publication. Replacement by a
-regular file, symlink or hard link between lstat and open must fail without changing
-the destination. Guarded writes do not claim atomic compare-and-swap against a
-non-cooperating editor; uncertain publication retains recovery evidence.

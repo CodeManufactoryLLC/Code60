@@ -1,0 +1,1108 @@
+{
+  "$schema": "./schema.json",
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-27",
+  "limits": {
+    "maxLines": 150,
+    "maxBytes": 10240,
+    "maxIndexLines": 100,
+    "maxDirectDocsPerDir": 12,
+    "maxDepth": 4,
+    "maxSummaryChars": 200
+  },
+  "domains": [
+    {
+      "id": "governance",
+      "code": "GOV",
+      "path": "knowledge/governance",
+      "description": "Normative policies, RFC 2119 standards, contributor/release/branch rules",
+      "index": "knowledge/governance/INDEX.md"
+    },
+    {
+      "id": "architecture",
+      "code": "ARCH",
+      "path": "knowledge/architecture",
+      "description": "System architecture, module boundaries, and architectural decision records",
+      "index": "knowledge/architecture/INDEX.md"
+    },
+    {
+      "id": "subsystems",
+      "code": "SUB",
+      "path": "knowledge/subsystems",
+      "description": "Canonical specifications per runtime subsystem",
+      "index": "knowledge/subsystems/INDEX.md"
+    },
+    {
+      "id": "operations",
+      "code": "OPS",
+      "path": "knowledge/operations",
+      "description": "Operational runbooks, installation, distribution, updates, and recovery",
+      "index": "knowledge/operations/INDEX.md"
+    },
+    {
+      "id": "reference",
+      "code": "REF",
+      "path": "knowledge/reference",
+      "description": "Machine-synced or generated technical references",
+      "index": "knowledge/reference/INDEX.md"
+    }
+  ],
+  "indexes": [
+    "knowledge/INDEX.md",
+    "knowledge/architecture/INDEX.md",
+    "knowledge/architecture/c4/INDEX.md",
+    "knowledge/governance/INDEX.md",
+    "knowledge/operations/INDEX.md",
+    "knowledge/operations/distribution/INDEX.md",
+    "knowledge/operations/runbooks/INDEX.md",
+    "knowledge/reference/INDEX.md",
+    "knowledge/reference/capabilities/INDEX.md",
+    "knowledge/reference/faq/INDEX.md",
+    "knowledge/subsystems/INDEX.md"
+  ],
+  "documents": [
+    {
+      "id": "KB-GOV-001",
+      "title": "Code60 Software Factory Definition V1.0",
+      "domain": "governance",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Code60's V1.0 Software Factory definition, L0-L5 autonomy tracker, C/I/S/N capability gates, and anti-pattern guardrails.",
+      "updated": "2026-11-27",
+      "path": "knowledge/governance/software-factory-definition.md",
+      "lines": 106,
+      "bytes": 9020,
+      "related": [
+        "KB-ARCH-001",
+        "KB-REF-004"
+      ],
+      "tags": [
+        "software-factory",
+        "autonomy",
+        "governance",
+        "tracker"
+      ]
+    },
+    {
+      "id": "KB-ARCH-001",
+      "title": "C4 Level 1: System Context",
+      "domain": "architecture",
+      "kind": "subsystem",
+      "status": "active",
+      "summary": "Actors, external systems, and trust boundaries surrounding Code60 in Structurizr view code60-context.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/c4/context.md",
+      "lines": 48,
+      "bytes": 2861,
+      "code_refs": [
+        "architecture/structurizr/model/people-and-external.dsl",
+        "architecture/structurizr/views/context-and-containers.dsl",
+        "SECURITY.md"
+      ],
+      "related": [
+        "KB-ARCH-002",
+        "KB-ARCH-006"
+      ],
+      "tags": [
+        "c4",
+        "architecture",
+        "context"
+      ]
+    },
+    {
+      "id": "KB-ARCH-002",
+      "title": "C4 Level 2: Containers and Data Stores",
+      "domain": "architecture",
+      "kind": "subsystem",
+      "status": "active",
+      "summary": "Executable runtime processes, sidecars, helpers, and persistent data stores in Structurizr view code60-containers.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/c4/containers.md",
+      "lines": 51,
+      "bytes": 3846,
+      "code_refs": [
+        "architecture/structurizr/model/containers.dsl",
+        "src/gateway/main.ts",
+        "src/management/cli.ts"
+      ],
+      "related": [
+        "KB-ARCH-001",
+        "KB-ARCH-003",
+        "KB-ARCH-004"
+      ],
+      "tags": [
+        "c4",
+        "architecture",
+        "containers"
+      ]
+    },
+    {
+      "id": "KB-ARCH-003",
+      "title": "C4 Level 3: Backend Components and Module Boundaries",
+      "domain": "architecture",
+      "kind": "subsystem",
+      "status": "active",
+      "summary": "Gateway internal components and the 11-module import dependency rules enforced by test/boundaries.test.ts.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/c4/components-backend.md",
+      "lines": 50,
+      "bytes": 2597,
+      "code_refs": [
+        "architecture/structurizr/model/components-gateway.dsl",
+        "test/boundaries.test.ts"
+      ],
+      "related": [
+        "KB-ARCH-002",
+        "KB-ARCH-004"
+      ],
+      "tags": [
+        "c4",
+        "architecture",
+        "components",
+        "boundaries"
+      ]
+    },
+    {
+      "id": "KB-ARCH-004",
+      "title": "C4 Level 3: Browser SPA Components",
+      "domain": "architecture",
+      "kind": "subsystem",
+      "status": "active",
+      "summary": "Internal React 19 and IBM Carbon UI components and typed HTTP/SSE client inside src/renderer/.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/c4/components-renderer.md",
+      "lines": 42,
+      "bytes": 2881,
+      "code_refs": [
+        "architecture/structurizr/model/components-renderer.dsl",
+        "src/renderer/browser-client.ts",
+        "src/renderer/page-tabs.tsx"
+      ],
+      "related": [
+        "KB-ARCH-002",
+        "KB-ARCH-003"
+      ],
+      "tags": [
+        "c4",
+        "architecture",
+        "renderer",
+        "carbon"
+      ]
+    },
+    {
+      "id": "KB-ARCH-005",
+      "title": "C4 Dynamic Views: Core Runtime Flows",
+      "domain": "architecture",
+      "kind": "subsystem",
+      "status": "active",
+      "summary": "End-to-end runtime interaction sequences modeled in Structurizr views/dynamic.dsl.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/c4/runtime-flows.md",
+      "lines": 46,
+      "bytes": 2962,
+      "code_refs": [
+        "architecture/structurizr/views/dynamic.dsl",
+        "src/gateway/server.ts",
+        "src/application/controller.ts"
+      ],
+      "related": [
+        "KB-ARCH-002",
+        "KB-ARCH-003"
+      ],
+      "tags": [
+        "c4",
+        "architecture",
+        "dynamic",
+        "flows"
+      ]
+    },
+    {
+      "id": "KB-ARCH-006",
+      "title": "C4 Deployment Views: Native Host and Docker",
+      "domain": "architecture",
+      "kind": "subsystem",
+      "status": "active",
+      "summary": "Production deployment topologies for native macOS/Linux login services and the mjholliday/code60 Docker image.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/c4/deployment.md",
+      "lines": 42,
+      "bytes": 2481,
+      "code_refs": [
+        "architecture/structurizr/model/deployment.dsl",
+        "docker/Dockerfile",
+        "docker/compose.yaml",
+        "src/platform/user-service.ts"
+      ],
+      "related": [
+        "KB-ARCH-001",
+        "KB-ARCH-002"
+      ],
+      "tags": [
+        "c4",
+        "architecture",
+        "deployment",
+        "docker"
+      ]
+    },
+    {
+      "id": "KB-ARCH-007",
+      "title": "Structurizr C4 Workflow and Viewer Guide",
+      "domain": "architecture",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Commands and conventions for validating, viewing locally, and exporting Code60's modular Structurizr C4 workspace.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/structurizr-guide.md",
+      "lines": 40,
+      "bytes": 2143,
+      "code_refs": [
+        "architecture/structurizr/workspace.dsl",
+        "scripts/c4.mjs",
+        "test/c4.test.mjs"
+      ],
+      "related": [
+        "KB-ARCH-001",
+        "KB-ARCH-003"
+      ],
+      "tags": [
+        "c4",
+        "structurizr",
+        "tooling"
+      ]
+    },
+    {
+      "id": "KB-OPS-001",
+      "title": "Backend Service and Scheduled Jobs Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Diagnose and recover Code60 Backend Service registration, paused schedules, and unfinished-work blocks.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/runbooks/scheduler.md",
+      "lines": 55,
+      "bytes": 4116,
+      "code_refs": [
+        "src/gateway/server.ts",
+        "src/management/cli.ts",
+        "src/renderer/system-manager.tsx",
+        "src/automation/scheduler.ts"
+      ],
+      "related": [
+        "KB-OPS-002",
+        "KB-ARCH-006"
+      ],
+      "tags": [
+        "runbook",
+        "scheduler",
+        "service"
+      ]
+    },
+    {
+      "id": "KB-OPS-002",
+      "title": "Low Disk Space Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Diagnose volume exhaustion affecting the 2 GiB scheduler floor, transcripts, databases, or diagnostics.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/runbooks/low-disk.md",
+      "lines": 50,
+      "bytes": 3344,
+      "code_refs": [
+        "src/automation/executor.ts",
+        "src/application/health-check.ts"
+      ],
+      "related": [
+        "KB-OPS-001",
+        "KB-OPS-003",
+        "KB-OPS-004"
+      ],
+      "tags": [
+        "runbook",
+        "disk",
+        "storage"
+      ]
+    },
+    {
+      "id": "KB-OPS-003",
+      "title": "Diagnostic Log Storage Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Diagnose and safely recover unavailable diagnostic log storage under $XDG_STATE_HOME/code60/logs.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/runbooks/diagnostics.md",
+      "lines": 47,
+      "bytes": 2910,
+      "code_refs": [
+        "src/application/log-store.ts",
+        "src/renderer/logs.tsx",
+        "src/application/health-check.ts"
+      ],
+      "related": [
+        "KB-OPS-002"
+      ],
+      "tags": [
+        "runbook",
+        "diagnostics",
+        "logs"
+      ]
+    },
+    {
+      "id": "KB-OPS-004",
+      "title": "Damaged Relay History Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Diagnose and safely recover damaged or blocked Relay storage under $XDG_STATE_HOME/code60/relay.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/runbooks/relay-history.md",
+      "lines": 49,
+      "bytes": 3142,
+      "code_refs": [
+        "src/application/relay-store.ts",
+        "src/application/relay-storage.ts",
+        "src/application/health-check.ts"
+      ],
+      "related": [
+        "KB-OPS-002",
+        "KB-OPS-003"
+      ],
+      "tags": [
+        "runbook",
+        "relay",
+        "history"
+      ]
+    },
+    {
+      "id": "KB-OPS-005",
+      "title": "MCP Configuration Storage and Transaction Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Recover guarded User/Project mcp.json conflicts, malformed files, backups, resets, and interrupted transactions.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/runbooks/mcp-storage.md",
+      "lines": 57,
+      "bytes": 4325,
+      "code_refs": [
+        "src/application/mcp-configuration-store.ts",
+        "src/application/mcp-management.ts",
+        "src/contracts/mcp-recovery.ts",
+        "src/renderer/mcp-workspace.tsx",
+        "src/renderer/mcp-recovery.tsx"
+      ],
+      "related": [
+        "KB-OPS-006",
+        "KB-OPS-002"
+      ],
+      "tags": [
+        "runbook",
+        "mcp",
+        "storage",
+        "recovery"
+      ]
+    },
+    {
+      "id": "KB-OPS-006",
+      "title": "MCP Connection, Authentication, and Troubleshooting Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Diagnose MCP connection failures, Keychain/OAuth auth issues, cleanup verification, and safe troubleshooting reports.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/runbooks/mcp-runtime-auth.md",
+      "lines": 53,
+      "bytes": 4333,
+      "code_refs": [
+        "src/application/mcp-runtime.ts",
+        "src/application/mcp-authentication.ts",
+        "src/renderer/mcp-servers.tsx",
+        "src/renderer/mcp-troubleshooting.tsx"
+      ],
+      "related": [
+        "KB-OPS-005"
+      ],
+      "tags": [
+        "runbook",
+        "mcp",
+        "oauth",
+        "credentials"
+      ]
+    },
+    {
+      "id": "KB-OPS-007",
+      "title": "Distribution Artifacts and Bootstrap Packaging",
+      "domain": "operations",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Build, verify, and accept unpublished platform payloads and the builtins-only npm bootstrap.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/distribution/artifacts.md",
+      "lines": 70,
+      "bytes": 5921,
+      "code_refs": [
+        "scripts/package-payload.mjs",
+        "scripts/package-bootstrap.mjs",
+        "src/platform/payload-acquire.mjs",
+        "src/platform/payload-archive.mjs"
+      ],
+      "related": [
+        "KB-OPS-008",
+        "KB-OPS-009"
+      ],
+      "tags": [
+        "distribution",
+        "packaging",
+        "bootstrap",
+        "artifacts"
+      ]
+    },
+    {
+      "id": "KB-OPS-008",
+      "title": "Managed Installation Internals",
+      "domain": "operations",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Managed installation layout, atomic activation, shell profile consent, and failure or uninstall recovery internals.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/distribution/installation.md",
+      "lines": 73,
+      "bytes": 7497,
+      "code_refs": [
+        "src/management/installation.ts",
+        "src/management/install-state.ts",
+        "src/management/installed-launcher.ts",
+        "src/management/shell-integration.ts"
+      ],
+      "related": [
+        "KB-OPS-007",
+        "KB-OPS-009",
+        "KB-OPS-010",
+        "KB-OPS-011"
+      ],
+      "tags": [
+        "distribution",
+        "installation",
+        "launcher",
+        "shell"
+      ]
+    },
+    {
+      "id": "KB-OPS-009",
+      "title": "Setup and First Use",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Managed setup consent, default database initialization, read-only status checks, failure handling, and validation boundaries.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/distribution/setup.md",
+      "lines": 65,
+      "bytes": 5177,
+      "code_refs": [
+        "src/management/setup.ts",
+        "src/application/setup-database.ts",
+        "src/gateway/server.ts"
+      ],
+      "related": [
+        "KB-OPS-007",
+        "KB-OPS-008",
+        "KB-OPS-010"
+      ],
+      "tags": [
+        "distribution",
+        "setup",
+        "database",
+        "cli"
+      ]
+    },
+    {
+      "id": "KB-OPS-010",
+      "title": "Explicit Updates and Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Run guarded terminal updates, inspect update state, recover interrupted activations, and respect browser read-only authority.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/distribution/updates.md",
+      "lines": 71,
+      "bytes": 5351,
+      "code_refs": [
+        "src/management/update.ts",
+        "src/management/update-state.ts",
+        "src/platform/update-registry.ts",
+        "src/renderer/updates.tsx"
+      ],
+      "related": [
+        "KB-OPS-008",
+        "KB-OPS-009",
+        "KB-OPS-011"
+      ],
+      "tags": [
+        "distribution",
+        "updates",
+        "recovery",
+        "cli"
+      ]
+    },
+    {
+      "id": "KB-OPS-011",
+      "title": "Uninstall and Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Remove managed Code60 installations safely while preserving user data, recover interrupted removals, and reinstall cleanly.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/distribution/uninstall.md",
+      "lines": 53,
+      "bytes": 4602,
+      "code_refs": [
+        "src/management/uninstall.ts",
+        "src/management/uninstall-plan.ts",
+        "src/management/removal-state.ts"
+      ],
+      "related": [
+        "KB-OPS-008",
+        "KB-OPS-009",
+        "KB-OPS-010"
+      ],
+      "tags": [
+        "distribution",
+        "uninstall",
+        "recovery",
+        "cli"
+      ]
+    },
+    {
+      "id": "KB-OPS-012",
+      "title": "Docker Hub Distribution",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Run, configure, build, test, and publish the optional linux/amd64 Code60 Docker image (mjholliday/code60).",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/distribution/docker.md",
+      "lines": 90,
+      "bytes": 5174,
+      "code_refs": [
+        "docker/Dockerfile",
+        "docker/compose.yaml",
+        "src/gateway/container.ts",
+        "scripts/package-docker.mjs"
+      ],
+      "related": [
+        "KB-OPS-007",
+        "KB-OPS-009"
+      ],
+      "tags": [
+        "distribution",
+        "docker",
+        "container",
+        "release"
+      ]
+    },
+    {
+      "id": "KB-OPS-013",
+      "title": "Releasing Code60",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Release preparation checklist, tag-and-dispatch validation workflow, native and Linux acceptance gates, and Docker Hub publishing.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/releasing.md",
+      "lines": 71,
+      "bytes": 6347,
+      "code_refs": [
+        ".github/workflows/release.yml",
+        ".github/workflows/native-tests.yml",
+        ".github/workflows/publish-docker.yml",
+        "scripts/verify-artifact-handoff.mjs"
+      ],
+      "related": [
+        "KB-OPS-007",
+        "KB-OPS-008",
+        "KB-OPS-009",
+        "KB-OPS-010",
+        "KB-OPS-011",
+        "KB-OPS-012"
+      ],
+      "tags": [
+        "release",
+        "distribution",
+        "ci",
+        "docker"
+      ]
+    },
+    {
+      "id": "KB-REF-001",
+      "title": "Capabilities: Orchestration and Chat",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for Relay, Assistants, Custom Assistants, Projects, Workers, auto-approval, and activity display.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/orchestration.md",
+      "lines": 122,
+      "bytes": 6757,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "orchestration",
+        "chat",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-002",
+      "title": "Capabilities: Workspace Navigation and Panels",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for navigation, history, Files, Terminal, Memory Recall, Plans, Reviews, and Undo.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/workspace.md",
+      "lines": 136,
+      "bytes": 8463,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "workspace",
+        "panels",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-003",
+      "title": "Capabilities: Customization, Memory, and Settings",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for Commands, Tactics, Internal Prompts, Configurations, model defaults, Memory, handoff, and Settings.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/customization.md",
+      "lines": 136,
+      "bytes": 6449,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "customization",
+        "settings",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-004",
+      "title": "Capabilities: Scheduled Jobs, Workflows, and Heartbeat",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for recurring Scheduled Jobs, native multi-step Workflows, and Core Heartbeat maintenance inside Code60 Gateway.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/automation.md",
+      "lines": 67,
+      "bytes": 6917,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "automation",
+        "workflows",
+        "heartbeat",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-005",
+      "title": "Capabilities: MCP Servers and Browser Automation",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for backend-owned MCP server management and conversational Playwright browser automation.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/connectors.md",
+      "lines": 52,
+      "bytes": 6261,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "mcp",
+        "browser",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-006",
+      "title": "Capabilities: Providers and Network Access",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for catalog coding-agent providers and Web Server (Beta) private-LAN access.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/providers-and-access.md",
+      "lines": 52,
+      "bytes": 4264,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "providers",
+        "lan",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-007",
+      "title": "Capabilities: Runtime Lifecycle and Monitoring",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for browser/backend lifecycle, Updates, Uninstall, System Manager, Health Check, and Usage.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/runtime.md",
+      "lines": 108,
+      "bytes": 8848,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "runtime",
+        "operations",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-008",
+      "title": "Capabilities: Data, Search, Self-Knowledge, and Experiments",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for Data Viewer, Search, Vector Codebase Search, Diagnostic Logs, Self-Knowledge, Retrieval Tests, and Memory Tester.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/inspection.md",
+      "lines": 136,
+      "bytes": 6543,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "inspection",
+        "experiments",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-009",
+      "title": "FAQ: Overview, Requirements, and Setup",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on what Code60 is, supported platforms, system and software requirements, Docker, CLI, and app format.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/overview-and-setup.md",
+      "lines": 103,
+      "bytes": 6332,
+      "code_refs": [
+        "src/management/cli.ts",
+        "src/gateway/server.ts",
+        "src/platform/support.ts"
+      ],
+      "related": [
+        "KB-REF-010",
+        "KB-OPS-009",
+        "KB-OPS-012"
+      ],
+      "tags": [
+        "faq",
+        "setup",
+        "requirements"
+      ]
+    },
+    {
+      "id": "KB-REF-010",
+      "title": "FAQ: Workspaces, Worktrees, Data, and Storage",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on repository setup, Git worktree lifecycle, local storage locations, and disk usage.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/workspaces-and-storage.md",
+      "lines": 80,
+      "bytes": 6264,
+      "code_refs": [
+        "src/git/tasks.ts",
+        "src/application/health-check.ts",
+        "src/application/log-store.ts",
+        "src/contracts/usage.ts"
+      ],
+      "related": [
+        "KB-REF-009",
+        "KB-OPS-002"
+      ],
+      "tags": [
+        "faq",
+        "workspaces",
+        "worktrees",
+        "storage"
+      ]
+    },
+    {
+      "id": "KB-REF-011",
+      "title": "FAQ: Permissions and Sandboxing",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on Code60 auto-approval, agent sandboxing boundaries, and Agent Provider sandbox controls.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/permissions-and-sandboxing.md",
+      "lines": 63,
+      "bytes": 4809,
+      "code_refs": [
+        "src/core/config.ts",
+        "src/core/orchestrator.ts",
+        "src/gateway/server.ts"
+      ],
+      "related": [
+        "KB-REF-012",
+        "KB-REF-014"
+      ],
+      "tags": [
+        "faq",
+        "security",
+        "permissions",
+        "sandboxing"
+      ]
+    },
+    {
+      "id": "KB-REF-012",
+      "title": "FAQ: Security Measures and Secrets",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on Code60's browser, API, process, MCP, and packaging safeguards and how Code60 handles secrets.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/security-and-secrets.md",
+      "lines": 67,
+      "bytes": 5697,
+      "code_refs": [
+        "src/gateway/server.ts",
+        "src/application/mcp-gateway.ts",
+        "src/platform/credential-store.ts"
+      ],
+      "related": [
+        "KB-REF-011",
+        "KB-OPS-006"
+      ],
+      "tags": [
+        "faq",
+        "security",
+        "secrets"
+      ]
+    },
+    {
+      "id": "KB-REF-013",
+      "title": "FAQ: Licensing, Pricing, and Token Usage",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on Apache-2.0 commercial use, cost, token usage impact, and local usage monitoring.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/licensing-and-usage.md",
+      "lines": 72,
+      "bytes": 4915,
+      "code_refs": [
+        "src/contracts/usage.ts",
+        "src/core/usage-store.ts",
+        "src/management/cli.ts"
+      ],
+      "related": [
+        "KB-REF-010",
+        "KB-REF-014"
+      ],
+      "tags": [
+        "faq",
+        "licensing",
+        "usage"
+      ]
+    },
+    {
+      "id": "KB-REF-014",
+      "title": "FAQ: Orchestration, Workers, MCP, and Concurrency",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on Code60 workers versus provider subagents, browser automation, MCP support, and concurrency limits.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/orchestration-and-workers.md",
+      "lines": 78,
+      "bytes": 6195,
+      "code_refs": [
+        "src/core/orchestrator.ts",
+        "src/core/config.ts",
+        "src/contracts/automation.ts",
+        "src/application/mcp-gateway.ts"
+      ],
+      "related": [
+        "KB-REF-011",
+        "KB-REF-015",
+        "KB-REF-016"
+      ],
+      "tags": [
+        "faq",
+        "orchestration",
+        "workers",
+        "mcp"
+      ]
+    },
+    {
+      "id": "KB-REF-015",
+      "title": "FAQ: Context, History, and Compaction",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on context sent to agents, triggers, long conversation history, and automatic context handoff.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/context-and-history.md",
+      "lines": 75,
+      "bytes": 7227,
+      "code_refs": [
+        "src/application/memory-limits.ts",
+        "src/application/relay-service.ts",
+        "src/core/episodic-memory.ts"
+      ],
+      "related": [
+        "KB-REF-014",
+        "KB-OPS-004"
+      ],
+      "tags": [
+        "faq",
+        "context",
+        "memory",
+        "history"
+      ]
+    },
+    {
+      "id": "KB-REF-016",
+      "title": "FAQ: Plans, Workflows, and Scheduled Jobs",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on Code60 Plans versus Workflows, provider planning modes, and Scheduled Jobs execution and recovery.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/plans-workflows-and-schedules.md",
+      "lines": 84,
+      "bytes": 6781,
+      "code_refs": [
+        "src/core/workflow-engine.ts",
+        "src/application/plans.ts",
+        "src/automation/scheduler.ts"
+      ],
+      "related": [
+        "KB-REF-014",
+        "KB-OPS-001"
+      ],
+      "tags": [
+        "faq",
+        "plans",
+        "workflows",
+        "scheduler"
+      ]
+    },
+    {
+      "id": "KB-REF-017",
+      "title": "FAQ: Accessibility, Architecture, and Support",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on accessibility support, programming languages, bug reports, security disclosures, and feature requests.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/accessibility-and-support.md",
+      "lines": 70,
+      "bytes": 4847,
+      "code_refs": [
+        "src/renderer/app.tsx",
+        "package.json"
+      ],
+      "related": [
+        "KB-ARCH-001",
+        "KB-REF-012"
+      ],
+      "tags": [
+        "faq",
+        "accessibility",
+        "support"
+      ]
+    },
+    {
+      "id": "KB-REF-018",
+      "title": "FAQ: Provider Support, Local Models, and Skills",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Frequently asked questions on Code60's standard Agent Provider catalog, local model harnesses, and repository or user-level skills.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/provider-support.md",
+      "lines": 58,
+      "bytes": 4073,
+      "code_refs": [
+        "src/application/provider-catalog.ts",
+        "src/application/provider-setup-policy.ts"
+      ],
+      "related": [
+        "KB-REF-019",
+        "KB-REF-006"
+      ],
+      "tags": [
+        "faq",
+        "providers",
+        "skills"
+      ]
+    },
+    {
+      "id": "KB-REF-019",
+      "title": "FAQ: Provider Authentication",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Per-provider ACP authentication steps and credential boundaries for Antigravity, Claude, Codex, Copilot, Droid, Kiro, OpenCode, and Cursor.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/faq/provider-authentication.md",
+      "lines": 107,
+      "bytes": 7067,
+      "code_refs": [
+        "src/application/provider-catalog.ts",
+        "src/application/provider-setup-policy.ts",
+        "src/application/provider-artifacts.ts",
+        "src/application/codex-provider.ts"
+      ],
+      "related": [
+        "KB-REF-018",
+        "KB-REF-012"
+      ],
+      "tags": [
+        "faq",
+        "providers",
+        "authentication"
+      ]
+    }
+  ]
+}

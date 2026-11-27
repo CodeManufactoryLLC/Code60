@@ -96,7 +96,14 @@ describe("opt-in repository hooks", () => {
   });
   it("runs the real hook in a space-containing checkout, stops on failure, and preserves the index", async () => {
     const { root, git, environment } = await fixture();
-    const commands = ["check:instructions", "typecheck", "lint", "check:unused"];
+    const commands = [
+      "check:instructions",
+      "kb:check",
+      "c4:check",
+      "typecheck",
+      "lint",
+      "check:unused",
+    ];
     expect(manifest.scripts["check:precommit"]).toBe(
       commands.map((name) => `npm run ${name}`).join(" && "),
     );
@@ -122,7 +129,7 @@ describe("opt-in repository hooks", () => {
     }).catch((error) => error);
     expect(failed.code).toBe(17);
     expect((await readFile(join(root, "calls"), "utf8")).trim().split("\n")).toEqual(
-      commands.slice(0, 2),
+      commands.slice(0, commands.indexOf("typecheck") + 1),
     );
     expect((await git("diff", "--cached", "--binary")).stdout).toBe(before);
     expect(await readFile(join(root, ".git/index"))).toEqual(index);

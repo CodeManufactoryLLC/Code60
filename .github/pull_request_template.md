@@ -42,7 +42,7 @@ Testing done or Relevant context section rather than implying it was tested. -->
 - [ ] Tests cover changed behavior, including a regression test for bug fixes.
 - [ ] Behavior changes have been verified with `npm run test:browser`.
 - [ ] CLI help and relevant documentation reflect user-visible changes.
-- [ ] `FAQ.md` and `TERMINOLOGY.md` reflect user-visible changes (using `refreshingly-simple-english`, alphabetical terminology, and updated metadata), or the description explains why no update is needed.
-- [ ] Capability-affecting changes update `src/contracts/knowledge.ts` and `docs/capabilities.md` (`npm run generate:capabilities`), or the description explains why no knowledge change is needed.
-- [ ] Changes follow `ARCHITECTURE.md` and the applicable `AGENTS.md` instructions.
-- [ ] Each commit includes the Developer Certificate of Origin sign-off required by `CONTRIBUTING.md`.
+- [ ] `knowledge/reference/faq/` reflects user-visible changes (using `refreshingly-simple-english` and updated metadata), or the description explains why no update is needed.
+- [ ] Capability-affecting changes update `src/contracts/knowledge.ts` and the semantic files under `knowledge/reference/capabilities/` (`npm run generate:capabilities`), or the description explains why no knowledge change is needed.
+- [ ] Changes follow `ARCHITECTURE.md`, `architecture/structurizr/` (`npm run c4:check`), and the applicable `AGENTS.md` instructions.
+- [ ] Each commit includes the Developer Certificate of Origin (`Signed-off-by:`) sign-off (`git commit -s`).

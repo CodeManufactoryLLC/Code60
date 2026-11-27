@@ -9,7 +9,7 @@ Own installation receipts and shell previews; never expose these APIs to browser
 Reuse matching releases and require explicit repair of owned bindings; no legacy
 migration or implicit version update. Shell previews contain only additions and
 fingerprints, not original profile contents. Profile writes require interactive
-approval and fresh identity checks. See [installation internals](../../docs/distribution/installation.md).
+approval and fresh identity checks. See [installation internals](../../knowledge/operations/distribution/installation.md).
 Shell removal has a separate preview and approval. Match the exact recorded
 addition, preserve unrelated bytes and leave changed or ambiguous blocks for
 manual inspection. Record partial completion without reverting user changes.

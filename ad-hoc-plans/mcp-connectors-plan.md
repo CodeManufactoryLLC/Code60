@@ -115,8 +115,8 @@ Status: complete. Implementation, required checks and owned-resource cleanup ver
   discovery, allow/deny, inactive/revoked/cross-session rejection, cancellation and
   backend-only upstream credentials. These are supporting integration tests, not
   a production connector adapter or certification of real provider support.
-- Added the [ownership architectural view](../docs/architectural-views/mcp-connector-ownership.md)
-  and the [target runtime contract](../ARCHITECTURE.md#mcp-connector-foundation-and-target-runtime).
+- Documented connector ownership and runtime boundaries (now tracked in [ARCHITECTURE.md](../ARCHITECTURE.md)
+  and [knowledge/architecture/c4/INDEX.md](../knowledge/architecture/c4/INDEX.md)).
   Updated module instructions and distinguished active MCP behavior from the
   staged target design in `MCP.md`.
 - No new page, management request, snapshot, tool or availability was introduced.
@@ -210,7 +210,7 @@ Status: complete. Implementation, required checks and owned-resource cleanup ver
   revisions and native precision, retention, failure boundaries, interrupted moves,
   cancellation, replay and explicit recovery. Selected the existing full browser
   first-use/acceptance/reload/Undo journey for independent regression coverage.
-- Added [the MCP storage recovery runbook](../docs/runbooks/mcp-configuration.md).
+- Added [the MCP storage recovery runbook](../knowledge/operations/runbooks/mcp-storage.md).
   Dedicated integrations, migrations, GUI/browser operations, live loading,
   connector processes, authentication and approval persistence remain outside
   this phase. No capability catalog regeneration is needed for an unwired library.
