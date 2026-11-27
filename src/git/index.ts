@@ -69,6 +69,8 @@ export interface Git {
   addWorktree(spec: WorktreeSpec, signal?: AbortSignal): Promise<void>;
   /** Removes the worktree, then deletes its branch. */
   removeWorktree(repoDir: string, path: string, branch: string): Promise<void>;
+  /** Prunes stale worktree administrative metadata whose working tree directory is gone. */
+  pruneWorktrees?(repoDir: string, expire: string, signal?: AbortSignal): Promise<void>;
   /** Diff of the worktree against `base`, including untracked files and agent commits. */
   diff(worktree: string, base: string, signal?: AbortSignal): Promise<string>;
   reviewSnapshot?(
@@ -385,6 +387,19 @@ export function createGit(): Git {
         }
         await runGit(["branch", "-D", branch], repoDir);
       });
+    },
+
+    async pruneWorktrees(repoDir, expire, signal) {
+      if (!/^\d+\.(?:seconds?|minutes?|hours?|days?)\.ago$/.test(expire)) {
+        throw new Error(`invalid worktree prune expiry '${expire}'`);
+      }
+      await coordinateMetadata(
+        repoDir,
+        async () => {
+          await runGit(["worktree", "prune", `--expire=${expire}`], repoDir, { signal });
+        },
+        signal,
+      );
     },
 
     async diff(worktree, base, signal) {

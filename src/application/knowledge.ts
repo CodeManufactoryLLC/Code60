@@ -78,11 +78,18 @@ export class DesktopKnowledge {
   private uiObservedAt: string | null = null;
   private uiRevision = 0;
   private readonly catalogFingerprint = knowledgeHash(capabilityReference());
+  private heartbeatStatusReader:
+    | (() => import("../bridge/index.js").RedactedHeartbeatStatus)
+    | null = null;
 
   constructor(
     private readonly sources: Sources,
     private readonly now = () => new Date().toISOString(),
   ) {}
+
+  setHeartbeatStatus(reader: () => import("../bridge/index.js").RedactedHeartbeatStatus): void {
+    this.heartbeatStatusReader = reader;
+  }
 
   rendererIdentity() {
     return this.renderer;
@@ -507,6 +514,18 @@ export class DesktopKnowledge {
         meta.customizations.revision,
         [name, request.kind],
       );
+    } else if (name === "code60_get_heartbeat_status") {
+      parseKnowledge(name, args);
+      result = this.heartbeatStatusReader
+        ? this.heartbeatStatusReader()
+        : {
+            enabled: false,
+            intervalMinutes: 15,
+            running: false,
+            lowDiskPausedByHeartbeat: false,
+            nextRunAt: null,
+            lastRun: null,
+          };
     } else if (name === "code60_read_customization") {
       const request = parseKnowledge(name, args);
       if (request.revision !== meta.customizations.revision)

@@ -1,4 +1,4 @@
-import { Close, Copy, Launch, Renew } from "@carbon/icons-react";
+import { Chat, Close, Copy, Launch, Renew } from "@carbon/icons-react";
 import {
   ActionableNotification,
   Button,
@@ -604,17 +604,36 @@ function EnvironmentList({
   );
 }
 
+function formatHealthCheckChatPrompt(check: HealthCheckItem): string {
+  const lines = [
+    `Help me resolve a Code60 Health Check issue: ${check.title}`,
+    `Status: ${HEALTH_STATUS_LABELS[check.status]}`,
+    `Observed: ${check.summary}`,
+  ];
+  if (check.detail) {
+    lines.push(`Details: ${check.detail}`);
+  }
+  lines.push("Walk me through fixing this safely.");
+  return lines.join("\n");
+}
+
+function isHealthCheckIssue(status: HealthStatus): boolean {
+  return status === "warning" || status === "error" || status === "unavailable";
+}
+
 export function HealthCheckPage({
   api,
   active,
   clientVersion,
   onNavigate,
+  onAskChat,
   onNotify,
 }: {
   api: Pick<ApplicationClient, "healthCheck" | "onHealthChanged">;
   active: boolean;
   clientVersion?: string;
-  onNavigate?: (link: HealthDeepLink) => void;
+  onNavigate?: (link: HealthDeepLink, prompt?: string) => void;
+  onAskChat?: (prompt: string) => void;
   onNotify?: (text: string, tone?: ToastTone) => void;
 }) {
   const [snapshot, setSnapshot] = useState<HealthSnapshot>();
@@ -1254,6 +1273,17 @@ export function HealthCheckPage({
                                       {actionLabel}
                                     </Button>
                                   )}
+                                  {onAskChat && isHealthCheckIssue(check.status) && (
+                                    <Button
+                                      kind="ghost"
+                                      size="sm"
+                                      hasIconOnly
+                                      renderIcon={Chat}
+                                      iconDescription={`Ask Chat about ${check.title}`}
+                                      tooltipPosition="left"
+                                      onClick={() => onAskChat(formatHealthCheckChatPrompt(check))}
+                                    />
+                                  )}
                                   {check.deepLink && onNavigate && (
                                     <Button
                                       kind="ghost"
@@ -1263,7 +1293,17 @@ export function HealthCheckPage({
                                       iconDescription={`Open ${check.deepLink.label}`}
                                       tooltipPosition="left"
                                       onClick={() => {
-                                        if (check.deepLink) onNavigate(check.deepLink);
+                                        if (!check.deepLink) return;
+                                        const isChatLink =
+                                          check.deepLink.kind === "relay" ||
+                                          (check.deepLink.kind === "page" &&
+                                            check.deepLink.id === "chat");
+                                        onNavigate(
+                                          check.deepLink,
+                                          isChatLink && isHealthCheckIssue(check.status)
+                                            ? formatHealthCheckChatPrompt(check)
+                                            : undefined,
+                                        );
                                       }}
                                     />
                                   )}

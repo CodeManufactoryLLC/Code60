@@ -56,6 +56,7 @@ describe("navigation tree", () => {
       "commands",
       "tables",
       "health-check",
+      "heartbeat",
       "prompts",
       "mcp-servers",
       "memory",

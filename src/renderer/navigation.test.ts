@@ -58,6 +58,7 @@ describe("navigation registry", () => {
       "prompts",
       "system-manager",
       "health-check",
+      "heartbeat",
       "workflows",
       "usage",
       "mcp-servers",
@@ -97,6 +98,7 @@ describe("navigation registry", () => {
     expect(pageAvailable("automations", null)).toBe(true);
     expect(pageAvailable("system-manager", null)).toBe(true);
     expect(pageAvailable("health-check", null)).toBe(true);
+    expect(pageAvailable("heartbeat", null)).toBe(true);
     expect(pageAvailable("vector-search", null)).toBe(true);
     expect(pageAvailable("memories", null)).toBe(true);
     expect(pageAvailable("settings", null)).toBe(true);

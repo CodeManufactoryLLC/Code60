@@ -92,7 +92,7 @@ it("serves the Code60 MCP stdio protocol from a separate process", async () => {
       annotations: { readOnlyHint: boolean; destructiveHint: boolean };
     };
     const listed: Listed[] = responses.get(2).tools;
-    expect(listed).toHaveLength(38);
+    expect(listed).toHaveLength(39);
     expect(listed.map((tool) => tool.name)).toEqual(
       expect.arrayContaining([
         "code60_get_capabilities",
@@ -100,6 +100,7 @@ it("serves the Code60 MCP stdio protocol from a separate process", async () => {
         "code60_list_customizations",
         "code60_read_customization",
         "code60_read_view",
+        "code60_get_heartbeat_status",
         "code60_browser",
         "code60_search_codebase",
         "code60_codebase_index_status",

@@ -771,7 +771,8 @@ per-item, per-section and full cancellation. Health Check never starts engines,
 repairs services, clears locks or mutates state. Copy health report omits
 host-identifying fields (IP addresses, hostname, proxy hosts and paths) by
 default unless explicitly opted in. Relay and awareness cannot invoke health
-probes or read host-identifying details.
+probes or read host-identifying details. Scheduled Core Heartbeat sweeps may
+reuse passive Health Check snapshots to drive bounded autonomous maintenance.
 Apps → Usage (also listed in the Manage sidebar group) and the read-only local
 `code60 usage` management CLI command provide database-independent, human-only
 provider token-usage monitoring and inspectable reporting. Every ACP turn across
@@ -820,6 +821,73 @@ assemble adjacent text chunks and show the saved execution outcome. Closing, hid
 or replacing the modal releases its subscription and rejects late reads. Evidence
 reads share the core run writer queue to avoid partially appended JSONL records;
 stream notices do not mutate schedule revisions.
+
+### Approved autonomous core heartbeat
+
+An Electron-independent core heartbeat engine (`src/core/heartbeat.ts`) and its
+Gateway-hosted `HeartbeatService` (`src/application/heartbeat.ts`) own scheduled
+health sweeps, stuck-state detection and reconciliation, bounded runtime
+self-healing, and safe workspace hygiene. Heartbeat runs inside the single
+Node.js 24 Code60 Gateway process without spawning a second background daemon or
+exposing a TCP listener, and persists its bounded policy and last 50 sweep
+records in private `$XDG_STATE_HOME/code60/heartbeat/state.json` (at most
+512 KiB via atomic private writes). Keeping heartbeat history separate from
+`automations/state.json` preserves the 5,000-entry user Scheduled Jobs budget
+and allows Heartbeat to keep ticking when user Scheduled Jobs are paused or
+blocked.
+
+**Authorized autonomous actions** (single-flight, per-action timeouts, fixed
+diagnostic vocabulary):
+- **Passive health and drift sweeps:** reuse passive `HealthCheckService`
+  snapshots across all six check groups, audit enabled Scheduled Jobs for
+  repository/base/provider drift, and warn before execution history nears the
+  5,000-entry limit.
+- **Dead-owner reconciliation and wedged-execution watchdog:** mark active runs
+  `interrupted` via `markInterrupted` when their owner is verified gone; detect
+  wedged live turns or stuck stopping runs past `turnTimeout + grace` and
+  escalate owned cleanup; terminate leftover orphan agent processes only when
+  native/exact process identity is verified; auto-clear a `leftover_agent`
+  scheduler block once verification confirms `gone` (never replaying missed or
+  uncertain work).
+- **Bounded runtime self-healing:** retire and restart unresponsive stateless
+  sidecars (Memory and RAG) under a hard restart cap (at most three restarts per
+  15 minutes), and retry transient Relay transport drops (at most three attempts)
+  only after private storage validation succeeds.
+- **Low-disk hysteresis guard:** proactively apply a distinct Heartbeat low-disk
+  pause below 2 GiB free space and auto-resume future dispatches once headroom
+  recovers above 4 GiB, without overriding a manual `pausedAll` or
+  `persistence_failed` latch.
+- **Safe hygiene and 7-guard clean worktree pruning:** delete orphaned
+  `code60-index-*` temporary directories and stale Code60 private `.tmp` files
+  older than one hour, run `git worktree prune --expire=1.hour.ago` under
+  `coordinateMetadata`, and remove aged terminal `code60/*` worktrees (default
+  24 hours) only when all seven guards pass: own `code60/*` branch, terminal run
+  older than minimum age, `recordedAgentAlive` verified false, unpinned by active
+  reviews/checkpoints/workflows/automations, zero unpreserved changes against
+  `base` (or already marked `discardedAt`), removal via `git.removeWorktree`,
+  and atomic `discardedAt` update leaving `run.json` and `events.jsonl` intact.
+
+**Inviolable red lines (never autonomous):**
+- Never replay uncertain, interrupted, or missed work or re-dispatch a prompt.
+- Never automatically commit, merge, push, or overwrite user edits.
+- Never delete `.writer` or Git lock files, rewrite permissions or ACLs, or
+  erase or truncate run records, transcripts, Relay journals, reviews,
+  `usage.sqlite`, or SQLite databases.
+- Never terminate a process whose ownership or identity is missing, inaccessible,
+  or mismatched; always fail closed and escalate.
+- Never remove a worktree with unpreserved/unintegrated edits; surface dirty
+  worktrees as read-only cleanup candidates instead.
+
+Manage → Heartbeat (also Apps → Heartbeat) is a database-independent Carbon UI
+showing every heartbeat action, manual **Run heartbeat** / **Dry run** /
+**Cancel** controls, the last heartbeat's initiation time, termination time, and
+duration, recent sweep history, and human-only policy toggles, updated over SSE
+(`heartbeat-changed`) without renderer polling timers. The local `code60
+heartbeat [status|run] [--inspect] [--json]` management CLI queries or triggers
+sweeps over authenticated loopback `/management/heartbeat`. The read-only
+`code60_get_heartbeat_status` MCP tool exposes redacted, host-identifier-free
+aggregate status and finding codes to orchestrators without exposing paths,
+hostnames, IPs, raw logs, or destructive controls.
 
 ### Approved agent memory
 

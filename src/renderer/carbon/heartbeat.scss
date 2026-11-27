@@ -1,0 +1,251 @@
+@use '@carbon/react/scss/type';
+@use '@carbon/react/scss/spacing' as space;
+
+@layer carbon-app {
+  .heartbeat-page {
+    @include type.type-style('body-01');
+    box-sizing: border-box;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    color: var(--cds-text-primary);
+    background: var(--cds-background);
+    overflow: auto;
+    scrollbar-gutter: stable;
+    padding-block-end: space.$spacing-09;
+
+    > .table-controls {
+      padding: 0;
+      margin: 0 0 space.$spacing-05;
+    }
+
+    .heartbeat-notification {
+      margin-block-end: space.$spacing-05;
+      max-inline-size: none;
+    }
+
+    .heartbeat-status-section {
+      padding-block-end: space.$spacing-06;
+      margin-block-end: space.$spacing-06;
+      border-block-end: 1px solid var(--cds-border-subtle-01);
+    }
+
+    .heartbeat-status-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: space.$spacing-04 space.$spacing-06;
+      margin-block-end: space.$spacing-05;
+    }
+
+    .heartbeat-verdict-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: space.$spacing-03;
+
+      h2 {
+        @include type.type-style('heading-03');
+        margin: 0;
+      }
+    }
+
+    .heartbeat-summary-controls {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: space.$spacing-03;
+    }
+
+    .heartbeat-timing-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+      gap: space.$spacing-05;
+      margin: 0;
+
+      dt {
+        @include type.type-style('label-01');
+        color: var(--cds-text-secondary);
+        margin-block-end: space.$spacing-01;
+      }
+
+      dd {
+        @include type.type-style('heading-compact-01');
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+      }
+    }
+
+    .heartbeat-progress-wrap {
+      margin-block-start: space.$spacing-05;
+    }
+
+    .heartbeat-attention-section {
+      margin-block-end: space.$spacing-07;
+
+      h3 {
+        @include type.type-style('heading-02');
+        margin: 0 0 space.$spacing-04;
+      }
+    }
+
+    .heartbeat-attention-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      border-block-start: 1px solid var(--cds-border-subtle-01);
+    }
+
+    .heartbeat-attention-item {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: space.$spacing-04 space.$spacing-06;
+      padding: space.$spacing-04 0;
+      border-block-end: 1px solid var(--cds-border-subtle-01);
+    }
+
+    .heartbeat-attention-body {
+      flex: 1 1 24rem;
+      min-width: 0;
+    }
+
+    .heartbeat-attention-title-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: space.$spacing-03;
+      margin-block-end: space.$spacing-02;
+    }
+
+    .heartbeat-attention-title {
+      @include type.type-style('heading-compact-01');
+    }
+
+    .heartbeat-attention-summary {
+      @include type.type-style('body-compact-01');
+      color: var(--cds-text-secondary);
+      margin: 0 0 space.$spacing-02;
+    }
+
+    .heartbeat-attention-fix {
+      @include type.type-style('body-compact-01');
+      margin: 0;
+    }
+
+    .heartbeat-attention-action {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: space.$spacing-03;
+    }
+
+    .heartbeat-tab-panel {
+      padding-inline: 0;
+      padding-block-start: space.$spacing-05;
+    }
+
+    .heartbeat-toolbar-filter {
+      min-inline-size: 10rem;
+      padding-inline-end: space.$spacing-03;
+      display: flex;
+      align-items: center;
+    }
+
+    .heartbeat-action-name {
+      font-weight: 500;
+    }
+
+    .heartbeat-behavior-cell {
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: space.$spacing-02;
+    }
+
+    .heartbeat-tabular {
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .heartbeat-expanded-detail {
+      padding: space.$spacing-04 0;
+    }
+
+    .heartbeat-action-times {
+      display: flex;
+      flex-wrap: wrap;
+      gap: space.$spacing-04 space.$spacing-06;
+      margin: 0 0 space.$spacing-04;
+
+      dt {
+        @include type.type-style('label-01');
+        color: var(--cds-text-secondary);
+      }
+
+      dd {
+        @include type.type-style('body-compact-01');
+        margin: space.$spacing-01 0 0;
+        font-variant-numeric: tabular-nums;
+      }
+    }
+
+    .heartbeat-findings-list,
+    .heartbeat-history-actions {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: space.$spacing-03;
+
+      li {
+        display: flex;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: space.$spacing-03;
+      }
+    }
+
+    .heartbeat-finding-copy {
+      flex: 1 1 20rem;
+      min-width: 0;
+    }
+
+    .heartbeat-finding-fix {
+      @include type.type-style('body-compact-01');
+      color: var(--cds-text-secondary);
+      margin-block-start: space.$spacing-01;
+    }
+
+    .heartbeat-empty-findings,
+    .heartbeat-empty-history {
+      @include type.type-style('body-compact-01');
+      color: var(--cds-text-secondary);
+      margin: 0;
+    }
+
+    .heartbeat-action-link {
+      margin-block-start: space.$spacing-04;
+    }
+
+    .heartbeat-policy-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+      gap: space.$spacing-06;
+      padding-block-start: space.$spacing-02;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .heartbeat-page .heartbeat-status-section,
+    .heartbeat-page .heartbeat-attention-list,
+    .heartbeat-page .heartbeat-attention-item {
+      border-color: CanvasText;
+    }
+  }
+}

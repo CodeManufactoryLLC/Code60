@@ -82,6 +82,7 @@ Yes, for local lifecycle management only. The `code60` CLI cannot submit prompts
 - **Opening and pairing:** `code60 open` opens the browser interface, and `code60 pairing on|off|status` controls local pairing codes.
 - **Installation and backend service:** `code60 setup`, `code60 status`, `code60 update`, `code60 uninstall`, and `code60 service` manage installation and the per-user Code60 Gateway service.
 - **Usage reports:** `code60 usage` prints local token-usage summaries and turn breakdowns in table, JSON, Markdown, or CSV format without running agents.
+- **Heartbeat checks:** `code60 heartbeat status` and `code60 heartbeat run` inspect or trigger **Code60 Gateway's** local maintenance sweeps without running coding agents.
 
 ### Does Code60 have a native desktop app?
 
@@ -106,12 +107,12 @@ No. Code60 requires no special configuration files, scripts, or dependencies ins
 
 ### Does Code60 automatically delete worktrees?
 
-No. Code60 never deletes Git worktrees automatically.
+Only empty `code60/*` worktrees or worktrees with a discard mark past the **Heartbeat** age limit, while **Heartbeat** clean-worktree pruning stays on. Code60 never deletes a worktree with edits automatically.
 
-- **Normal lifecycle events:** Finishing, cancelling, or stopping a run leaves existing worktrees intact. Closing the browser, stopping or restarting Code60 Gateway, updating Code60, or running `code60 uninstall` or `code60 service uninstall` also keeps them on disk.
-- **Scheduled Jobs and Workflows:** Worktrees from **Scheduled Jobs** and **Workflows** stay on disk. A user can inspect changes and diffs with normal Git tools.
+- **Normal lifecycle events:** Finishing, cancelling, or stopping a run leaves existing worktrees intact. Closing the browser, stopping or restarting **Code60 Gateway**, updating Code60, or running `code60 uninstall` or `code60 service uninstall` also keeps them on disk.
+- **Heartbeat clean-worktree pruning:** Under **Manage → Heartbeat**, [Heartbeat](TERMINOLOGY.md#heartbeat) removes inactive `code60/*` worktrees with zero diff against their base branch after 24 hours by default. It skips active runs, live processes, workflows, checkpoints, and every worktree with edits, while keeping `run.json` and `events.jsonl`.
 - **Manual removal:** For an inactive run, open its actions menu (for example, in **Apps → Data Viewer**) and choose **Delete worktree**. Code60 blocks removal while the run or its agent process remains active.
-- **Confirmation and history:** Before removing a worktree and its run branch, Code60 shows a confirmation dialog. That dialog lists the worktree path, branch, and every file with edits that removal erases. After removal, the session record stays visible as inactive.
+- **Confirmation and history:** Before removing a worktree and its run branch manually, Code60 shows a confirmation dialog. That dialog lists the worktree path, branch, and every file with edits that removal erases. After removal, the session record stays visible as inactive.
 
 ## Data and Storage
 
@@ -136,7 +137,8 @@ A base installation typically uses about **400 MB to 1 GB**, depending on platfo
 | Local embedding model | About 164 MB | Local INT8 weights for offline embeddings. |
 | Embedding runtime dependencies | About 125 MB (macOS Apple Silicon) | Total with model is about 290 MB before other app files. |
 | Private provider installs | Varies by provider | Lives under `~/.local/share/code60/providers/`. |
-| Git worktrees | Varies by repository | Code60 never deletes worktrees automatically. |
+| Git worktrees | Varies by repository | **Heartbeat** prunes empty `code60/*` worktrees after 24 hours while keeping every worktree with edits. |
+| Heartbeat history | Up to 512 KiB | Keeps the latest 50 sweeps in `$XDG_STATE_HOME/code60/heartbeat/state.json`. |
 | Conversation transcripts | No automatic limit | Local `events.jsonl` and **Relay** journals never expire automatically. |
 | Request checkpoints | Up to 256 MiB per chat | Keeps up to 100 prior requests per chat. |
 | Workflow history | Up to 16 MiB | Keeps up to 1,000 workflow records. |
