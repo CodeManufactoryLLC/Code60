@@ -1,8 +1,9 @@
-import { Checkmark, Close, DotMark, Notification } from "@carbon/icons-react";
+import { Notification } from "@carbon/icons-react";
 import { Button } from "@carbon/react";
 import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { AlertRecord, AlertSeverity } from "../bridge/index.js";
 import { formatAlertTime } from "./alerts.js";
+import { AnchoredMenu } from "./anchored-menu.js";
 import { Icon, type IconName } from "./icons.js";
 
 export interface HeaderAlertsProps {
@@ -73,6 +74,14 @@ export function AlertBellButton({
   );
 }
 
+interface RowMenuState {
+  alertId: string;
+  x: number;
+  y: number;
+  anchor: HTMLButtonElement;
+  last: boolean;
+}
+
 export function AlertPopover({
   panelId,
   triggerRef,
@@ -88,6 +97,17 @@ export function AlertPopover({
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const [position, setPosition] = useState<{ top: number; right: number }>({ top: 52, right: 8 });
+  const [rowMenu, setRowMenu] = useState<RowMenuState | null>(null);
+  const rowMenuRef = useRef(rowMenu);
+  rowMenuRef.current = rowMenu;
+
+  const activeMenuAlert = rowMenu
+    ? alerts.items.find((item) => item.id === rowMenu.alertId)
+    : undefined;
+
+  useEffect(() => {
+    if (rowMenu && !activeMenuAlert) setRowMenu(null);
+  }, [rowMenu, activeMenuAlert]);
 
   useLayoutEffect(() => {
     const updatePosition = () => {
@@ -106,6 +126,8 @@ export function AlertPopover({
     panelRef.current?.focus({ preventScroll: true });
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      // Let an open row actions menu close first before dismissing the alerts popover.
+      if (rowMenuRef.current) return;
       event.preventDefault();
       event.stopPropagation();
       closeRef.current();
@@ -115,7 +137,9 @@ export function AlertPopover({
       const target = event.target;
       if (
         target instanceof Node &&
-        (panelRef.current?.contains(target) || triggerRef.current?.contains(target))
+        (panelRef.current?.contains(target) ||
+          triggerRef.current?.contains(target) ||
+          (target instanceof Element && target.closest(".alert-item-menu") !== null))
       ) {
         return;
       }
@@ -131,6 +155,11 @@ export function AlertPopover({
       window.removeEventListener("blur", onBlur);
     };
   }, [triggerRef]);
+
+  const openRowMenu = (alertId: string, anchor: HTMLButtonElement, last = false) => {
+    const rect = anchor.getBoundingClientRect();
+    setRowMenu({ alertId, x: rect.right, y: rect.bottom + 4, anchor, last });
+  };
 
   const hasRead = alerts.items.some((item) => item.read);
 
@@ -168,67 +197,94 @@ export function AlertPopover({
         <p className="alert-empty">No alerts.</p>
       ) : (
         <ul className="alert-list">
-          {alerts.items.map((alert) => (
-            <li
-              key={alert.id}
-              className="alert-item"
-              data-read={alert.read}
-              data-severity={alert.severity}
-            >
-              <button
-                type="button"
-                className="alert-item-link"
-                onClick={() => {
-                  onClose();
-                  alerts.onOpenAlert(alert);
-                }}
+          {alerts.items.map((alert) => {
+            const menuExpanded = rowMenu?.alertId === alert.id;
+            const menuId = `${panelId}-menu-${alert.id}`;
+            return (
+              <li
+                key={alert.id}
+                className="alert-item"
+                data-read={alert.read}
+                data-severity={alert.severity}
               >
-                <span className="alert-item-leading" aria-hidden="true">
-                  <span className="alert-item-dot" />
-                  <Icon
-                    name={severityIcon(alert.severity)}
-                    className={`alert-item-severity alert-item-severity--${alert.severity}`}
-                  />
-                </span>
-                <span className="alert-item-body">
-                  <span className="alert-item-title">{alert.title}</span>
-                  {alert.detail && <span className="alert-item-detail">{alert.detail}</span>}
-                  <span className="alert-item-meta">
-                    {alert.read ? "Read" : "Unread"} · {formatAlertTime(alert.updatedAt)}
+                <button
+                  type="button"
+                  className="alert-item-link"
+                  onClick={() => {
+                    setRowMenu(null);
+                    onClose();
+                    alerts.onOpenAlert(alert);
+                  }}
+                >
+                  <span className="alert-item-leading" aria-hidden="true">
+                    <Icon
+                      name={severityIcon(alert.severity)}
+                      className={`alert-item-severity alert-item-severity--${alert.severity}`}
+                    />
                   </span>
-                </span>
-              </button>
-              <div className="alert-item-controls">
-                <button
-                  type="button"
-                  className="icon-button alert-item-action"
-                  aria-label={
-                    alert.read ? `Mark "${alert.title}" unread` : `Mark "${alert.title}" read`
-                  }
-                  title={alert.read ? "Mark unread" : "Mark read"}
-                  onClick={() =>
-                    alert.read ? alerts.onMarkUnread(alert.id) : alerts.onMarkRead(alert.id)
-                  }
-                >
-                  {alert.read ? (
-                    <DotMark size={16} aria-hidden="true" />
-                  ) : (
-                    <Checkmark size={16} aria-hidden="true" />
-                  )}
+                  <span className="alert-item-body">
+                    <span className="alert-item-title">{alert.title}</span>
+                    {alert.detail && <span className="alert-item-detail">{alert.detail}</span>}
+                    <span className="alert-item-meta">
+                      {alert.read ? "Read" : "Unread"} · {formatAlertTime(alert.updatedAt)}
+                    </span>
+                  </span>
                 </button>
-                <button
-                  type="button"
-                  className="icon-button alert-item-action"
-                  aria-label={`Dismiss "${alert.title}"`}
-                  title="Dismiss"
-                  onClick={() => alerts.onDismiss(alert.id)}
-                >
-                  <Close size={16} aria-hidden="true" />
-                </button>
-              </div>
-            </li>
-          ))}
+                <div className="alert-item-controls">
+                  <button
+                    type="button"
+                    className="icon-button alert-item-action"
+                    aria-label={`Actions for "${alert.title}"`}
+                    title="Alert actions"
+                    aria-haspopup="menu"
+                    aria-expanded={menuExpanded}
+                    aria-controls={menuExpanded ? menuId : undefined}
+                    onClick={(event) => {
+                      if (menuExpanded) setRowMenu(null);
+                      else openRowMenu(alert.id, event.currentTarget);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+                      event.preventDefault();
+                      openRowMenu(alert.id, event.currentTarget, event.key === "ArrowUp");
+                    }}
+                  >
+                    <Icon name="overflow-menu--horizontal" />
+                  </button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
+      )}
+      {rowMenu && activeMenuAlert && (
+        <AnchoredMenu
+          id={`${panelId}-menu-${activeMenuAlert.id}`}
+          className="alert-item-menu"
+          x={rowMenu.x}
+          y={rowMenu.y}
+          align="end"
+          anchor={rowMenu.anchor}
+          initialFocus={rowMenu.last ? "last" : "first"}
+          label={`Actions for "${activeMenuAlert.title}"`}
+          items={[
+            {
+              id: "toggle-read",
+              label: activeMenuAlert.read ? "Mark as unread" : "Mark as read",
+              run: () =>
+                activeMenuAlert.read
+                  ? alerts.onMarkUnread(activeMenuAlert.id)
+                  : alerts.onMarkRead(activeMenuAlert.id),
+            },
+            {
+              id: "dismiss",
+              label: "Dismiss",
+              danger: true,
+              run: () => alerts.onDismiss(activeMenuAlert.id),
+            },
+          ]}
+          onClose={() => setRowMenu(null)}
+        />
       )}
     </div>
   );

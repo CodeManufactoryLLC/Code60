@@ -934,9 +934,18 @@
     gap: space.$spacing-02;
     border-block-end: 1px solid var(--cds-border-subtle-01);
     background: var(--cds-layer-01);
+    &:hover,
+    &:has(.alert-item-action[aria-expanded='true']) {
+      background: var(--cds-layer-hover-01);
+    }
   }
   .carbon-app .alert-item[data-read='false'] {
     background: var(--cds-background);
+    box-shadow: inset 3px 0 var(--cds-border-interactive);
+    &:hover,
+    &:has(.alert-item-action[aria-expanded='true']) {
+      background: var(--cds-layer-hover-01);
+    }
   }
   .carbon-app .alert-item-link {
     flex: 1;
@@ -951,9 +960,6 @@
     text-align: start;
     cursor: pointer;
     font: inherit;
-    &:hover {
-      background: var(--cds-layer-hover-01);
-    }
     &:focus-visible {
       outline: 2px solid var(--cds-focus);
       outline-offset: -2px;
@@ -962,21 +968,8 @@
   .carbon-app .alert-item-leading {
     display: inline-flex;
     align-items: center;
-    gap: space.$spacing-02;
     padding-block-start: 0.125rem;
     flex-shrink: 0;
-  }
-  .carbon-app .alert-item-dot {
-    inline-size: 0.5rem;
-    block-size: 0.5rem;
-    border-radius: 999px;
-    background: transparent;
-  }
-  .carbon-app .alert-item[data-read='false'] .alert-item-dot {
-    background: var(--cds-link-primary);
-    @media (forced-colors: active) {
-      background: Highlight;
-    }
   }
   .carbon-app .alert-item-severity {
     flex-shrink: 0;
@@ -1016,7 +1009,6 @@
   .carbon-app .alert-item-controls {
     display: flex;
     align-items: center;
-    gap: 0.125rem;
     padding: space.$spacing-02 space.$spacing-03 space.$spacing-02 0;
     flex-shrink: 0;
   }
@@ -1030,14 +1022,18 @@
     background: transparent;
     color: var(--cds-icon-secondary);
     cursor: pointer;
-    &:hover {
+    &:hover,
+    &[aria-expanded='true'] {
       color: var(--cds-icon-primary);
-      background: var(--cds-layer-hover-01);
+      background: var(--cds-layer-active-01);
     }
     &:focus-visible {
       outline: 2px solid var(--cds-focus);
       outline-offset: -2px;
     }
+  }
+  .carbon-app .alert-item-menu {
+    z-index: 9000;
   }
   .carbon-app .product-navigation {
     background:var(--cds-layer-01);

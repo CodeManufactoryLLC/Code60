@@ -90,8 +90,10 @@ describe("AlertBellButton and AlertPopover", () => {
     expect(html).toContain("Scheduled job failed: Nightly");
     expect(html).toContain('data-read="false"');
     expect(html).toContain('data-read="true"');
-    expect(html).toContain('aria-label="Mark &quot;Approval needed: Relay&quot; read"');
-    expect(html).toContain('aria-label="Mark &quot;Scheduled job failed: Nightly&quot; unread"');
+    expect(html).toContain('aria-label="Actions for &quot;Approval needed: Relay&quot;"');
+    expect(html).toContain('aria-label="Actions for &quot;Scheduled job failed: Nightly&quot;"');
+    expect(html).toContain('aria-haspopup="menu"');
+    expect(html).not.toContain("alert-item-dot");
   });
 
   it("renders empty state when there are no alerts", () => {

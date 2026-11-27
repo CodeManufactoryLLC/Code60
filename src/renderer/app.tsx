@@ -349,12 +349,17 @@ export function App({
       case "custom-agent":
         void navigation.open({ kind: "custom-agent", id: target.id });
         return;
-      case "conversation":
+      case "conversation": {
         setChatHistoryOpen(true);
-        void navigation.open({ kind: "conversation", id: target.id }).then((opened) => {
+        const matchedChat = snapshot?.chats.find(
+          (chat) => chat.run?.id === target.id || chat.conversationId === target.id,
+        );
+        const resolvedId = (matchedChat && conversationId(matchedChat)) ?? target.id;
+        void navigation.open({ kind: "conversation", id: resolvedId }).then((opened) => {
           if (!opened) notify("That conversation is no longer open.", "error");
         });
         return;
+      }
       case "page":
         if (!pageAvailable(target.id, database)) {
           notify("Connect to a database first.", "error");

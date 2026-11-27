@@ -24,7 +24,16 @@ export const ALERT_PREFIXES = {
 } as const;
 
 function chatIdentifier(chat: OrchestrationChat): string | undefined {
-  return chat.conversationId ?? chat.run?.id;
+  return chat.run?.id ?? (chat.kind === "relay" ? chat.conversationId : undefined);
+}
+
+function chatAlertTarget(chat: OrchestrationChat): AlertTarget | undefined {
+  if (chat.kind === "relay") {
+    if (chat.customAgentId) return { kind: "custom-agent", id: chat.customAgentId };
+    return { kind: "relay" };
+  }
+  const id = chatIdentifier(chat);
+  return id ? { kind: "conversation", id } : undefined;
 }
 
 function chatDisplayLabel(chat: OrchestrationChat): string {
@@ -60,8 +69,8 @@ export function collectApprovalAlerts(snapshot: Snapshot): AlertInput[] {
 
   for (const chat of snapshot.chats) {
     const run = chat.run;
-    const conversationId = chatIdentifier(chat);
-    if (!run || !conversationId || !run.pending.length) continue;
+    const target = chatAlertTarget(chat);
+    if (!run || !target || !run.pending.length) continue;
     const label = chatDisplayLabel(chat);
     for (const permission of run.pending) {
       const dedupeKey = `${ALERT_PREFIXES.approval}${run.id}:${permission.id}`;
@@ -73,7 +82,7 @@ export function collectApprovalAlerts(snapshot: Snapshot): AlertInput[] {
         severity: "warning",
         title: `Approval needed: ${label}`,
         detail: permission.title,
-        target: { kind: "conversation", id: conversationId },
+        target,
       });
     }
   }
@@ -103,18 +112,19 @@ export function collectApprovalAlerts(snapshot: Snapshot): AlertInput[] {
 export function collectDraftPlanAlerts(snapshot: Snapshot): AlertInput[] {
   const alerts: AlertInput[] = [];
   for (const chat of snapshot.chats) {
-    const conversationId = chatIdentifier(chat);
-    if (!conversationId || !chat.plans?.length) continue;
+    const keyId = chat.conversationId ?? chat.run?.id;
+    const target = chatAlertTarget(chat);
+    if (!keyId || !target || !chat.plans?.length) continue;
     const chatLabel = chatDisplayLabel(chat);
     for (const plan of chat.plans) {
       if (plan.state !== "draft") continue;
       alerts.push({
-        dedupeKey: `${ALERT_PREFIXES.planDraft}${conversationId}:${plan.id}:${plan.proposalRevision}`,
+        dedupeKey: `${ALERT_PREFIXES.planDraft}${keyId}:${plan.id}:${plan.proposalRevision}`,
         source: "plan",
         severity: "info",
         title: `Plan ready for review: ${plan.title}`,
         detail: `${chatLabel} (${plan.total} task${plan.total === 1 ? "" : "s"})`,
-        target: { kind: "conversation", id: conversationId },
+        target,
       });
     }
   }
@@ -124,18 +134,19 @@ export function collectDraftPlanAlerts(snapshot: Snapshot): AlertInput[] {
 export function collectFailedPlanAlerts(snapshot: Snapshot): AlertInput[] {
   const alerts: AlertInput[] = [];
   for (const chat of snapshot.chats) {
-    const conversationId = chatIdentifier(chat);
-    if (!conversationId || !chat.plans?.length) continue;
+    const keyId = chat.conversationId ?? chat.run?.id;
+    const target = chatAlertTarget(chat);
+    if (!keyId || !target || !chat.plans?.length) continue;
     const chatLabel = chatDisplayLabel(chat);
     for (const plan of chat.plans) {
       if (plan.state !== "failed") continue;
       alerts.push({
-        dedupeKey: `event:plan-failed:${conversationId}:${plan.id}:${plan.revision}`,
+        dedupeKey: `event:plan-failed:${keyId}:${plan.id}:${plan.revision}`,
         source: "plan",
         severity: "error",
         title: `Plan failed: ${plan.title}`,
         detail: `${chatLabel} (${plan.completed}/${plan.total} completed)`,
-        target: { kind: "conversation", id: conversationId },
+        target,
       });
     }
   }

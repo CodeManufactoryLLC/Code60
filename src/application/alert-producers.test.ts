@@ -96,7 +96,7 @@ describe("alert producers", () => {
             },
           ],
           run: {
-            id: "relay-1",
+            id: "relay-run-1",
             agent: "codex",
             status: "running",
             turns: 1,
@@ -104,10 +104,65 @@ describe("alert producers", () => {
             worktree: "/tmp",
             pending: [
               {
-                id: "relay-1#1",
-                runId: "relay-1",
+                id: "relay-run-1#1",
+                runId: "relay-run-1",
                 toolCallId: "tc-1",
                 title: "Run npm test",
+                kind: "execute",
+              },
+            ],
+            stopping: false,
+          },
+          directory: null,
+          error: null,
+          events: [],
+          updates: { paused: false, pending: 0 },
+        },
+        {
+          kind: "project",
+          conversationId: "proj-conv-1",
+          title: "Project chat",
+          run: {
+            id: "proj-run-1",
+            agent: "codex",
+            status: "running",
+            turns: 1,
+            branch: null,
+            worktree: "/tmp/proj",
+            pending: [
+              {
+                id: "proj-run-1#1",
+                runId: "proj-run-1",
+                toolCallId: "tc-3",
+                title: "Write file",
+                kind: "edit",
+              },
+            ],
+            stopping: false,
+          },
+          directory: "/tmp/proj",
+          error: null,
+          events: [],
+          updates: { paused: false, pending: 0 },
+        },
+        {
+          kind: "relay",
+          customAgentId: "custom-agent-1",
+          conversationId: "custom-conv-1",
+          title: "Reviewer",
+          run: {
+            id: "custom-run-1",
+            agent: "codex",
+            status: "running",
+            turns: 1,
+            branch: null,
+            worktree: "/tmp",
+            pending: [
+              {
+                id: "custom-run-1#1",
+                runId: "custom-run-1",
+                toolCallId: "tc-4",
+                title: "Inspect git log",
                 kind: "execute",
               },
             ],
@@ -168,14 +223,26 @@ describe("alert producers", () => {
     });
 
     const approvals = collectApprovalAlerts(snapshot);
-    expect(approvals).toHaveLength(2);
+    expect(approvals).toHaveLength(4);
     expect(approvals[0]).toMatchObject({
       source: "approval",
       title: "Approval needed: Relay",
       detail: "Run npm test",
-      target: { kind: "conversation", id: "relay-1" },
+      target: { kind: "relay" },
     });
     expect(approvals[1]).toMatchObject({
+      source: "approval",
+      title: "Approval needed: Project chat",
+      detail: "Write file",
+      target: { kind: "conversation", id: "proj-run-1" },
+    });
+    expect(approvals[2]).toMatchObject({
+      source: "approval",
+      title: "Approval needed: Reviewer",
+      detail: "Inspect git log",
+      target: { kind: "custom-agent", id: "custom-agent-1" },
+    });
+    expect(approvals[3]).toMatchObject({
       source: "approval",
       title: "Approval needed: Refactor worker",
       target: { kind: "conversation", id: "worker-1" },
@@ -186,7 +253,7 @@ describe("alert producers", () => {
     expect(drafts[0]).toMatchObject({
       source: "plan",
       title: "Plan ready for review: Add alerts",
-      target: { kind: "conversation", id: "relay-1" },
+      target: { kind: "relay" },
     });
 
     const failedPlans = collectFailedPlanAlerts(snapshot);

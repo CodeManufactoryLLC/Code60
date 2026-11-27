@@ -108,22 +108,24 @@ test("browser: header Alerts bell shows unread count dot, links to destinations,
     await expect(popover.locator(".alert-item")).toHaveCount(3);
     await expect(popover).not.toContainText("Stale database error");
 
-    await popover
-      .getByRole("button", { name: 'Mark "Workflow failed: Release pipeline" read', exact: true })
-      .click();
+    // Open the row three-dot menu to toggle read/unread on individual items.
+    const rowMenuTrigger = popover.getByRole("button", {
+      name: 'Actions for "Workflow failed: Release pipeline"',
+      exact: true,
+    });
+    await rowMenuTrigger.click();
+    await local.page.getByRole("menuitem", { name: "Mark as read", exact: true }).click();
     await expect(bell.locator(".alert-bell-badge")).toHaveText("1");
     await expect(popover.locator('.alert-item[data-read="true"]')).toHaveCount(2);
 
-    await popover
-      .getByRole("button", { name: 'Mark "Workflow failed: Release pipeline" unread', exact: true })
-      .click();
+    await rowMenuTrigger.click();
+    await local.page.getByRole("menuitem", { name: "Mark as unread", exact: true }).click();
     await expect(bell.locator(".alert-bell-badge")).toHaveText("2");
     await expect(popover.locator('.alert-item[data-read="false"]')).toHaveCount(2);
 
     // Mark the second item read, reload the page, and verify persistence.
-    await popover
-      .getByRole("button", { name: 'Mark "Workflow failed: Release pipeline" read', exact: true })
-      .click();
+    await rowMenuTrigger.click();
+    await local.page.getByRole("menuitem", { name: "Mark as read", exact: true }).click();
     await expect(bell.locator(".alert-bell-badge")).toHaveText("1");
 
     await local.page.reload();
@@ -142,12 +144,13 @@ test("browser: header Alerts bell shows unread count dot, links to destinations,
     await expect(reloadedBell.locator(".alert-bell-badge")).toHaveCount(0);
     await expect(local.page.locator("#panel-automations")).toBeVisible();
 
-    // Mark an item unread, then use Mark all read and Clear read.
+    // Mark an item unread via its three-dot menu, then use Mark all read and Clear read.
     await reloadedBell.click();
     await expect(reloadedPopover).toBeVisible();
     await reloadedPopover
-      .getByRole("button", { name: 'Mark "Check update instructions" unread', exact: true })
+      .getByRole("button", { name: 'Actions for "Check update instructions"', exact: true })
       .click();
+    await local.page.getByRole("menuitem", { name: "Mark as unread", exact: true }).click();
     await expect(reloadedBell.locator(".alert-bell-badge")).toHaveText("1");
 
     await reloadedPopover.getByRole("button", { name: "Mark all read", exact: true }).click();
