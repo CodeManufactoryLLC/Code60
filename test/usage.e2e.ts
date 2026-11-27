@@ -32,18 +32,61 @@ test("browser: Usage page records live turns, supports hotspot drill-down, expor
 
     const page = local.page.locator("section.usage-page");
     await expect(page).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Burn rate by provider and model" }),
-    ).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Summary" })).toBeVisible();
+    await expect(page.locator(".cds--tile")).toHaveCount(0);
+    const summary = page.locator(".usage-dashboard");
+    await expect(page.getByText("Turns recorded")).toHaveCount(0);
+    await expect(page.getByText("Retained turns")).toHaveCount(0);
+    await expect(page.getByText("Provider-reported cost")).toHaveCount(0);
+    await expect(summary.getByText("Estimated total tokens", { exact: true })).toBeVisible();
+    await expect(summary.getByText("New input", { exact: true })).toBeVisible();
+    await expect(summary.getByText("Cached / re-read", { exact: true })).toBeVisible();
+    await expect(summary.getByText("Output", { exact: true })).toBeVisible();
+    await expect(summary.getByText("Total turns", { exact: true })).toBeVisible();
+    await expect(summary.getByText("Net context added", { exact: true })).toBeVisible();
+    await expect(summary.getByText("Tool calls", { exact: true })).toBeVisible();
+    await expect(summary.getByText("Tool waves", { exact: true })).toBeVisible();
+    await expect(summary.getByText("Compactions", { exact: true })).toBeVisible();
+
+    // Switch to Provider burn rate tab and verify live recorded turn.
+    await page.getByRole("tab", { name: "Provider burn rate" }).click();
+    await expect(page.getByText("Burn rate by provider and model")).toHaveCount(0);
     // Should record at least 1 turn from the Relay exchange.
     await expect(page.locator("table[aria-label='Provider burn rate']")).toBeVisible({
       timeout: 15_000,
     });
     await expect(page.locator("table[aria-label='Provider burn rate']")).toContainText("claude");
 
-    // Uses Carbon Dropdowns (no native <select>).
+    // Switch to Usage Timeline tab and verify timeline renders without the old heading.
+    await page.getByRole("tab", { name: "Usage Timeline" }).click();
+    await expect(page.locator(".usage-timeline-bars")).toBeVisible();
+    await expect(page.getByText("Burn timeline")).toHaveCount(0);
+
+    // Uses Carbon Dropdowns (no native <select>) with no UA list bullets/indentation.
     await expect(page.locator(".usage-filters select")).toHaveCount(0);
     await expect(page.locator(".usage-filters .cds--dropdown")).toHaveCount(3);
+    const rangeTrigger = page.locator("#usage-range-select button.cds--list-box__field");
+    await rangeTrigger.click();
+    const rangeMenu = page.locator("#usage-range-select .cds--list-box__menu");
+    await expect(rangeMenu).toBeVisible();
+    const menuStyle = await rangeMenu.evaluate((el) => {
+      const style = getComputedStyle(el);
+      const item = el.querySelector(".cds--list-box__menu-item");
+      const itemStyle = item ? getComputedStyle(item) : null;
+      return {
+        listStyleType: style.listStyleType,
+        paddingLeft: style.paddingLeft,
+        marginTop: style.marginTop,
+        itemListStyleType: itemStyle?.listStyleType ?? null,
+      };
+    });
+    expect(menuStyle).toEqual({
+      listStyleType: "none",
+      paddingLeft: "0px",
+      marginTop: "0px",
+      itemListStyleType: "none",
+    });
+    await rangeTrigger.press("Escape");
 
     // Switch to Chats & workflows tab and drill into Turn inspector.
     await page.getByRole("tab", { name: "Chats & workflows" }).click();
@@ -60,8 +103,12 @@ test("browser: Usage page records live turns, supports hotspot drill-down, expor
     await expect(page.getByText("Estimation Breakdown")).toBeVisible();
     await expect(page.getByText("Context & Tools")).toBeVisible();
 
-    // Export Markdown triggers download toast.
-    await page.getByRole("button", { name: "Export Markdown" }).click();
+    // Switch to Export tab and trigger Markdown download toast.
+    await page.getByRole("tab", { name: "Export" }).click();
+    await expect(page.getByRole("button", { name: "Markdown", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "JSON", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "CSV", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Markdown", exact: true }).click();
     await expect(local.page.getByRole("region", { name: "Notifications" })).toContainText(
       /Exported code60-usage-.*\.md/,
     );

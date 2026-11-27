@@ -1,3 +1,4 @@
+import { Download } from "@carbon/icons-react";
 import {
   Accordion,
   AccordionItem,
@@ -20,7 +21,6 @@ import {
   TabPanels,
   Tabs,
   Tag,
-  Tile,
 } from "@carbon/react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -80,7 +80,7 @@ function formatCosts(metrics: UsageAggregateMetrics): string {
         ? `$${entry.amount.toFixed(4)}`
         : `${entry.amount.toFixed(4)} ${entry.currency}`,
     )
-    .join(" · ");
+    .join(", ");
 }
 
 function formatSurfaceLabel(surface: UsageSurface, helperKind: string | null): string {
@@ -257,7 +257,7 @@ export function UsagePage({
           : { kind: "session", id: spot.sessionId, label: `Session ${spot.sessionId}` };
     setTurnScope(scope);
     setTurnOffset(0);
-    setTabIndex(2);
+    setTabIndex(4);
   };
 
   const knownProviders = useMemo(() => {
@@ -372,95 +372,86 @@ export function UsagePage({
             }}
           />
         </div>
-
-        <div className="usage-export-actions">
-          <Button
-            kind="tertiary"
-            size="sm"
-            disabled={exporting !== null}
-            onClick={() => void handleExport("markdown")}
-          >
-            {exporting === "markdown" ? "Exporting…" : "Export Markdown"}
-          </Button>
-          <Button
-            kind="tertiary"
-            size="sm"
-            disabled={exporting !== null}
-            onClick={() => void handleExport("json")}
-          >
-            {exporting === "json" ? "Exporting…" : "Export JSON"}
-          </Button>
-          <Button
-            kind="tertiary"
-            size="sm"
-            disabled={exporting !== null}
-            onClick={() => void handleExport("csv")}
-          >
-            {exporting === "csv" ? "Exporting…" : "Export CSV"}
-          </Button>
-        </div>
       </div>
-
-      <section className="usage-kpi-grid" aria-label="Usage overview">
-        <Tile className="usage-kpi-tile">
-          <span className="usage-kpi-label">Estimated total tokens</span>
-          <strong className="usage-kpi-value">{formatNumber(totals?.totalTokens ?? 0)}</strong>
-          <span className="usage-kpi-meta">
-            {formatNumber(totals?.newInputTokens ?? 0)} new ·{" "}
-            {formatNumber(totals?.cachedOrRereadInputTokens ?? 0)} cached/re-read ·{" "}
-            {formatNumber(totals?.outputTokens ?? 0)} output
-          </span>
-        </Tile>
-
-        <Tile className="usage-kpi-tile">
-          <span className="usage-kpi-label">Turns recorded</span>
-          <strong className="usage-kpi-value">{formatNumber(totals?.turns ?? 0)}</strong>
-          <div className="usage-tags">
-            <Tag type="green" size="sm">
-              Exact: {formatNumber(totals?.exactTurns ?? 0)}
-            </Tag>
-            <Tag type="blue" size="sm">
-              Derived: {formatNumber(totals?.derivedTurns ?? 0)}
-            </Tag>
-            <Tag type="gray" size="sm">
-              Lower bound: {formatNumber(totals?.lowerBoundTurns ?? 0)}
-            </Tag>
-          </div>
-        </Tile>
-
-        <Tile className="usage-kpi-tile">
-          <span className="usage-kpi-label">Net context added</span>
-          <strong className="usage-kpi-value">{formatNumber(totals?.netContextDelta ?? 0)}</strong>
-          <span className="usage-kpi-meta">
-            {formatNumber(totals?.toolCalls ?? 0)} tool calls ·{" "}
-            {formatNumber(totals?.toolWaves ?? 0)} waves · {formatNumber(totals?.compactions ?? 0)}{" "}
-            compactions
-          </span>
-        </Tile>
-
-        <Tile className="usage-kpi-tile">
-          <span className="usage-kpi-label">Provider-reported cost</span>
-          <strong className="usage-kpi-value">
-            {totals ? formatCosts(totals) : "Not reported"}
-          </strong>
-          <span className="usage-kpi-meta">
-            Retained turns: {formatNumber(report?.status.totalStoredTurns ?? 0)} (
-            {report?.retentionDays ?? 90}d cap)
-          </span>
-        </Tile>
-      </section>
 
       <Tabs selectedIndex={tabIndex} onChange={({ selectedIndex }) => setTabIndex(selectedIndex)}>
         <TabList aria-label="Usage report sections" contained>
+          <Tab>Summary</Tab>
           <Tab>Provider burn rate</Tab>
+          <Tab>Usage Timeline</Tab>
           <Tab>Chats &amp; workflows</Tab>
           <Tab>Turn inspector</Tab>
+          <Tab>Export</Tab>
         </TabList>
         <TabPanels>
-          {/* Tab 1: Provider Burn Rate */}
+          {/* Tab 1: Summary */}
+          <TabPanel>
+            <div className="usage-section usage-dashboard">
+              <section className="usage-dashboard-group" aria-labelledby="usage-summary-tokens">
+                <h2 id="usage-summary-tokens" className="usage-section-heading">
+                  Tokens
+                </h2>
+                <dl className="usage-figure-grid">
+                  <div className="usage-figure">
+                    <dt className="usage-figure-label">Estimated total tokens</dt>
+                    <dd className="usage-figure-value">{formatNumber(totals?.totalTokens ?? 0)}</dd>
+                  </div>
+                  <div className="usage-figure">
+                    <dt className="usage-figure-label">New input</dt>
+                    <dd className="usage-figure-value">
+                      {formatNumber(totals?.newInputTokens ?? 0)}
+                    </dd>
+                  </div>
+                  <div className="usage-figure">
+                    <dt className="usage-figure-label">Cached / re-read</dt>
+                    <dd className="usage-figure-value">
+                      {formatNumber(totals?.cachedOrRereadInputTokens ?? 0)}
+                    </dd>
+                  </div>
+                  <div className="usage-figure">
+                    <dt className="usage-figure-label">Output</dt>
+                    <dd className="usage-figure-value">
+                      {formatNumber(totals?.outputTokens ?? 0)}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section className="usage-dashboard-group" aria-labelledby="usage-summary-activity">
+                <h2 id="usage-summary-activity" className="usage-section-heading">
+                  Context &amp; activity
+                </h2>
+                <dl className="usage-figure-grid">
+                  <div className="usage-figure">
+                    <dt className="usage-figure-label">Total turns</dt>
+                    <dd className="usage-figure-value">{formatNumber(totals?.turns ?? 0)}</dd>
+                  </div>
+                  <div className="usage-figure">
+                    <dt className="usage-figure-label">Net context added</dt>
+                    <dd className="usage-figure-value">
+                      {formatNumber(totals?.netContextDelta ?? 0)}
+                    </dd>
+                  </div>
+                  <div className="usage-figure">
+                    <dt className="usage-figure-label">Tool calls</dt>
+                    <dd className="usage-figure-value">{formatNumber(totals?.toolCalls ?? 0)}</dd>
+                  </div>
+                  <div className="usage-figure">
+                    <dt className="usage-figure-label">Tool waves</dt>
+                    <dd className="usage-figure-value">{formatNumber(totals?.toolWaves ?? 0)}</dd>
+                  </div>
+                  <div className="usage-figure">
+                    <dt className="usage-figure-label">Compactions</dt>
+                    <dd className="usage-figure-value">{formatNumber(totals?.compactions ?? 0)}</dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
+          </TabPanel>
+
+          {/* Tab 2: Provider Burn Rate */}
           <TabPanel>
             <section className="usage-section">
-              <h2 className="usage-section-heading">Burn rate by provider and model</h2>
               {!report || report.providers.length === 0 ? (
                 <div className="usage-empty">
                   No turns recorded in the selected window. Run any chat, worker, workflow, or
@@ -544,33 +535,37 @@ export function UsagePage({
                   </Table>
                 </TableContainer>
               )}
+            </section>
+          </TabPanel>
 
-              {report && report.timeline.length > 0 && (
-                <section aria-label="Token usage timeline">
-                  <h2 className="usage-section-heading">Burn timeline</h2>
-                  <div className="usage-timeline-bars">
-                    {report.timeline.map((bucket) => (
-                      <div key={bucket.bucket} className="usage-timeline-row">
-                        <span className="usage-mono">{bucket.bucket}</span>
-                        <div className="usage-timeline-track" aria-hidden="true">
-                          <div
-                            className="usage-timeline-fill"
-                            style={{
-                              width: `${Math.max(2, Math.round((bucket.totalTokens / maxTimelineTokens) * 100))}%`,
-                            }}
-                          />
-                        </div>
-                        <span className="usage-num">{formatNumber(bucket.totalTokens)} tok</span>
-                        <span className="usage-num">{formatNumber(bucket.turns)} turns</span>
+          {/* Tab 3: Usage Timeline */}
+          <TabPanel>
+            <section className="usage-section" aria-label="Usage timeline">
+              {!report || report.timeline.length === 0 ? (
+                <div className="usage-empty">No timeline data recorded in the selected window.</div>
+              ) : (
+                <div className="usage-timeline-bars">
+                  {report.timeline.map((bucket) => (
+                    <div key={bucket.bucket} className="usage-timeline-row">
+                      <span className="usage-mono">{bucket.bucket}</span>
+                      <div className="usage-timeline-track" aria-hidden="true">
+                        <div
+                          className="usage-timeline-fill"
+                          style={{
+                            width: `${Math.max(2, Math.round((bucket.totalTokens / maxTimelineTokens) * 100))}%`,
+                          }}
+                        />
                       </div>
-                    ))}
-                  </div>
-                </section>
+                      <span className="usage-num">{formatNumber(bucket.totalTokens)} tok</span>
+                      <span className="usage-num">{formatNumber(bucket.turns)} turns</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </section>
           </TabPanel>
 
-          {/* Tab 2: Chats & Workflows Hotspots */}
+          {/* Tab 4: Chats & Workflows Hotspots */}
           <TabPanel>
             <section className="usage-section">
               <h2 className="usage-section-heading">Breakdown by surface</h2>
@@ -940,6 +935,41 @@ export function UsagePage({
                   </div>
                 </>
               )}
+            </section>
+          </TabPanel>
+
+          {/* Tab 6: Export */}
+          <TabPanel>
+            <section className="usage-section" aria-label="Export usage report">
+              <div className="usage-export-grid">
+                <Button
+                  kind="tertiary"
+                  className="usage-export-button"
+                  disabled={exporting !== null}
+                  onClick={() => void handleExport("markdown")}
+                >
+                  <Download size={24} aria-hidden="true" />
+                  <span>{exporting === "markdown" ? "Exporting…" : "Markdown"}</span>
+                </Button>
+                <Button
+                  kind="tertiary"
+                  className="usage-export-button"
+                  disabled={exporting !== null}
+                  onClick={() => void handleExport("json")}
+                >
+                  <Download size={24} aria-hidden="true" />
+                  <span>{exporting === "json" ? "Exporting…" : "JSON"}</span>
+                </Button>
+                <Button
+                  kind="tertiary"
+                  className="usage-export-button"
+                  disabled={exporting !== null}
+                  onClick={() => void handleExport("csv")}
+                >
+                  <Download size={24} aria-hidden="true" />
+                  <span>{exporting === "csv" ? "Exporting…" : "CSV"}</span>
+                </Button>
+              </div>
             </section>
           </TabPanel>
         </TabPanels>

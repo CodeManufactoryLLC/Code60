@@ -40,49 +40,72 @@
       min-inline-size: 10rem;
     }
 
-    .usage-export-actions {
+    .usage-export-grid {
       display: flex;
       flex-wrap: wrap;
+      gap: space.$spacing-05;
+    }
+
+    .usage-export-button {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       gap: space.$spacing-03;
+      inline-size: 7.5rem;
+      block-size: 7.5rem;
+      min-inline-size: 7.5rem;
+      min-block-size: 7.5rem;
+      padding: space.$spacing-04;
+      text-align: center;
     }
 
-    .usage-kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    .usage-dashboard {
+      display: flex;
+      flex-direction: column;
+      gap: space.$spacing-07;
+    }
+
+    .usage-dashboard-group {
+      display: flex;
+      flex-direction: column;
       gap: space.$spacing-04;
-      margin-block-end: space.$spacing-06;
+
+      &:not(:first-child) {
+        padding-block-start: space.$spacing-06;
+        border-block-start: 1px solid var(--cds-border-subtle-01);
+      }
+
+      .usage-section-heading {
+        margin: 0;
+      }
     }
 
-    .usage-kpi-tile {
+    .usage-figure-grid {
+      margin: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+      gap: space.$spacing-05 space.$spacing-07;
+    }
+
+    .usage-figure {
       display: flex;
       flex-direction: column;
       gap: space.$spacing-02;
-      padding: space.$spacing-05;
-      border: 1px solid var(--cds-border-subtle-01);
+      min-inline-size: 0;
     }
 
-    .usage-kpi-label {
+    .usage-figure-label {
       @include type.type-style('label-01');
+      margin: 0;
       color: var(--cds-text-secondary);
     }
 
-    .usage-kpi-value {
+    .usage-figure-value {
       @include type.type-style('productive-heading-04');
+      margin: 0;
       color: var(--cds-text-primary);
       font-variant-numeric: tabular-nums;
-    }
-
-    .usage-kpi-meta {
-      @include type.type-style('helper-text-01');
-      color: var(--cds-text-secondary);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .usage-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: space.$spacing-02;
-      align-items: center;
     }
 
     .usage-section {
