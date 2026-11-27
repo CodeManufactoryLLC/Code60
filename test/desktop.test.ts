@@ -5570,6 +5570,12 @@ describe("orchestrated workers over ACP", {
     await fs.writeFile(join(projectDir, ".env"), "SECRET=123\n");
     await fs.writeFile(join(projectDir, "README.md"), "# Demo\n");
 
+    const beforeGit = await call("code60_codebase_index_status", {});
+    expect(beforeGit.status).toBeGreaterThanOrEqual(400);
+    expect(beforeGit.body.error).toContain("code60_setup_git");
+    expect(beforeGit.body.error).toContain("inspect");
+    const trackSpy = vi.spyOn(controller.codebase, "trackRepository");
+
     const inspected = await call("code60_setup_git", { scope, action: "inspect" });
     expect(inspected.status, inspected.body.error).toBe(200);
     expect(inspected.body.result).toMatchObject({
@@ -5616,6 +5622,7 @@ describe("orchestrated workers over ACP", {
     expect(committed).toContain("README.md");
     expect(committed).not.toContain(".env");
     expect(controller.snapshot().gitReadiness?.status).toBe("ready");
+    expect(trackSpy).toHaveBeenCalledWith(projectDir);
 
     // Calling setup again on a ready repository is an idempotent no-op.
     const repeat = await call("code60_setup_git", { scope, action: "setup" });

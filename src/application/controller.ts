@@ -1582,6 +1582,7 @@ export class ApplicationHost {
               this.history = history;
               this.poller.invalidate(["history", "worktrees", "files"]);
             }
+            if (state.status === "ready") this.codebase.trackRepository(project);
           }
           this.gitOperation = false;
           this.changed();
@@ -3516,6 +3517,15 @@ export class ApplicationHost {
     }
     if (isCodebaseSearchTool(name)) {
       if (!this.workspace?.dir) throw new Error("Open a Git project before searching the codebase");
+      const readiness = await this.checkProjectGit(this.workspace.dir);
+      if (readiness.status !== "ready") {
+        if (readiness.status === "not_repository" || readiness.status === "no_commits") {
+          throw new Error(
+            `Set up Git to enable vector codebase search. ${readiness.message} Call code60_get_context and code60_setup_git with action 'inspect' to inspect existing files and Git author identity and guide the user through Git setup.`,
+          );
+        }
+        throw new Error(`Set up Git to enable vector codebase search. ${readiness.message}`);
+      }
       return this.codebase.callTool("bound", name, args, this.workspace.dir, signal);
     }
     if (isKnowledgeTool(name))
