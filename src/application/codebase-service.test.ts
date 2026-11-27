@@ -75,6 +75,10 @@ function createInProcessWorker(dbPath: string, embedder: RagEmbedder): CodebaseW
       switch (op) {
         case "status":
           return store.getRepository(String(args[0])) as T;
+        case "listRepositories":
+          return store.listRepositories() as T;
+        case "deleteRepository":
+          return store.deleteRepository(String(args[0])) as T;
         case "indexedFiles":
           return [...store.indexedFiles(String(args[0])).entries()] as T;
         case "upsertRepository":
@@ -182,6 +186,35 @@ describe("CodebaseIndexService", () => {
       expect(status.status).toBe("ready");
       expect(status.fileCount).toBe(3);
       expect(status.chunkCount).toBe(3);
+
+      let notifications = 0;
+      const unsubscribe = service.subscribe(() => {
+        notifications++;
+      });
+      try {
+        const overview = await service.overview();
+        expect(overview.repositories).toHaveLength(1);
+        const repoEntry = overview.repositories[0];
+        if (!repoEntry) throw new Error("Expected indexed repository in overview");
+        expect(repoEntry.fileCount).toBe(3);
+        expect(repoEntry.chunkCount).toBe(3);
+        expect(repoEntry.sizeBytes).toBeGreaterThan(0);
+        expect(repoEntry.lastDurationMs).toBeGreaterThanOrEqual(0);
+        expect(repoEntry.languages).toEqual([{ language: "typescript", files: 3, chunks: 3 }]);
+
+        const byKey = await service.searchByKey(repoEntry.repoKey, {
+          query: "alphaScheduler",
+          limit: 5,
+        });
+        expect(byKey.status).toBe("ready");
+        expect(byKey.hits[0]?.path).toBe("alpha.ts");
+
+        expect(await service.removeByKey(repoEntry.repoKey)).toBe(true);
+        expect(notifications).toBeGreaterThan(0);
+        expect((await service.overview()).repositories).toHaveLength(0);
+      } finally {
+        unsubscribe();
+      }
     } finally {
       await service.close();
     }

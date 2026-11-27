@@ -1,12 +1,15 @@
 import { type ChildProcess, fork } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { realpath } from "node:fs/promises";
+import { realpath, stat } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   type BoundCodebaseSearchArgs,
   CODEBASE_SEARCH_SERVER_NAME,
   type CodebaseFetchStatus,
+  type CodebaseIndexedRepository,
+  type CodebaseIndexOverview,
   type CodebaseIndexProgress,
   type CodebaseIndexStatus,
   type CodebaseSearchResult,
@@ -29,6 +32,7 @@ import {
   CODEBASE_MODEL_IDENTITY,
   CODEBASE_MODEL_LABEL,
   type StoredRepository,
+  type StoredRepositorySummary,
 } from "./codebase-store.js";
 import type {
   CodebaseFinalizeInput,
@@ -308,6 +312,8 @@ interface ActiveIndexJob {
  * and Scheduled Agents.
  */
 export class CodebaseIndexService {
+  private readonly stateRoot: string;
+  private readonly customWorker: boolean;
   private readonly worker: CodebaseWorkerClient;
   private readonly fetchCooldownMs: number;
   private readonly inlineWaitMs: number;
@@ -315,7 +321,9 @@ export class CodebaseIndexService {
   private readonly tracked = new Set<string>();
   private readonly lastFetchAt = new Map<string, number>();
   private readonly activeJobs = new Map<string, ActiveIndexJob>();
+  private readonly listeners = new Set<() => void>();
   private readonly shutdownAbort = new AbortController();
+  private lastProgressNotify = 0;
   private refreshTimer: ReturnType<typeof setInterval> | undefined;
   private closed = false;
 
@@ -325,6 +333,8 @@ export class CodebaseIndexService {
     private readonly git: Git,
     options: CodebaseServiceOptions = {},
   ) {
+    this.stateRoot = stateRoot;
+    this.customWorker = Boolean(options.worker);
     this.fetchCooldownMs = options.fetchCooldownMs ?? DEFAULT_FETCH_COOLDOWN_MS;
     this.inlineWaitMs = options.inlineWaitMs ?? DEFAULT_INLINE_WAIT_MS;
     this.refreshWaitMs = options.refreshWaitMs ?? DEFAULT_REFRESH_WAIT_MS;
@@ -340,6 +350,27 @@ export class CodebaseIndexService {
         }
       }, interval);
       this.refreshTimer.unref();
+    }
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notify(force = true): void {
+    if (this.listeners.size === 0) return;
+    const now = Date.now();
+    if (!force && now - this.lastProgressNotify < 250) return;
+    this.lastProgressNotify = now;
+    for (const listener of [...this.listeners]) {
+      try {
+        listener();
+      } catch {
+        /* Isolate subscriber errors from indexing work. */
+      }
     }
   }
 
@@ -411,10 +442,12 @@ export class CodebaseIndexService {
         if (this.activeJobs.get(resolved.repoKey) === job) {
           this.activeJobs.delete(resolved.repoKey);
         }
+        this.notify(true);
       },
     );
     job.promise = promise;
     this.activeJobs.set(resolved.repoKey, job);
+    this.notify(true);
     return promise;
   }
 
@@ -424,6 +457,7 @@ export class CodebaseIndexService {
     forceFetch: boolean,
     signal: AbortSignal,
   ): Promise<StoredRepository> {
+    const startedAt = Date.now();
     const codebaseGit = this.requireCodebaseGit();
     const lastFetch = this.lastFetchAt.get(resolved.repoKey) ?? 0;
     const shouldFetch = forceFetch || Date.now() - lastFetch >= this.fetchCooldownMs;
@@ -549,6 +583,7 @@ export class CodebaseIndexService {
           filesTotal: eligible.length,
           chunksIndexed: totalChunks,
         };
+        this.notify(false);
         if (batchResult.truncated) break;
       }
 
@@ -564,6 +599,7 @@ export class CodebaseIndexService {
             commitSha: snapshot.commit,
             indexedAt: new Date().toISOString(),
             lastSyncAt: now,
+            durationMs: Math.max(0, Date.now() - startedAt),
             fetchStatus: effectiveFetchStatus,
             fetchWarning: snapshot.fetchWarning ?? null,
             deletedPaths,
@@ -586,6 +622,7 @@ export class CodebaseIndexService {
               branch: snapshot.branch,
               ref: snapshot.ref,
               lastSyncAt: now,
+              lastDurationMs: Math.max(0, Date.now() - startedAt),
               fetchStatus: effectiveFetchStatus,
               fetchWarning: snapshot.fetchWarning ?? null,
               status: existing?.status === "ready" ? "ready" : "error",
@@ -748,6 +785,145 @@ export class CodebaseIndexService {
       ...(active ? { progress: { ...active.progress } } : {}),
       ...(stored.lastError ? { error: stored.lastError } : {}),
     };
+  }
+
+  private async storeFileBytes(): Promise<number> {
+    let total = 0;
+    for (const file of ["index.sqlite", "index.sqlite-wal"]) {
+      const info = await stat(join(this.stateRoot, file)).catch(() => null);
+      if (info) total += info.size;
+    }
+    return total;
+  }
+
+  /** Returns an overview of all indexed repositories and active indexing jobs for the UI. */
+  async overview(signal?: AbortSignal): Promise<CodebaseIndexOverview> {
+    if (this.closed) throw new Error("Codebase search service is closing");
+    const storeBytes = await this.storeFileBytes();
+    const dbExists = existsSync(join(this.stateRoot, "index.sqlite"));
+    const stored =
+      !this.customWorker && !dbExists && this.activeJobs.size === 0
+        ? []
+        : await this.worker.call<StoredRepositorySummary[]>("listRepositories", [], signal);
+    const byKey = new Map<string, CodebaseIndexedRepository>();
+    for (const repo of stored) {
+      const active = this.activeJobs.get(repo.repoKey);
+      byKey.set(repo.repoKey, {
+        repoKey: repo.repoKey,
+        name: basename(repo.topLevel) || repo.topLevel,
+        topLevel: repo.topLevel,
+        commonDir: repo.commonDir,
+        branch: repo.branch,
+        ref: repo.ref,
+        commit: repo.commitSha,
+        status: active ? "indexing" : repo.status,
+        modelId: repo.modelId,
+        chunkerId: repo.chunkerId,
+        fileCount: repo.fileCount,
+        chunkCount: repo.chunkCount,
+        sizeBytes: repo.sizeBytes,
+        indexedAt: repo.indexedAt,
+        lastSyncAt: repo.lastSyncAt,
+        lastDurationMs: repo.lastDurationMs,
+        fetchStatus: repo.fetchStatus,
+        fetchWarning: repo.fetchWarning,
+        lastError: repo.lastError,
+        ...(active ? { progress: { ...active.progress } } : {}),
+        languages: repo.languages,
+      });
+    }
+    for (const [repoKey, job] of this.activeJobs.entries()) {
+      if (byKey.has(repoKey)) continue;
+      const snap = job.snapshot;
+      const topLevel = snap?.topLevel ?? repoKey;
+      byKey.set(repoKey, {
+        repoKey,
+        name: basename(topLevel) || topLevel,
+        topLevel,
+        commonDir: snap?.commonDir ?? "",
+        branch: snap?.branch ?? "main",
+        ref: snap?.ref ?? "HEAD",
+        commit: snap?.commit ?? null,
+        status: "indexing",
+        modelId: CODEBASE_MODEL_IDENTITY,
+        chunkerId: CODEBASE_CHUNKER_IDENTITY,
+        fileCount: job.progress.filesIndexed,
+        chunkCount: job.progress.chunksIndexed,
+        sizeBytes: 0,
+        indexedAt: null,
+        lastSyncAt: new Date().toISOString(),
+        lastDurationMs: null,
+        fetchStatus: snap?.fetchStatus === "skipped" ? "cached" : (snap?.fetchStatus ?? "skipped"),
+        fetchWarning: snap?.fetchWarning ?? null,
+        lastError: null,
+        progress: { ...job.progress },
+        languages: [],
+      });
+    }
+    return {
+      generatedAt: new Date().toISOString(),
+      model: CODEBASE_MODEL_LABEL,
+      storeBytes,
+      maxRepositories: CODEBASE_LIMITS.maxRepositories,
+      maxChunksPerRepository: CODEBASE_LIMITS.maxChunksPerRepo,
+      repositories: [...byKey.values()],
+    };
+  }
+
+  private async resolveStoredByKey(
+    repoKey: string,
+    signal?: AbortSignal,
+  ): Promise<StoredRepository> {
+    const repo = await this.worker.call<StoredRepository | null>("status", [repoKey], signal);
+    if (!repo) throw new Error("Repository index not found");
+    return repo;
+  }
+
+  /** Forces an immediate `origin/main` fetch and incremental re-index for a stored repository key. */
+  async reindexByKey(repoKey: string, signal?: AbortSignal): Promise<{ started: boolean }> {
+    if (this.closed) throw new Error("Codebase search service is closing");
+    const stored = await this.resolveStoredByKey(repoKey, signal);
+    if (this.activeJobs.has(repoKey)) return { started: false };
+    void this.ensureIndexed(stored.topLevel, { forceFetch: true }).catch(() => {});
+    return { started: true };
+  }
+
+  /** Validates a Git repository directory and starts indexing its `main` branch. */
+  async indexDirectory(cwd: string): Promise<{ repoKey: string }> {
+    if (this.closed) throw new Error("Codebase search service is closing");
+    const resolved = await this.resolveRepository(cwd);
+    if (this.tracked.size < CODEBASE_LIMITS.maxRepositories) this.tracked.add(resolved.topLevel);
+    void this.ensureIndexed(resolved.topLevel, { forceFetch: true }).catch(() => {});
+    return { repoKey: resolved.repoKey };
+  }
+
+  /** Cancels any active indexing job for `repoKey` and removes its derived SQLite index rows. */
+  async removeByKey(repoKey: string): Promise<boolean> {
+    if (this.closed) throw new Error("Codebase search service is closing");
+    const active = this.activeJobs.get(repoKey);
+    if (active) {
+      active.abort.abort();
+      await active.promise.catch(() => {});
+    }
+    const stored = await this.worker
+      .call<StoredRepository | null>("status", [repoKey])
+      .catch(() => null);
+    if (stored) this.tracked.delete(stored.topLevel);
+    this.lastFetchAt.delete(repoKey);
+    const removed = await this.worker.call<boolean>("deleteRepository", [repoKey]);
+    this.notify(true);
+    return removed;
+  }
+
+  /** Runs a hybrid vector + FTS5 search against a stored repository identified by `repoKey`. */
+  async searchByKey(
+    repoKey: string,
+    args: BoundCodebaseSearchArgs,
+    signal?: AbortSignal,
+  ): Promise<CodebaseSearchResult> {
+    if (this.closed) throw new Error("Codebase search service is closing");
+    const stored = await this.resolveStoredByKey(repoKey, signal);
+    return this.search(stored.topLevel, args, signal);
   }
 
   /** Handles a built-in codebase MCP tool call for either Relay (explicit cwd) or bound sessions. */

@@ -1,6 +1,6 @@
 import { dirname } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { CodebaseFetchStatus } from "../bridge/index.js";
+import type { CodebaseFetchStatus, CodebaseLanguageStat } from "../bridge/index.js";
 import {
   CODEBASE_CHUNKER,
   CODEBASE_LIMITS,
@@ -26,12 +26,18 @@ export interface StoredRepository {
   chunkerId: string;
   fileCount: number;
   chunkCount: number;
+  sizeBytes: number;
   indexedAt: string | null;
   lastSyncAt: string;
+  lastDurationMs: number | null;
   fetchStatus: CodebaseFetchStatus;
   fetchWarning: string | null;
   status: "unindexed" | "indexing" | "ready" | "error";
   lastError: string | null;
+}
+
+export interface StoredRepositorySummary extends StoredRepository {
+  languages: CodebaseLanguageStat[];
 }
 
 export interface StoredChunkInput {
@@ -82,8 +88,13 @@ function mapRepository(row: Record<string, unknown>): StoredRepository {
     chunkerId: String(row.chunker_id),
     fileCount: Number(row.file_count),
     chunkCount: Number(row.chunk_count),
+    sizeBytes: Number(row.size_bytes ?? 0),
     indexedAt: row.indexed_at === null ? null : String(row.indexed_at),
     lastSyncAt: String(row.last_sync_at),
+    lastDurationMs:
+      row.last_duration_ms === null || row.last_duration_ms === undefined
+        ? null
+        : Number(row.last_duration_ms),
     fetchStatus: String(row.fetch_status) as CodebaseFetchStatus,
     fetchWarning: row.fetch_warning === null ? null : String(row.fetch_warning),
     status: String(row.status) as StoredRepository["status"],
@@ -115,8 +126,10 @@ export class CodebaseStore {
         chunker_id TEXT NOT NULL,
         file_count INTEGER NOT NULL DEFAULT 0,
         chunk_count INTEGER NOT NULL DEFAULT 0,
+        size_bytes INTEGER NOT NULL DEFAULT 0,
         indexed_at TEXT,
         last_sync_at TEXT NOT NULL,
+        last_duration_ms INTEGER,
         fetch_status TEXT NOT NULL,
         fetch_warning TEXT,
         status TEXT NOT NULL,
@@ -155,6 +168,17 @@ export class CodebaseStore {
         INSERT INTO chunks_fts(rowid, path, text) VALUES (new.id, new.path, new.text);
       END;
     `);
+    this.ensureColumn("size_bytes", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("last_duration_ms", "INTEGER");
+  }
+
+  private ensureColumn(name: string, definition: string): void {
+    const columns = this.db.prepare("PRAGMA table_info(repositories)").all() as Array<{
+      name: string;
+    }>;
+    if (!columns.some((col) => col.name === name)) {
+      this.db.exec(`ALTER TABLE repositories ADD COLUMN ${name} ${definition}`);
+    }
   }
 
   get root(): string {
@@ -180,6 +204,7 @@ export class CodebaseStore {
     ref: string;
     commitSha?: string | null;
     lastSyncAt: string;
+    lastDurationMs?: number | null;
     fetchStatus: CodebaseFetchStatus;
     fetchWarning?: string | null;
     status: StoredRepository["status"];
@@ -196,9 +221,9 @@ export class CodebaseStore {
         .prepare(`
           INSERT INTO repositories (
             repo_key, common_dir, top_level, branch, ref, commit_sha,
-            model_id, chunker_id, file_count, chunk_count, indexed_at,
-            last_sync_at, fetch_status, fetch_warning, status, last_error
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?)
+            model_id, chunker_id, file_count, chunk_count, size_bytes, indexed_at,
+            last_sync_at, last_duration_ms, fetch_status, fetch_warning, status, last_error
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, NULL, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(repo_key) DO UPDATE SET
             common_dir = excluded.common_dir,
             top_level = excluded.top_level,
@@ -219,11 +244,16 @@ export class CodebaseStore {
               WHEN repositories.model_id != excluded.model_id OR repositories.chunker_id != excluded.chunker_id THEN 0
               ELSE repositories.chunk_count
             END,
+            size_bytes = CASE
+              WHEN repositories.model_id != excluded.model_id OR repositories.chunker_id != excluded.chunker_id THEN 0
+              ELSE repositories.size_bytes
+            END,
             indexed_at = CASE
               WHEN repositories.model_id != excluded.model_id OR repositories.chunker_id != excluded.chunker_id THEN NULL
               ELSE repositories.indexed_at
             END,
             last_sync_at = excluded.last_sync_at,
+            last_duration_ms = COALESCE(excluded.last_duration_ms, repositories.last_duration_ms),
             fetch_status = excluded.fetch_status,
             fetch_warning = excluded.fetch_warning,
             status = excluded.status,
@@ -239,6 +269,7 @@ export class CodebaseStore {
           CODEBASE_MODEL_IDENTITY,
           CODEBASE_CHUNKER_IDENTITY,
           input.lastSyncAt,
+          input.lastDurationMs ?? null,
           input.fetchStatus,
           input.fetchWarning ?? null,
           input.status,
@@ -320,6 +351,7 @@ export class CodebaseStore {
     commitSha: string;
     indexedAt: string;
     lastSyncAt: string;
+    durationMs?: number | null;
     fetchStatus: CodebaseFetchStatus;
     fetchWarning?: string | null;
     deletedPaths: readonly string[];
@@ -332,9 +364,12 @@ export class CodebaseStore {
       }
       const stats = this.db
         .prepare(
-          "SELECT COUNT(DISTINCT path) AS files, COUNT(*) AS chunks FROM chunks WHERE repo_key = ?",
+          `SELECT COUNT(DISTINCT path) AS files,
+                  COUNT(*) AS chunks,
+                  COALESCE(SUM(LENGTH(CAST(text AS BLOB)) + LENGTH(vector)), 0) AS bytes
+           FROM chunks WHERE repo_key = ?`,
         )
-        .get(input.repoKey) as { files: number; chunks: number };
+        .get(input.repoKey) as { files: number; chunks: number; bytes: number };
       this.db
         .prepare(`
           UPDATE repositories
@@ -347,8 +382,10 @@ export class CodebaseStore {
               chunker_id = ?,
               file_count = ?,
               chunk_count = ?,
+              size_bytes = ?,
               indexed_at = ?,
               last_sync_at = ?,
+              last_duration_ms = ?,
               fetch_status = ?,
               fetch_warning = ?,
               status = 'ready',
@@ -365,8 +402,10 @@ export class CodebaseStore {
           CODEBASE_CHUNKER_IDENTITY,
           Number(stats.files ?? 0),
           Number(stats.chunks ?? 0),
+          Number(stats.bytes ?? 0),
           input.indexedAt,
           input.lastSyncAt,
+          input.durationMs ?? null,
           input.fetchStatus,
           input.fetchWarning ?? null,
           input.repoKey,
@@ -380,6 +419,59 @@ export class CodebaseStore {
     const updated = this.getRepository(input.repoKey);
     if (!updated) throw new Error("Repository metadata disappeared after indexing");
     return updated;
+  }
+
+  listRepositories(): StoredRepositorySummary[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM repositories
+         ORDER BY COALESCE(indexed_at, last_sync_at) DESC, top_level ASC`,
+      )
+      .all() as Array<Record<string, unknown>>;
+    const sizeBackfill = new Map<string, number>();
+    const sizeRows = this.db
+      .prepare(
+        `SELECT repo_key, COALESCE(SUM(LENGTH(CAST(text AS BLOB)) + LENGTH(vector)), 0) AS bytes
+         FROM chunks GROUP BY repo_key`,
+      )
+      .all() as Array<{ repo_key: string; bytes: number }>;
+    for (const entry of sizeRows) {
+      sizeBackfill.set(String(entry.repo_key), Number(entry.bytes ?? 0));
+    }
+    const languageRows = this.db
+      .prepare(
+        `SELECT repo_key, language, COUNT(DISTINCT path) AS files, COUNT(*) AS chunks
+         FROM chunks
+         GROUP BY repo_key, language
+         ORDER BY chunks DESC, language ASC`,
+      )
+      .all() as Array<{ repo_key: string; language: string; files: number; chunks: number }>;
+    const languagesByRepo = new Map<string, CodebaseLanguageStat[]>();
+    for (const row of languageRows) {
+      const key = String(row.repo_key);
+      const list = languagesByRepo.get(key) ?? [];
+      list.push({
+        language: String(row.language),
+        files: Number(row.files ?? 0),
+        chunks: Number(row.chunks ?? 0),
+      });
+      languagesByRepo.set(key, list);
+    }
+    return rows.map((row) => {
+      const repo = mapRepository(row);
+      const computedSize =
+        repo.sizeBytes > 0 ? repo.sizeBytes : (sizeBackfill.get(repo.repoKey) ?? 0);
+      return {
+        ...repo,
+        sizeBytes: computedSize,
+        languages: languagesByRepo.get(repo.repoKey) ?? [],
+      };
+    });
+  }
+
+  deleteRepository(repoKey: string): boolean {
+    const result = this.db.prepare("DELETE FROM repositories WHERE repo_key = ?").run(repoKey);
+    return Number(result.changes ?? 0) > 0;
   }
 
   markSync(input: {

@@ -27,7 +27,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: No confirmation; navigation only.
-- Limits: Chat is a top-level navigation button opening Relay and Carbon's Chat History panel. Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments are expandable navigation groups. Opening a destination reveals its group. Skip to main content moves keyboard focus past the navigation to the current page. Conversations keep their own actions in Chat History. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.
+- Limits: Chat is a top-level navigation button opening Relay and Carbon's Chat History panel. Automate, Connect, Context, Customize, Personalize, Manage, Contributor Tools and Experiments are expandable navigation groups. Opening a destination reveals its group. Skip to main content moves keyboard focus past the navigation to the current page. Conversations keep their own actions in Chat History. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.
 - Pages: none
 - Settings sections: none
 - Tools: none
@@ -219,7 +219,7 @@ Schema version: 1
 - ID: `commands`
 - Status: shipped
 - Purpose: Use bundled or saved reusable prompts with a leading $name. Bundled commands: $create-command: Create a reusable $ command from your instructions. $plan: Propose a plan for your request and wait for Code60 acceptance. $business-evaluation: Plan an evidence-based business evaluation, then wait for Code60 acceptance. $catch-me-up: Explain the broader context and anything I may have missed. $big-picture: Step back from the details and reassess the value and approach. $pushback: Challenge your conclusion and re-evaluate the evidence. $simplify: Explain the current topic in simple, plain language.
-- Access: Customize → Commands (also Apps → Commands); project composer / or $ command picker
+- Access: Context → Commands (also Apps → Commands); project composer / or $ command picker
 - Prerequisite: database
 - Agent access: existing-tools
 - Confirmation: Existing permissions apply.
@@ -247,7 +247,7 @@ Schema version: 1
 - ID: `prompts`
 - Status: shipped
 - Purpose: Inspect all 44 internal prompts by canonical dotted ID and customize the 10 editable project, handoff, and utility templates.
-- Access: Customize → Internal Prompts (also Apps → Internal Prompts) → filter by ID/name and Save, Discard changes, or Reset to default
+- Access: Context → Internal Prompts (also Apps → Internal Prompts) → filter by ID/name and Save, Discard changes, or Reset to default
 - Prerequisite: database
 - Agent access: read
 - Confirmation: Existing permissions apply.
@@ -331,7 +331,7 @@ Schema version: 1
 - ID: `memory`
 - Status: shipped
 - Purpose: Learn and recall scoped evidence when enabled.
-- Access: Apps → Memory; Apps → Data Viewer → Memories
+- Access: Context → Memory (also Apps → Memory); Apps → Data Viewer → Memories
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Existing permissions apply.
@@ -578,17 +578,17 @@ Schema version: 1
 - Settings sections: none
 - Tools: `code60_get_activity_context`, `code60_report_activity`
 
-## Vector codebase search
+## Vector Search
 
 - ID: `codebase-search`
 - Status: shipped
-- Purpose: Automatically index the latest main branch of Git repositories with Code60's bundled offline ONNX embedding engine and run hybrid semantic and lexical code search.
-- Access: Relay, Custom Assistants, project chats, subagents, Workflow Engine, and Scheduled Agents → code60_search_codebase and code60_codebase_index_status
+- Purpose: Automatically index the latest main branch of Git repositories with Code60's bundled offline ONNX embedding engine, inspect indexed repositories and storage sizes under Context → Vector Search, and run hybrid semantic and lexical code search.
+- Access: Context → Vector Search (also Apps → Vector Search); Relay, Custom Assistants, project chats, subagents, Workflow Engine, and Scheduled Agents → code60_search_codebase and code60_codebase_index_status
 - Prerequisite: git
 - Agent access: read
-- Confirmation: Read-only; never modifies repositories, branches, or working trees.
-- Limits: Indexes tracked text files on main (non-mutating origin fetch when configured, falling back to local main or default branch) without modifying the working tree or branches. Shared across linked worktrees via git-common-dir. Private SQLite + FTS5 index under application state; runs ONNX inference in a dedicated lazy Node sidecar. Relay and Custom Assistants require an explicit cwd; project chats, subagents, Workflow Engine, and Scheduled Agents are strictly bound to their target repository. Retrieved code is untrusted data.
-- Pages: none
+- Confirmation: Read-only for agents; removing a repository index from Context → Vector Search requires browser confirmation and deletes only derived index rows while preserving source files and Git history.
+- Limits: No database is required for the Vector Search page. Indexes tracked text files on main (non-mutating origin fetch when configured, falling back to local main or default branch) without modifying the working tree or branches. Shared across linked worktrees via git-common-dir. Private SQLite + FTS5 index under application state; runs ONNX inference in a dedicated lazy Node sidecar. Relay and Custom Assistants require an explicit cwd; project chats, subagents, Workflow Engine, and Scheduled Agents are strictly bound to their target repository. Retrieved code is untrusted data.
+- Pages: `vector-search`
 - Settings sections: none
 - Tools: `code60_search_codebase`, `code60_codebase_index_status`
 

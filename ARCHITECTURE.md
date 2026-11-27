@@ -975,6 +975,17 @@ without loosening deny-by-default permissions for any other tool. External MCP
 connectors and orchestrator tools remain excluded from workers, workflows, and
 scheduled jobs.
 
+The database-independent **Context → Vector Search** page (under the **Context**
+sidebar group alongside **Memory**, **Commands**, and **Internal Prompts**) lets
+humans inspect all currently indexed repositories (status, branch/commit, file
+count, chunk count, byte size, last run timestamp/duration, and expandable Git
+snapshot and language breakdown), trigger manual re-indexing, pick a Git folder
+through the host picker to index, remove a repository's derived index rows after
+browser confirmation, and test hybrid queries in a dedicated **Query** tab.
+Browser operations accept only opaque repository keys (`repoKey`), never raw
+filesystem paths; opening the page reads SQLite metadata lazily without loading
+ONNX weights until indexing or querying runs.
+
 Exception for Tactics and stopped orchestration chats: a browser-safe versioned
 catalog supplies eight bundled prompt workflows. Only the composer opens the
 searchable native Tactics modal. Preview is distinct from Apply; Apply and Remove

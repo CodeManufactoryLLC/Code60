@@ -443,13 +443,16 @@ test("browser: Carbon application navigation, appearance controls and retained d
     await expect(page.locator("#panel-automations")).toBeFocused();
     await expectPageAlignment("#jobs-page-heading", "#panel-automations .cds--tabs");
     const customize = nav.getByRole("tablist", { name: "Customize", exact: true });
-    await expect(customize.getByRole("tab")).toHaveText([
-      "Custom Assistants",
-      "Internal Prompts",
+    await expect(customize.getByRole("tab")).toHaveText(["Custom Assistants", "MCP Servers"]);
+    await expandNavigation(page, "Context");
+    const contextNav = nav.getByRole("tablist", { name: "Context", exact: true });
+    await expect(contextNav.getByRole("tab")).toHaveText([
+      "Vector Search",
+      "Memory",
       "Commands",
-      "MCP Servers",
+      "Internal Prompts",
     ]);
-    await customize.getByRole("tab", { name: "Internal Prompts", exact: true }).click();
+    await contextNav.getByRole("tab", { name: "Internal Prompts", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Internal Prompts", level: 1, exact: true }),
     ).toBeVisible();
@@ -495,7 +498,7 @@ test("browser: Carbon application navigation, appearance controls and retained d
     );
     await expect(promptPanel.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
     await promptFilter.fill("");
-    await customize.getByRole("tab", { name: "Commands", exact: true }).click();
+    await contextNav.getByRole("tab", { name: "Commands", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Commands", level: 1, exact: true }),
     ).toBeVisible();
@@ -604,7 +607,7 @@ test("browser: Carbon application navigation, appearance controls and retained d
         await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible();
       }
     }
-    for (const groupName of ["Automate", "Customize"] as const)
+    for (const groupName of ["Automate", "Context", "Customize"] as const)
       await expandNavigation(page, groupName);
     await page.setViewportSize({ width: 1600, height: 1280 });
     await page.screenshot({ path: test.info().outputPath("sidebar-groups.png") });
@@ -1444,7 +1447,7 @@ test("browser: Carbon project commands retain arguments after a rejected send an
       }),
     );
     await start(page, fixture.directory);
-    await expandNavigation(page, "Customize");
+    await expandNavigation(page, "Context");
     await page.getByRole("tab", { name: "Commands", exact: true }).click();
     const commands = page.locator(".commands-page");
     await commands.getByRole("button", { name: "New command", exact: true }).click();

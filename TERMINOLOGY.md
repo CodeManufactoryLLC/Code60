@@ -54,7 +54,7 @@ Code60 Gateway runs in the background as a per-user service. Active agents, **Sc
 
 ## Internal Prompts
 
-**Internal Prompts** are the 44 system prompts under **Customize → Internal Prompts** that guide orchestration, handoffs, plans, reviews, memory, and utilities in Code60. Each prompt uses a unique lowercase dot-path identifier across 11 domains.
+**Internal Prompts** are the 44 system prompts under **Context → Internal Prompts** that guide orchestration, handoffs, plans, reviews, memory, and utilities in Code60. Each prompt uses a unique lowercase dot-path identifier across 11 domains.
 
 A user can edit or reset 10 project and utility templates for the active database, including the **Operating Contract**. The other 34 entries stay read-only to protect safety wrappers, strict JSON schemas, tactics, default `$` commands, and **Relay**.
 
@@ -76,7 +76,7 @@ Turning **Memory** off stops Memory Capture immediately and discards pending cap
 
 The Operating Contract is the instruction set that defines how a project orchestrator behaves in Code60's [Two-Layer Architecture](#two-layer-architecture). Code60 sends it on every new turn to guide delegation, planning, worker control, tool use, and responses.
 
-A user can edit its clauses under **Customize → Internal Prompts**. It guides assistant behavior and does not act as a security boundary.
+A user can edit its clauses under **Context → Internal Prompts**. It guides assistant behavior and does not act as a security boundary.
 
 ## Orchestration
 
@@ -113,7 +113,7 @@ Each job dispatches either a single-turn headless prompt under a deny-by-default
 
 **Vector Codebase Search** is Code60's local, read-only semantic and lexical search engine for Git repositories. It runs the local ONNX embedding engine (`jina-embeddings-v2-base-code`) alongside SQLite `FTS5` search in a separate Node.js worker process.
 
-[Code60 Gateway](#gateway) fetches `origin/main` when a remote exists, reads commit blobs directly without touching working files, and saves the private index in `$XDG_STATE_HOME/code60/codebase-index/index.sqlite`. **Relay**, **Custom Assistants**, project orchestrators, workers, **Workflows**, and **Scheduled Jobs** call `code60_search_codebase` and `code60_codebase_index_status` to search repository code.
+[Code60 Gateway](#gateway) fetches `origin/main` when a remote exists, reads commit blobs directly without touching working files, and saves the private index in `$XDG_STATE_HOME/code60/codebase-index/index.sqlite`. **Relay**, **Custom Assistants**, project orchestrators, workers, **Workflows**, and **Scheduled Jobs** call `code60_search_codebase` and `code60_codebase_index_status` to search repository code. A user can inspect repository indexes, storage sizes, and test queries under **Context → Vector Search**.
 
 ## Workflow
 

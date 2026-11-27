@@ -168,6 +168,73 @@ export interface CodebaseIndexStatus {
   error?: string;
 }
 
+export interface CodebaseLanguageStat {
+  language: string;
+  files: number;
+  chunks: number;
+}
+
+export interface CodebaseIndexedRepository {
+  repoKey: string;
+  name: string;
+  topLevel: string;
+  commonDir: string;
+  branch: string;
+  ref: string;
+  commit: string | null;
+  status: "unindexed" | "indexing" | "ready" | "error";
+  modelId: string;
+  chunkerId: string;
+  fileCount: number;
+  chunkCount: number;
+  sizeBytes: number;
+  indexedAt: string | null;
+  lastSyncAt: string;
+  lastDurationMs: number | null;
+  fetchStatus: CodebaseFetchStatus;
+  fetchWarning: string | null;
+  lastError: string | null;
+  progress?: CodebaseIndexProgress;
+  languages: CodebaseLanguageStat[];
+}
+
+export interface CodebaseIndexOverview {
+  generatedAt: string;
+  model: string;
+  storeBytes: number;
+  maxRepositories: number;
+  maxChunksPerRepository: number;
+  repositories: CodebaseIndexedRepository[];
+}
+
+const repoKeySchema = z
+  .string()
+  .regex(/^[0-9a-f]{64}$/, "Repository key must be a 64-character lowercase SHA-256 hex digest");
+
+const codebaseRepoKeyRequestSchema = z.strictObject({
+  repoKey: repoKeySchema,
+});
+
+const codebaseUiSearchRequestSchema = z.strictObject({
+  repoKey: repoKeySchema,
+  query: querySchema,
+  limit: limitSchema,
+  pathPrefix: pathPrefixSchema,
+  language: languageSchema,
+});
+
+export type CodebaseUiSearchRequest = z.output<typeof codebaseUiSearchRequestSchema>;
+
+export function parseCodebaseRepoKeyRequest(
+  value: unknown,
+): z.output<typeof codebaseRepoKeyRequestSchema> {
+  return parseCodebaseValue(codebaseRepoKeyRequestSchema, value ?? {});
+}
+
+export function parseCodebaseUiSearchRequest(value: unknown): CodebaseUiSearchRequest {
+  return parseCodebaseValue(codebaseUiSearchRequestSchema, value ?? {});
+}
+
 export interface McpCodebaseToolDefinition {
   kind: "codebase";
   name: CodebaseSearchTool;

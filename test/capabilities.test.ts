@@ -100,7 +100,7 @@ describe("browser capability catalog", () => {
       agentAccess: "human-only",
       access: expect.stringContaining("Left navigation sidebar"),
       limitations: expect.stringMatching(
-        /Chat is a top-level navigation button.*Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments.*Skip to main content/,
+        /Chat is a top-level navigation button.*Automate, Connect, Context, Customize, Personalize, Manage, Contributor Tools and Experiments.*Skip to main content/,
       ),
     });
     expect(

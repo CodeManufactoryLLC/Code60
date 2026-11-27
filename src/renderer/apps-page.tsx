@@ -14,6 +14,7 @@ const tasks: Record<string, string> = {
   "system-manager": "Check service health and recover jobs",
   "health-check": "Inspect backend, providers, services and disk health",
   usage: "Monitor provider token burn rates and inspect heavy chats and workflows",
+  "vector-search": "Inspect indexed repositories, storage size, and test hybrid code queries",
   "polling-settings": "Configure background polling",
   updates: "Check the installed version and update instructions",
 };

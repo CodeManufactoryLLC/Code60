@@ -475,6 +475,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     application.mcp.subscribe(() => emit("mcp-changed")),
     application.memory.subscribe(() => emit("memory-changed")),
     application.rag.subscribe((status) => emit("rag-status", status)),
+    application.codebase.subscribe(() => emit("codebase-index-changed")),
     application.terminals.subscribe((event) => emit("terminal-event", event)),
     application.terminals.subscribeChanges(() => emit("terminals-changed")),
     logs.subscribe(() => emit("logs-changed")),

@@ -6,6 +6,7 @@ export async function expandNavigation(
   group:
     | "Automate"
     | "Connect"
+    | "Context"
     | "Customize"
     | "Personalize"
     | "Manage"

@@ -61,6 +61,7 @@ describe("navigation registry", () => {
       "workflows",
       "usage",
       "mcp-servers",
+      "vector-search",
     ]);
     expect(pagesInGroup("primary")).toEqual([
       "home",
@@ -96,6 +97,7 @@ describe("navigation registry", () => {
     expect(pageAvailable("automations", null)).toBe(true);
     expect(pageAvailable("system-manager", null)).toBe(true);
     expect(pageAvailable("health-check", null)).toBe(true);
+    expect(pageAvailable("vector-search", null)).toBe(true);
     expect(pageAvailable("memories", null)).toBe(true);
     expect(pageAvailable("settings", null)).toBe(true);
     expect(pageAvailable("apps", null)).toBe(true);

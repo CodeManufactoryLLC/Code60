@@ -358,6 +358,7 @@ Code60 neither triggers nor blocks an [Agent Provider's](TERMINOLOGY.md#agent-pr
 - **Non-mutating Git sync:** [Code60 Gateway](TERMINOLOGY.md#gateway) fetches `origin/main` when a remote exists and reads commit blobs without altering local files, branches, or the Git index. When `origin` is offline or absent, Code60 indexes the local `main` branch or `HEAD`.
 - **Available surfaces:** **Relay**, **Custom Assistants**, project orchestrators, workers, **Workflows**, and **Scheduled Jobs** receive `code60_search_codebase` and `code60_codebase_index_status`. **Relay** and **Custom Assistants** pass an explicit repository path, while other surfaces search their active repository automatically.
 - **Local privacy and sharing:** Code60 runs CPU embeddings offline in a separate Node.js worker process and saves vectors in `$XDG_STATE_HOME/code60/codebase-index/index.sqlite`. Worktrees of the same repository share one index.
+- **Inspection and management:** Open **Context → Vector Search** to view every repository index, file and chunk counts, storage size, and last run time. That page also supports re-indexing, removal after confirmation, and live query tests.
 
 ## Plans and Workflows
 

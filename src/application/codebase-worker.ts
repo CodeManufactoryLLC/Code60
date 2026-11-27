@@ -45,6 +45,7 @@ export interface CodebaseFinalizeInput {
   commitSha: string;
   indexedAt: string;
   lastSyncAt: string;
+  durationMs?: number | null;
   fetchStatus: CodebaseFetchStatus;
   fetchWarning?: string | null;
   deletedPaths: readonly string[];
@@ -214,6 +215,10 @@ async function dispatch(op: string, args: unknown[]): Promise<unknown> {
   switch (op) {
     case "status":
       return store.getRepository(String(args[0]));
+    case "listRepositories":
+      return store.listRepositories();
+    case "deleteRepository":
+      return store.deleteRepository(String(args[0]));
     case "indexedFiles":
       return [...store.indexedFiles(String(args[0])).entries()];
     case "upsertRepository":

@@ -149,6 +149,12 @@ export function createBrowserClient(
     onRagStatus: (listener) => {
       return events.on("rag-status", listener);
     },
+    codebaseIndexOverview: () => rpc("codebase-index-overview"),
+    codebaseIndexReindex: (request) => rpc("codebase-index-reindex", request),
+    codebaseIndexAdd: () => rpc("codebase-index-add"),
+    codebaseIndexRemove: (request) => rpc("codebase-index-remove", request),
+    codebaseIndexSearch: (request) => rpc("codebase-index-search", request),
+    onCodebaseIndexChanged: (listener) => events.on("codebase-index-changed", listener),
     openWebLink: async (request) => requestWebLink(parseWebLink(request).url),
     queryLogs: (request: unknown) => rpc("logs-query", request),
     logDetail: (request: unknown) => rpc("logs-detail", request),

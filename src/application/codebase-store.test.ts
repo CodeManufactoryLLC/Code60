@@ -95,12 +95,24 @@ describe("CodebaseStore and codebase-worker", () => {
         commitSha: "c".repeat(40),
         indexedAt: now,
         lastSyncAt: now,
+        durationMs: 420,
         fetchStatus: "no_remote",
         deletedPaths: [],
       });
       expect(finalized.status).toBe("ready");
       expect(finalized.fileCount).toBe(2);
       expect(finalized.chunkCount).toBe(2);
+      expect(finalized.sizeBytes).toBeGreaterThan(6000);
+      expect(finalized.lastDurationMs).toBe(420);
+
+      const listed = store.listRepositories();
+      expect(listed).toHaveLength(1);
+      expect(listed[0]?.sizeBytes).toBe(finalized.sizeBytes);
+      expect(listed[0]?.lastDurationMs).toBe(420);
+      expect(listed[0]?.languages).toEqual([
+        { language: "python", files: 1, chunks: 1 },
+        { language: "typescript", files: 1, chunks: 1 },
+      ]);
 
       const authResults = await searchCodebaseStore(
         store,
@@ -141,6 +153,10 @@ describe("CodebaseStore and codebase-worker", () => {
       expect(updated.fileCount).toBe(1);
       expect(updated.chunkCount).toBe(1);
       expect([...store.indexedFiles(repoKey).keys()]).toEqual(["src/auth/token.ts"]);
+
+      expect(store.deleteRepository(repoKey)).toBe(true);
+      expect(store.listRepositories()).toEqual([]);
+      expect(store.deleteRepository(repoKey)).toBe(false);
     } finally {
       store.close();
     }
