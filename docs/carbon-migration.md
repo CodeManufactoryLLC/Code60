@@ -42,10 +42,7 @@ Authenticated IBM Carbon MCP documentation and code searches informed each famil
 | Search and diagnostics | [Search recovery](https://carbondesignsystem.com/building-blocks/core/patterns/search/#avoid-dead-ends) | Present the query, scope, results and selected record together. Distinguish literal matches from related sources used in the overview. Preserve a failed query so the operator can retry, and offer Clear search for no matches. |
 | Settings and builders | [Forms](https://carbondesignsystem.com/building-blocks/core/patterns/forms/) | Keep labels, related fields, dependent settings, preview and form actions together. Preserve edited values when the backend rejects a submission. |
 
-Carbon owns standard fields, button semantics, tabs, menu surfaces, table elements, theme tokens and composed dialogs. Code60 owns session and execution identity, cancellation, server cursors, revision checks, selection, evidence assembly and focus across view transitions. Monaco, trees, diffs, telemetry and transcript scrolling keep their specialist implementations. The shared stylesheet bridges these retained layouts to Carbon. The job stylesheet contains schedule-specific layout. Visual evidence and run-specific results are recorded in the worktree QA directory under `test-results/qa/carbon-full-app`.
-
-The [visual review and functional coverage](review/carbon-full-app/README.md) include before/after comparisons for the major operator workflows.
-
+Carbon owns standard fields, button semantics, tabs, menu surfaces, table elements, theme tokens and composed dialogs. Code60 owns session and execution identity, cancellation, server cursors, revision checks, selection, evidence assembly and focus across view transitions. Monaco, trees, diffs, telemetry and transcript scrolling keep their specialist implementations. The shared stylesheet bridges these retained layouts to Carbon. The job stylesheet contains schedule-specific layout.
 
 ## Modal dialogs
 
