@@ -14,11 +14,13 @@ import {
   type Config,
   type CoreDeps,
   DEFAULT_CONFIG,
+  isBuiltinCodebaseSearchPermission,
   loadConfig,
   type Orchestrator,
   openWorkspace,
   prepareRuns,
   recordedAgentAlive,
+  type SessionResourceFactory,
   UsageError,
 } from "../core/index.js";
 import { fileCode } from "../platform/index.js";
@@ -166,10 +168,16 @@ async function readPromptEvidence(
   };
 }
 
+export interface PromptHandlerToolOptions {
+  codeTools?: (repositoryPath: string) => SessionResourceFactory | undefined;
+  onRepositoryActive?: (repositoryPath: string) => void;
+}
+
 export function createPromptActionHandler(
   deps: CoreDeps,
   env: Readonly<NodeJS.ProcessEnv>,
   laneLimit = DEFAULT_PROMPT_LANE_LIMIT,
+  tools: PromptHandlerToolOptions = {},
 ): ActionHandler<"prompt"> {
   const configuration = () => loadConfig(deps.fs, env);
 
@@ -360,6 +368,8 @@ export function createPromptActionHandler(
             },
           },
         };
+        tools.onRepositoryActive?.(action.repository.path);
+        const sessionResources = tools.codeTools?.(action.repository.path);
         const prepared = await prepareRuns(
           preparationDeps,
           {
@@ -371,6 +381,8 @@ export function createPromptActionHandler(
             base,
             workspaceMode: "worktree",
             requireIsolation: true,
+            ...(sessionResources ? { sessionResources } : {}),
+            ...(sessionResources ? { allowPermission: isBuiltinCodebaseSearchPermission } : {}),
             usageAttribution: {
               surface: "scheduled-job",
               scheduleId: automation.id,

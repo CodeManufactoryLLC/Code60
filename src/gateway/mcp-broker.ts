@@ -26,6 +26,7 @@ export async function createMcpBroker(
   const entries = new Map<string, Entry>();
   let origin = "";
   let closing = false;
+  let closed: Promise<void> | undefined;
   const server = createServer((request, response) => {
     void (async () => {
       response.setHeader("Cache-Control", "no-store");
@@ -137,13 +138,16 @@ export async function createMcpBroker(
   return {
     expose,
     origin,
-    close: async () => {
-      closing = true;
-      for (const token of entries.keys()) revoke(token);
-      server.closeAllConnections();
-      await new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
-      );
+    close: () => {
+      closed ??= (async () => {
+        closing = true;
+        for (const token of entries.keys()) revoke(token);
+        server.closeAllConnections();
+        await new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve())),
+        );
+      })();
+      return closed;
     },
   };
 }

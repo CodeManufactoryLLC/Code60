@@ -40,11 +40,23 @@ describe("MCP initialization", () => {
     expect(
       relay.find((tool) => tool.name === "code60_dispatch_agent")?.inputSchema.properties,
     ).toHaveProperty("planTaskId");
+    expect(
+      relay.find((tool) => tool.name === "code60_search_codebase")?.inputSchema.properties,
+    ).toHaveProperty("cwd");
+    expect(
+      relay.find((tool) => tool.name === "code60_codebase_index_status")?.inputSchema.properties,
+    ).toHaveProperty("cwd");
     write.mockClear();
     vi.stubEnv("CODE60_MCP_ROLE", "");
     await handleMcpRequest({ jsonrpc: "2.0", id: 2, method: "tools/list" });
     const project = JSON.parse(String(write.mock.calls[0]?.[0])).result.tools as typeof relay;
     expect(project.some((tool) => tool.name === "code60_list_customizations")).toBe(true);
+    expect(
+      project.find((tool) => tool.name === "code60_search_codebase")?.inputSchema.properties,
+    ).not.toHaveProperty("cwd");
+    expect(
+      project.find((tool) => tool.name === "code60_codebase_index_status")?.inputSchema.properties,
+    ).not.toHaveProperty("cwd");
     expect(
       project.find((tool) => tool.name === "code60_create_plan")?.inputSchema.properties.tasks,
     ).toMatchObject({ items: { required: ["text"] } });

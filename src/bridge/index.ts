@@ -2,13 +2,25 @@ import { type ChatUndoResult, chatReferenceSchema } from "./chat-context.js";
 
 export {
   APPLICATION_CAPABILITIES,
+  type BoundCodebaseSearchArgs,
   type BrowserMode,
   type Capability,
+  CODEBASE_SEARCH_SERVER_NAME,
+  type CodebaseFetchStatus,
+  type CodebaseIndexedRepository,
+  type CodebaseIndexOverview,
+  type CodebaseIndexProgress,
+  type CodebaseIndexStatus,
+  type CodebaseLanguageStat,
+  type CodebaseSearchHit,
+  type CodebaseSearchResult,
   capabilityReference,
   capabilityReferences,
+  codebaseSearchToolsForRole,
   defaultableSelections,
   type Group,
   isAllowedBrowserTool,
+  isCodebaseSearchTool,
   isKnowledgeRelativePath,
   isKnowledgeTool,
   KNOWLEDGE_LIMITS,
@@ -31,6 +43,10 @@ export {
   pages,
   parentPageIds,
   parseBrowserRequest,
+  parseCodebaseRepoKeyRequest,
+  parseCodebaseSearchArgs,
+  parseCodebaseStatusArgs,
+  parseCodebaseUiSearchRequest,
   parseKnowledge,
   parseMcpConnectorDocument,
   settingsSections,
@@ -529,6 +545,14 @@ export interface ApplicationClient {
   cancelRag(requestId: string): Promise<void>;
   clearRag(request: import("./rag.js").RagIdentity): Promise<boolean>;
   onRagStatus(listener: (status: import("./rag.js").RagStatus) => void): () => void;
+  codebaseIndexOverview(): Promise<import("../contracts/index.js").CodebaseIndexOverview>;
+  codebaseIndexReindex(request: { repoKey: string }): Promise<{ started: boolean }>;
+  codebaseIndexAdd(): Promise<{ added: boolean; repoKey?: string }>;
+  codebaseIndexRemove(request: { repoKey: string }): Promise<{ removed: boolean }>;
+  codebaseIndexSearch(
+    request: import("../contracts/index.js").CodebaseUiSearchRequest,
+  ): Promise<import("../contracts/index.js").CodebaseSearchResult>;
+  onCodebaseIndexChanged(listener: () => void): () => void;
   /** Confirms an HTTP(S) destination natively; false means cancelled or already pending. */
   openWebLink(request: WebLink): Promise<boolean>;
   queryLogs(request: import("./logs.js").LogQuery): Promise<import("./logs.js").LogPage>;

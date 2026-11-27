@@ -40,7 +40,7 @@ function navigation(
 }
 
 describe("database connection navigation", () => {
-  it("shows the top-level Chat button followed by the seven navigation groups in order", () => {
+  it("shows the top-level Chat button followed by the eight navigation groups in order", () => {
     const html = navigation(null);
     expect(html).toContain('data-sidebar-item="chat"');
     expect(html).toContain('id="tab-chat"');
@@ -53,6 +53,7 @@ describe("database connection navigation", () => {
     expect(groups.map((group) => group.split('"')[0])).toEqual([
       "Automate",
       "Connect",
+      "Context",
       "Customize",
       "Personalize",
       "Manage",
@@ -66,7 +67,8 @@ describe("database connection navigation", () => {
     ).toEqual([
       ["automations", "workflows"],
       ["mcp-servers", "providers"],
-      ["custom-agents", "prompts", "commands", "customize-mcp-servers"],
+      ["vector-search", "memory", "commands", "prompts"],
+      ["custom-agents", "customize-mcp-servers"],
       ["appearance", "table-defaults", "text"],
       [
         "about",
@@ -83,6 +85,8 @@ describe("database connection navigation", () => {
     for (const label of [
       "Chat",
       "Workflows",
+      "Vector Search",
+      "Memory",
       "Custom Assistants",
       "Internal Prompts",
       "Table Defaults",
@@ -163,6 +167,8 @@ describe("database connection navigation", () => {
     for (const id of [
       "chat",
       "workflows",
+      "vector-search",
+      "settings-memory",
       "custom-agents",
       "mcp-servers",
       "settings-polling-settings",
@@ -185,6 +191,7 @@ describe("database connection navigation", () => {
   it.each([
     ["appearance", "Personalize"],
     ["about", "Manage"],
+    ["memory", "Context"],
     ["text", "Personalize"],
     ["polling-settings", "Manage"],
     ["updates", "Manage"],

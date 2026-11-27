@@ -2,11 +2,13 @@ import { copyFile, lstat, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
 import { samePath } from "../platform/index.js";
+import { type CodebaseGitOps, codebaseGit } from "./codebase.js";
 import { GitError, runGit, runSetupGit } from "./exec.js";
 import { coordinateMetadata } from "./metadata.js";
 import { type GitSetupOps, gitSetup } from "./setup.js";
 import { type TaskGit, taskGit } from "./tasks.js";
 
+export type { CodebaseGitOps, CodebaseMainSnapshot } from "./codebase.js";
 export type { GitReadiness, GitSetupFile, GitSetupOps } from "./setup.js";
 export type { TaskEntry, TaskGit } from "./tasks.js";
 
@@ -59,6 +61,7 @@ interface ReviewSnapshot {
 export interface Git {
   setup?: GitSetupOps;
   tasks?: TaskGit;
+  codebase?: CodebaseGitOps;
   repoInfo(cwd: string): Promise<RepoInfo>;
   listWorktrees(repoDir: string, options?: WorktreeReadOptions): Promise<GitWorktree[]>;
   /** Resolves a revision to a full commit hash. */
@@ -226,6 +229,7 @@ export function createGit(): Git {
   return {
     setup: gitSetup,
     tasks: taskGit,
+    codebase: codebaseGit,
     async reviewSnapshot(worktree, base, signal, captured) {
       const read = async (env: Record<string, string>) => {
         const tree = captured ?? (await runGit(["write-tree"], worktree, { env, signal })).trim();

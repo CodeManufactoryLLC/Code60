@@ -746,9 +746,13 @@ Persistence failure and low space stop dispatch.
 
 `prompt` actions use core headless single-turn execution with mandatory
 worktrees, the saved local base branch resolved at launch, explicit
-deny-by-default permissions and no MCP or implicit memory. `workflow` actions
+deny-by-default permissions (plus structured read-only approval for Code60's
+built-in `code60-code` vector codebase search tools bound to the job's pinned
+repository) and no external MCP servers or implicit memory. `workflow` actions
 branch from the saved local base branch resolved at launch, expose workflow
-`autoApprove`, run with no MCP or implicit memory through `DesktopWorkflows` so
+`autoApprove`, receive Code60's read-only `code60-code` vector codebase search
+tools bound to the workflow's repository with no external MCP servers or
+implicit memory through `DesktopWorkflows` so
 every run is viewable and interactable in Apps → Workflows, and reconcile on
 gateway restart against `DesktopWorkflows` (re-attaching active/paused runs and
 settling already terminal runs). Pin repository and provider identities for both
@@ -1018,6 +1022,50 @@ writes, without entering the controller action queue. Cancellation targets
 the current request UUID and runs on database replacement, renderer reload/loss,
 Stop all and shutdown. Sidecars are stopped before unfinished generations are
 removed. Page changes retain query/results; database changes reset them.
+
+### Approved vector codebase search
+
+Vector codebase search is a distinct read-only repository indexing capability
+separate from the manual conversation-history RAG experiment above. It reuses
+the bundled offline ONNX embedding engine (`jina-embeddings-v2-base-code`,
+768-dim INT8, 512-token chunks with 64-token overlap) in a lazy, bounded Node
+sidecar (`src/application/codebase-worker.ts`) combined with SQLite `FTS5`
+lexical matching via Reciprocal Rank Fusion (RRF).
+
+Code60 indexes the latest commit of each tracked repository's `main` branch
+using non-mutating Git operations (`git fetch --no-tags --quiet origin main`
+with `GIT_TERMINAL_PROMPT=0` when an `origin` remote is configured, falling
+back to `origin/HEAD`, local `main`, or `HEAD` when offline or without a remote).
+Blob contents are read directly from Git objects (`git ls-tree` and
+`git cat-file --batch`) without modifying working trees, staging indexes, or
+local branches. Worktrees of the same repository share one index keyed by
+canonical `git-common-dir`. Derived chunks, `FTS5` rows, and Float32 vectors
+live in a private SQLite store (`$XDG_STATE_HOME/code60/codebase-index/index.sqlite`,
+mode `0700`/`0600`) with incremental `blob_oid` diffing and bounded file/chunk
+limits.
+
+Read-only tools (`code60_search_codebase` and `code60_codebase_index_status`)
+are exposed across all six execution surfaces: Relay and Custom Assistants
+(via the `code60` MCP server with explicit `cwd`), Project Orchestrators (via
+the `code60` MCP server bound to the open project), and SubAgents, Workflow
+Engine tasks, and Scheduled Agents (via the gateway MCP broker as the read-only
+`code60-code` server bound to the active repository). Structured ACP MCP
+metadata (`server === "code60-code"` and allowlisted read-only tool name)
+allows read-only codebase search in Scheduled Jobs and Workflow Engine turns
+without loosening deny-by-default permissions for any other tool. External MCP
+connectors and orchestrator tools remain excluded from workers, workflows, and
+scheduled jobs.
+
+The database-independent **Context → Vector Search** page (under the **Context**
+sidebar group alongside **Memory**, **Commands**, and **Internal Prompts**) lets
+humans inspect all currently indexed repositories (status, branch/commit, file
+count, chunk count, byte size, last run timestamp/duration, and expandable Git
+snapshot and language breakdown), trigger manual re-indexing, pick a Git folder
+through the host picker to index, remove a repository's derived index rows after
+browser confirmation, and test hybrid queries in a dedicated **Query** tab.
+Browser operations accept only opaque repository keys (`repoKey`), never raw
+filesystem paths; opening the page reads SQLite metadata lazily without loading
+ONNX weights until indexing or querying runs.
 
 Exception for Tactics and stopped orchestration chats: a browser-safe versioned
 catalog supplies eight bundled prompt workflows. Only the composer opens the

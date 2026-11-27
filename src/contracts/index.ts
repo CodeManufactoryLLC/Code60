@@ -25,6 +25,7 @@ export * from "./activity.js";
 export * from "./alerts.js";
 export * from "./automation.js";
 export * from "./browser.js";
+export * from "./codebase-search.js";
 export * from "./commands.js";
 export * from "./health-check.js";
 export * from "./heartbeat.js";

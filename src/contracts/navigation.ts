@@ -162,6 +162,15 @@ export const pages = [
     icon: "app-usage",
   },
   {
+    id: "vector-search",
+    initialOrder: 32,
+    label: "Vector Search",
+    group: "apps",
+    order: 5,
+    database: false,
+    icon: "app-vector-search",
+  },
+  {
     id: "apps",
     initialOrder: 14,
     label: "Apps",

@@ -301,6 +301,23 @@ export class DesktopKnowledge {
         "The browser tool is available, but Node.js/npm, Chrome and Existing Browser extension approval are checked only when used. No browser was probed.";
       action =
         "Use code60_browser status, select the mode requested in chat, then list-tools and call. Report missing prerequisites without switching modes.";
+    } else if (cap.id === "codebase-search") {
+      status =
+        caller.kind === "relay" || state.gitReady === true
+          ? "available"
+          : state.gitReady === false
+            ? "blocked"
+            : "unknown";
+      reason =
+        caller.kind === "relay"
+          ? "Vector codebase search indexes the latest main branch of any Git repository passed via cwd using Code60's bundled offline ONNX engine."
+          : state.gitReady === true
+            ? "Vector codebase search automatically indexes the open project's latest main branch (non-mutating origin fetch when configured) using Code60's bundled offline ONNX engine."
+            : "Vector codebase search requires a Git repository with at least one commit.";
+      action =
+        caller.kind === "relay"
+          ? "Call code60_search_codebase or code60_codebase_index_status with an explicit absolute cwd."
+          : "Call code60_search_codebase or code60_codebase_index_status in the open project.";
     } else if (cap.prerequisite === "project" && !state.projectOpen) {
       status = "blocked";
       reason = "Caller has no bound open project.";

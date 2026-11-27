@@ -48,6 +48,7 @@ import { SystemManagerPage } from "./system-manager.js";
 import { updateTabs } from "./tabs.js";
 import { UpdatesSection } from "./updates.js";
 import { UsagePage } from "./usage-page.js";
+import { VectorSearchPage } from "./vector-search-page.js";
 import { WebServerPage } from "./web-server.js";
 import { WorkflowsPage } from "./workflows.js";
 import { WorktreesPage } from "./worktrees.js";
@@ -311,6 +312,13 @@ export function AppPages(props: AppPagesProps) {
       />
     ),
     usage: <UsagePage api={api} active={!splash && tabs.active === "usage"} onNotify={notify} />,
+    "vector-search": (
+      <VectorSearchPage
+        api={api}
+        active={!splash && tabs.active === "vector-search"}
+        onNotify={notify}
+      />
+    ),
     automations: (
       <AutomationsPage
         api={api}

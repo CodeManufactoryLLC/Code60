@@ -1,11 +1,20 @@
 import type { ActivityTool } from "./activity.js";
 import { BROWSER_TOOL } from "./browser.js";
+import {
+  CODEBASE_SEARCH_TOOL_DEFINITIONS,
+  codebaseSearchToolsForRole,
+  type McpCodebaseToolDefinition,
+} from "./codebase-search.js";
 import { MCP_KNOWLEDGE_TOOL_DEFINITIONS } from "./knowledge.js";
 
 export function mcpToolsForRole(role: "relay" | "project") {
   if (role !== "relay") return MCP_TOOL_DEFINITIONS;
+  const relayCodebase = new Map(
+    codebaseSearchToolsForRole("relay").map((tool) => [tool.name, tool]),
+  );
   const allowed = new Set([
     ...MCP_KNOWLEDGE_TOOL_DEFINITIONS.map((tool) => tool.name),
+    ...CODEBASE_SEARCH_TOOL_DEFINITIONS.map((tool) => tool.name),
     "code60_get_context",
     "code60_dispatch_agent",
     "code60_list_agents",
@@ -22,6 +31,8 @@ export function mcpToolsForRole(role: "relay" | "project") {
     "code60_browser",
   ]);
   return MCP_TOOL_DEFINITIONS.filter((tool) => allowed.has(tool.name)).map((tool) => {
+    const codebaseTool = relayCodebase.get(tool.name as McpCodebaseToolDefinition["name"]);
+    if (codebaseTool) return codebaseTool;
     if (tool.name === "code60_create_plan" || tool.name === "code60_update_plan") {
       const inputSchema = structuredClone(tool.inputSchema);
       const properties =
@@ -166,6 +177,7 @@ export interface McpActivityToolDefinition extends McpToolBase {
 }
 export type McpToolDefinition =
   | typeof BROWSER_TOOL
+  | McpCodebaseToolDefinition
   | (typeof MCP_KNOWLEDGE_TOOL_DEFINITIONS)[number]
   | McpTableToolDefinition
   | McpControlToolDefinition
@@ -734,6 +746,7 @@ export const MCP_ACTIVITY_TOOL_DEFINITIONS: readonly McpActivityToolDefinition[]
 
 export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = [
   BROWSER_TOOL,
+  ...CODEBASE_SEARCH_TOOL_DEFINITIONS,
   ...MCP_KNOWLEDGE_TOOL_DEFINITIONS,
   ...MCP_ACTIVITY_TOOL_DEFINITIONS,
   ...MCP_TABLE_TOOL_DEFINITIONS,

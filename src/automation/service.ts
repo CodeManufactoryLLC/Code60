@@ -1,5 +1,10 @@
 import { join } from "node:path";
-import { type CoreDeps, defaultDeps, stateHome } from "../core/index.js";
+import {
+  type CoreDeps,
+  defaultDeps,
+  type SessionResourceFactory,
+  stateHome,
+} from "../core/index.js";
 import { assertSupportedPlatform } from "../platform/index.js";
 import { executionEvidence } from "./evidence.js";
 import { createPromptActionHandler } from "./executor.js";
@@ -15,6 +20,10 @@ interface SchedulerRuntimeOptions {
   listen?: boolean;
   /** Additional action handlers composed by gateway (e.g. "workflow"). */
   handlers?: readonly AnyActionHandler[];
+  /** Optional read-only built-in codebase search tools bound to a repository. */
+  codeTools?: (repositoryPath: string) => SessionResourceFactory | undefined;
+  /** Optional hook notified when a scheduled prompt targets a repository. */
+  onRepositoryActive?: (repositoryPath: string) => void;
 }
 
 export async function startSchedulerRuntime(
@@ -23,11 +32,21 @@ export async function startSchedulerRuntime(
   options: boolean | SchedulerRuntimeOptions = false,
 ) {
   assertSupportedPlatform();
-  const { listen = false, handlers = [] } =
-    typeof options === "boolean" ? { listen: options } : options;
+  const {
+    listen = false,
+    handlers = [],
+    codeTools,
+    onRepositoryActive,
+  } = typeof options === "boolean" ? { listen: options } : options;
   const root = automationRoot(env);
   const store = await AutomationStore.open(root);
-  const registry = new ActionRegistry([createPromptActionHandler(deps, env), ...handlers]);
+  const registry = new ActionRegistry([
+    createPromptActionHandler(deps, env, undefined, {
+      ...(codeTools ? { codeTools } : {}),
+      ...(onRepositoryActive ? { onRepositoryActive } : {}),
+    }),
+    ...handlers,
+  ]);
   const scheduler = new Scheduler(store, registry);
   let timer: ReturnType<typeof setInterval> | undefined;
   try {

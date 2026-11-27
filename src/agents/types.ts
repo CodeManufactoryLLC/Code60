@@ -48,6 +48,8 @@ export interface PermissionRequest {
   toolCallId: string;
   title: string;
   kind: ToolKind;
+  /** Structured adapter-reported MCP attribution, never inferred from free-text titles. */
+  mcp?: { server?: string; tool?: string } | undefined;
   /** The choices the agent offered, recorded for review; only "once" options are ever picked. */
   options?: readonly PermissionOption[];
 }

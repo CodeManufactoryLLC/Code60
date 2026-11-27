@@ -103,6 +103,8 @@ interface KnownToolCall {
   kind: ToolKind;
   status: string;
   mcp?: { server?: string } | undefined;
+  /** Internal structured MCP tool name for permission matching; omitted from RunEvents. */
+  mcpTool?: string | undefined;
 }
 
 function object(value: unknown): Record<string, unknown> {
@@ -115,13 +117,14 @@ function object(value: unknown): Record<string, unknown> {
 function mcpAttribution(update: {
   name?: unknown;
   _meta?: unknown;
-}): { mcp: { server?: string } | undefined } | undefined {
+}): { mcp: { server?: string } | undefined; mcpTool?: string | undefined } | undefined {
   const meta = object(update._meta);
   const airMcp = object(object(object(meta.jetbrains).air).mcp);
   const claude = object(meta.claudeCode);
   const name = update.name ?? claude.toolName;
   const match = typeof name === "string" ? /^mcp__([^\r\n]+?)__([^\r\n]+)$/.exec(name) : null;
   const reported = airMcp.server ?? match?.[1];
+  const reportedTool = airMcp.tool ?? match?.[2];
   const identified =
     meta.is_mcp_tool_call === true || typeof airMcp.tool === "string" || match !== null;
   if (identified) {
@@ -130,10 +133,17 @@ function mcpAttribution(update: {
       typeof reported === "string" && /^[a-zA-Z0-9_.-]{1,128}$/.test(reported)
         ? reported
         : undefined;
-    return { mcp: server === undefined ? {} : { server } };
+    const tool =
+      typeof reportedTool === "string" && /^[a-zA-Z0-9_.-]{1,128}$/.test(reportedTool)
+        ? reportedTool
+        : undefined;
+    return {
+      mcp: server === undefined ? {} : { server },
+      ...(tool === undefined ? {} : { mcpTool: tool }),
+    };
   }
   // A corrected programmatic name can explicitly replace earlier attribution.
-  return typeof name === "string" ? { mcp: undefined } : undefined;
+  return typeof name === "string" ? { mcp: undefined, mcpTool: undefined } : undefined;
 }
 
 /** Upper bound on one raw update's stored JSON text, in UTF-8 bytes. */
@@ -181,8 +191,10 @@ export function mapUpdate(
         ...mcpAttribution(update),
       };
       if (call.mcp === undefined) delete call.mcp;
+      if (call.mcpTool === undefined) delete call.mcpTool;
       toolCalls.set(update.toolCallId, call);
-      return { type: "toolCall", toolCallId: update.toolCallId, ...call };
+      const { mcpTool: _tool, ...emitted } = call;
+      return { type: "toolCall", toolCallId: update.toolCallId, ...emitted };
     }
     case "tool_call_update": {
       const known = toolCalls.get(update.toolCallId);
@@ -191,11 +203,14 @@ export function mapUpdate(
         kind: update.kind != null ? toToolKind(update.kind) : (known?.kind ?? "other"),
         status: update.status ?? known?.status ?? "pending",
         ...(known?.mcp === undefined ? {} : { mcp: known.mcp }),
+        ...(known?.mcpTool === undefined ? {} : { mcpTool: known.mcpTool }),
         ...mcpAttribution(update),
       };
       if (call.mcp === undefined) delete call.mcp;
+      if (call.mcpTool === undefined) delete call.mcpTool;
       toolCalls.set(update.toolCallId, call);
-      return { type: "toolCall", toolCallId: update.toolCallId, ...call };
+      const { mcpTool: _tool, ...emitted } = call;
+      return { type: "toolCall", toolCallId: update.toolCallId, ...emitted };
     }
     default:
       return undefined;
@@ -350,14 +365,25 @@ async function connectSession(
       pendingPermissions.add(controller);
       try {
         const { toolCall } = params;
+        const known = toolCalls.get(toolCall.toolCallId);
+        const attr = mcpAttribution(toolCall as { name?: unknown; _meta?: unknown });
+        const mcpServer = attr?.mcp?.server ?? known?.mcp?.server;
+        const mcpTool = attr?.mcpTool ?? known?.mcpTool;
+        const mcp =
+          mcpServer !== undefined || mcpTool !== undefined
+            ? {
+                ...(mcpServer === undefined ? {} : { server: mcpServer }),
+                ...(mcpTool === undefined ? {} : { tool: mcpTool }),
+              }
+            : undefined;
         const answer = await new Promise<PermissionAnswer | undefined>((resolve, reject) => {
           controller.signal.addEventListener("abort", () => resolve(undefined), { once: true });
           (permissionHandler as PermissionHandler)(
             {
               toolCallId: toolCall.toolCallId,
-              title:
-                toolCall.title ?? toolCalls.get(toolCall.toolCallId)?.title ?? toolCall.toolCallId,
+              title: toolCall.title ?? known?.title ?? toolCall.toolCallId,
               kind: toToolKind(toolCall.kind),
+              ...(mcp === undefined ? {} : { mcp }),
               options: params.options.map((option) => ({
                 optionId: option.optionId,
                 name: option.name,

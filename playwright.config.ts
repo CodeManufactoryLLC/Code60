@@ -22,6 +22,7 @@ export default defineConfig({
     "alerts.e2e.ts",
     "heartbeat.e2e.ts",
     "usage.e2e.ts",
+    "vector-search.e2e.ts",
     "web-server.e2e.ts",
     "terminal.e2e.ts",
   ],
