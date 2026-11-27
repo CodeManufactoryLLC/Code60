@@ -1,4 +1,5 @@
 import type {
+  AlertService,
   ApplicationHost,
   DesktopAutomations,
   DesktopLogStore,
@@ -18,6 +19,7 @@ import {
   mcpSaveTextSchema,
   mcpTargetSchema,
   parseAction,
+  parseAlertRequest,
   parseBoolean,
   parseCodexSetupIdentity,
   parseConfigurationId,
@@ -97,11 +99,17 @@ export function applicationOperations(
   workflows: DesktopWorkflows,
   healthCheck?: HealthCheckService,
   usage?: UsageStore,
+  alerts?: AlertService,
 ) {
   const operations = new Map<string, (value: unknown) => unknown>();
   const handle = (name: string, action: (value: unknown) => unknown) => {
     operations.set(name, action);
   };
+  handle("alerts", (value) => {
+    const request = parseAlertRequest(value);
+    if (!alerts) throw new Error("Alert service is unavailable.");
+    return alerts.handle(request);
+  });
   handle("usage-report", (value) => {
     const query = parseUsageReportQuery(value);
     if (!usage) throw new Error("Usage monitoring store is unavailable.");

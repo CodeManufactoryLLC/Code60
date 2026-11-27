@@ -564,6 +564,20 @@ Schema version: 1
 - Settings sections: none
 - Tools: none
 
+## Alerts
+
+- ID: `alerts`
+- Status: shipped
+- Purpose: Surface app-wide items needing human attention in the upper-right header bell, with an unread count badge, clickable internal navigation links, and read/unread management.
+- Access: Header → Alerts bell
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: None.
+- Limits: Database-independent and persisted privately in local backend state. Links target only validated internal Code60 destinations; never stores prompts, transcripts, credentials or arbitrary paths, and never exposed to agents, MCP or awareness.
+- Pages: none
+- Settings sections: none
+- Tools: none
+
 ## Activity display
 
 - ID: `activity`

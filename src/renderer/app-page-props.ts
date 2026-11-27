@@ -47,6 +47,8 @@ export interface AppPagesProps {
   openChat(id: string, compose?: boolean, eventIndex?: number): void;
   openReview(id: string): void;
   openRelay(): Promise<void>;
+  requestedWorkflow: { id: string; nonce: number } | null;
+  onOpenWorkflow(workflowId: string): void;
   chatHistoryOpen: boolean;
   onChatHistoryOpenChange(open: boolean): void;
   act(action: Action): Promise<boolean>;

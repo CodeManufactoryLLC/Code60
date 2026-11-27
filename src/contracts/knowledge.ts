@@ -619,6 +619,16 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Choose Clear logs to remove retained diagnostics. Cancel keeps them.",
   ),
   feature(
+    "alerts",
+    "Alerts",
+    "Surface app-wide items needing human attention in the upper-right header bell, with an unread count badge, clickable internal navigation links, and read/unread management.",
+    "Header → Alerts bell",
+    "none",
+    "human-only",
+    "Database-independent and persisted privately in local backend state. Links target only validated internal Code60 destinations; never stores prompts, transcripts, credentials or arbitrary paths, and never exposed to agents, MCP or awareness.",
+    "None.",
+  ),
+  feature(
     "activity",
     "Activity display",
     "Show the orchestrator's current step beside the transcript and spotlight working conversation and worker names, including custom assistants and Relay.",

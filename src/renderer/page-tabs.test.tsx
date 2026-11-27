@@ -105,6 +105,37 @@ describe("database connection navigation", () => {
     expect(html).toContain('aria-label="Commands"');
     expect(html).toContain(">Workspace</button>");
   });
+  it("renders the header Alerts bell with its unread count dot when alerts are supplied", () => {
+    const html = renderToStaticMarkup(
+      <PageTabBar
+        showRelayDot={false}
+        onShowRelayDotChange={() => {}}
+        theme="system"
+        onThemeChange={() => {}}
+        tabs={initialTabs}
+        settingsSection={null}
+        database={null}
+        onSelect={() => {}}
+        onOpenChat={() => {}}
+        onSettingsSectionSelect={() => {}}
+        navigation={{ busy: false }}
+        chats={[]}
+        alerts={{
+          items: [],
+          unreadCount: 4,
+          onOpenAlert: () => {},
+          onMarkRead: () => {},
+          onMarkUnread: () => {},
+          onMarkAllRead: () => {},
+          onDismiss: () => {},
+          onClearRead: () => {},
+        }}
+      />,
+    );
+    expect(html).toContain('aria-label="Alerts (4 unread)"');
+    expect(html).toContain('class="alert-bell-badge"');
+    expect(html).toContain(">4</span>");
+  });
   it("leaves the separate database action to the application footer", () => {
     for (const database of [null, "/database.sqlite"]) {
       const html = navigation(database);

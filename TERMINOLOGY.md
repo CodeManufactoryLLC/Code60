@@ -1,12 +1,13 @@
 # Code60 Terminology
 
-> **Applies to:** Code60 `v0.5.0-beta` · **Last update:** `2026-11-26`
+> **Applies to:** Code60 `v0.5.0-beta` · **Last update:** `2026-11-27`
 > Open **Manage → About** or run `code60 status` to check the local Code60 version. See [Code60 FAQ](FAQ.md) for common questions.
 
 ## Terms
 
 - [ACP](#acp)
 - [Agent Provider](#agent-provider)
+- [Alerts](#alerts)
 - [Computer Use](#computer-use)
 - [Continuity Checkpoint](#continuity-checkpoint)
 - [Gateway](#gateway)
@@ -32,6 +33,12 @@ Through ACP, Code60 opens agent sessions, sends prompts, receives live updates, 
 An **Agent Provider** is an external coding-agent command-line interface (CLI) or harness that Code60 connects to through [ACP](#acp). Examples include **Antigravity**, **Claude**, **Codex**, **Copilot**, **Droid**, **Kiro**, and **OpenCode**.
 
 Agent Providers supply the underlying coding agents for both layers of Code60's [Two-Layer Architecture](#two-layer-architecture). Each provider manages its own credentials, models, and harness modes, while a user manages provider connections under **Connect → Providers**.
+
+## Alerts
+
+**Alerts** are app-wide notices in Code60's upper-right header bell that flag items needing human review or action.
+
+The bell displays a number dot when active alerts wait for review. Clicking the bell opens direct links to each item along with read/unread toggles, **Mark all read**, and **Clear read** controls.
 
 ## Computer Use
 

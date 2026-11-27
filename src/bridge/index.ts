@@ -36,6 +36,7 @@ export {
   settingsSections,
   validateMcpConnectorText,
 } from "../contracts/index.js";
+export * from "./alerts.js";
 export * from "./automation.js";
 export type { ChatReference, ChatUndoResult } from "./chat-context.js";
 export { chatReferenceSchema } from "./chat-context.js";
@@ -475,6 +476,10 @@ export interface ApplicationClient {
   onHealthChanged?(
     listener: (snapshot: import("./health-check.js").HealthSnapshot) => void,
   ): () => void;
+  alerts?(
+    request: import("./alerts.js").AlertRequest,
+  ): Promise<import("./alerts.js").AlertSnapshot>;
+  onAlertsChanged?(listener: (snapshot: import("./alerts.js").AlertSnapshot) => void): () => void;
   usageReport?(
     query?: import("./usage.js").UsageReportQuery,
   ): Promise<import("./usage.js").UsageReport>;

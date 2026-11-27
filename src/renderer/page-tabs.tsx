@@ -17,6 +17,7 @@ import {
   useState,
 } from "react";
 import type { OrchestrationChat } from "../bridge/index.js";
+import { AlertBellButton, AlertPopover, type HeaderAlertsProps } from "./alert-bell.js";
 import type { Theme } from "./appearance.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { Checkbox } from "./carbon/choices.js";
@@ -42,6 +43,7 @@ export function PageTabBar({
   onShowRelayDotChange,
   autoApproval = true,
   onAutoApprovalChange,
+  alerts,
   commands,
   workspace,
   connected,
@@ -65,6 +67,7 @@ export function PageTabBar({
   onShowRelayDotChange(show: boolean): void;
   autoApproval?: boolean;
   onAutoApprovalChange?: ((enabled: boolean) => Promise<void>) | undefined;
+  alerts?: HeaderAlertsProps | undefined;
   commands?(): void;
   workspace?(close: () => void): import("react").ReactNode;
   connected?: boolean | undefined;
@@ -85,6 +88,9 @@ export function PageTabBar({
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [utilities, setUtilities] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const alertTriggerRef = useRef<HTMLButtonElement>(null);
+  const alertPanelId = "header-alerts-panel";
   const [autoApprovalSaving, setAutoApprovalSaving] = useState(false);
   const [autoApprovalError, setAutoApprovalError] = useState(false);
   const closeNavigation = () => setMobileOpen(false);
@@ -189,8 +195,25 @@ export function PageTabBar({
           <Button size="md" kind="ghost" aria-haspopup="dialog" onClick={() => setUtilities(true)}>
             Workspace
           </Button>
+          {alerts && (
+            <AlertBellButton
+              triggerRef={alertTriggerRef}
+              unreadCount={alerts.unreadCount}
+              open={alertsOpen}
+              panelId={alertPanelId}
+              onToggle={() => setAlertsOpen((current) => !current)}
+            />
+          )}
         </div>
       </Header>
+      {alerts && alertsOpen && (
+        <AlertPopover
+          panelId={alertPanelId}
+          triggerRef={alertTriggerRef}
+          alerts={alerts}
+          onClose={() => setAlertsOpen(false)}
+        />
+      )}
       <SideNav
         id="navigation-sidebar"
         aria-busy={navigation.busy || undefined}

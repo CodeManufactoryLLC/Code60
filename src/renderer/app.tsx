@@ -7,8 +7,9 @@ import {
   useRef,
   useState,
 } from "react";
-import type { Action, ApplicationClient, DesktopRun } from "../bridge/index.js";
+import type { Action, AlertRecord, ApplicationClient, DesktopRun } from "../bridge/index.js";
 import { AgentSetupWizard } from "./agent-setup.js";
+import { useAlerts } from "./alerts.js";
 import { useAppActions } from "./app-actions.js";
 import { appCommands } from "./app-commands.js";
 import { AppDialogs } from "./app-dialogs.js";
@@ -85,6 +86,9 @@ export function App({
 
   const [relayListening, setRelayListening] = useState(false);
   const [chatHistoryOpen, setChatHistoryOpen] = useState(true);
+  const [requestedWorkflow, setRequestedWorkflow] = useState<{ id: string; nonce: number } | null>(
+    null,
+  );
   const [palette, setPalette] = useState(false);
   const [notifications, setNotifications] = useState<ToastMessage[]>([]);
   const notificationId = useRef(0);
@@ -101,6 +105,7 @@ export function App({
   const { theme, setTheme } = preferences;
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId | null>(null);
   const { splash, splashReady, setSetupOpen, enterApp, returnSplash } = useSplashEntry(snapshot);
+  const alerts = useAlerts(transport, !splash && connected !== false);
   const returnToSplash = () => {
     returnSplash();
     setPicker(undefined);
@@ -315,6 +320,50 @@ export function App({
     terminalSource: selectedTerminalSource(state, workerId),
   });
 
+  const openRelay = async () => {
+    setChatHistoryOpen(true);
+    const id = builtinRelayId(snapshot?.chats ?? []);
+    if (!id) throw new Error("Relay is unavailable. Try again shortly.");
+    if (!(await navigation.open({ kind: "conversation", id })))
+      throw new Error("Unable to open Relay. Try again shortly.");
+  };
+  const openWorkflow = (workflowId: string) => {
+    setRequestedWorkflow({ id: workflowId, nonce: Date.now() });
+    void navigation.open({ kind: "page", id: "workflows" });
+  };
+  const openAlert = (alert: AlertRecord) => {
+    if (!alert.read) void alerts.markRead(alert.id);
+    const target = alert.target;
+    switch (target.kind) {
+      case "relay":
+        void openRelay().catch((cause: unknown) =>
+          notify(cause instanceof Error ? cause.message : "Unable to open Relay.", "error"),
+        );
+        return;
+      case "workflow":
+        openWorkflow(target.id);
+        return;
+      case "settings":
+        void navigation.open({ kind: "settings", id: target.id });
+        return;
+      case "custom-agent":
+        void navigation.open({ kind: "custom-agent", id: target.id });
+        return;
+      case "conversation":
+        setChatHistoryOpen(true);
+        void navigation.open({ kind: "conversation", id: target.id }).then((opened) => {
+          if (!opened) notify("That conversation is no longer open.", "error");
+        });
+        return;
+      case "page":
+        if (!pageAvailable(target.id, database)) {
+          notify("Connect to a database first.", "error");
+          return;
+        }
+        void navigation.open({ kind: "page", id: target.id });
+        return;
+    }
+  };
   const footer = (close: () => void) => (
     <AppFooter
       api={api}
@@ -392,6 +441,17 @@ export function App({
             onAutoApprovalChange={
               snapshot ? (value) => api.setOrchestrationAutoApproval(value) : undefined
             }
+            alerts={{
+              items: alerts.items,
+              unreadCount: alerts.unreadCount,
+              ...(alerts.error ? { error: alerts.error } : {}),
+              onOpenAlert: openAlert,
+              onMarkRead: (id) => void alerts.markRead(id),
+              onMarkUnread: (id) => void alerts.markUnread(id),
+              onMarkAllRead: () => void alerts.markAllRead(),
+              onDismiss: (id) => void alerts.dismiss(id),
+              onClearRead: () => void alerts.clearRead(),
+            }}
             commands={() => setPalette(true)}
             workspace={(close) => (
               <>
@@ -447,13 +507,9 @@ export function App({
           notify={notify}
           openChat={openChat}
           openReview={openReview}
-          openRelay={async () => {
-            setChatHistoryOpen(true);
-            const id = builtinRelayId(snapshot?.chats ?? []);
-            if (!id) throw new Error("Relay is unavailable. Try again shortly.");
-            if (!(await navigation.open({ kind: "conversation", id })))
-              throw new Error("Unable to open Relay. Try again shortly.");
-          }}
+          openRelay={openRelay}
+          requestedWorkflow={requestedWorkflow}
+          onOpenWorkflow={openWorkflow}
           chatHistoryOpen={chatHistoryOpen}
           onChatHistoryOpenChange={setChatHistoryOpen}
           act={act}

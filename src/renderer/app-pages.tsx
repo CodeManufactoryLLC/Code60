@@ -78,11 +78,10 @@ export function AppPages(props: AppPagesProps) {
     fileAction,
     accept,
     onChatHistoryOpenChange,
+    requestedWorkflow,
+    onOpenWorkflow,
   } = props;
   const snapshot = state?.snapshot;
-  const [requestedWorkflow, setRequestedWorkflow] = useState<{ id: string; nonce: number } | null>(
-    null,
-  );
   usePageTransition(
     tabs.active,
     tabs.active === "settings"
@@ -281,10 +280,7 @@ export function AppPages(props: AppPagesProps) {
         api={api}
         active={!splash && tabs.active === "automations"}
         agents={snapshot?.agents ?? []}
-        onOpenWorkflow={(workflowId) => {
-          setRequestedWorkflow({ id: workflowId, nonce: Date.now() });
-          void navigation.open({ kind: "page", id: "workflows" });
-        }}
+        onOpenWorkflow={onOpenWorkflow}
       />
     ),
     memories: (

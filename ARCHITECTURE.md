@@ -253,7 +253,7 @@ migration as the finished application.
 
 ## Product shell and resume
 
-The product header owns browser history, connection status, commands and workspace
+The product header owns browser history, connection status, commands, alerts and workspace
 controls. The responsive panel uses Carbon UI Shell submenus for Chat, Develop, Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments. Opening a destination reveals its group. Toggling a group preserves the current view and its nested disclosures.
 The start screen occupies the viewport and hides the retained workspace until entry. Provider setup opens one native modal above it. The header skip link focuses the active panel. The application grid retains inactive destinations and their drafts. Startup pairs
 the controlling browser and verifies a provider before restoring a destination.
@@ -268,6 +268,19 @@ list. Create and edit occupy a dedicated form. Evidence belongs to the selected
 execution. Workflows separates definition reuse from execution playback and recovery.
 Backend confirmations, repository choosers, revisions and execution policies retain
 their authority.
+
+## App-wide Alerts
+
+`AlertService` in `src/application` owns app-wide human notifications independently of databases.
+Alerts and their read/unread state persist privately under `$XDG_STATE_HOME/code60/alerts/state.json`
+with bounded capacity, atomic writes, and corruption preservation. The gateway exposes a narrow
+human-only `alerts` operation (`list`, `mark-read`, `mark-unread`, `mark-all-read`, `dismiss`,
+`clear-read`) and pushes live `alerts-changed` frames over the authenticated browser event stream.
+Navigation targets are strictly typed internal destinations (`page`, `settings`, `conversation`,
+`custom-agent`, `workflow`, `relay`) with no filesystem paths, credentials, or agent/MCP exposure.
+Live actionable conditions (pending approvals, draft plans, active workspace/MCP/health errors,
+and workflows awaiting input) synchronize automatically and resolve when cleared; point-in-time
+failures persist until dismissed or cleared.
 
 ## Current exclusions
 

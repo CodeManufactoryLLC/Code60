@@ -1,3 +1,19 @@
+export {
+  ALERT_PREFIXES,
+  collectApprovalAlerts,
+  collectDraftPlanAlerts,
+  collectFailedPlanAlerts,
+  collectHealthAlerts,
+  collectMcpAlerts,
+  collectSchedulerExecutionAlerts,
+  collectSchedulerLiveAlerts,
+  collectWorkflowFailureAlert,
+  collectWorkflowLiveAlerts,
+  collectWorkspaceAlerts,
+  type SchedulerExecutionNotice,
+  schedulerExecutionAlertKey,
+} from "./alert-producers.js";
+export { AlertService } from "./alerts.js";
 export { DesktopAutomations } from "./automations.js";
 export { prepareCodexEnvironment } from "./codex-provider.js";
 export { ApplicationHost } from "./controller.js";
