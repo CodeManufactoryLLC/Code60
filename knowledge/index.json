@@ -440,7 +440,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/operations/distribution/artifacts.md",
       "lines": 70,
-      "bytes": 5920,
+      "bytes": 5921,
       "code_refs": [
         "scripts/package-payload.mjs",
         "scripts/package-bootstrap.mjs",

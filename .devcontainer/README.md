@@ -222,8 +222,7 @@ synthetic identity locally in test repositories or perform commits on the host.
 
 ## Concurrent agents
 
-Read the [shared-host agent rules](../AGENTS.md#concurrent-work-on-a-shared-host)
-and [host/container command guide](../CONTRIBUTING.md#shared-host-development).
+Follow [AGENTS.md](../AGENTS.md) and [CONSTITUTION.md](../CONSTITUTION.md) when running concurrent agents on a shared host.
 Confirm your assigned checkout/branch and record its labels, ports, owned processes
 and evidence paths. An idle worktree or stopped container may still belong to
 another task; availability is not proof of ownership.
