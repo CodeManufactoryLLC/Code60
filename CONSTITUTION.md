@@ -29,3 +29,12 @@ This document is the highest source of authority for agents working in this repo
 - `CON-3.1.2` Changes that add, remove, or alter `src/` module boundaries, runtime containers or workers, persistent data stores, external integrations, or deployment topologies MUST update `architecture/structurizr/`, `test/boundaries.test.ts` (when module boundaries change), and affected `knowledge/architecture/c4/` documents, and MUST pass `npm run c4:check` and `npm run kb:check`.
 - `CON-3.1.3` Local Structurizr viewer containers launched via `npm run c4:view` MUST bind exclusively to loopback (`127.0.0.1`), MUST use a pinned image by default (overridable via `CODE60_STRUCTURIZR_IMAGE`), and MUST clean up only their own labeled container on exit.
 - `CON-3.1.4` Diagram exports from `npm run c4:export` MUST write only to gitignored `test-results/` and MUST NOT be committed as binary artifacts into tracked documentation folders.
+
+## 4. Security Policy and Trust Boundaries
+
+### 4.1 Binding security stipulations
+
+- `CON-4.1.1` [SECURITY.md](SECURITY.md) is the canonical normative security policy for Code60; all `SEC-*` stipulations in [SECURITY.md](SECURITY.md) MUST be enforced as binding constitutional requirements across code, configuration, tooling, and documentation.
+- `CON-4.1.2` Changes that affect runtime safeguards, authentication, pairing, permissions, process or filesystem boundaries, secrets, MCP connectors, provider setup, or application updates MUST preserve every applicable `SEC-*` stipulation in [SECURITY.md](SECURITY.md) and MUST include automated verification tests for any new or modified security boundary.
+- `CON-4.1.3` Agents and contributors MUST NOT weaken, bypass, or silently alter a `SEC-*` trust boundary; any intentional change to a security requirement MUST explicitly update [SECURITY.md](SECURITY.md) with rationale and corresponding test coverage in the same pull request.
+- `CON-4.1.4` [SECURITY.md](SECURITY.md) MUST maintain RFC 2119 single-line stipulations (`SEC-<section>.<subsection>.<number>`) in accordance with `CON-1.1.1` and `CON-1.1.2`.
