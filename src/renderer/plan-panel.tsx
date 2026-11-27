@@ -22,6 +22,36 @@ const taskStates: Record<Plan["tasks"][number]["state"], string> = {
   completed: "Completed",
 };
 
+function PlanSectionList({
+  headingId,
+  title,
+  items,
+}: {
+  headingId: string;
+  title: string;
+  items: readonly string[] | undefined;
+}) {
+  if (!items?.length) return null;
+  const counts = new Map<string, number>();
+  const keyed = items.map((item) => {
+    const seen = (counts.get(item) ?? 0) + 1;
+    counts.set(item, seen);
+    return { key: seen === 1 ? item : `${item}#${seen}`, item };
+  });
+  return (
+    <section className="plan-section" aria-labelledby={headingId}>
+      <h3 id={headingId} className="plan-section-heading">
+        {title}
+      </h3>
+      <ul className="plan-section-list">
+        {keyed.map(({ key, item }) => (
+          <li key={key}>{item}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function PlanPanel({
   plan,
   api,
@@ -146,6 +176,16 @@ export function PlanPanel({
       <article className="plan-document" aria-label="Plan document">
         <h2 className="plan-title">{plan.title}</h2>
         {plan.description && <p className="plan-description">{plan.description}</p>}
+        <PlanSectionList
+          headingId={`${id}-out-of-scope`}
+          title="Out of scope"
+          items={plan.outOfScope}
+        />
+        <PlanSectionList
+          headingId={`${id}-assumptions`}
+          title="Assumptions & open questions"
+          items={plan.assumptions}
+        />
         <ul className="plan-tasks">
           {plan.tasks.map((task) => (
             <li className="plan-task" key={task.id} data-state={task.state}>
@@ -163,6 +203,12 @@ export function PlanPanel({
               <span className="plan-task-status">
                 <span className="plan-task-badge">{taskStates[task.state]}</span>
               </span>
+              {task.details && <p className="plan-task-detail">{task.details}</p>}
+              {task.verify && (
+                <p className="plan-task-meta">
+                  <span className="plan-task-meta-label">Verify:</span> {task.verify}
+                </p>
+              )}
               {task.target && (
                 <p className="plan-task-note">
                   Target: <code>{task.target.cwd}</code> (
@@ -176,6 +222,11 @@ export function PlanPanel({
             </li>
           ))}
         </ul>
+        <PlanSectionList
+          headingId={`${id}-verification`}
+          title="Verification & completion criteria"
+          items={plan.verification}
+        />
       </article>
     </section>
   );

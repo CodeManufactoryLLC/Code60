@@ -298,10 +298,15 @@ export class PlanStore {
         creationKey: key,
         title: request.title,
         description: request.description,
+        ...(request.outOfScope?.length ? { outOfScope: request.outOfScope } : {}),
+        ...(request.assumptions?.length ? { assumptions: request.assumptions } : {}),
+        ...(request.verification?.length ? { verification: request.verification } : {}),
         state: "draft",
         tasks: request.tasks.map((task, index) => ({
           id: randomUUID(),
           text: task.text,
+          ...(task.details ? { details: task.details } : {}),
+          ...(task.verify ? { verify: task.verify } : {}),
           state: "pending",
           note: "",
           workerIds: [],
@@ -365,9 +370,17 @@ export class PlanStore {
           throw new Error("Invalid task identity");
         plan.title = request.draft.title;
         plan.description = request.draft.description;
+        if (request.draft.outOfScope?.length) plan.outOfScope = request.draft.outOfScope;
+        else delete plan.outOfScope;
+        if (request.draft.assumptions?.length) plan.assumptions = request.draft.assumptions;
+        else delete plan.assumptions;
+        if (request.draft.verification?.length) plan.verification = request.draft.verification;
+        else delete plan.verification;
         plan.tasks = request.draft.tasks.map((task, index) => ({
           id: task.id ?? randomUUID(),
           text: task.text,
+          ...(task.details ? { details: task.details } : {}),
+          ...(task.verify ? { verify: task.verify } : {}),
           state: "pending",
           note: "",
           workerIds: [],

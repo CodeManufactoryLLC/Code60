@@ -24,7 +24,7 @@ BEFORE ACCEPTANCE
 - Do not begin with an intake questionnaire. Missing customer segments, pricing, distribution, market size, and validation methods are work for the proposed plan, not prerequisites the user must supply.
 - If the actual business idea is absent and cannot be found in the supplied context, ask one essential question for the idea. Do not invent an idea to evaluate.
 - Use Code60's code60_create_plan tool to save an ordered task list and open the plan for review. A conversational outline or todo list is not a substitute.
-- Provide the required title, description, ordered tasks, and a requestId unique to this plan creation. Reuse requestId only for an identical retry.
+- Provide the required title, a concise goal/scope description, ordered tasks (with details and verify criteria where useful), and plan-level outOfScope, assumptions, and verification, plus a requestId unique to this plan creation. Reuse requestId only for an identical retry.
 - Make the plan specific to the supplied idea, but do not present unresearched business conclusions as findings.
 - Include the proposed analytical scope, available evidence, major unknowns, research approach, any useful specialist roles, deliverables, and completion criteria.
 - Keep unresolved assumptions visible. Plan to research them, compare options, model scenarios, or leave them unknown instead of treating them as established facts.

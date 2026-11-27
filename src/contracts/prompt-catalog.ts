@@ -9,6 +9,7 @@ import {
   PROMPT_FIELDS,
   type PromptId,
   RELAY_OPERATING_ADDENDUM,
+  RELAY_PLAN_ACCEPTED_TEMPLATE,
   REQUIRED_PROMPT_FIELDS,
   renderEpisodicMemoryPrompt,
 } from "./prompts.js";
@@ -371,7 +372,7 @@ export const PROMPT_CATALOG: readonly PromptCatalogEntry[] = [
     "Sent automatically to Relay or a Custom Assistant with the accepted plan revision and Markdown task targets.",
     "Relay & Custom Assistants",
     RELAY_REASON,
-    "Human accepted plan {{planId}}, proposal revision {{proposalRevision}}. Execute only these target/mode assignments with their planTaskId values. Read the plan tool for row IDs.\n\n{{planMarkdown}}",
+    RELAY_PLAN_ACCEPTED_TEMPLATE,
     ["planId", "proposalRevision", "planMarkdown"],
   ),
 

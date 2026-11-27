@@ -138,7 +138,7 @@ export const TACTICS: readonly Tactic[] = [
     approval: "Human Accept before execution",
     help: "Use saved Code60 plans and task identifiers. Blocked work requires explicit continuation.",
     prompt:
-      "Have a scout inspect relevant code, dependencies, tests, and obstacles. Create a saved Code60 plan with concrete deliverables, verification steps, assumptions, and unresolved decisions. Wait for the human Accept action in Code60 before executing the plan; conversational approval is not acceptance. After acceptance, dispatch workers with the appropriate plan task identifiers. Read evidence before reporting task completion. If blocked, record the blocker and follow Code60's explicit continuation rules. Preserve human acceptance for revised plans and never infer completion from a worker turn ending.",
+      "Have a read-only scout inspect relevant code, dependencies, tests, and obstacles before drafting. Save a structured Code60 plan with a concise goal/scope description, explicit outOfScope items and unresolved assumptions, ordered concrete tasks (with details and verify criteria), and overall verification steps. Wait for the human Accept action in Code60 before executing; conversational approval is not acceptance. After acceptance, dispatch workers with planTaskId, inspect evidence before reporting task completion, and follow Code60's pause-on-block and revised-plan acceptance rules.",
   },
   {
     id: "challenge-the-plan",
@@ -152,7 +152,7 @@ export const TACTICS: readonly Tactic[] = [
     approval: "Revised saved plans still require human Accept",
     help: "Address substantiated weaknesses and record remaining tradeoffs. Do not start implementation.",
     prompt:
-      "Give both reviewers the same proposed plan, requirements, and repository evidence. Ask one to examine feasibility, dependencies, and compatibility. Ask the other to inspect requirements coverage, acceptance criteria, failure cases, and verification gaps. Require each objection to identify an affected requirement and supporting evidence. Reconcile findings, revise substantiated weaknesses, and record remaining tradeoffs and uncertainty. Stop after one critique-and-revision round. Any revised saved Code60 plan still requires human acceptance; do not execute it under this tactic.",
+      "Give both reviewers the same proposed plan, requirements, and repository evidence. Ask one to examine feasibility, dependencies, and compatibility. Ask the other to inspect requirements coverage, outOfScope boundaries, task details and verify criteria, failure cases, and verification gaps. Require each objection to identify an affected requirement and supporting evidence. Reconcile findings, revise substantiated weaknesses in the structured plan fields, and record remaining tradeoffs and open questions in assumptions. Stop after one critique-and-revision round. Any revised saved Code60 plan still requires human acceptance; do not execute it under this tactic.",
   },
 ];
 
