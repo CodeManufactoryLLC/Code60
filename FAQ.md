@@ -143,7 +143,7 @@ A base installation typically uses about **400 MB to 1 GB**, depending on platfo
 | Usage history | Up to 90 days or 500,000 turns | Local `usage.sqlite` stores numeric counts and opaque IDs only. |
 | **Scheduled Jobs** free-space guard | At least 2 GiB free | **Scheduled Jobs** refuse to start below 2 GiB free. |
 
-Size figures reflect macOS Apple Silicon measurements for Code60 `v0.4.1` on `2026-11-25`. See [Low disk space](docs/runbooks/low-disk.md) for storage recovery guidance.
+Size figures reflect macOS Apple Silicon measurements for Code60 `v0.4.1` on `2026-11-25`. See [Low disk space](knowledge/operations/runbooks/low-disk.md) for storage recovery guidance.
 
 ## Security and Permissions
 

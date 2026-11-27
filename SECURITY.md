@@ -166,7 +166,7 @@ Custom launch overrides retain external setup. Providers own their persistent cr
 
 ### 4.3 MCP connectors, credentials, and guarded file writes
 
-Scope: MCP tools run with the local user's permissions and are not sandboxed. SHA-256 in MCP identity/review metadata binds configuration, public discovery, client identity, and scope. Guarded writes do not claim atomic compare-and-swap against a non-cooperating editor. See [MCP configuration](MCP.md) and the [MCP recovery runbook](docs/runbooks/mcp-configuration.md).
+Scope: MCP tools run with the local user's permissions and are not sandboxed. SHA-256 in MCP identity/review metadata binds configuration, public discovery, client identity, and scope. Guarded writes do not claim atomic compare-and-swap against a non-cooperating editor. See [MCP configuration](MCP.md), [MCP storage recovery](knowledge/operations/runbooks/mcp-storage.md), and [MCP runtime and auth recovery](knowledge/operations/runbooks/mcp-runtime-auth.md).
 
 - `SEC-4.3.1` User and project `mcp.json` definitions MUST remain backend-owned.
 - `SEC-4.3.2` Each owning ACP session MUST receive only fixed local stdio adapters with ephemeral connector capabilities and MUST NOT receive upstream commands, endpoints, or credentials.

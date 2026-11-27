@@ -53,6 +53,7 @@
     "knowledge/architecture/c4/INDEX.md",
     "knowledge/governance/INDEX.md",
     "knowledge/operations/INDEX.md",
+    "knowledge/operations/runbooks/INDEX.md",
     "knowledge/reference/INDEX.md",
     "knowledge/reference/capabilities/INDEX.md",
     "knowledge/subsystems/INDEX.md"
@@ -243,6 +244,166 @@
         "c4",
         "structurizr",
         "tooling"
+      ]
+    },
+    {
+      "id": "KB-OPS-001",
+      "title": "Backend Service and Scheduled Jobs Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Diagnose and recover Code60 Backend Service registration, paused schedules, and unfinished-work blocks.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/runbooks/scheduler.md",
+      "lines": 55,
+      "bytes": 3947,
+      "code_refs": [
+        "src/gateway/server.ts",
+        "src/management/cli.ts",
+        "src/renderer/system-manager.tsx",
+        "src/automation/scheduler.ts"
+      ],
+      "related": [
+        "KB-OPS-002",
+        "KB-ARCH-006"
+      ],
+      "tags": [
+        "runbook",
+        "scheduler",
+        "service"
+      ]
+    },
+    {
+      "id": "KB-OPS-002",
+      "title": "Low Disk Space Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Diagnose volume exhaustion affecting the 2 GiB scheduler floor, transcripts, databases, or diagnostics.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/runbooks/low-disk.md",
+      "lines": 50,
+      "bytes": 3076,
+      "code_refs": [
+        "src/automation/executor.ts",
+        "src/application/health-check.ts"
+      ],
+      "related": [
+        "KB-OPS-001",
+        "KB-OPS-003",
+        "KB-OPS-004"
+      ],
+      "tags": [
+        "runbook",
+        "disk",
+        "storage"
+      ]
+    },
+    {
+      "id": "KB-OPS-003",
+      "title": "Diagnostic Log Storage Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Diagnose and safely recover unavailable diagnostic log storage under $XDG_STATE_HOME/code60/logs.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/runbooks/diagnostics.md",
+      "lines": 47,
+      "bytes": 2910,
+      "code_refs": [
+        "src/application/log-store.ts",
+        "src/renderer/logs.tsx",
+        "src/application/health-check.ts"
+      ],
+      "related": [
+        "KB-OPS-002"
+      ],
+      "tags": [
+        "runbook",
+        "diagnostics",
+        "logs"
+      ]
+    },
+    {
+      "id": "KB-OPS-004",
+      "title": "Damaged Relay History Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Diagnose and safely recover damaged or blocked Relay storage under $XDG_STATE_HOME/code60/relay.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/runbooks/relay-history.md",
+      "lines": 49,
+      "bytes": 3142,
+      "code_refs": [
+        "src/application/relay-store.ts",
+        "src/application/relay-storage.ts",
+        "src/application/health-check.ts"
+      ],
+      "related": [
+        "KB-OPS-002",
+        "KB-OPS-003"
+      ],
+      "tags": [
+        "runbook",
+        "relay",
+        "history"
+      ]
+    },
+    {
+      "id": "KB-OPS-005",
+      "title": "MCP Configuration Storage and Transaction Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Recover guarded User/Project mcp.json conflicts, malformed files, backups, resets, and interrupted transactions.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/runbooks/mcp-storage.md",
+      "lines": 57,
+      "bytes": 4325,
+      "code_refs": [
+        "src/application/mcp-configuration-store.ts",
+        "src/application/mcp-management.ts",
+        "src/contracts/mcp-recovery.ts",
+        "src/renderer/mcp-workspace.tsx",
+        "src/renderer/mcp-recovery.tsx"
+      ],
+      "related": [
+        "KB-OPS-006",
+        "KB-OPS-002"
+      ],
+      "tags": [
+        "runbook",
+        "mcp",
+        "storage",
+        "recovery"
+      ]
+    },
+    {
+      "id": "KB-OPS-006",
+      "title": "MCP Connection, Authentication, and Troubleshooting Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Diagnose MCP connection failures, Keychain/OAuth auth issues, cleanup verification, and safe troubleshooting reports.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/runbooks/mcp-runtime-auth.md",
+      "lines": 53,
+      "bytes": 4333,
+      "code_refs": [
+        "src/application/mcp-runtime.ts",
+        "src/application/mcp-authentication.ts",
+        "src/renderer/mcp-servers.tsx",
+        "src/renderer/mcp-troubleshooting.tsx"
+      ],
+      "related": [
+        "KB-OPS-005"
+      ],
+      "tags": [
+        "runbook",
+        "mcp",
+        "oauth",
+        "credentials"
       ]
     },
     {

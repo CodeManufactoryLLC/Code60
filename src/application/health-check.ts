@@ -41,7 +41,7 @@ import { commandIdentity, PROVIDERS } from "./provider-catalog.js";
 
 const execFileAsync = promisify(execFile);
 
-const LOW_DISK_ERROR_BYTES = 2 * 1024 ** 3; // 2 GiB scheduler dispatch guard (docs/runbooks/low-disk.md)
+const LOW_DISK_ERROR_BYTES = 2 * 1024 ** 3; // 2 GiB scheduler dispatch guard (knowledge/operations/runbooks/low-disk.md)
 const LOW_DISK_WARNING_BYTES = 10 * 1024 ** 3; // 10 GiB headroom warning
 const LOW_DISK_WARNING_PERCENT = 10;
 const CHECKPOINT_QUOTA_BYTES = 256 * 1024 ** 2; // 256 MiB
@@ -1141,8 +1141,8 @@ export class HealthCheckService {
             summary: `Relay is ${runStatus}, with a history-saving warning or recorded gap.`,
             detail:
               relay.historySaving === "unavailable"
-                ? "Relay history saving is currently unavailable. See docs/runbooks/relay-history.md."
-                : "A historical gap is recorded in the Relay journal. See docs/runbooks/relay-history.md.",
+                ? "Relay history saving is currently unavailable. See knowledge/operations/runbooks/relay-history.md."
+                : "A historical gap is recorded in the Relay journal. See knowledge/operations/runbooks/relay-history.md.",
           };
         }
         if (!relay.run) {
@@ -1421,7 +1421,7 @@ export class HealthCheckService {
             : "Disk space could not be inspected.";
         const detail =
           worst === "error"
-            ? "At least one volume is below the 2 GiB scheduler floor (see docs/runbooks/low-disk.md)."
+            ? "At least one volume is below the 2 GiB scheduler floor (see knowledge/operations/runbooks/low-disk.md)."
             : worst === "warning"
               ? "Disk headroom is below 10 GiB or 10% on at least one volume."
               : "Ample free space across inspected volumes (scheduler minimum: 2 GiB).";
@@ -1469,7 +1469,7 @@ export class HealthCheckService {
             status: "error",
             summary: `Diagnostic log storage unavailable (${logs.persistenceFailures} persistence failure(s)).`,
             detail:
-              "See docs/runbooks/diagnostics.md. Diagnostics are optional and do not block agents.",
+              "See knowledge/operations/runbooks/diagnostics.md. Diagnostics are optional and do not block agents.",
           };
         }
         if (logs.dropped > 0) {

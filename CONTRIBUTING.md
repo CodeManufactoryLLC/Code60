@@ -204,7 +204,7 @@ by linked worktrees. Do not install on someone else's behalf.
 
 ### Operational recovery
 
-Follow the [recovery runbooks](docs/runbooks/README.md) for scheduler registration,
+Follow the [recovery runbooks](knowledge/operations/runbooks/INDEX.md) for scheduler registration,
 low disk, unavailable diagnostics and damaged Relay history. Read-only diagnosis
 comes first; preserve history/worktrees/locks and obtain permission for changes.
 Desktop Stop all and quit do not stop service-owned automations.

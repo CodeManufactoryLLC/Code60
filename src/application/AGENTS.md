@@ -17,7 +17,7 @@ and require explicit known-state Complete/Roll back. Keep pending/unknown/corrup
 evidence; prune only completed verified unpinned backups. Accepted request IDs
 never replay effects. Project files may use 0644; user files/evidence stay private.
 Close drains queued operations without replaying pending effects. Follow
-`docs/runbooks/mcp-configuration.md` before any recovery work.
+`knowledge/operations/runbooks/mcp-storage.md` and `knowledge/operations/runbooks/mcp-runtime-auth.md` before any recovery work.
 
 Phase 1's pure resolver consumes validated documents and trusted backend-owned
 identity/revision/approval metadata. Project definitions always shadow matching

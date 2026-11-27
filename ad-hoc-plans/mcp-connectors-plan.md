@@ -210,7 +210,7 @@ Status: complete. Implementation, required checks and owned-resource cleanup ver
   revisions and native precision, retention, failure boundaries, interrupted moves,
   cancellation, replay and explicit recovery. Selected the existing full browser
   first-use/acceptance/reload/Undo journey for independent regression coverage.
-- Added [the MCP storage recovery runbook](../docs/runbooks/mcp-configuration.md).
+- Added [the MCP storage recovery runbook](../knowledge/operations/runbooks/mcp-storage.md).
   Dedicated integrations, migrations, GUI/browser operations, live loading,
   connector processes, authentication and approval persistence remain outside
   this phase. No capability catalog regeneration is needed for an unwired library.

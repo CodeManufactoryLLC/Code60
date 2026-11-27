@@ -149,7 +149,7 @@ and supported controls before extending tests. Retain evidence under ignored
   per-user installation without explicit permission.
 - **Actions:** use Automations to review disabled schedule, run once with consent,
   pause/cancel; close the browser while backend-owned work is active; reopen and
-  inspect history/block, following the [scheduler runbook](../../../../docs/runbooks/scheduler.md).
+  inspect history/block, following the [scheduler runbook](../../../../knowledge/operations/runbooks/scheduler.md).
 - **Invariants:** interactive Stop all/browser close do not stop service-owned automation;
   no catch-up/retry, automatic apply or restored uncertain work; service remains
   sole metadata writer. No unit-only injected-clock result counts as UI E2E.
