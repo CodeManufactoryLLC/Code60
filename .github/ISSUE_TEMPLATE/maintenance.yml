@@ -20,7 +20,7 @@ body:
     id: completion
     attributes:
       label: Completion criteria
-      description: State how a reviewer can verify completion. For a release, use the checklist in RELEASING.md.
+      description: State how a reviewer can verify completion. For a release, use the checklist in knowledge/operations/releasing.md.
       placeholder: |
         - [ ] ...
     validations:

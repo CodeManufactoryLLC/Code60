@@ -23,13 +23,13 @@ tags:
 # FAQ: Plans, Workflows, and Scheduled Jobs
 
 > **Applies to:** Code60 `v0.5.0-beta` · **Last update:** `2026-11-27`
-> Open **Manage → About** or run `code60 status` to check the local Code60 version. See [Code60 Terminology](../../../TERMINOLOGY.md) for key terms.
+> Open **Manage → About** or run `code60 status` to check the local Code60 version.
 
 ## Plans and Workflows
 
 ### What is the difference between Plans and Workflows?
 
-**Plans** guide interactive chat orchestration in [Code60 Gateway](../../../TERMINOLOGY.md#gateway), while [Workflows](../../../TERMINOLOGY.md#workflow) run standalone multi-task coding runs inside **Code60 Gateway**.
+**Plans** guide interactive chat orchestration in Code60 Gateway, while Workflows run standalone multi-task coding runs inside **Code60 Gateway**.
 
 - **Execution and providers:** Both **Plans** and **Workflows** run on any active **Agent Provider** through ACP. **Plans** run inside chat (**Relay**, **Custom Assistants**, or project chats), while **Workflows** start manually under **Automate → Workflows** or on a cadence under **Automate → Scheduled Jobs**.
 - **Structure and verification:** A **Plan** is an optional task list that an orchestrator revises in chat and executes by dispatching interactive Code60 workers. A **Workflow** defines up to 100 sequential tasks with independent verification criteria, optional check commands, and automatic repair and retry limits.
@@ -43,7 +43,7 @@ Code60 still forwards any provider **Harness mode** (including a provider's own 
 
 ### How are Code60 Plans different from agent plans?
 
-Code60 **Plans** are application-level plans with human approval gates and worker tracking across Code60's [Two-Layer Architecture](../../../TERMINOLOGY.md#two-layer-architecture). Agent plans live inside a single provider harness.
+Code60 **Plans** are application-level plans with human approval gates and worker tracking across Code60's Two-Layer Architecture. Agent plans live inside a single provider harness.
 
 - **Human Accept gate:** A Code60 draft plan blocks new worker dispatches in that conversation until a human clicks **Accept** on that exact revision. No agent tool can accept a Code60 plan.
 - **Worker-level tracking:** After human acceptance, the orchestrator dispatches separate Code60 workers with task IDs (`planTaskId`) and reports progress with evidence notes and worker IDs.
@@ -56,7 +56,7 @@ Code60 **Plans** are application-level plans with human approval gates and worke
 
 **Scheduled Jobs** run locally on the host computer inside a mandatory separate Git worktree. There is no cloud runner or remote service.
 
-- **Local backend service:** The per-user [Code60 Gateway](../../../TERMINOLOGY.md#gateway) service (`launchd` on macOS or user `systemd` without linger on Linux) runs each job directly on the host machine. The machine must stay awake with an active user login session.
+- **Local backend service:** The per-user Code60 Gateway service (`launchd` on macOS or user `systemd` without linger on Linux) runs each job directly on the host machine. The machine must stay awake with an active user login session.
 - **Separate Git worktree:** Each run creates a separate Git worktree from the job's local repository and base branch. Single-prompt jobs run one headless turn under an explicit deny-by-default allowlist, while workflow jobs run multi-task **Workflows** with an `autoApprove` option. Both run without external MCP servers or implicit memory.
 - **Manual review:** Code60 keeps the worktree, transcript, and diff on disk and never automatically applies, merges, commits, or pushes changes.
 

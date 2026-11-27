@@ -23,7 +23,7 @@ tags:
 
 # Docker Hub Distribution
 
-Code60 distributes an optional `linux/amd64` Docker image (`mjholliday/code60`) built directly from the verified `linux-x64` release payload. It runs [Code60 Gateway](../../../TERMINOLOGY.md#gateway) in the foreground on port `6060` under `tini` as the non-root `node` user with `/opt/code60` read-only.
+Code60 distributes an optional `linux/amd64` Docker image (`mjholliday/code60`) built directly from the verified `linux-x64` release payload. It runs Code60 Gateway in the foreground on port `6060` under `tini` as the non-root `node` user with `/opt/code60` read-only.
 
 ## Quick start
 
@@ -73,7 +73,7 @@ One-time setup: create `mjholliday/code60` on Docker Hub with a scoped Read & Wr
 
 To publish a release image:
 
-1. Tag the merged release commit on `main` (`vX.Y.Z` or `vX.Y.Z-beta.N`) per [RELEASING.md](../../../RELEASING.md).
+1. Tag the merged release commit on `main` (`vX.Y.Z` or `vX.Y.Z-beta.N`) per [Releasing Code60](../releasing.md).
 2. Run a dry run first (builds and tests without pushing):
 
 ```sh

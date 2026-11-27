@@ -10,3 +10,9 @@ Operational runbooks, installation, distribution, updates, and recovery. Generat
 | --- | ---: |
 | [Distribution](distribution/INDEX.md) | 6 |
 | [Runbooks](runbooks/INDEX.md) | 6 |
+
+## Documents
+
+| ID | Title | Kind | Status | Updated | Summary |
+| --- | --- | --- | --- | --- | --- |
+| `KB-OPS-013` | [Releasing Code60](releasing.md) | `runbook` | `active` | `2026-11-27` | Release preparation checklist, tag-and-dispatch validation workflow, native and Linux acceptance gates, and Docker Hub publishing. |

@@ -23,15 +23,15 @@ tags:
 # FAQ: Overview, Requirements, and Setup
 
 > **Applies to:** Code60 `v0.5.0-beta` · **Last update:** `2026-11-27`
-> Open **Manage → About** or run `code60 status` to check the local Code60 version. See [Code60 Terminology](../../../TERMINOLOGY.md) for key terms.
+> Open **Manage → About** or run `code60 status` to check the local Code60 version.
 
 ## Overview
 
 ### Is Code60 an agent?
 
-No. Code60 is a local [orchestration](../../../TERMINOLOGY.md#orchestration) application for coding agents. External [Agent Providers](../../../TERMINOLOGY.md#agent-provider) supply the underlying models and coding agents.
+No. Code60 is a local orchestration application for coding agents. External Agent Providers supply the underlying models and coding agents.
 
-Code60 connects to those providers through [Agent Client Protocol (ACP)](../../../TERMINOLOGY.md#acp) and coordinates them using its [Two-Layer Architecture](../../../TERMINOLOGY.md#two-layer-architecture). Code60 provides the browser interface, [Code60 Gateway](../../../TERMINOLOGY.md#gateway), separate Git worktrees, plans, reviews, **Scheduled Jobs**, **Workflows**, and Model Context Protocol (MCP) management.
+Code60 connects to those providers through Agent Client Protocol (ACP) and coordinates them using its Two-Layer Architecture. Code60 provides the browser interface, Code60 Gateway, separate Git worktrees, plans, reviews, **Scheduled Jobs**, **Workflows**, and Model Context Protocol (MCP) management.
 
 ## Requirements and Setup
 
@@ -60,7 +60,7 @@ A Windows device can still open Code60's browser interface over a private local 
 ### What software do I need to run Code60?
 
 - **Core software:** Node.js 24 (`>=24.22.0 <25` for setup, updates, and uninstall), `npm`, Git, and a modern web browser.
-- **Agent Provider:** At least one [Agent Provider](../../../TERMINOLOGY.md#agent-provider). A user can connect an existing command-line interface (CLI) or install a private copy for catalog providers from **Connect → Providers**.
+- **Agent Provider:** At least one Agent Provider. A user can connect an existing command-line interface (CLI) or install a private copy for catalog providers from **Connect → Providers**.
 - **Optional software:** Chrome on the host machine for `code60_browser` web automation (plus Microsoft's Playwright Chrome extension for existing-browser mode). Docker with Compose v2 is only for optional contributor container workflows.
 
 See [What are the system requirements for running Code60?](#what-are-the-system-requirements-for-running-code60) for operating-system and hardware details.
@@ -69,7 +69,7 @@ See [What are the system requirements for running Code60?](#what-are-the-system-
 
 No. Code60 installs, runs, and supports local development without Docker.
 
-Code60 runs natively on macOS Apple Silicon and Linux x64. It uses [Code60 Gateway](../../../TERMINOLOGY.md#gateway) (a local Node.js 24 backend), a browser interface, and separate Git worktrees for coding agents.
+Code60 runs natively on macOS Apple Silicon and Linux x64. It uses Code60 Gateway (a local Node.js 24 backend), a browser interface, and separate Git worktrees for coding agents.
 
 Code60 also provides a Linux `x64` Docker image (`mjholliday/code60`) on port `6060` for container setups. See the [Docker distribution guide](../../operations/distribution/docker.md) for setup and security options.
 
@@ -90,7 +90,7 @@ Yes, for local lifecycle management only. The `code60` CLI cannot submit prompts
 
 ### Does Code60 have a native desktop app?
 
-No. Code60 runs [Code60 Gateway](../../../TERMINOLOGY.md#gateway) (a local Node.js 24 backend) with a React browser interface.
+No. Code60 runs Code60 Gateway (a local Node.js 24 backend) with a React browser interface.
 
 There is no Electron wrapper, native window application, or DMG, DEB, or AppImage installer. Closing or refreshing the browser keeps active agents, **Scheduled Jobs**, and **Workflows** running in the background.
 

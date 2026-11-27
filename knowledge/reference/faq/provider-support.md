@@ -21,11 +21,11 @@ tags:
 # FAQ: Provider Support, Local Models, and Skills
 
 > **Applies to:** Code60 `v0.5.0-beta` · **Last update:** `2026-11-27`
-> Open **Manage → About** or run `code60 status` to check the local Code60 version. See [Code60 Terminology](../../../TERMINOLOGY.md) for key terms.
+> Open **Manage → About** or run `code60 status` to check the local Code60 version.
 
 ## Provider Support
 
-Code60 connects both layers of its [Two-Layer Architecture](../../../TERMINOLOGY.md#two-layer-architecture) to coding-agent providers through ACP. It never asks for provider passwords and never stores API keys. Each provider keeps its own credentials in the backend user's storage.
+Code60 connects both layers of its Two-Layer Architecture to coding-agent providers through ACP. It never asks for provider passwords and never stores API keys. Each provider keeps its own credentials in the backend user's storage.
 
 The standard provider catalog covers **Antigravity, Claude, Codex, Copilot, Droid, Kiro, and OpenCode**. Under **Connect → Providers**, a user can verify a CLI that already holds an active login. A user can also run Code60's in-app installation and browser sign-in flow.
 
@@ -47,7 +47,7 @@ Yes, through any agent that supports local models. Code60 does not run local lan
 Yes in the worker layer, **Scheduled Jobs**, and **Workflows**, where each **Agent Provider** discovers skills from the repository working directory.
 
 - **Worker layer, Scheduled Jobs, and Workflows:** Code60 starts project workers, **Scheduled Jobs**, and **Workflows** inside the repository's Git worktree (or direct target folder). Each **Agent Provider** discovers repository skills and instruction files there according to its own rules.
-- **Orchestration layer:** In Code60's [Two-Layer Architecture](../../../TERMINOLOGY.md#two-layer-architecture), **Relay**, **Custom Assistants**, and project orchestrators run in private Code60 workspace folders outside the Git checkout. Provider harnesses generally do not auto-discover repository skills for the orchestrator.
+- **Orchestration layer:** In Code60's Two-Layer Architecture, **Relay**, **Custom Assistants**, and project orchestrators run in private Code60 workspace folders outside the Git checkout. Provider harnesses generally do not auto-discover repository skills for the orchestrator.
 
 ### Does Code60 use my Agent Provider's existing user-level skills?
 

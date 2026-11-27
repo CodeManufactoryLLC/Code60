@@ -23,7 +23,7 @@ tags:
 # FAQ: Context, History, and Compaction
 
 > **Applies to:** Code60 `v0.5.0-beta` · **Last update:** `2026-11-27`
-> Open **Manage → About** or run `code60 status` to check the local Code60 version. See [Code60 Terminology](../../../TERMINOLOGY.md) for key terms.
+> Open **Manage → About** or run `code60 status` to check the local Code60 version.
 
 ## Context and History
 
@@ -58,7 +58,7 @@ Code60 keeps complete transcripts on disk, bounds what the browser loads into me
 
 ### How does Code60 interact with an Agent Provider's context compaction?
 
-Code60 neither triggers nor blocks an [Agent Provider's](../../../TERMINOLOGY.md#agent-provider) internal context compaction. If a harness compacts its own context during a turn, Code60 lets it run normally.
+Code60 neither triggers nor blocks an Agent Provider's internal context compaction. If a harness compacts its own context during a turn, Code60 lets it run normally.
 
 - **Live context gauge:** The composer footer shows the token count and capacity that the provider reports over ACP and never guesses from transcript length. When a provider compacts context, the gauge can drop to match the new report.
 - **Interaction with Code60 context handoff:** Between turns, Code60 starts automatic context handoff at 70% of context capacity. That check uses the higher of the provider's report and Code60's own session estimate. Code60's 70% rollover often occurs before late-window provider compaction, while early provider compaction still runs inside the harness.

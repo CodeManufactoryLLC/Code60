@@ -22,7 +22,7 @@ tags:
 # FAQ: Licensing, Pricing, and Token Usage
 
 > **Applies to:** Code60 `v0.5.0-beta` · **Last update:** `2026-11-27`
-> Open **Manage → About** or run `code60 status` to check the local Code60 version. See [Code60 Terminology](../../../TERMINOLOGY.md) for key terms.
+> Open **Manage → About** or run `code60 status` to check the local Code60 version.
 
 ## Licensing and Pricing
 
@@ -44,14 +44,14 @@ Code60 is free and open-source under the [Apache License, Version 2.0](../../../
 
 Code60 does not bill for tokens, and actual usage depends on the active **Agent Provider** and models. Total token usage balances extra upfront coordination against potential net savings on complex, multi-step tasks.
 
-- **Upfront cost versus net savings:** Running an orchestrator alongside workers in Code60's [Two-Layer Architecture](../../../TERMINOLOGY.md#two-layer-architecture) adds upfront tokens for instructions, tools, and updates. On complex, long-trajectory tasks, narrow worker contexts, plan review, and independent verification can reduce drift and rework. That higher reliability may reduce net token usage across the full task.
+- **Upfront cost versus net savings:** Running an orchestrator alongside workers in Code60's Two-Layer Architecture adds upfront tokens for instructions, tools, and updates. On complex, long-trajectory tasks, narrow worker contexts, plan review, and independent verification can reduce drift and rework. That higher reliability may reduce net token usage across the full task.
 - **Parallel runs and workflows:** Running multiple workers in parallel increases immediate token usage. **Workflows** also spend tokens on independent verification, repair passes, and fresh-session retries.
 - **Optional helper features:** Active **Memory** extraction, **Search** overviews, **Create with prompt** drafting, and automatic context handoffs send relevant context to the active provider. Turning **Memory** off stops memory extraction and recall.
 - **Cost control and visibility:** The composer footer displays live context fill whenever the provider sends it. **Manage → Usage** and `code60 usage` display per-provider totals, heavy sessions, and turn details. The **Model** picker sets separate defaults for orchestrators and workers.
 
 ### How does Code60 monitor token usage?
 
-[Code60 Gateway](../../../TERMINOLOGY.md#gateway) logs quantitative metrics for every [ACP](../../../TERMINOLOGY.md#acp) turn across **Relay**, **Custom Assistants**, project chats, workers, **Scheduled Jobs**, **Workflows**, and background helpers. A user can inspect totals under **Manage → Usage** or run `code60 usage` in a terminal.
+Code60 Gateway logs quantitative metrics for every ACP turn across **Relay**, **Custom Assistants**, project chats, workers, **Scheduled Jobs**, **Workflows**, and background helpers. A user can inspect totals under **Manage → Usage** or run `code60 usage` in a terminal.
 
 - **Three measurement tiers:** Each turn carries a confidence label. Labels cover exact ACP usage, context-model math from `usage_update` waves, or lower-bound counts from visible ACP text.
 - **Burn rate and context growth:** Reports separate cumulative turn totals from net context growth, tool waves, and context compactions. Those signals help identify heavy chats, loops, and workflow steps.
@@ -60,9 +60,9 @@ Code60 does not bill for tokens, and actual usage depends on the active **Agent 
 
 ### Does Code60 enforce token budgets or calculate dollar bills?
 
-No. [Usage Monitoring](../../../TERMINOLOGY.md#usage-monitoring) is read-only. Code60 never enforces spend caps, blocks turns, or guesses dollar bills from rate tables.
+No. Usage Monitoring is read-only. Code60 never enforces spend caps, blocks turns, or guesses dollar bills from rate tables.
 
-When an [Agent Provider](../../../TERMINOLOGY.md#agent-provider) emits an ACP `cost` field inside `usage_update`, Code60 shows that provider's session cost deltas directly.
+When an Agent Provider emits an ACP `cost` field inside `usage_update`, Code60 shows that provider's session cost deltas directly.
 
 ### What data does Usage Monitoring store, and how can I clear it?
 

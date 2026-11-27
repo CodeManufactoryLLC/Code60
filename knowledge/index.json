@@ -583,7 +583,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/operations/distribution/docker.md",
       "lines": 90,
-      "bytes": 5211,
+      "bytes": 5174,
       "code_refs": [
         "docker/Dockerfile",
         "docker/compose.yaml",
@@ -599,6 +599,38 @@
         "docker",
         "container",
         "release"
+      ]
+    },
+    {
+      "id": "KB-OPS-013",
+      "title": "Releasing Code60",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Release preparation checklist, tag-and-dispatch validation workflow, native and Linux acceptance gates, and Docker Hub publishing.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/releasing.md",
+      "lines": 71,
+      "bytes": 6347,
+      "code_refs": [
+        ".github/workflows/release.yml",
+        ".github/workflows/native-tests.yml",
+        ".github/workflows/publish-docker.yml",
+        "scripts/verify-artifact-handoff.mjs"
+      ],
+      "related": [
+        "KB-OPS-007",
+        "KB-OPS-008",
+        "KB-OPS-009",
+        "KB-OPS-010",
+        "KB-OPS-011",
+        "KB-OPS-012"
+      ],
+      "tags": [
+        "release",
+        "distribution",
+        "ci",
+        "docker"
       ]
     },
     {
@@ -787,7 +819,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/overview-and-setup.md",
       "lines": 102,
-      "bytes": 6535,
+      "bytes": 6159,
       "code_refs": [
         "src/management/cli.ts",
         "src/gateway/server.ts",
@@ -814,7 +846,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/workspaces-and-storage.md",
       "lines": 78,
-      "bytes": 5629,
+      "bytes": 5564,
       "code_refs": [
         "src/git/tasks.ts",
         "src/application/health-check.ts",
@@ -842,7 +874,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/permissions-and-sandboxing.md",
       "lines": 63,
-      "bytes": 5054,
+      "bytes": 4809,
       "code_refs": [
         "src/core/config.ts",
         "src/core/orchestrator.ts",
@@ -869,7 +901,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/security-and-secrets.md",
       "lines": 67,
-      "bytes": 5762,
+      "bytes": 5697,
       "code_refs": [
         "src/gateway/server.ts",
         "src/application/mcp-gateway.ts",
@@ -895,7 +927,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/licensing-and-usage.md",
       "lines": 72,
-      "bytes": 5182,
+      "bytes": 4915,
       "code_refs": [
         "src/contracts/usage.ts",
         "src/core/usage-store.ts",
@@ -921,7 +953,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/orchestration-and-workers.md",
       "lines": 77,
-      "bytes": 6355,
+      "bytes": 5985,
       "code_refs": [
         "src/core/orchestrator.ts",
         "src/core/config.ts",
@@ -950,7 +982,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/context-and-history.md",
       "lines": 66,
-      "bytes": 6052,
+      "bytes": 5945,
       "code_refs": [
         "src/application/memory-limits.ts",
         "src/application/relay-service.ts",
@@ -977,7 +1009,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/plans-workflows-and-schedules.md",
       "lines": 84,
-      "bytes": 6950,
+      "bytes": 6729,
       "code_refs": [
         "src/core/workflow-engine.ts",
         "src/application/plans.ts",
@@ -1004,7 +1036,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/accessibility-and-support.md",
       "lines": 70,
-      "bytes": 4912,
+      "bytes": 4847,
       "code_refs": [
         "src/renderer/app.tsx",
         "package.json"
@@ -1029,7 +1061,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/provider-support.md",
       "lines": 58,
-      "bytes": 4238,
+      "bytes": 4073,
       "code_refs": [
         "src/application/provider-catalog.ts",
         "src/application/provider-setup-policy.ts"
@@ -1054,7 +1086,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/provider-authentication.md",
       "lines": 107,
-      "bytes": 7132,
+      "bytes": 7067,
       "code_refs": [
         "src/application/provider-catalog.ts",
         "src/application/provider-setup-policy.ts",

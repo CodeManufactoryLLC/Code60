@@ -25,13 +25,13 @@ tags:
 # FAQ: Orchestration, Workers, MCP, and Concurrency
 
 > **Applies to:** Code60 `v0.5.0-beta` · **Last update:** `2026-11-27`
-> Open **Manage → About** or run `code60 status` to check the local Code60 version. See [Code60 Terminology](../../../TERMINOLOGY.md) for key terms.
+> Open **Manage → About** or run `code60 status` to check the local Code60 version.
 
 ## Orchestration and Workers
 
 ### How are Code60 subagents different than my Agent Provider's subagents?
 
-In Code60's [Two-Layer Architecture](../../../TERMINOLOGY.md#two-layer-architecture), Code60 subagents (workers) are full Code60 sessions that run in separate Git worktrees. An [Agent Provider's](../../../TERMINOLOGY.md#agent-provider) internal subagents run inside that single provider's process and stay outside Code60's orchestration controls.
+In Code60's Two-Layer Architecture, Code60 subagents (workers) are full Code60 sessions that run in separate Git worktrees. An Agent Provider's internal subagents run inside that single provider's process and stay outside Code60's orchestration controls.
 
 - **Separate Git worktrees:** Each Code60 project worker edits files in its own Git worktree and run branch. Code60 integrates those edits safely and supports message-level **Undo**, whereas a provider's internal subagents typically share one working directory.
 - **Cross-provider flexibility:** Code60 can dispatch workers using any active **Agent Provider** and apply separate model defaults for orchestrators and workers. A provider's internal subagents stay within that single provider's harness.
@@ -41,15 +41,15 @@ In Code60's [Two-Layer Architecture](../../../TERMINOLOGY.md#two-layer-architect
 
 ### Does Code60 use my Agent Provider's subagents?
 
-No. Code60 does not call or manage an [Agent Provider's](../../../TERMINOLOGY.md#agent-provider) internal subagents directly.
+No. Code60 does not call or manage an Agent Provider's internal subagents directly.
 
-In Code60's [Two-Layer Architecture](../../../TERMINOLOGY.md#two-layer-architecture), orchestrators delegate coding tasks by starting Code60 worker sessions through ACP. Each project worker runs in its own Git worktree with its own transcript and lifecycle controls.
+In Code60's Two-Layer Architecture, orchestrators delegate coding tasks by starting Code60 worker sessions through ACP. Each project worker runs in its own Git worktree with its own transcript and lifecycle controls.
 
 Code60 does not block a provider's internal subagents. If a harness spawns its own subagents during a turn, they run inside that session's directory or worktree under that provider's control.
 
 ### Does Code60 have Computer Use capabilities?
 
-No. Code60 has no native desktop [Computer Use](../../../TERMINOLOGY.md#computer-use) control.
+No. Code60 has no native desktop Computer Use control.
 
 - **Web browser automation:** **Relay**, **Custom Assistants**, and project chats include the `code60_browser` tool using Playwright. It controls web pages in **Headless**, **Visible**, or **Existing Browser** mode and cannot control native desktop applications.
 - **Scope and limits:** Workers, helpers, and **Scheduled Jobs** do not receive `code60_browser`. Message **Undo** does not undo external website changes.
@@ -57,9 +57,9 @@ No. Code60 has no native desktop [Computer Use](../../../TERMINOLOGY.md#computer
 
 ### Does Code60 support MCP?
 
-Yes. Code60 supports [MCP](../../../TERMINOLOGY.md#mcp) for both its own orchestration tools and external tool servers. See [MCP Configuration](../../../MCP.md) for full details.
+Yes. Code60 supports MCP for both its own orchestration tools and external tool servers. See [MCP Configuration](../../../MCP.md) for full details.
 
-- **Orchestration tools:** In Code60's [Two-Layer Architecture](../../../TERMINOLOGY.md#two-layer-architecture), orchestrators receive Code60's MCP tools for worker control, planning, reviews, and browser automation. Workers never receive those tools.
+- **Orchestration tools:** In Code60's Two-Layer Architecture, orchestrators receive Code60's MCP tools for worker control, planning, reviews, and browser automation. Workers never receive those tools.
 - **External MCP servers:** Under **Connect → MCP Servers**, a user can manage User and open-project servers with visual forms or strict JSON. Project server IDs override User IDs, new servers start off, and project servers require human approval for their exact revision.
 - **Transports and scope:** Code60 supports `stdio` and Streamable HTTP transports for tools only. It omits legacy Server-Sent Events (SSE), resources, prompts, sampling, and elicitation.
 - **Secrets and limits:** MCP secrets stay in macOS Keychain, Linux Secret Service, or explicit temporary memory, with S256 PKCE OAuth support. **Scheduled Jobs**, setup probes, and internal helpers receive no external MCP servers.
