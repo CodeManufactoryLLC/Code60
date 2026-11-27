@@ -73,7 +73,7 @@
     "test:update": "node scripts/test-update.mjs"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "^2.4.0",
+    "@agentclientprotocol/sdk": "^2.9.1",
     "@carbon/ai-chat": "1.25.0",
     "@carbon/ai-chat-components": "1.15.0",
     "@carbon/icons": "11.92.0",
