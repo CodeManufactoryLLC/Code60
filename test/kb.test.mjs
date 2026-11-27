@@ -2,7 +2,13 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { checkKnowledgeBase, DOMAINS, findKnowledge, indexKnowledgeBase } from "../scripts/kb.mjs";
+import {
+  checkKnowledgeBase,
+  DOMAINS,
+  findKnowledge,
+  indexKnowledgeBase,
+  KB_LIMITS,
+} from "../scripts/kb.mjs";
 
 const tempDirs = [];
 
@@ -32,15 +38,16 @@ afterEach(async () => {
   }
 });
 
-describe("knowledge base indexing and validation", () => {
-  it("validates the live repository knowledge base cleanly", async () => {
+describe("knowledge base indexing, nesting, and limits", () => {
+  it("validates the live repository knowledge base and nested indexes cleanly", async () => {
     expect(await checkKnowledgeBase()).toEqual([]);
   });
 
-  it("indexes valid documents, validates RFC 2119 stipulations, and supports lookup", async () => {
+  it("generates nested INDEX.md files, validates RFC 2119 stipulations, and detects drift", async () => {
     const root = await createFixture();
+    await mkdir(join(root, "knowledge/governance/policies"), { recursive: true });
     await writeFile(
-      join(root, "knowledge/governance/sample.md"),
+      join(root, "knowledge/governance/policies/sample.md"),
       [
         "---",
         "id: KB-GOV-001",
@@ -72,9 +79,21 @@ describe("knowledge base indexing and validation", () => {
 
     const indexed = await indexKnowledgeBase(root);
     expect(indexed.count).toBe(1);
+    expect(indexed.indexes).toBe(7); // root + 5 domains + policies subfolder
     expect(await checkKnowledgeBase(root)).toEqual([]);
 
+    const domainIndex = await readFile(join(root, "knowledge/governance/INDEX.md"), "utf8");
+    expect(domainIndex).toContain("[Policies](policies/INDEX.md)");
+    const nestedIndex = await readFile(
+      join(root, "knowledge/governance/policies/INDEX.md"),
+      "utf8",
+    );
+    expect(nestedIndex).toContain("← [Parent Index](../INDEX.md)");
+    expect(nestedIndex).toContain("[Sample Governance](sample.md)");
+
     const manifest = JSON.parse(await readFile(join(root, "knowledge/index.json"), "utf8"));
+    expect(manifest.limits).toEqual(KB_LIMITS);
+    expect(manifest.indexes).toContain("knowledge/governance/policies/INDEX.md");
     expect(manifest.documents[0]).toMatchObject({
       id: "KB-GOV-001",
       ruleIds: ["GOV-1.1.1", "GOV-1.1.2"],
@@ -85,21 +104,23 @@ describe("knowledge base indexing and validation", () => {
       "KB-GOV-001",
     ]);
 
-    await writeFile(
-      join(root, "knowledge/INDEX.md"),
-      "# Index\n\n<!-- BEGIN:KB_INDEX -->\nstale\n<!-- END:KB_INDEX -->\n",
-      "utf8",
-    );
+    await writeFile(join(root, "knowledge/governance/policies/INDEX.md"), "# stale\n", "utf8");
     const drift = await checkKnowledgeBase(root);
-    expect(drift.some((line) => line.includes("out of date"))).toBe(true);
+    expect(drift.some((line) => line.includes("Nested index is out of date"))).toBe(true);
   });
 
-  it("rejects bad frontmatter, broken code_refs, RFC 2119 violations, and legacy capabilities.md", async () => {
+  it("enforces file size, nesting, frontmatter, RFC 2119, and non-monolithic capabilities limits", async () => {
     const root = await createFixture();
     await mkdir(join(root, "src/contracts"), { recursive: true });
     await writeFile(join(root, "src/contracts/knowledge.ts"), "export {};\n", "utf8");
     await mkdir(join(root, "docs"), { recursive: true });
     await writeFile(join(root, "docs/capabilities.md"), "# stale\n", "utf8");
+    await writeFile(join(root, "knowledge/reference/capabilities.md"), "# monolith\n", "utf8");
+
+    const tooManyLines = Array.from(
+      { length: KB_LIMITS.maxLines + 10 },
+      (_, i) => `Line ${i}`,
+    ).join("\n");
     await writeFile(
       join(root, "knowledge/governance/bad.md"),
       [
@@ -121,12 +142,13 @@ describe("knowledge base indexing and validation", () => {
         "### 1.1 Broken",
         "",
         "- `GOV-1.1.2` This lacks an uppercase keyword and must fail.",
-        "",
+        tooManyLines,
       ].join("\n"),
       "utf8",
     );
 
     const failures = await checkKnowledgeBase(root);
+    expect(failures.some((f) => f.includes("exceeding maxLines"))).toBe(true);
     expect(failures.some((f) => f.includes("does not match folder domain code"))).toBe(true);
     expect(
       failures.some((f) => f.includes('Missing or unsafe code_refs path "src/missing.ts"')),
@@ -136,6 +158,11 @@ describe("knowledge base indexing and validation", () => {
     expect(failures.some((f) => f.includes("lacks an RFC 2119 keyword"))).toBe(true);
     expect(failures.some((f) => f.includes("Lowercase RFC 2119 keyword"))).toBe(true);
     expect(failures.some((f) => f.includes("Legacy capabilities path must not exist"))).toBe(true);
-    expect(failures.some((f) => f.includes("Missing generated capability reference"))).toBe(true);
+    expect(failures.some((f) => f.includes("Monolithic capabilities file must not exist"))).toBe(
+      true,
+    );
+    expect(failures.some((f) => f.includes("Missing generated capability reference files"))).toBe(
+      true,
+    );
   });
 });

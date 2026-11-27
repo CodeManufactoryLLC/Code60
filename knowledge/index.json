@@ -2,55 +2,234 @@
   "$schema": "./schema.json",
   "schemaVersion": 1,
   "generatedAt": "2026-11-27",
+  "limits": {
+    "maxLines": 150,
+    "maxBytes": 10240,
+    "maxIndexLines": 100,
+    "maxDirectDocsPerDir": 12,
+    "maxDepth": 4,
+    "maxSummaryChars": 200
+  },
   "domains": [
     {
       "id": "governance",
       "code": "GOV",
       "path": "knowledge/governance",
-      "description": "Normative policies, RFC 2119 standards, contributor/release/branch rules"
+      "description": "Normative policies, RFC 2119 standards, contributor/release/branch rules",
+      "index": "knowledge/governance/INDEX.md"
     },
     {
       "id": "architecture",
       "code": "ARCH",
       "path": "knowledge/architecture",
-      "description": "System architecture, module boundaries, and architectural decision records"
+      "description": "System architecture, module boundaries, and architectural decision records",
+      "index": "knowledge/architecture/INDEX.md"
     },
     {
       "id": "subsystems",
       "code": "SUB",
       "path": "knowledge/subsystems",
-      "description": "Canonical specifications per runtime subsystem"
+      "description": "Canonical specifications per runtime subsystem",
+      "index": "knowledge/subsystems/INDEX.md"
     },
     {
       "id": "operations",
       "code": "OPS",
       "path": "knowledge/operations",
-      "description": "Operational runbooks, installation, distribution, updates, and recovery"
+      "description": "Operational runbooks, installation, distribution, updates, and recovery",
+      "index": "knowledge/operations/INDEX.md"
     },
     {
       "id": "reference",
       "code": "REF",
       "path": "knowledge/reference",
-      "description": "Machine-synced or generated technical references"
+      "description": "Machine-synced or generated technical references",
+      "index": "knowledge/reference/INDEX.md"
     }
+  ],
+  "indexes": [
+    "knowledge/INDEX.md",
+    "knowledge/architecture/INDEX.md",
+    "knowledge/governance/INDEX.md",
+    "knowledge/operations/INDEX.md",
+    "knowledge/reference/INDEX.md",
+    "knowledge/reference/capabilities/INDEX.md",
+    "knowledge/subsystems/INDEX.md"
   ],
   "documents": [
     {
       "id": "KB-REF-001",
-      "title": "Capability Reference",
+      "title": "Capabilities: Orchestration and Chat",
       "domain": "reference",
       "kind": "reference",
       "status": "active",
-      "summary": "Generated catalog of Code60 browser capabilities, access paths, prerequisites, limits, and agent-visible tools.",
+      "summary": "Generated capability specs for Relay, Assistants, Custom Assistants, Projects, Workers, auto-approval, and activity display.",
       "updated": "2026-11-27",
-      "path": "knowledge/reference/capabilities.md",
+      "path": "knowledge/reference/capabilities/orchestration.md",
+      "lines": 122,
+      "bytes": 6757,
       "code_refs": [
         "src/contracts/knowledge.ts",
         "src/contracts/navigation.ts"
       ],
       "tags": [
         "capabilities",
-        "self-knowledge",
+        "orchestration",
+        "chat",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-002",
+      "title": "Capabilities: Workspace Navigation and Panels",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for navigation, history, Files, Terminal, Memory Recall, Plans, Reviews, and Undo.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/workspace.md",
+      "lines": 136,
+      "bytes": 8454,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "workspace",
+        "panels",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-003",
+      "title": "Capabilities: Customization, Memory, and Settings",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for Commands, Tactics, Internal Prompts, Configurations, model defaults, Memory, handoff, and Settings.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/customization.md",
+      "lines": 136,
+      "bytes": 6427,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "customization",
+        "settings",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-004",
+      "title": "Capabilities: Scheduled Jobs and Workflows",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for recurring Scheduled Jobs and native multi-step Workflows inside Code60 Gateway.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/automation.md",
+      "lines": 52,
+      "bytes": 5336,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "automation",
+        "workflows",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-005",
+      "title": "Capabilities: MCP Servers and Browser Automation",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for backend-owned MCP server management and conversational Playwright browser automation.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/connectors.md",
+      "lines": 52,
+      "bytes": 6261,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "mcp",
+        "browser",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-006",
+      "title": "Capabilities: Providers and Network Access",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for catalog coding-agent providers and Web Server (Beta) private-LAN access.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/providers-and-access.md",
+      "lines": 52,
+      "bytes": 4264,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "providers",
+        "lan",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-007",
+      "title": "Capabilities: Runtime Lifecycle and Monitoring",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for browser/backend lifecycle, Updates, Uninstall, System Manager, Health Check, and Usage.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/runtime.md",
+      "lines": 108,
+      "bytes": 8848,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "runtime",
+        "operations",
+        "reference"
+      ]
+    },
+    {
+      "id": "KB-REF-008",
+      "title": "Capabilities: Data, Search, Self-Knowledge, and Experiments",
+      "domain": "reference",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Generated capability specs for Data Viewer, Search, Diagnostic Logs, Self-Knowledge, Retrieval Tests, and Memory Tester.",
+      "updated": "2026-11-27",
+      "path": "knowledge/reference/capabilities/inspection.md",
+      "lines": 122,
+      "bytes": 5026,
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "inspection",
+        "experiments",
         "reference"
       ]
     }

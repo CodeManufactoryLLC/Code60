@@ -12,7 +12,11 @@ Start here to locate canonical Code60 documentation without reading full specifi
 ## Indexed Documents
 
 <!-- BEGIN:KB_INDEX -->
-| ID | Title | Domain | Kind | Status | Updated | Summary |
-| --- | --- | --- | --- | --- | --- | --- |
-| `KB-REF-001` | [Capability Reference](reference/capabilities.md) | `reference` | `reference` | `active` | `2026-11-27` | Generated catalog of Code60 browser capabilities, access paths, prerequisites, limits, and agent-visible tools. |
+| Code | Domain Index | Docs | Scope |
+| --- | --- | ---: | --- |
+| `GOV` | [Governance](governance/INDEX.md) | 0 | Normative policies, RFC 2119 standards, contributor/release/branch rules |
+| `ARCH` | [Architecture](architecture/INDEX.md) | 0 | System architecture, module boundaries, and architectural decision records |
+| `SUB` | [Subsystems](subsystems/INDEX.md) | 0 | Canonical specifications per runtime subsystem |
+| `OPS` | [Operations](operations/INDEX.md) | 0 | Operational runbooks, installation, distribution, updates, and recovery |
+| `REF` | [Reference](reference/INDEX.md) | 8 | Machine-synced or generated technical references |
 <!-- END:KB_INDEX -->

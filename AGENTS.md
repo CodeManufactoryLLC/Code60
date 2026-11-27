@@ -10,8 +10,8 @@ Keep `AGENTS.md` optimized for progressive disclosure, serving as a concise guid
 
 ## Progressive-Disclosure Navigation
 
-- [knowledge/INDEX.md](knowledge/INDEX.md) (and machine-readable [knowledge/index.json](knowledge/index.json) / `npm run kb:find`) — start here to locate canonical knowledge base documents by ID, domain, or `code_refs`.
-- [knowledge/reference/capabilities.md](knowledge/reference/capabilities.md) (`KB-REF-001`) — generated catalog of shipped capabilities, access paths, prerequisites, limits, and agent tools. For capability-affecting changes, update `src/contracts/knowledge.ts` and run `npm run generate:capabilities && npm run kb:index`.
+- [knowledge/INDEX.md](knowledge/INDEX.md) (nested domain `INDEX.md` tree, [knowledge/index.json](knowledge/index.json), and `npm run kb:find`) — start here to drill into small, bounded knowledge documents by domain, ID, or `code_refs`.
+- [knowledge/reference/capabilities/INDEX.md](knowledge/reference/capabilities/INDEX.md) (`KB-REF-001`–`KB-REF-008`) — semantic generated catalogs of shipped capabilities, access paths, prerequisites, limits, and agent tools. For capability-affecting changes, update `src/contracts/knowledge.ts` and run `npm run generate:capabilities && npm run kb:check`.
 - [SECURITY.md](SECURITY.md) — security policy and trust boundaries (`SEC-*` stipulations).
 - [ARCHITECTURE.md](ARCHITECTURE.md) — system architecture overview.
-- [.factory/skills/knowledge-base/SKILL.md](.factory/skills/knowledge-base/SKILL.md) — workflow for reading, authoring, indexing (`npm run kb:index`), and validating (`npm run kb:check`) knowledge base documents.
+- [.factory/skills/knowledge-base/SKILL.md](.factory/skills/knowledge-base/SKILL.md) — workflow for navigating nested indexes, staying within KB size/nesting limits, authoring docs, indexing (`npm run kb:index`), and validating (`npm run kb:check`).

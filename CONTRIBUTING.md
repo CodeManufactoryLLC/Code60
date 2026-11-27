@@ -176,7 +176,7 @@ handoff tests; actual login-service lifecycle validation remains a native releas
 
 ### Knowledge base and capabilities
 
-Canonical knowledge lives under `knowledge/`, indexed by [knowledge/INDEX.md](knowledge/INDEX.md) and [knowledge/index.json](knowledge/index.json). Follow the [knowledge-base skill](.factory/skills/knowledge-base/SKILL.md) when adding or updating documents, then run `npm run kb:index` and `npm run kb:check`. For capability-affecting changes, update `src/contracts/knowledge.ts` and run `npm run generate:capabilities && npm run kb:index && npm run kb:check` rather than editing `knowledge/reference/capabilities.md` by hand.
+Canonical knowledge lives under `knowledge/` in small, size-bounded semantic files navigated by nested `INDEX.md` files and [knowledge/index.json](knowledge/index.json). Follow the [knowledge-base skill](.factory/skills/knowledge-base/SKILL.md) when adding or updating documents, then run `npm run kb:index` and `npm run kb:check`. For capability-affecting changes, update `src/contracts/knowledge.ts` and run `npm run generate:capabilities && npm run kb:check` rather than editing files under `knowledge/reference/capabilities/` by hand.
 
 ### Optional Git hooks
 

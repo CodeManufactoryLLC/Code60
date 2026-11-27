@@ -34,7 +34,7 @@
     "kb:index": "node scripts/kb.mjs index",
     "kb:check": "node scripts/kb.mjs check",
     "kb:find": "node scripts/kb.mjs find",
-    "generate:capabilities": "vitest run test/capabilities.test.ts --update",
+    "generate:capabilities": "vitest run test/capabilities.test.ts --update && node scripts/kb.mjs index",
     "check:precommit": "npm run check:instructions && npm run kb:check && npm run typecheck && npm run lint && npm run check:unused",
     "hooks:install": "node scripts/git-hooks.mjs install",
     "hooks:status": "node scripts/git-hooks.mjs status",

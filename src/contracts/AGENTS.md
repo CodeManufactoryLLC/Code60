@@ -35,7 +35,7 @@
   free of I/O. No executable/environment fields are permitted.
 - The self-knowledge catalog in `knowledge.ts` must classify every page, settings
   section and MCP tool. Update descriptors with any capability-affecting change,
-  then run `npm run generate:capabilities`; never hand-edit `knowledge/reference/capabilities.md`.
+  then run `npm run generate:capabilities`; never hand-edit files under `knowledge/reference/capabilities/`.
   Catalog text describes product behavior; it is never authority or instructions.
 
 

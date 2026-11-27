@@ -733,52 +733,202 @@ const references = (capability: string) => ({
 });
 export const capabilityReferences = references;
 
-/** Deterministic bundled reference; `knowledge/reference/capabilities.md` must equal this output. */
-export function capabilityReference(): string {
+export interface CapabilityCategory {
+  id: string;
+  kbId: string;
+  title: string;
+  summary: string;
+  tags: readonly string[];
+  capabilities: readonly string[];
+}
+
+export const CAPABILITY_CATEGORIES: readonly CapabilityCategory[] = [
+  {
+    id: "orchestration",
+    kbId: "KB-REF-001",
+    title: "Capabilities: Orchestration and Chat",
+    summary:
+      "Generated capability specs for Relay, Assistants, Custom Assistants, Projects, Workers, auto-approval, and activity display.",
+    tags: ["capabilities", "orchestration", "chat", "reference"],
+    capabilities: [
+      "relay",
+      "assistants",
+      "custom-agents",
+      "projects",
+      "workers",
+      "orchestration-permissions",
+      "activity",
+    ],
+  },
+  {
+    id: "workspace",
+    kbId: "KB-REF-002",
+    title: "Capabilities: Workspace Navigation and Panels",
+    summary:
+      "Generated capability specs for navigation, history, Files, Terminal, Memory Recall, Plans, Reviews, and Undo.",
+    tags: ["capabilities", "workspace", "panels", "reference"],
+    capabilities: [
+      "page-navigation",
+      "navigation-history",
+      "files",
+      "terminal",
+      "memory-recall",
+      "plans",
+      "reviews",
+      "apply-undo",
+    ],
+  },
+  {
+    id: "customization",
+    kbId: "KB-REF-003",
+    title: "Capabilities: Customization, Memory, and Settings",
+    summary:
+      "Generated capability specs for Commands, Tactics, Internal Prompts, Configurations, model defaults, Memory, handoff, and Settings.",
+    tags: ["capabilities", "customization", "settings", "reference"],
+    capabilities: [
+      "commands",
+      "tactics",
+      "prompts",
+      "configurations",
+      "model-settings",
+      "memory",
+      "continuity",
+      "settings",
+    ],
+  },
+  {
+    id: "automation",
+    kbId: "KB-REF-004",
+    title: "Capabilities: Scheduled Jobs and Workflows",
+    summary:
+      "Generated capability specs for recurring Scheduled Jobs and native multi-step Workflows inside Code60 Gateway.",
+    tags: ["capabilities", "automation", "workflows", "reference"],
+    capabilities: ["automations", "workflows"],
+  },
+  {
+    id: "connectors",
+    kbId: "KB-REF-005",
+    title: "Capabilities: MCP Servers and Browser Automation",
+    summary:
+      "Generated capability specs for backend-owned MCP server management and conversational Playwright browser automation.",
+    tags: ["capabilities", "mcp", "browser", "reference"],
+    capabilities: ["mcp-servers", "browser"],
+  },
+  {
+    id: "providers-and-access",
+    kbId: "KB-REF-006",
+    title: "Capabilities: Providers and Network Access",
+    summary:
+      "Generated capability specs for catalog coding-agent providers and Web Server (Beta) private-LAN access.",
+    tags: ["capabilities", "providers", "lan", "reference"],
+    capabilities: ["providers", "web-server"],
+  },
+  {
+    id: "runtime",
+    kbId: "KB-REF-007",
+    title: "Capabilities: Runtime Lifecycle and Monitoring",
+    summary:
+      "Generated capability specs for browser/backend lifecycle, Updates, Uninstall, System Manager, Health Check, and Usage.",
+    tags: ["capabilities", "runtime", "operations", "reference"],
+    capabilities: [
+      "browser-runtime",
+      "updates",
+      "uninstall",
+      "system-manager",
+      "health-check",
+      "usage",
+    ],
+  },
+  {
+    id: "inspection",
+    kbId: "KB-REF-008",
+    title: "Capabilities: Data, Search, Self-Knowledge, and Experiments",
+    summary:
+      "Generated capability specs for Data Viewer, Search, Diagnostic Logs, Self-Knowledge, Retrieval Tests, and Memory Tester.",
+    tags: ["capabilities", "inspection", "experiments", "reference"],
+    capabilities: [
+      "data",
+      "search",
+      "logs",
+      "knowledge",
+      "rag",
+      "episodic-memory",
+      "contributor-tools",
+    ],
+  },
+];
+
+const renderCapabilityLines = (c: Capability): string[] => {
   const list = (values: string[]) =>
     values.length ? values.map((v) => `\`${v}\``).join(", ") : "none";
+  const refs = references(c.id);
   return [
-    "---",
-    "id: KB-REF-001",
-    "title: Capability Reference",
-    "domain: reference",
-    "kind: reference",
-    "status: active",
-    "summary: Generated catalog of Code60 browser capabilities, access paths, prerequisites, limits, and agent-visible tools.",
-    "updated: 2026-11-27",
-    "code_refs:",
-    "  - src/contracts/knowledge.ts",
-    "  - src/contracts/navigation.ts",
-    "tags:",
-    "  - capabilities",
-    "  - self-knowledge",
-    "  - reference",
-    "---",
+    `## ${c.label}`,
     "",
-    "# Capability Reference",
+    `- ID: \`${c.id}\``,
+    `- Status: ${c.status}`,
+    `- Purpose: ${c.purpose}`,
+    `- Access: ${c.access}`,
+    `- Prerequisite: ${c.prerequisite}`,
+    `- Agent access: ${c.agentAccess}`,
+    `- Confirmation: ${c.confirmation}`,
+    `- Limits: ${c.limitations}`,
+    `- Pages: ${list(refs.pages)}`,
+    `- Settings sections: ${list(refs.settings)}`,
+    `- Tools: ${list(refs.tools)}`,
     "",
-    "Generated from `src/contracts/knowledge.ts`. Do not edit by hand; run `npm run generate:capabilities`.",
-    "",
-    `Schema version: ${KNOWLEDGE_SCHEMA_VERSION}`,
-    "",
-    ...APPLICATION_CAPABILITIES.flatMap((c) => {
-      const refs = references(c.id);
-      return [
-        `## ${c.label}`,
-        "",
-        `- ID: \`${c.id}\``,
-        `- Status: ${c.status}`,
-        `- Purpose: ${c.purpose}`,
-        `- Access: ${c.access}`,
-        `- Prerequisite: ${c.prerequisite}`,
-        `- Agent access: ${c.agentAccess}`,
-        `- Confirmation: ${c.confirmation}`,
-        `- Limits: ${c.limitations}`,
-        `- Pages: ${list(refs.pages)}`,
-        `- Settings sections: ${list(refs.settings)}`,
-        `- Tools: ${list(refs.tools)}`,
-        "",
-      ];
-    }),
-  ].join("\n");
+  ];
+};
+
+/** Bounded, semantic capability reference documents under `knowledge/reference/capabilities/`. */
+export function capabilityDocuments(): readonly {
+  category: string;
+  kbId: string;
+  path: string;
+  content: string;
+}[] {
+  const byId = new Map(APPLICATION_CAPABILITIES.map((c) => [c.id, c]));
+  return CAPABILITY_CATEGORIES.map((category) => {
+    const items = category.capabilities.flatMap((id) => {
+      const cap = byId.get(id);
+      return cap ? [cap] : [];
+    });
+    const content = [
+      "---",
+      `id: ${category.kbId}`,
+      `title: "${category.title}"`,
+      "domain: reference",
+      "kind: reference",
+      "status: active",
+      `summary: ${category.summary}`,
+      "updated: 2026-11-27",
+      "code_refs:",
+      "  - src/contracts/knowledge.ts",
+      "  - src/contracts/navigation.ts",
+      "tags:",
+      ...category.tags.map((tag) => `  - ${tag}`),
+      "---",
+      "",
+      `# ${category.title}`,
+      "",
+      "Generated from `src/contracts/knowledge.ts`. Do not edit by hand; run `npm run generate:capabilities`.",
+      "",
+      `Schema version: ${KNOWLEDGE_SCHEMA_VERSION}`,
+      "",
+      ...items.flatMap(renderCapabilityLines),
+    ].join("\n");
+    return {
+      category: category.id,
+      kbId: category.kbId,
+      path: `knowledge/reference/capabilities/${category.id}.md`,
+      content,
+    };
+  });
+}
+
+/** Deterministic combined catalog text used for runtime catalog fingerprinting. */
+export function capabilityReference(): string {
+  return capabilityDocuments()
+    .map((doc) => doc.content)
+    .join("\n");
 }

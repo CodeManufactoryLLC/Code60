@@ -1,11 +1,20 @@
-import { access, lstat, readdir, readFile, realpath, writeFile } from "node:fs/promises";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { access, lstat, mkdir, readdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 
 const repository = fileURLToPath(new URL("..", import.meta.url));
 const BEGIN_MARKER = "<!-- BEGIN:KB_INDEX -->";
 const END_MARKER = "<!-- END:KB_INDEX -->";
+
+export const KB_LIMITS = {
+  maxLines: 150,
+  maxBytes: 10_240,
+  maxIndexLines: 100,
+  maxDirectDocsPerDir: 12,
+  maxDepth: 4,
+  maxSummaryChars: 200,
+};
 
 export const DOMAINS = [
   {
@@ -92,8 +101,21 @@ function isValidIsoDate(text) {
   );
 }
 
-async function collectMarkdown(root, folder, failures) {
+function titleCaseSegment(segment) {
+  return segment
+    .split("-")
+    .map((part) => (part ? `${part[0].toUpperCase()}${part.slice(1)}` : part))
+    .join(" ");
+}
+
+function nestingDepth(relPath) {
+  // Depth beneath `knowledge/`, e.g. `knowledge/reference/capabilities/runtime.md` -> 3.
+  return relPath.replace(/^knowledge\//, "").split("/").length;
+}
+
+async function collectTree(root, folder, failures) {
   const files = [];
+  const dirs = [];
   const walk = async (relDir) => {
     let entries;
     try {
@@ -102,19 +124,20 @@ async function collectMarkdown(root, folder, failures) {
       if (error.code === "ENOENT") return;
       throw error;
     }
+    dirs.push(relDir);
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
       const relPath = `${relDir}/${entry.name}`;
       if (entry.isSymbolicLink()) {
-        failures.push(`${relPath}:1: Knowledge base file must not be a symbolic link`);
+        failures.push(`${relPath}:1: Knowledge base entry must not be a symbolic link`);
       } else if (entry.isDirectory()) {
         await walk(relPath);
       } else if (entry.isFile() && entry.name.endsWith(".md")) {
-        files.push(relPath);
+        if (entry.name !== "INDEX.md") files.push(relPath);
       }
     }
   };
   await walk(folder);
-  return files;
+  return { files, dirs };
 }
 
 function validateStipulations(relPath, body, prefix, failures) {
@@ -183,10 +206,14 @@ async function scanKnowledgeBase(directory = repository) {
   const root = await realpath(directory);
   const failures = [];
   const documents = [];
+  const directories = new Set();
+  const directCounts = new Map();
   const byId = new Map();
 
   for (const domain of DOMAINS) {
-    const files = await collectMarkdown(root, domain.path, failures);
+    directories.add(domain.path);
+    const { files, dirs } = await collectTree(root, domain.path, failures);
+    for (const dir of dirs) directories.add(dir);
     for (const relPath of files) {
       const fullPath = resolve(root, relPath);
       if (!inside(root, fullPath) || !inside(root, await realpath(fullPath))) {
@@ -198,7 +225,31 @@ async function scanKnowledgeBase(directory = repository) {
         failures.push(`${relPath}:1: Expected a regular file`);
         continue;
       }
+
+      const depth = nestingDepth(relPath);
+      if (depth > KB_LIMITS.maxDepth) {
+        failures.push(
+          `${relPath}:1: Nesting depth ${depth} exceeds maxDepth ${KB_LIMITS.maxDepth}`,
+        );
+      }
+
       const raw = await readFile(fullPath, "utf8");
+      const lines = raw.split(/\r?\n/).length;
+      const bytes = Buffer.byteLength(raw, "utf8");
+      if (lines > KB_LIMITS.maxLines) {
+        failures.push(
+          `${relPath}:1: Document has ${lines} lines, exceeding maxLines (${KB_LIMITS.maxLines}); split into smaller semantic files under a nested subfolder`,
+        );
+      }
+      if (bytes > KB_LIMITS.maxBytes) {
+        failures.push(
+          `${relPath}:1: Document is ${bytes} bytes, exceeding maxBytes (${KB_LIMITS.maxBytes}); split into smaller semantic files under a nested subfolder`,
+        );
+      }
+
+      const parentDir = dirname(relPath);
+      directCounts.set(parentDir, (directCounts.get(parentDir) ?? 0) + 1);
+
       const fmMatch = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(raw);
       if (!fmMatch) {
         failures.push(`${relPath}:1: Missing YAML frontmatter`);
@@ -250,11 +301,11 @@ async function scanKnowledgeBase(directory = repository) {
       if (
         typeof meta.summary !== "string" ||
         !meta.summary.trim() ||
-        meta.summary.length > 200 ||
+        meta.summary.length > KB_LIMITS.maxSummaryChars ||
         /[\r\n|]/.test(meta.summary)
       ) {
         failures.push(
-          `${relPath}:1: Frontmatter summary must be a single line (1–200 chars, no "|" characters)`,
+          `${relPath}:1: Frontmatter summary must be a single line (1–${KB_LIMITS.maxSummaryChars} chars, no "|" characters)`,
         );
       }
       const updated =
@@ -311,6 +362,8 @@ async function scanKnowledgeBase(directory = repository) {
         summary: String(meta.summary ?? "").trim(),
         updated: String(updated ?? ""),
         path: relPath,
+        lines,
+        bytes,
       };
       if (meta.rule_prefix) entry.rule_prefix = meta.rule_prefix;
       if (Array.isArray(meta.code_refs) && meta.code_refs.length) entry.code_refs = meta.code_refs;
@@ -318,6 +371,14 @@ async function scanKnowledgeBase(directory = repository) {
       if (Array.isArray(meta.tags) && meta.tags.length) entry.tags = meta.tags;
       if (ruleIds?.length) entry.ruleIds = ruleIds;
       documents.push(entry);
+    }
+  }
+
+  for (const [dir, count] of directCounts) {
+    if (count > KB_LIMITS.maxDirectDocsPerDir) {
+      failures.push(
+        `${dir}:1: Directory contains ${count} direct documents, exceeding maxDirectDocsPerDir (${KB_LIMITS.maxDirectDocsPerDir}); group into semantic subfolders with nested INDEX.md files`,
+      );
     }
   }
 
@@ -341,45 +402,103 @@ async function scanKnowledgeBase(directory = repository) {
   if (await exists(resolve(root, "src/contracts/knowledge.ts"))) {
     if (await exists(resolve(root, "docs/capabilities.md"))) {
       failures.push(
-        "docs/capabilities.md:1: Legacy capabilities path must not exist; keep it at knowledge/reference/capabilities.md",
+        "docs/capabilities.md:1: Legacy capabilities path must not exist; keep bounded semantic files under knowledge/reference/capabilities/",
       );
     }
-    const capDoc = documents.find((doc) => doc.path === "knowledge/reference/capabilities.md");
-    if (!capDoc) {
+    if (await exists(resolve(root, "knowledge/reference/capabilities.md"))) {
       failures.push(
-        "knowledge/reference/capabilities.md:1: Missing generated capability reference (run npm run generate:capabilities)",
+        "knowledge/reference/capabilities.md:1: Monolithic capabilities file must not exist; use semantic files under knowledge/reference/capabilities/",
       );
-    } else if (capDoc.id !== "KB-REF-001") {
+    }
+    const capDocs = documents.filter((doc) =>
+      doc.path.startsWith("knowledge/reference/capabilities/"),
+    );
+    if (!capDocs.length) {
       failures.push(
-        `knowledge/reference/capabilities.md:1: Capability reference must keep stable ID KB-REF-001 (got ${capDoc.id})`,
+        "knowledge/reference/capabilities/INDEX.md:1: Missing generated capability reference files (run npm run generate:capabilities)",
       );
     }
   }
 
-  return { root, documents, failures };
+  return { root, documents, directories: [...directories].sort(), failures };
 }
 
-function renderIndexMarkdown(existing, documents) {
+function renderRootIndexMarkdown(existing, documents) {
   const start = existing.indexOf(BEGIN_MARKER);
   const end = existing.indexOf(END_MARKER);
   if (start < 0 || end < 0 || end < start) {
     throw new Error(`knowledge/INDEX.md must contain ${BEGIN_MARKER} and ${END_MARKER} markers`);
   }
-  const block = documents.length
-    ? [
-        "| ID | Title | Domain | Kind | Status | Updated | Summary |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
-        ...documents.map((doc) => {
-          const rel = doc.path.replace(/^knowledge\//, "");
-          return `| \`${doc.id}\` | [${doc.title}](${rel}) | \`${doc.domain}\` | \`${doc.kind}\` | \`${doc.status}\` | \`${doc.updated}\` | ${doc.summary} |`;
-        }),
-      ].join("\n")
-    : "_No domain documents indexed yet. Add documents under `governance/`, `architecture/`, `subsystems/`, `operations/`, or `reference/` using [templates/](templates/)._";
-
+  const rows = DOMAINS.map((domain) => {
+    const count = documents.filter((doc) => doc.domain === domain.id).length;
+    return `| \`${domain.code}\` | [${titleCaseSegment(domain.id)}](${domain.id}/INDEX.md) | ${count} | ${domain.description} |`;
+  });
+  const block = [
+    "| Code | Domain Index | Docs | Scope |",
+    "| --- | --- | ---: | --- |",
+    ...rows,
+  ].join("\n");
   return `${existing.slice(0, start + BEGIN_MARKER.length)}\n${block}\n${existing.slice(end)}`;
 }
 
-function renderIndexJson(documents) {
+function renderNestedIndexMarkdown(dir, allDirs, documents) {
+  const relFromKb = dir.replace(/^knowledge\//, "");
+  const parts = relFromKb.split("/");
+  const domain = DOMAIN_BY_ID.get(parts[0]);
+  const title =
+    parts.length === 1
+      ? `${titleCaseSegment(parts[0])} Index`
+      : `${titleCaseSegment(parts[parts.length - 1])} Index`;
+
+  const childDirs = allDirs.filter((candidate) => dirname(candidate) === dir);
+  const directDocs = documents.filter((doc) => dirname(doc.path) === dir);
+
+  const lines = [
+    `# ${title}`,
+    "",
+    "← [Parent Index](../INDEX.md)",
+    "",
+    domain && parts.length === 1
+      ? `${domain.description}. Generated by \`npm run kb:index\`; do not edit by hand.`
+      : `Semantic section under \`${dir}/\`. Generated by \`npm run kb:index\`; do not edit by hand.`,
+    "",
+  ];
+
+  if (childDirs.length) {
+    lines.push("## Sections", "", "| Section | Docs |", "| --- | ---: |");
+    for (const child of childDirs) {
+      const name = child.slice(dir.length + 1);
+      const count = documents.filter((doc) => doc.path.startsWith(`${child}/`)).length;
+      lines.push(`| [${titleCaseSegment(name)}](${name}/INDEX.md) | ${count} |`);
+    }
+    lines.push("");
+  }
+
+  if (directDocs.length) {
+    lines.push(
+      "## Documents",
+      "",
+      "| ID | Title | Kind | Status | Updated | Summary |",
+      "| --- | --- | --- | --- | --- | --- |",
+    );
+    for (const doc of directDocs) {
+      const file = doc.path.slice(dir.length + 1);
+      lines.push(
+        `| \`${doc.id}\` | [${doc.title}](${file}) | \`${doc.kind}\` | \`${doc.status}\` | \`${doc.updated}\` | ${doc.summary} |`,
+      );
+    }
+    lines.push("");
+  } else if (!childDirs.length) {
+    lines.push(
+      "_No documents indexed in this section yet. Add files using [templates/](../templates/)._",
+      "",
+    );
+  }
+
+  return lines.join("\n");
+}
+
+function renderIndexJson(directories, documents) {
   const latestUpdated = documents.reduce(
     (latest, doc) => (doc.updated && (!latest || doc.updated > latest) ? doc.updated : latest),
     null,
@@ -388,33 +507,45 @@ function renderIndexJson(documents) {
     $schema: "./schema.json",
     schemaVersion: 1,
     generatedAt: latestUpdated,
-    domains: DOMAINS.map((domain) => ({ ...domain })),
+    limits: { ...KB_LIMITS },
+    domains: DOMAINS.map((domain) => ({
+      ...domain,
+      index: `${domain.path}/INDEX.md`,
+    })),
+    indexes: ["knowledge/INDEX.md", ...directories.map((dir) => `${dir}/INDEX.md`)],
     documents,
   };
   return `${JSON.stringify(payload, null, 2)}\n`;
 }
 
 export async function indexKnowledgeBase(directory = repository) {
-  const { root, documents, failures } = await scanKnowledgeBase(directory);
+  const { root, documents, directories, failures } = await scanKnowledgeBase(directory);
   if (failures.length) {
     const error = new Error(failures.join("\n"));
     error.failures = failures;
     throw error;
   }
+
   const indexMdPath = resolve(root, "knowledge/INDEX.md");
   const indexJsonPath = resolve(root, "knowledge/index.json");
   const existingMd = await readFile(indexMdPath, "utf8");
-  const nextMd = renderIndexMarkdown(existingMd, documents);
-  const nextJson = renderIndexJson(documents);
+  const nextMd = renderRootIndexMarkdown(existingMd, documents);
   await writeFile(indexMdPath, nextMd, "utf8");
-  await writeFile(indexJsonPath, nextJson, "utf8");
-  return { count: documents.length, documents };
+
+  for (const dir of directories) {
+    const nestedPath = resolve(root, `${dir}/INDEX.md`);
+    await mkdir(dirname(nestedPath), { recursive: true });
+    await writeFile(nestedPath, renderNestedIndexMarkdown(dir, directories, documents), "utf8");
+  }
+
+  await writeFile(indexJsonPath, renderIndexJson(directories, documents), "utf8");
+  return { count: documents.length, indexes: directories.length + 1, documents };
 }
 
 export async function checkKnowledgeBase(directory = repository) {
   const root = await realpath(directory);
   if (!(await exists(resolve(root, "knowledge")))) return [];
-  const { documents, failures } = await scanKnowledgeBase(root);
+  const { documents, directories, failures } = await scanKnowledgeBase(root);
 
   const indexMdPath = resolve(root, "knowledge/INDEX.md");
   const indexJsonPath = resolve(root, "knowledge/index.json");
@@ -424,7 +555,13 @@ export async function checkKnowledgeBase(directory = repository) {
   } else {
     try {
       const actualMd = await readFile(indexMdPath, "utf8");
-      const expectedMd = renderIndexMarkdown(actualMd, documents);
+      const lineCount = actualMd.split(/\r?\n/).length;
+      if (lineCount > KB_LIMITS.maxIndexLines) {
+        failures.push(
+          `knowledge/INDEX.md:1: Index has ${lineCount} lines, exceeding maxIndexLines (${KB_LIMITS.maxIndexLines})`,
+        );
+      }
+      const expectedMd = renderRootIndexMarkdown(actualMd, documents);
       if (actualMd !== expectedMd) {
         failures.push(
           "knowledge/INDEX.md:1: Knowledge base index is out of date (run npm run kb:index)",
@@ -435,11 +572,31 @@ export async function checkKnowledgeBase(directory = repository) {
     }
   }
 
+  for (const dir of directories) {
+    const relIndex = `${dir}/INDEX.md`;
+    const nestedPath = resolve(root, relIndex);
+    if (!(await exists(nestedPath))) {
+      failures.push(`${relIndex}:1: Missing nested index (run npm run kb:index)`);
+    } else {
+      const actualNested = await readFile(nestedPath, "utf8");
+      const lineCount = actualNested.split(/\r?\n/).length;
+      if (lineCount > KB_LIMITS.maxIndexLines) {
+        failures.push(
+          `${relIndex}:1: Nested index has ${lineCount} lines, exceeding maxIndexLines (${KB_LIMITS.maxIndexLines})`,
+        );
+      }
+      const expectedNested = renderNestedIndexMarkdown(dir, directories, documents);
+      if (actualNested !== expectedNested) {
+        failures.push(`${relIndex}:1: Nested index is out of date (run npm run kb:index)`);
+      }
+    }
+  }
+
   if (!(await exists(indexJsonPath))) {
     failures.push("knowledge/index.json:1: Missing machine-readable knowledge index");
   } else {
     const actualJson = await readFile(indexJsonPath, "utf8");
-    const expectedJson = renderIndexJson(documents);
+    const expectedJson = renderIndexJson(directories, documents);
     if (actualJson !== expectedJson) {
       failures.push(
         "knowledge/index.json:1: Machine-readable knowledge index is out of date (run npm run kb:index)",
@@ -451,7 +608,6 @@ export async function checkKnowledgeBase(directory = repository) {
     failures.push("knowledge/schema.json:1: Missing knowledge base schema");
   }
 
-  // Ensure every domain key in DOMAIN_BY_ID is reachable
   for (const domain of DOMAIN_BY_ID.values()) {
     if (!(await exists(resolve(root, domain.path)))) {
       failures.push(`${domain.path}:1: Missing knowledge domain directory`);
@@ -492,14 +648,16 @@ if (
   try {
     if (command === "index") {
       const result = await indexKnowledgeBase();
-      console.log(`Indexed ${result.count} knowledge base document(s).`);
+      console.log(
+        `Indexed ${result.count} knowledge base document(s) across ${result.indexes} index file(s).`,
+      );
     } else if (command === "check") {
       const failures = await checkKnowledgeBase();
       if (failures.length) {
         console.error(failures.join("\n"));
         process.exitCode = 1;
       } else {
-        console.log("Knowledge base validation and index sync passed.");
+        console.log("Knowledge base validation and nested index sync passed.");
       }
     } else if (command === "find") {
       const matches = await findKnowledge(args.join(" "));

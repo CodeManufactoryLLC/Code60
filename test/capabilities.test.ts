@@ -1,7 +1,10 @@
+import { readdir } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
   APPLICATION_CAPABILITIES,
   BUILTIN_COMMANDS,
+  CAPABILITY_CATEGORIES,
+  capabilityDocuments,
   capabilityReference,
   isKnowledgeTool,
   MCP_KNOWLEDGE_TOOL_DEFINITIONS,
@@ -445,12 +448,29 @@ describe("browser capability catalog", () => {
     expect(commands?.limitations).toContain("do not grant new execution authority");
   });
 
-  it("matches the generated bundled reference", async () => {
-    const reference = capabilityReference();
-    expect(reference).toContain("id: KB-REF-001");
-    expect(reference).toContain("# Capability Reference");
-    expect(reference).toContain("mjholliday/code60");
-    await expect(reference).toMatchFileSnapshot("../knowledge/reference/capabilities.md");
+  it("partitions every capability into bounded semantic reference files", async () => {
+    const mapped = CAPABILITY_CATEGORIES.flatMap((category) => category.capabilities);
+    expect(new Set(mapped).size).toBe(mapped.length);
+    expect([...mapped].sort()).toEqual([...ids].sort());
+
+    const docs = capabilityDocuments();
+    expect(capabilityReference()).toContain("mjholliday/code60");
+    for (const doc of docs) {
+      expect(doc.content.split("\n").length, `${doc.path} lines`).toBeLessThanOrEqual(150);
+      expect(Buffer.byteLength(doc.content, "utf8"), `${doc.path} bytes`).toBeLessThanOrEqual(
+        10_240,
+      );
+      await expect(doc.content).toMatchFileSnapshot(`../${doc.path}`);
+    }
+
+    const expectedFiles = new Set([
+      "INDEX.md",
+      ...docs.map((doc) => doc.path.split("/").at(-1) ?? ""),
+    ]);
+    const actualFiles = (
+      await readdir(new URL("../knowledge/reference/capabilities", import.meta.url))
+    ).filter((name) => name.endsWith(".md"));
+    expect(actualFiles.filter((name) => !expectedFiles.has(name))).toEqual([]);
   });
 
   it("describes session-owned file tabs without changing their runtime prerequisite", () => {

@@ -3,7 +3,7 @@
   "$id": "https://code60.dev/schemas/knowledge-index.schema.json",
   "title": "Code60 Knowledge Base Index & Frontmatter Schema",
   "type": "object",
-  "required": ["schemaVersion", "domains", "documents"],
+  "required": ["schemaVersion", "limits", "domains", "indexes", "documents"],
   "additionalProperties": false,
   "properties": {
     "$schema": {
@@ -15,13 +15,33 @@
     },
     "generatedAt": {
       "type": ["string", "null"],
-      "description": "ISO-8601 UTC timestamp of the last index build, or null before first generation."
+      "description": "Latest YYYY-MM-DD document updated date, or null when no documents are indexed."
+    },
+    "limits": {
+      "type": "object",
+      "required": [
+        "maxLines",
+        "maxBytes",
+        "maxIndexLines",
+        "maxDirectDocsPerDir",
+        "maxDepth",
+        "maxSummaryChars"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "maxLines": { "type": "integer", "minimum": 1 },
+        "maxBytes": { "type": "integer", "minimum": 1 },
+        "maxIndexLines": { "type": "integer", "minimum": 1 },
+        "maxDirectDocsPerDir": { "type": "integer", "minimum": 1 },
+        "maxDepth": { "type": "integer", "minimum": 1 },
+        "maxSummaryChars": { "type": "integer", "minimum": 1 }
+      }
     },
     "domains": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "code", "path", "description"],
+        "required": ["id", "code", "path", "index", "description"],
         "additionalProperties": false,
         "properties": {
           "id": {
@@ -35,10 +55,20 @@
           "path": {
             "type": "string"
           },
+          "index": {
+            "type": "string"
+          },
           "description": {
             "type": "string"
           }
         }
+      }
+    },
+    "indexes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^knowledge/(?:.+/)?INDEX\\.md$"
       }
     },
     "documents": {
@@ -78,7 +108,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
-          "description": "Single-sentence progressive-disclosure summary rendered in INDEX.md."
+          "description": "Single-sentence progressive-disclosure summary rendered in nested INDEX.md files."
         },
         "updated": {
           "type": "string",
@@ -121,11 +151,19 @@
         },
         {
           "type": "object",
-          "required": ["path"],
+          "required": ["path", "lines", "bytes"],
           "properties": {
             "path": {
               "type": "string",
               "pattern": "^knowledge/(governance|architecture|subsystems|operations|reference)/.+\\.md$"
+            },
+            "lines": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1
             },
             "ruleIds": {
               "type": "array",
