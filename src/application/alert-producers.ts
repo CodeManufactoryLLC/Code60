@@ -17,7 +17,6 @@ export const ALERT_PREFIXES = {
   approval: "live:approval:",
   planDraft: "live:plan-draft:",
   workspace: "live:workspace:",
-  mcp: "live:mcp:",
   automation: "live:automation:",
   health: "live:health:",
   workflowPrefix: (recordId: string) => `live:workflow:${recordId}:`,
@@ -181,24 +180,6 @@ export function collectWorkspaceAlerts(snapshot: Snapshot): AlertInput[] {
   return alerts;
 }
 
-export function collectMcpAlerts(summary: {
-  recoveryPending: number;
-  issueCount: number;
-}): AlertInput[] {
-  const alerts: AlertInput[] = [];
-  if (summary.recoveryPending > 0) {
-    alerts.push({
-      dedupeKey: `${ALERT_PREFIXES.mcp}recovery-pending`,
-      source: "mcp",
-      severity: "warning",
-      title: "MCP configuration recovery pending",
-      detail: `${summary.recoveryPending} pending configuration recovery item${summary.recoveryPending === 1 ? "" : "s"}.`,
-      target: { kind: "page", id: "mcp-servers" },
-    });
-  }
-  return alerts;
-}
-
 export function collectWorkflowLiveAlerts(
   recordId: string,
   name: string,
@@ -303,7 +284,6 @@ function mapHealthDeepLink(deepLink?: HealthDeepLink): AlertTarget {
 const DEDICATED_PRODUCER_HEALTH_CHECKS = new Set<string>([
   "database-health",
   "relay-health",
-  "mcp-servers",
   "scheduler-status",
 ]);
 

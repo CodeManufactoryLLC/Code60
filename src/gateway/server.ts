@@ -12,7 +12,6 @@ import {
   collectDraftPlanAlerts,
   collectFailedPlanAlerts,
   collectHealthAlerts,
-  collectMcpAlerts,
   collectSchedulerExecutionAlerts,
   collectSchedulerLiveAlerts,
   collectWorkflowFailureAlert,
@@ -473,6 +472,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     return shutdownRequested;
   });
   const syncApplicationAlerts = (snapshot: ReturnType<ApplicationHost["snapshot"]>) => {
+    if (closing || quiescing || preparingUninstall) return;
     void (async () => {
       await alerts.syncSource(ALERT_PREFIXES.approval, collectApprovalAlerts(snapshot));
       await alerts.syncSource(ALERT_PREFIXES.planDraft, collectDraftPlanAlerts(snapshot));
@@ -482,35 +482,16 @@ export async function startGateway(options: GatewayOptions = {}) {
       }
     })().catch(() => {});
   };
-  let mcpAlertSyncInFlight = false;
-  let mcpAlertSyncPending = false;
-  const syncMcpAlerts = () => {
-    if (mcpAlertSyncInFlight) {
-      mcpAlertSyncPending = true;
-      return;
-    }
-    mcpAlertSyncInFlight = true;
-    void (async () => {
-      try {
-        do {
-          mcpAlertSyncPending = false;
-          const summary = await application.healthMcpSummary();
-          await alerts.syncSource(ALERT_PREFIXES.mcp, collectMcpAlerts(summary));
-        } while (mcpAlertSyncPending && !closing);
-      } finally {
-        mcpAlertSyncInFlight = false;
-      }
-    })().catch(() => {});
-  };
   let schedulerAlertSyncInFlight = false;
   let schedulerAlertSyncPending = false;
-  const syncSchedulerAlerts = () => {
+  const syncSchedulerAlerts = (): Promise<void> => {
+    if (closing || quiescing || preparingUninstall) return Promise.resolve();
     if (schedulerAlertSyncInFlight) {
       schedulerAlertSyncPending = true;
-      return;
+      return Promise.resolve();
     }
     schedulerAlertSyncInFlight = true;
-    void (async () => {
+    return (async () => {
       try {
         do {
           schedulerAlertSyncPending = false;
@@ -518,7 +499,7 @@ export async function startGateway(options: GatewayOptions = {}) {
             ALERT_PREFIXES.automation,
             collectSchedulerLiveAlerts(schedulerError),
           );
-          if (!scheduler) continue;
+          if (!scheduler || closing || quiescing || preparingUninstall) continue;
           const history = (await scheduler.request({ action: "history", limit: 20 })) as {
             executions?: SchedulerExecutionNotice[];
           };
@@ -532,15 +513,14 @@ export async function startGateway(options: GatewayOptions = {}) {
           for (const item of collectSchedulerExecutionAlerts(executions)) {
             await alerts.publish(item);
           }
-        } while (schedulerAlertSyncPending && !closing);
+        } while (schedulerAlertSyncPending && !closing && !quiescing && !preparingUninstall);
       } finally {
         schedulerAlertSyncInFlight = false;
       }
     })().catch(() => {});
   };
   syncApplicationAlerts(application.snapshot(false, true));
-  syncMcpAlerts();
-  syncSchedulerAlerts();
+  await syncSchedulerAlerts();
   const disposers = [
     application.subscribe((snapshot) => {
       workflows.observeProvider(
@@ -553,10 +533,7 @@ export async function startGateway(options: GatewayOptions = {}) {
       syncApplicationAlerts(snapshot);
       emit("update", snapshot);
     }, true),
-    application.mcp.subscribe(() => {
-      syncMcpAlerts();
-      emit("mcp-changed");
-    }),
+    application.mcp.subscribe(() => emit("mcp-changed")),
     application.memory.subscribe(() => emit("memory-changed")),
     application.rag.subscribe((status) => emit("rag-status", status)),
     application.terminals.subscribe((event) => emit("terminal-event", event)),

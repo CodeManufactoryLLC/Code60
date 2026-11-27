@@ -5,7 +5,6 @@ import {
   collectDraftPlanAlerts,
   collectFailedPlanAlerts,
   collectHealthAlerts,
-  collectMcpAlerts,
   collectSchedulerExecutionAlerts,
   collectSchedulerLiveAlerts,
   collectWorkflowFailureAlert,
@@ -272,10 +271,7 @@ describe("alert producers", () => {
     ]);
   });
 
-  it("collects MCP, workflow, scheduler, and non-duplicate health alerts", () => {
-    expect(collectMcpAlerts({ recoveryPending: 2, issueCount: 1 })).toHaveLength(1);
-    expect(collectMcpAlerts({ recoveryPending: 0, issueCount: 0 })).toHaveLength(0);
-
+  it("collects workflow, scheduler, and non-duplicate health alerts", () => {
     const wfId = "550e8400-e29b-41d4-a716-446655440020";
     const needsInput: WorkflowSnapshot = {
       runId: "550e8400-e29b-41d4-a716-446655440021",

@@ -4,7 +4,6 @@ export {
   collectDraftPlanAlerts,
   collectFailedPlanAlerts,
   collectHealthAlerts,
-  collectMcpAlerts,
   collectSchedulerExecutionAlerts,
   collectSchedulerLiveAlerts,
   collectWorkflowFailureAlert,
