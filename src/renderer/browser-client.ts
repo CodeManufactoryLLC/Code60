@@ -129,6 +129,8 @@ export function createBrowserClient(
     onTerminalsChanged: (listener) => events.on("terminals-changed", listener),
     healthCheck: (request) => rpc("health-check", request),
     onHealthChanged: (listener) => events.on("health-changed", listener),
+    heartbeat: (request) => rpc("heartbeat", request),
+    onHeartbeatChanged: (listener) => events.on("heartbeat-changed", listener),
     usageReport: (query) => rpc("usage-report", query ?? {}),
     usageTurns: (query) => rpc("usage-turns", query ?? {}),
     usageExport: (request) => rpc("usage-export", request),

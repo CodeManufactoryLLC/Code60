@@ -25,6 +25,10 @@ export const LOG_EVENTS = {
   "worktree.remove": ["worktree", "Worktree removal completed"],
   "database.connect": ["database", "Database connection completed"],
   "persistence.failed": ["persistence", "Lifecycle persistence failed"],
+  "heartbeat.sweep": ["heartbeat", "Heartbeat sweep completed with findings"],
+  "heartbeat.reconciled": ["heartbeat", "Heartbeat reconciled stuck or orphaned state"],
+  "heartbeat.worktree_pruned": ["heartbeat", "Heartbeat pruned clean worktree"],
+  "heartbeat.self_heal": ["heartbeat", "Heartbeat self-healing action executed"],
 } as const;
 const logEventSchema = z.enum(
   Object.keys(LOG_EVENTS) as [keyof typeof LOG_EVENTS, ...(keyof typeof LOG_EVENTS)[]],
@@ -41,6 +45,7 @@ const logComponentSchema = z.enum([
   "worktree",
   "database",
   "persistence",
+  "heartbeat",
 ]);
 const logOutcomeSchema = z.enum([
   "started",

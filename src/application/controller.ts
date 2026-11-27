@@ -5561,6 +5561,90 @@ export class ApplicationHost {
     };
   }
 
+  heartbeatRepoPaths(): string[] {
+    const snap = this.snapshot(false, true);
+    const paths = new Set<string>();
+    for (const project of snap.openProjects ?? []) paths.add(project.path);
+    if (snap.directory) paths.add(snap.directory);
+    return [...paths];
+  }
+
+  heartbeatPinnedWorktreesAndRuns(): { worktrees: Set<string>; runIds: Set<string> } {
+    const worktrees = new Set<string>();
+    const runIds = new Set<string>();
+    const snap = this.snapshot(false, true);
+    for (const id of snap.liveIds) runIds.add(id);
+    for (const run of snap.runs) {
+      if (
+        run.view &&
+        !["finished", "failed", "cancelled", "timed_out", "interrupted"].includes(run.view.status)
+      ) {
+        runIds.add(run.record.id);
+        worktrees.add(run.record.worktree);
+      }
+    }
+    return { worktrees, runIds };
+  }
+
+  heartbeatInspectWedgedRuns(): Array<{ runId: string; label: string; reason: string }> {
+    const wedged: Array<{ runId: string; label: string; reason: string }> = [];
+    const snap = this.snapshot(false, true);
+    for (const run of snap.runs) {
+      if (run.view?.stopping && run.agentAlive) {
+        wedged.push({
+          runId: run.record.id,
+          label: run.record.agent,
+          reason: "Run remained in stopping state with a live agent process.",
+        });
+      }
+    }
+    return wedged;
+  }
+
+  async heartbeatRecoverWedgedRun(runId: string): Promise<boolean> {
+    try {
+      await this.action({ type: "stop", id: runId });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async heartbeatHealRuntime(options: {
+    canRestartSidecar: boolean;
+    mode: "maintain" | "inspect";
+  }): Promise<{
+    restartedSidecars: number;
+    sidecarIssues: string[];
+    relayReconnected: boolean;
+    relayError: string | null;
+  }> {
+    let restartedSidecars = 0;
+    const sidecarIssues: string[] = [];
+    const relayReconnected = false;
+    let relayError: string | null = null;
+
+    try {
+      const mem = await this.memory.snapshot();
+      if (mem.warning) {
+        sidecarIssues.push(mem.warning);
+        if (options.mode === "maintain" && options.canRestartSidecar) {
+          await this.memory.close();
+          restartedSidecars++;
+        }
+      }
+    } catch {
+      sidecarIssues.push("Memory sidecar did not respond to health check.");
+    }
+
+    const snap = this.snapshot(false, true);
+    if (snap.chat.kind === "relay" && snap.chat.error) {
+      relayError = snap.chat.error;
+    }
+
+    return { restartedSidecars, sidecarIssues, relayReconnected, relayError };
+  }
+
   async initialDatabaseStatus(): Promise<{ state: "ready" | "not-selected" | "unavailable" }> {
     try {
       const selected = await this.storage.preferences.selection?.();

@@ -144,6 +144,15 @@ export const pages = [
     icon: "app-health-check",
   },
   {
+    id: "heartbeat",
+    initialOrder: 31,
+    label: "Heartbeat",
+    group: "apps",
+    order: 2,
+    database: false,
+    icon: "app-heartbeat",
+  },
+  {
     id: "usage",
     initialOrder: 30,
     label: "Usage",

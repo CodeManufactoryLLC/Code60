@@ -7411,4 +7411,84 @@ describe("controller terminals", () => {
       await fs.rm(emptyState, { recursive: true, force: true });
     }
   });
+
+  it("exposes Heartbeat runtime helpers for repos, pinned runs, wedged recovery, and sidecar healing", async () => {
+    await controller.open(directory);
+    expect(controller.heartbeatRepoPaths()).toContain(controller.snapshot().directory);
+
+    const emptyPins = controller.heartbeatPinnedWorktreesAndRuns();
+    expect(emptyPins.worktrees.size).toBe(0);
+    expect(emptyPins.runIds.size).toBe(0);
+    expect(controller.heartbeatInspectWedgedRuns()).toEqual([]);
+
+    // Exercise pinned active runs and wedged-run detection via snapshot state.
+    const realSnap = controller.snapshot(false, true);
+    const snapSpy = vi.spyOn(controller, "snapshot").mockReturnValue({
+      ...realSnap,
+      liveIds: ["live-1"],
+      runs: [
+        {
+          record: {
+            id: "wedged-1",
+            agent: "claude",
+            worktree: "/tmp/wt-wedged",
+          } as never,
+          view: { status: "running", stopping: true } as never,
+          agentAlive: true,
+        } as never,
+      ],
+      chat: { ...realSnap.chat, kind: "relay", error: "Relay disconnected" } as never,
+    });
+
+    const pins = controller.heartbeatPinnedWorktreesAndRuns();
+    expect(pins.runIds.has("live-1")).toBe(true);
+    expect(pins.runIds.has("wedged-1")).toBe(true);
+    expect(pins.worktrees.has("/tmp/wt-wedged")).toBe(true);
+    expect(controller.heartbeatInspectWedgedRuns()).toEqual([
+      {
+        runId: "wedged-1",
+        label: "claude",
+        reason: "Run remained in stopping state with a live agent process.",
+      },
+    ]);
+
+    const actionSpy = vi.spyOn(controller, "action").mockResolvedValueOnce(undefined as never);
+    expect(await controller.heartbeatRecoverWedgedRun("wedged-1")).toBe(true);
+    actionSpy.mockRejectedValueOnce(new Error("stop failed"));
+    expect(await controller.heartbeatRecoverWedgedRun("wedged-1")).toBe(false);
+    actionSpy.mockRestore();
+
+    // Healthy sidecar + Relay error reporting.
+    const healthy = await controller.heartbeatHealRuntime({
+      canRestartSidecar: true,
+      mode: "inspect",
+    });
+    expect(healthy.restartedSidecars).toBe(0);
+    expect(healthy.relayError).toBe("Relay disconnected");
+
+    // Unhealthy sidecar restarted when maintain + canRestartSidecar.
+    const memSnapSpy = vi
+      .spyOn(controller.memory, "snapshot")
+      .mockResolvedValueOnce({ warning: "Sidecar stalled" } as never);
+    const memCloseSpy = vi.spyOn(controller.memory, "close").mockResolvedValueOnce();
+    const healed = await controller.heartbeatHealRuntime({
+      canRestartSidecar: true,
+      mode: "maintain",
+    });
+    expect(healed.restartedSidecars).toBe(1);
+    expect(healed.sidecarIssues).toContain("Sidecar stalled");
+    expect(memCloseSpy).toHaveBeenCalledTimes(1);
+
+    // Unresponsive sidecar rejection handled safely.
+    memSnapSpy.mockRejectedValueOnce(new Error("IPC timeout"));
+    const failed = await controller.heartbeatHealRuntime({
+      canRestartSidecar: true,
+      mode: "maintain",
+    });
+    expect(failed.sidecarIssues).toContain("Memory sidecar did not respond to health check.");
+
+    memSnapSpy.mockRestore();
+    memCloseSpy.mockRestore();
+    snapSpy.mockRestore();
+  });
 });

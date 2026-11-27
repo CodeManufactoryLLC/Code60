@@ -11,6 +11,7 @@ import {
   DesktopWorkflows,
   filePreferences,
   HealthCheckService,
+  HeartbeatService,
   inspectWorkflowRecordsForUninstall,
   openProjectDatabase,
   prepareCodexEnvironment,
@@ -27,6 +28,7 @@ import {
   operationRequestSchema,
   pairingPolicySchema,
   pairingRequestSchema,
+  parseHeartbeatRequest,
   parseUsageReportQuery,
   parseUsageTurnsQuery,
   webServerEnabledSchema,
@@ -435,6 +437,66 @@ export async function startGateway(options: GatewayOptions = {}) {
     mcpSummary: () => application.healthMcpSummary(),
     logStatus: () => logs.status(),
   });
+  const heartbeatDeps = options.deps ?? defaultDeps(logs.sink, usage.sink);
+  const heartbeat = new HeartbeatService({
+    env,
+    deps: heartbeatDeps,
+    log: logs.sink,
+    runPassiveHealthCheck: async () =>
+      healthCheck.handle({ action: "run", scope: { kind: "all", includeActive: false } }),
+    scheduler: {
+      status: () => scheduler?.scheduler.status() ?? null,
+      executionCount: () => scheduler?.scheduler.executionCount() ?? 0,
+      listEnabledJobs: () =>
+        (scheduler?.scheduler.enabledAutomations() ?? []).map((automation) => ({
+          id: automation.id,
+          name: automation.name,
+          enabled: automation.enabled,
+          repositoryPath: automation.action.repository.path,
+          baseBranch: automation.action.baseBranch,
+          providerName:
+            automation.action.type === "prompt"
+              ? automation.action.agent
+              : automation.action.provider,
+          providerHash: automation.action.providerHash,
+        })),
+      verifyJobDrift: async (job) => {
+        try {
+          await heartbeatDeps.git.resolveCommit(job.repositoryPath, `refs/heads/${job.baseBranch}`);
+        } catch {
+          return "base_missing";
+        }
+        return "ok";
+      },
+      resolveBlock: async () => {
+        if (!scheduler) return false;
+        await scheduler.request({ action: "resolveBlock" });
+        return true;
+      },
+      pauseAll: async () => {
+        if (!scheduler) return;
+        await scheduler.request({ action: "pauseAll", cancelActive: false });
+      },
+      resumeAll: async () => {
+        if (!scheduler) return;
+        await scheduler.request({ action: "resumeAll" });
+      },
+    },
+    runtime: {
+      repoPaths: () => application.heartbeatRepoPaths(),
+      pinnedWorktreesAndRuns: () => {
+        const appPins = application.heartbeatPinnedWorktreesAndRuns();
+        const worktrees = new Set<string>(appPins.worktrees);
+        for (const wt of workflows.pinnedWorktrees()) worktrees.add(wt);
+        for (const wt of scheduler?.scheduler.pinnedWorktrees() ?? []) worktrees.add(wt);
+        return { worktrees, runIds: appPins.runIds };
+      },
+      inspectWedgedRuns: () => application.heartbeatInspectWedgedRuns(),
+      recoverWedgedRun: (runId) => application.heartbeatRecoverWedgedRun(runId),
+      healRuntime: (opts) => application.heartbeatHealRuntime(opts),
+    },
+  });
+  application.knowledge.setHeartbeatStatus(() => heartbeat.redactedStatus());
   const operations = applicationOperations(
     application,
     logs,
@@ -444,6 +506,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     workflows,
     healthCheck,
     usage,
+    heartbeat,
   );
   operations.set("backend-stop", async () => {
     if (
@@ -474,6 +537,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     logs.subscribe(() => emit("logs-changed")),
     usage.subscribe(() => emit("usage-changed")),
     healthCheck.subscribe((snapshot) => emit("health-changed", snapshot)),
+    heartbeat.subscribe((snapshot) => emit("heartbeat-changed", snapshot)),
   ];
   const detach = async (session: string) => {
     const owner = owners.get(session);
@@ -698,6 +762,10 @@ export async function startGateway(options: GatewayOptions = {}) {
                 ).turns
               : undefined;
             respond(response, { report, ...(turns ? { turns } : {}) });
+          } else if (path === "/management/heartbeat") {
+            const payload = await body(request);
+            const parsed = parseHeartbeatRequest(payload ?? { action: "snapshot" });
+            respond(response, await heartbeat.handle(parsed));
           } else if (path === "/management/prepare-database") {
             for await (const chunk of request)
               if (chunk.length) throw new Error("Database preparation accepts no payload");
@@ -711,6 +779,7 @@ export async function startGateway(options: GatewayOptions = {}) {
               requirePairing,
               scheduler: scheduler?.scheduler.status() ?? null,
               schedulerError,
+              heartbeat: heartbeat.redactedStatus(),
               database: await application.initialDatabaseStatus(),
               engines: {
                 bundled: false,
@@ -1061,6 +1130,7 @@ export async function startGateway(options: GatewayOptions = {}) {
       await quiesce();
       closing = true;
       for (const dispose of disposers) dispose();
+      await heartbeat.stop();
       healthCheck.dispose();
       automations.reset();
       for (const stream of streams.values()) stream.end();
@@ -1130,6 +1200,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     });
     await application.restore({ prepareDefaultDatabase: true });
     resolveAppReady();
+    await heartbeat.start();
     await webServer.start(options.container ? false : (settings?.webServerEnabled ?? false));
     return {
       origin,
@@ -1143,6 +1214,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     };
   } catch (error) {
     for (const dispose of disposers) dispose();
+    await heartbeat.stop().catch(() => {});
     healthCheck.dispose();
     resolveAppReady();
     await Promise.allSettled([scheduler?.stop()]);
@@ -1190,14 +1262,16 @@ export async function managementRequest(
     | "prepare-database"
     | "update-summary"
     | "usage"
+    | "heartbeat"
     | "uninstall-summary"
     | "prepare-uninstall",
   value?:
     | { requirePairing: boolean }
-    | { query?: unknown; includeTurns?: boolean; turnLimit?: number },
+    | { query?: unknown; includeTurns?: boolean; turnLimit?: number }
+    | { action: string; mode?: string },
 ) {
   const connection = await readGatewayConnection(env);
-  const sendsBody = action === "pairing" || action === "usage";
+  const sendsBody = action === "pairing" || action === "usage" || action === "heartbeat";
   const response = await fetch(`${connection.origin}/management/${action}`, {
     method: "POST",
     redirect: "error",
@@ -1206,7 +1280,9 @@ export async function managementRequest(
       ...(sendsBody ? { "Content-Type": "application/json" } : {}),
     },
     ...(sendsBody ? { body: JSON.stringify(value ?? null) } : {}),
-    signal: AbortSignal.timeout(["shutdown", "prepare-uninstall"].includes(action) ? 90_000 : 5000),
+    signal: AbortSignal.timeout(
+      ["shutdown", "prepare-uninstall", "heartbeat"].includes(action) ? 90_000 : 5000,
+    ),
   });
   const result = (await response.json()) as Record<string, unknown>;
   if (!response.ok)
