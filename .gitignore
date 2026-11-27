@@ -27,6 +27,7 @@ playwright-report/
 .devcontainer/local/
 .devcontainer/devcontainer.json
 architecture/structurizr/.structurizr/
+architecture/structurizr/workspace.json
 
 # Operating system metadata
 .DS_Store
