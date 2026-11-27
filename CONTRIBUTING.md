@@ -174,6 +174,10 @@ or native environments mean BLOCKED, not a unit-test substitute. Never install a
 real service during routine tests. Use injected native controls for ownership and
 handoff tests; actual login-service lifecycle validation remains a native release gate.
 
+### Knowledge base and capabilities
+
+Canonical knowledge lives under `knowledge/`, indexed by [knowledge/INDEX.md](knowledge/INDEX.md) and [knowledge/index.json](knowledge/index.json). Follow the [knowledge-base skill](.factory/skills/knowledge-base/SKILL.md) when adding or updating documents, then run `npm run kb:index` and `npm run kb:check`. For capability-affecting changes, update `src/contracts/knowledge.ts` and run `npm run generate:capabilities && npm run kb:index && npm run kb:check` rather than editing `knowledge/reference/capabilities.md` by hand.
+
 ### Optional Git hooks
 
 Nothing installs hooks during `npm ci`. Opt in explicitly:

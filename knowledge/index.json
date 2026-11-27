@@ -1,7 +1,7 @@
 {
   "$schema": "./schema.json",
   "schemaVersion": 1,
-  "generatedAt": "2026-11-27T18:29:00Z",
+  "generatedAt": "2026-11-27",
   "domains": [
     {
       "id": "governance",
@@ -44,8 +44,15 @@
       "summary": "Generated catalog of Code60 browser capabilities, access paths, prerequisites, limits, and agent-visible tools.",
       "updated": "2026-11-27",
       "path": "knowledge/reference/capabilities.md",
-      "code_refs": ["src/contracts/knowledge.ts", "src/contracts/navigation.ts"],
-      "tags": ["capabilities", "self-knowledge", "reference"]
+      "code_refs": [
+        "src/contracts/knowledge.ts",
+        "src/contracts/navigation.ts"
+      ],
+      "tags": [
+        "capabilities",
+        "self-knowledge",
+        "reference"
+      ]
     }
   ]
 }

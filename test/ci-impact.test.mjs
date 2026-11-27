@@ -9,6 +9,7 @@ const full = classify(null);
 it.each([
   ["docs/runbooks/setup.md", ["instructions"]],
   ["knowledge/reference/capabilities.md", ["instructions"]],
+  ["knowledge/index.json", ["instructions"]],
   ["docs/review/after.png", ["instructions"]],
   ["src/renderer/Page.tsx", ["check", "browser"]],
   ["test/core-reconnect.test.ts", ["check"]],

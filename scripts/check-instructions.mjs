@@ -3,6 +3,7 @@ import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import Markdown from "react-markdown";
 import { parse } from "yaml";
+import { checkKnowledgeBase } from "./kb.mjs";
 
 const repository = fileURLToPath(new URL("..", import.meta.url));
 const inside = (root, path) => {
@@ -263,6 +264,7 @@ export async function checkInstructions(directory = repository) {
       }
     }
   }
+  failures.push(...(await checkKnowledgeBase(root)));
   return failures;
 }
 

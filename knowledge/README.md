@@ -51,4 +51,7 @@ Canonical repository knowledge base organized for **progressive disclosure**, **
 - `KB-4.1.1` Every knowledge document MUST begin with YAML frontmatter conforming to [schema.json](schema.json).
 - `KB-4.1.2` Every `code_refs` path declared in frontmatter MUST resolve to an existing file or directory in the repository.
 - `KB-4.1.3` [INDEX.md](INDEX.md) and [index.json](index.json) MUST remain synchronized with the frontmatter of all documents across the five domain folders.
-- `KB-4.1.4` Generated sections inside `INDEX.md` (bounded by `<!-- BEGIN:KB_INDEX -->` and `<!-- END:KB_INDEX -->`) SHOULD be updated via the indexing script rather than edited by hand once indexing automation is wired.
+- `KB-4.1.4` Generated sections inside `INDEX.md` (bounded by `<!-- BEGIN:KB_INDEX -->` and `<!-- END:KB_INDEX -->`) and `index.json` MUST be updated via `npm run kb:index` and validated via `npm run kb:check` rather than edited by hand.
+- `KB-4.1.5` Generated reference documents such as [reference/capabilities.md](reference/capabilities.md) (`KB-REF-001`) MUST be regenerated from their canonical source (`npm run generate:capabilities` followed by `npm run kb:index`) and MUST follow [.factory/skills/knowledge-base/SKILL.md](../.factory/skills/knowledge-base/SKILL.md).
+
+Use `npm run kb:find -- <query>` to search indexed documents by ID, stipulation ID, tag, keyword, or `code_refs` path.
