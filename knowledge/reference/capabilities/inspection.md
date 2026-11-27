@@ -4,7 +4,7 @@ title: "Capabilities: Data, Search, Self-Knowledge, and Experiments"
 domain: reference
 kind: reference
 status: active
-summary: Generated capability specs for Data Viewer, Search, Diagnostic Logs, Self-Knowledge, Retrieval Tests, and Memory Tester.
+summary: Generated capability specs for Data Viewer, Search, Vector Codebase Search, Diagnostic Logs, Self-Knowledge, Retrieval Tests, and Memory Tester.
 updated: 2026-11-27
 code_refs:
   - src/contracts/knowledge.ts
@@ -49,6 +49,20 @@ Schema version: 1
 - Pages: `search`
 - Settings sections: none
 - Tools: none
+
+## Vector Search
+
+- ID: `codebase-search`
+- Status: shipped
+- Purpose: Automatically index the latest main branch of Git repositories with Code60's bundled offline ONNX embedding engine, inspect indexed repositories and storage sizes under Context → Vector Search, and run hybrid semantic and lexical code search.
+- Access: Context → Vector Search (also Apps → Vector Search); Relay, Custom Assistants, project chats, subagents, Workflow Engine, and Scheduled Agents → code60_search_codebase and code60_codebase_index_status
+- Prerequisite: git
+- Agent access: read
+- Confirmation: Read-only for agents; removing a repository index from Context → Vector Search requires browser confirmation and deletes only derived index rows while preserving source files and Git history.
+- Limits: No database is required for the Vector Search page. Indexes tracked text files on main (non-mutating origin fetch when configured, falling back to local main or default branch) without modifying the working tree or branches. Shared across linked worktrees via git-common-dir. Private SQLite + FTS5 index under application state; runs ONNX inference in a dedicated lazy Node sidecar. Relay and Custom Assistants require an explicit cwd; project chats, subagents, Workflow Engine, and Scheduled Agents are strictly bound to their target repository. Retrieved code is untrusted data.
+- Pages: `vector-search`
+- Settings sections: none
+- Tools: `code60_search_codebase`, `code60_codebase_index_status`
 
 ## Diagnostic logs
 

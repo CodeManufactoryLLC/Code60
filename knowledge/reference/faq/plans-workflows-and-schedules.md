@@ -57,7 +57,7 @@ Code60 **Plans** are application-level plans with human approval gates and worke
 **Scheduled Jobs** run locally on the host computer inside a mandatory separate Git worktree. There is no cloud runner or remote service.
 
 - **Local backend service:** The per-user Code60 Gateway service (`launchd` on macOS or user `systemd` without linger on Linux) runs each job directly on the host machine. The machine must stay awake with an active user login session.
-- **Separate Git worktree:** Each run creates a separate Git worktree from the job's local repository and base branch. Single-prompt jobs run one headless turn under an explicit deny-by-default allowlist, while workflow jobs run multi-task **Workflows** with an `autoApprove` option. Both run without external MCP servers or implicit memory.
+- **Separate Git worktree:** Each run creates a separate Git worktree from the job's local repository and base branch. Single-prompt jobs run one headless turn under an explicit deny-by-default allowlist, while workflow jobs run multi-task **Workflows** with an `autoApprove` option. Both receive Code60's read-only Vector Codebase Search tools without external MCP servers or implicit memory.
 - **Manual review:** Code60 keeps the worktree, transcript, and diff on disk and never automatically applies, merges, commits, or pushes changes.
 
 ### What kinds of jobs can Scheduled Jobs run?

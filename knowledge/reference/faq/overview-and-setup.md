@@ -87,6 +87,7 @@ Yes, for local lifecycle management only. The `code60` CLI cannot submit prompts
 - **Opening and pairing:** `code60 open` opens the browser interface, and `code60 pairing on|off|status` controls local pairing codes.
 - **Installation and backend service:** `code60 setup`, `code60 status`, `code60 update`, `code60 uninstall`, and `code60 service` manage installation and the per-user Code60 Gateway service.
 - **Usage reports:** `code60 usage` prints local token-usage summaries and turn breakdowns in table, JSON, Markdown, or CSV format without running agents.
+- **Heartbeat checks:** `code60 heartbeat status` and `code60 heartbeat run` inspect or trigger **Code60 Gateway's** local maintenance sweeps without running coding agents.
 
 ### Does Code60 have a native desktop app?
 

@@ -1,0 +1,215 @@
+@use '@carbon/react/scss/type';
+@use '@carbon/react/scss/spacing' as space;
+
+@layer carbon-app {
+  .vector-search-page {
+    @include type.type-style('body-01');
+    box-sizing: border-box;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    color: var(--cds-text-primary);
+    background: var(--cds-background);
+    overflow: auto;
+    scrollbar-gutter: stable;
+    padding-block-end: space.$spacing-09;
+
+    > .table-controls {
+      padding: 0;
+      margin: 0 0 space.$spacing-05;
+    }
+
+    .vector-search-section {
+      margin-block-start: space.$spacing-05;
+    }
+
+    .vector-search-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: space.$spacing-04;
+      margin-block-end: space.$spacing-05;
+    }
+
+    .vector-search-meta {
+      @include type.type-style('helper-text-01');
+      color: var(--cds-text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .vector-search-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: space.$spacing-03;
+    }
+
+    .vector-search-table-wrap {
+      overflow-x: auto;
+      margin-block-end: space.$spacing-06;
+    }
+
+    .vector-search-repo-cell {
+      display: flex;
+      flex-direction: column;
+      gap: space.$spacing-01;
+      min-width: 9rem;
+    }
+
+    .vector-search-repo-name {
+      font-weight: 600;
+      color: var(--cds-text-primary);
+    }
+
+    .vector-search-repo-path {
+      @include type.type-style('helper-text-01');
+      color: var(--cds-text-secondary);
+      font-family: var(--cds-code-01-font-family, monospace);
+      font-size: 0.75rem;
+      max-inline-size: 15rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .vector-search-last-run {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      white-space: nowrap;
+    }
+
+    .vector-search-num {
+      text-align: end;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .vector-search-mono {
+      font-family: var(--cds-code-01-font-family, monospace);
+      font-size: 0.8125rem;
+      white-space: nowrap;
+    }
+
+    .vector-search-row-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: space.$spacing-02;
+      white-space: nowrap;
+    }
+
+    .vector-search-detail {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+      gap: space.$spacing-05;
+      padding: space.$spacing-04 space.$spacing-05;
+      background: var(--cds-layer-02);
+    }
+
+    .vector-search-detail-group {
+      display: flex;
+      flex-direction: column;
+      gap: space.$spacing-02;
+      min-width: 0;
+    }
+
+    .vector-search-detail-title {
+      @include type.type-style('heading-compact-01');
+      color: var(--cds-text-primary);
+      margin: 0;
+    }
+
+    .vector-search-detail-list {
+      margin: 0;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: space.$spacing-01 space.$spacing-04;
+      @include type.type-style('helper-text-01');
+      font-variant-numeric: tabular-nums;
+
+      dt {
+        color: var(--cds-text-secondary);
+        white-space: nowrap;
+      }
+
+      dd {
+        margin: 0;
+        min-width: 0;
+        color: var(--cds-text-primary);
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    }
+
+    .vector-search-query-form {
+      display: grid;
+      grid-template-columns: minmax(14rem, 1fr) minmax(18rem, 2fr) minmax(10rem, 1fr) minmax(8rem, 0.8fr) 6.5rem auto;
+      gap: space.$spacing-04;
+      align-items: end;
+      margin-block-end: space.$spacing-05;
+
+      @media (max-width: 64rem) {
+        grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+      }
+    }
+
+    .vector-search-results {
+      display: flex;
+      flex-direction: column;
+      gap: space.$spacing-04;
+    }
+
+    .vector-search-hit {
+      border-block-start: 1px solid var(--cds-border-subtle-01);
+      padding-block-start: space.$spacing-04;
+      display: flex;
+      flex-direction: column;
+      gap: space.$spacing-02;
+    }
+
+    .vector-search-hit-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: space.$spacing-03;
+    }
+
+    .vector-search-hit-tags {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: space.$spacing-02;
+      font-variant-numeric: tabular-nums;
+      @include type.type-style('helper-text-01');
+      color: var(--cds-text-secondary);
+    }
+
+    .vector-search-hit-code {
+      margin: 0;
+      padding: space.$spacing-03 space.$spacing-04;
+      background: var(--cds-layer-02);
+      border: 1px solid var(--cds-border-subtle-01);
+      font-family: var(--cds-code-01-font-family, monospace);
+      font-size: 0.8125rem;
+      line-height: 1.45;
+      overflow-x: auto;
+      white-space: pre;
+      color: var(--cds-text-primary);
+    }
+
+    .vector-search-empty {
+      color: var(--cds-text-secondary);
+      padding-block: space.$spacing-05;
+      margin: 0;
+    }
+
+    .vector-search-banner {
+      margin-block-end: space.$spacing-04;
+      max-inline-size: 100%;
+    }
+  }
+}

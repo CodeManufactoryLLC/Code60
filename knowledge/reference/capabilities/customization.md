@@ -27,7 +27,7 @@ Schema version: 1
 - ID: `commands`
 - Status: shipped
 - Purpose: Use bundled or saved reusable prompts with a leading $name. Bundled commands: $create-command: Create a reusable $ command from your instructions. $plan: Propose a plan for your request and wait for Code60 acceptance. $business-evaluation: Plan an evidence-based business evaluation, then wait for Code60 acceptance. $catch-me-up: Explain the broader context and anything I may have missed. $big-picture: Step back from the details and reassess the value and approach. $pushback: Challenge your conclusion and re-evaluate the evidence. $simplify: Explain the current topic in simple, plain language.
-- Access: Customize → Commands (also Apps → Commands); project composer / or $ command picker
+- Access: Context → Commands (also Apps → Commands); project composer / or $ command picker
 - Prerequisite: database
 - Agent access: existing-tools
 - Confirmation: Existing permissions apply.
@@ -55,7 +55,7 @@ Schema version: 1
 - ID: `prompts`
 - Status: shipped
 - Purpose: Inspect all 44 internal prompts by canonical dotted ID and customize the 10 editable project, handoff, and utility templates.
-- Access: Customize → Internal Prompts (also Apps → Internal Prompts) → filter by ID/name and Save, Discard changes, or Reset to default
+- Access: Context → Internal Prompts (also Apps → Internal Prompts) → filter by ID/name and Save, Discard changes, or Reset to default
 - Prerequisite: database
 - Agent access: read
 - Confirmation: Existing permissions apply.
@@ -97,7 +97,7 @@ Schema version: 1
 - ID: `memory`
 - Status: shipped
 - Purpose: Learn and recall scoped evidence when enabled.
-- Access: Apps → Memory; Apps → Data Viewer → Memories
+- Access: Context → Memory (also Apps → Memory); Apps → Data Viewer → Memories
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Existing permissions apply.

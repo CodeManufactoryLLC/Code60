@@ -280,7 +280,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/operations/runbooks/scheduler.md",
       "lines": 55,
-      "bytes": 3947,
+      "bytes": 4116,
       "code_refs": [
         "src/gateway/server.ts",
         "src/management/cli.ts",
@@ -307,7 +307,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/operations/runbooks/low-disk.md",
       "lines": 50,
-      "bytes": 3076,
+      "bytes": 3344,
       "code_refs": [
         "src/automation/executor.ts",
         "src/application/health-check.ts"
@@ -665,7 +665,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/capabilities/workspace.md",
       "lines": 136,
-      "bytes": 8454,
+      "bytes": 8463,
       "code_refs": [
         "src/contracts/knowledge.ts",
         "src/contracts/navigation.ts"
@@ -687,7 +687,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/capabilities/customization.md",
       "lines": 136,
-      "bytes": 6427,
+      "bytes": 6449,
       "code_refs": [
         "src/contracts/knowledge.ts",
         "src/contracts/navigation.ts"
@@ -701,15 +701,15 @@
     },
     {
       "id": "KB-REF-004",
-      "title": "Capabilities: Scheduled Jobs and Workflows",
+      "title": "Capabilities: Scheduled Jobs, Workflows, and Heartbeat",
       "domain": "reference",
       "kind": "reference",
       "status": "active",
-      "summary": "Generated capability specs for recurring Scheduled Jobs and native multi-step Workflows inside Code60 Gateway.",
+      "summary": "Generated capability specs for recurring Scheduled Jobs, native multi-step Workflows, and Core Heartbeat maintenance inside Code60 Gateway.",
       "updated": "2026-11-27",
       "path": "knowledge/reference/capabilities/automation.md",
-      "lines": 52,
-      "bytes": 5336,
+      "lines": 67,
+      "bytes": 6917,
       "code_refs": [
         "src/contracts/knowledge.ts",
         "src/contracts/navigation.ts"
@@ -718,6 +718,7 @@
         "capabilities",
         "automation",
         "workflows",
+        "heartbeat",
         "reference"
       ]
     },
@@ -793,11 +794,11 @@
       "domain": "reference",
       "kind": "reference",
       "status": "active",
-      "summary": "Generated capability specs for Data Viewer, Search, Diagnostic Logs, Self-Knowledge, Retrieval Tests, and Memory Tester.",
+      "summary": "Generated capability specs for Data Viewer, Search, Vector Codebase Search, Diagnostic Logs, Self-Knowledge, Retrieval Tests, and Memory Tester.",
       "updated": "2026-11-27",
       "path": "knowledge/reference/capabilities/inspection.md",
-      "lines": 122,
-      "bytes": 5026,
+      "lines": 136,
+      "bytes": 6543,
       "code_refs": [
         "src/contracts/knowledge.ts",
         "src/contracts/navigation.ts"
@@ -818,8 +819,8 @@
       "summary": "Frequently asked questions on what Code60 is, supported platforms, system and software requirements, Docker, CLI, and app format.",
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/overview-and-setup.md",
-      "lines": 102,
-      "bytes": 6159,
+      "lines": 103,
+      "bytes": 6332,
       "code_refs": [
         "src/management/cli.ts",
         "src/gateway/server.ts",
@@ -845,8 +846,8 @@
       "summary": "Frequently asked questions on repository setup, Git worktree lifecycle, local storage locations, and disk usage.",
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/workspaces-and-storage.md",
-      "lines": 78,
-      "bytes": 5564,
+      "lines": 80,
+      "bytes": 6264,
       "code_refs": [
         "src/git/tasks.ts",
         "src/application/health-check.ts",
@@ -952,8 +953,8 @@
       "summary": "Frequently asked questions on Code60 workers versus provider subagents, browser automation, MCP support, and concurrency limits.",
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/orchestration-and-workers.md",
-      "lines": 77,
-      "bytes": 5985,
+      "lines": 78,
+      "bytes": 6195,
       "code_refs": [
         "src/core/orchestrator.ts",
         "src/core/config.ts",
@@ -981,8 +982,8 @@
       "summary": "Frequently asked questions on context sent to agents, triggers, long conversation history, and automatic context handoff.",
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/context-and-history.md",
-      "lines": 66,
-      "bytes": 5945,
+      "lines": 75,
+      "bytes": 7227,
       "code_refs": [
         "src/application/memory-limits.ts",
         "src/application/relay-service.ts",
@@ -1009,7 +1010,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/plans-workflows-and-schedules.md",
       "lines": 84,
-      "bytes": 6729,
+      "bytes": 6781,
       "code_refs": [
         "src/core/workflow-engine.ts",
         "src/application/plans.ts",

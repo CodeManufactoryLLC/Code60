@@ -4,6 +4,7 @@ import type {
   DesktopLogStore,
   DesktopWorkflows,
   HealthCheckService,
+  HeartbeatService,
 } from "../application/index.js";
 import { logProjectId } from "../application/index.js";
 import {
@@ -19,6 +20,8 @@ import {
   mcpTargetSchema,
   parseAction,
   parseBoolean,
+  parseCodebaseRepoKeyRequest,
+  parseCodebaseUiSearchRequest,
   parseCodexSetupIdentity,
   parseConfigurationId,
   parseDatabaseMode,
@@ -34,6 +37,7 @@ import {
   parseGitSetupFile,
   parseGitSetupIdentity,
   parseHealthCheckRequest,
+  parseHeartbeatRequest,
   parseLogClear,
   parseLogDetail,
   parseLogQuery,
@@ -97,6 +101,7 @@ export function applicationOperations(
   workflows: DesktopWorkflows,
   healthCheck?: HealthCheckService,
   usage?: UsageStore,
+  heartbeat?: HeartbeatService,
 ) {
   const operations = new Map<string, (value: unknown) => unknown>();
   const handle = (name: string, action: (value: unknown) => unknown) => {
@@ -132,6 +137,11 @@ export function applicationOperations(
     const request = parseHealthCheckRequest(value);
     if (!healthCheck) throw new Error("Health Check service is unavailable.");
     return healthCheck.handle(request);
+  });
+  handle("heartbeat", (value) => {
+    const request = parseHeartbeatRequest(value);
+    if (!heartbeat) throw new Error("Heartbeat service is unavailable.");
+    return heartbeat.handle(request);
   });
   handle("mcp-recovery", (value) =>
     controller.mcpRecovery(parseMcpManagement(mcpRecoveryRequestSchema, value)),
@@ -341,6 +351,30 @@ export function applicationOperations(
   handle("rag-retrieve", (value) => controller.retrieveRag(parseRagQuery(value)));
   handle("rag-cancel", (value) => controller.cancelRag(parseRagCancel(value)));
   handle("rag-clear", (value) => controller.clearRag(parseRagIdentity(value)));
+  handle("codebase-index-overview", () => controller.codebase.overview());
+  handle("codebase-index-reindex", (value) =>
+    controller.codebase.reindexByKey(parseCodebaseRepoKeyRequest(value).repoKey),
+  );
+  handle("codebase-index-add", async () => {
+    const path = await interactions.pick("folder");
+    if (!path) return { added: false };
+    const { repoKey } = await controller.codebase.indexDirectory(path);
+    return { added: true, repoKey };
+  });
+  handle("codebase-index-remove", async (value) => {
+    const { repoKey } = parseCodebaseRepoKeyRequest(value);
+    const confirmed = await interactions.confirm(
+      "remove-codebase-index",
+      "Remove this repository's derived vector index? Source files and Git history are kept.",
+    );
+    if (!confirmed) return { removed: false };
+    const removed = await controller.codebase.removeByKey(repoKey);
+    return { removed };
+  });
+  handle("codebase-index-search", (value) => {
+    const { repoKey, ...searchArgs } = parseCodebaseUiSearchRequest(value);
+    return controller.codebase.searchByKey(repoKey, searchArgs);
+  });
   handle("project-search", (value) => controller.searchProjects(value));
   handle("project-search-page", (value) => controller.searchProjectsPage(value));
   handle("project-search-cancel", (value) => controller.cancelProjectSearch(value));

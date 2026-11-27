@@ -7,7 +7,12 @@ through their public indexes. Never import application or gateway or expose a TC
 - Never replay uncertain prompt work, retry skipped/failed occurrences or accumulate a backlog.
 - Enforce per-action concurrency lanes and per-resource mutual exclusion (`repo:<dev>:<ino>`), holding slots until terminal execution state.
 - Built-in `prompt` actions use mandatory worktrees, explicit saved deny-by-default policy, one headless
-  turn, no MCP, no implicit memory and no automatic worktree cleanup.
+  turn, optional read-only `code60-code` codebase search tools bound to the pinned repository (with
+  structured read-only permission approval), no external MCP servers, no implicit memory and no
+  automatic worktree cleanup by the prompt executor itself. Gateway-hosted Core Heartbeat runs
+  separately in its own bounded state store, inspects scheduler health/drift, may trigger verified
+  `resolveBlock` after orphan confirmation, and applies distinct low-disk hysteresis without
+  consuming the 5,000-entry user execution cap or bypassing manual `pausedAll`.
 - Gateway-injected action handlers (such as `workflow`) register through `startSchedulerRuntime` without importing `application` here; unregistered handlers fail closed (`handler_unavailable`).
 - Pin repository and provider identities. Treat missing/unsafe state as recovery,
   never permission to erase history or displace a live/unverifiable writer.

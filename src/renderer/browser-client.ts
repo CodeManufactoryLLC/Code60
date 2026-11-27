@@ -129,6 +129,8 @@ export function createBrowserClient(
     onTerminalsChanged: (listener) => events.on("terminals-changed", listener),
     healthCheck: (request) => rpc("health-check", request),
     onHealthChanged: (listener) => events.on("health-changed", listener),
+    heartbeat: (request) => rpc("heartbeat", request),
+    onHeartbeatChanged: (listener) => events.on("heartbeat-changed", listener),
     usageReport: (query) => rpc("usage-report", query ?? {}),
     usageTurns: (query) => rpc("usage-turns", query ?? {}),
     usageExport: (request) => rpc("usage-export", request),
@@ -149,6 +151,12 @@ export function createBrowserClient(
     onRagStatus: (listener) => {
       return events.on("rag-status", listener);
     },
+    codebaseIndexOverview: () => rpc("codebase-index-overview"),
+    codebaseIndexReindex: (request) => rpc("codebase-index-reindex", request),
+    codebaseIndexAdd: () => rpc("codebase-index-add"),
+    codebaseIndexRemove: (request) => rpc("codebase-index-remove", request),
+    codebaseIndexSearch: (request) => rpc("codebase-index-search", request),
+    onCodebaseIndexChanged: (listener) => events.on("codebase-index-changed", listener),
     openWebLink: async (request) => requestWebLink(parseWebLink(request).url),
     queryLogs: (request: unknown) => rpc("logs-query", request),
     logDetail: (request: unknown) => rpc("logs-detail", request),

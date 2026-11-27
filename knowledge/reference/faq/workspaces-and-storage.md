@@ -37,12 +37,12 @@ No. Code60 requires no special configuration files, scripts, or dependencies ins
 
 ### Does Code60 automatically delete worktrees?
 
-No. Code60 never deletes Git worktrees automatically.
+Only empty `code60/*` worktrees or worktrees with a discard mark past the **Heartbeat** age limit, while **Heartbeat** clean-worktree pruning stays on. Code60 never deletes a worktree with edits automatically.
 
-- **Normal lifecycle events:** Finishing, cancelling, or stopping a run leaves existing worktrees intact. Closing the browser, stopping or restarting Code60 Gateway, updating Code60, or running `code60 uninstall` or `code60 service uninstall` also keeps them on disk.
-- **Scheduled Jobs and Workflows:** Worktrees from **Scheduled Jobs** and **Workflows** stay on disk. A user can inspect changes and diffs with normal Git tools.
+- **Normal lifecycle events:** Finishing, cancelling, or stopping a run leaves existing worktrees intact. Closing the browser, stopping or restarting **Code60 Gateway**, updating Code60, or running `code60 uninstall` or `code60 service uninstall` also keeps them on disk.
+- **Heartbeat clean-worktree pruning:** Under **Manage → Heartbeat**, Heartbeat removes inactive `code60/*` worktrees with zero diff against their base branch after 24 hours by default. It skips active runs, live processes, workflows, checkpoints, and every worktree with edits, while keeping `run.json` and `events.jsonl`.
 - **Manual removal:** For an inactive run, open its actions menu (for example, in **Apps → Data Viewer**) and choose **Delete worktree**. Code60 blocks removal while the run or its agent process remains active.
-- **Confirmation and history:** Before removing a worktree and its run branch, Code60 shows a confirmation dialog. That dialog lists the worktree path, branch, and every file with edits that removal erases. After removal, the session record stays visible as inactive.
+- **Confirmation and history:** Before removing a worktree and its run branch manually, Code60 shows a confirmation dialog. That dialog lists the worktree path, branch, and every file with edits that removal erases. After removal, the session record stays visible as inactive.
 
 ## Data and Storage
 
@@ -54,6 +54,7 @@ Code60 keeps all application data locally on the host machine. New run directori
 - **Run records and transcripts:** Runs write `run.json` and `events.jsonl` under `<git-common-dir>/code60/runs/`, `$XDG_STATE_HOME/code60/dirs/<key>/runs/`, or `.code60_workspace/` beside the database. Code60 does not automatically scrub or expire transcripts.
 - **Configuration, workflows, and logs:** MCP files live at `$XDG_CONFIG_HOME/code60/mcp.json` and `<project>/.code60/mcp.json`, and **Workflows** state lives under `$XDG_STATE_HOME/code60/workflows`. Diagnostic logs under `$XDG_STATE_HOME/code60/logs` carry a 7-day, 20 MiB cap.
 - **Usage ledger:** Token metrics live in `$XDG_STATE_HOME/code60/usage/usage.sqlite` with a 90-day, 500,000-turn cap. That file holds numeric counts, provider IDs, model IDs, and opaque IDs without prompts, replies, file paths, or secrets.
+- **Codebase search index:** Vector Codebase Search saves repository embeddings and full-text chunks in `$XDG_STATE_HOME/code60/codebase-index/index.sqlite` with private permissions (`0600`).
 - **Credentials:** Provider logins stay in each provider's own backend-user storage. MCP secrets stay in macOS Keychain, Linux Secret Service, or explicit temporary backend memory.
 
 ### How much disk space does a Code60 installation use?
@@ -66,7 +67,8 @@ A base installation typically uses about **400 MB to 1 GB**, depending on platfo
 | Local embedding model | About 164 MB | Local INT8 weights for offline embeddings. |
 | Embedding runtime dependencies | About 125 MB (macOS Apple Silicon) | Total with model is about 290 MB before other app files. |
 | Private provider installs | Varies by provider | Lives under `~/.local/share/code60/providers/`. |
-| Git worktrees | Varies by repository | Code60 never deletes worktrees automatically. |
+| Git worktrees | Varies by repository | **Heartbeat** prunes empty `code60/*` worktrees after 24 hours while keeping every worktree with edits. |
+| Heartbeat history | Up to 512 KiB | Keeps the latest 50 sweeps in `$XDG_STATE_HOME/code60/heartbeat/state.json`. |
 | Conversation transcripts | No automatic limit | Local `events.jsonl` and **Relay** journals never expire automatically. |
 | Request checkpoints | Up to 256 MiB per chat | Keeps up to 100 prior requests per chat. |
 | Workflow history | Up to 16 MiB | Keeps up to 1,000 workflow records. |

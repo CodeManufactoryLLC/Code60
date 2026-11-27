@@ -65,6 +65,7 @@ export interface OrchestratorOptions {
   maxParallel: number;
   policy: PermissionPolicy;
   overrides?: PolicyOverrides;
+  allowPermission?: (request: import("../agents/index.js").PermissionRequest) => boolean;
   env?: Readonly<Record<string, string>>;
   cancelGraceMs?: number;
   killGraceMs?: number;
@@ -202,6 +203,7 @@ export async function createOrchestrator(
     killGraceMs: options.killGraceMs ?? KILL_GRACE_MS,
     decide: (kind: Parameters<typeof decide>[0]) =>
       decide(kind, options.policy, options.mode, options.overrides),
+    ...(options.allowPermission ? { allowPermission: options.allowPermission } : {}),
     prompts: options.prompts ?? DEFAULT_PROMPT_TEMPLATES,
     ...(options.usageAttribution === undefined
       ? {}

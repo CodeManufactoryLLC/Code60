@@ -45,6 +45,19 @@ describe("browser capability catalog", () => {
     expect(health?.limitations).toContain("omits hostname, IP addresses");
     expect(health?.limitations).toContain("Relay and awareness cannot run health probes");
   });
+  it("classifies Heartbeat as database-independent with redacted read-only agent awareness", () => {
+    const hb = APPLICATION_CAPABILITIES.find((cap) => cap.id === "heartbeat");
+    expect(hb).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "read",
+      access: expect.stringContaining("Manage → Heartbeat"),
+    });
+    expect(PAGE_CAPABILITIES.heartbeat).toBe("heartbeat");
+    expect(TOOL_CAPABILITIES.code60_get_heartbeat_status).toBe("heartbeat");
+    expect(pages.find((page) => page.id === "heartbeat")?.database).toBe(false);
+    expect(hb?.limitations).toContain("code60_get_heartbeat_status");
+    expect(hb?.limitations).toContain("Never replays uncertain work");
+  });
   it("describes consented state-preserving uninstall without granting agent or browser authority", () => {
     const capability = APPLICATION_CAPABILITIES.find((cap) => cap.id === "uninstall");
     expect(capability).toMatchObject({
@@ -105,7 +118,7 @@ describe("browser capability catalog", () => {
       agentAccess: "human-only",
       access: expect.stringContaining("Left navigation sidebar"),
       limitations: expect.stringMatching(
-        /Chat is a top-level navigation button.*Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments.*Skip to main content/,
+        /Chat is a top-level navigation button.*Automate, Connect, Context, Customize, Personalize, Manage, Contributor Tools and Experiments.*Skip to main content/,
       ),
     });
     expect(
@@ -446,6 +459,19 @@ describe("browser capability catalog", () => {
     expect(commands?.limitations).toContain("only in project orchestrator chats");
     expect(commands?.limitations).toContain("not Relay or worker chats");
     expect(commands?.limitations).toContain("do not grant new execution authority");
+  });
+
+  it("classifies Vector codebase search with read-only agent access and ONNX/main-branch limits", () => {
+    const cap = APPLICATION_CAPABILITIES.find((item) => item.id === "codebase-search");
+    expect(cap).toMatchObject({
+      prerequisite: "git",
+      agentAccess: "read",
+      status: "shipped",
+    });
+    expect(cap?.purpose).toContain("ONNX");
+    expect(cap?.limitations).toContain("non-mutating origin fetch");
+    expect(TOOL_CAPABILITIES.code60_search_codebase).toBe("codebase-search");
+    expect(TOOL_CAPABILITIES.code60_codebase_index_status).toBe("codebase-search");
   });
 
   it("partitions every capability into bounded semantic reference files", async () => {

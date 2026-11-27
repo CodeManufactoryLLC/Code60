@@ -27,7 +27,7 @@ Scheduled Jobs history or **Manage → Health Check** reports `low_disk`, schedu
 
 ## 2. Read-only diagnosis
 
-1. Check free space on the repository, `HOME`/`XDG` state, and temporary/build volumes using `df -h` (or OS storage tools) — these can be separate mounts.
+1. Check free space on the repository, `HOME`/`XDG` state, and temporary/build volumes using `df -h` (or OS storage tools) and inspect `code60 heartbeat status --json` or **Manage → Heartbeat** — these can be separate mounts. Core Heartbeat proactively pauses future scheduled dispatches below 2 GiB and resumes them only when headroom recovers above 4 GiB (never overriding a manual pause or persistence-failure latch).
 2. Inspect backend service status and execution history using [scheduler.md](scheduler.md).
 3. Distinguish disk exhaustion from permissions, unsafe path identity, or live process ownership; freeing disk space does not repair those conditions.
 4. Do not run builds or image builds during disk pressure merely to diagnose an installation.

@@ -2,11 +2,13 @@ import { copyFile, lstat, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
 import { samePath } from "../platform/index.js";
+import { type CodebaseGitOps, codebaseGit } from "./codebase.js";
 import { GitError, runGit, runSetupGit } from "./exec.js";
 import { coordinateMetadata } from "./metadata.js";
 import { type GitSetupOps, gitSetup } from "./setup.js";
 import { type TaskGit, taskGit } from "./tasks.js";
 
+export type { CodebaseGitOps, CodebaseMainSnapshot } from "./codebase.js";
 export type { GitReadiness, GitSetupFile, GitSetupOps } from "./setup.js";
 export type { TaskEntry, TaskGit } from "./tasks.js";
 
@@ -59,6 +61,7 @@ interface ReviewSnapshot {
 export interface Git {
   setup?: GitSetupOps;
   tasks?: TaskGit;
+  codebase?: CodebaseGitOps;
   repoInfo(cwd: string): Promise<RepoInfo>;
   listWorktrees(repoDir: string, options?: WorktreeReadOptions): Promise<GitWorktree[]>;
   /** Resolves a revision to a full commit hash. */
@@ -66,6 +69,8 @@ export interface Git {
   addWorktree(spec: WorktreeSpec, signal?: AbortSignal): Promise<void>;
   /** Removes the worktree, then deletes its branch. */
   removeWorktree(repoDir: string, path: string, branch: string): Promise<void>;
+  /** Prunes stale worktree administrative metadata whose working tree directory is gone. */
+  pruneWorktrees?(repoDir: string, expire: string, signal?: AbortSignal): Promise<void>;
   /** Diff of the worktree against `base`, including untracked files and agent commits. */
   diff(worktree: string, base: string, signal?: AbortSignal): Promise<string>;
   reviewSnapshot?(
@@ -224,6 +229,7 @@ export function createGit(): Git {
   return {
     setup: gitSetup,
     tasks: taskGit,
+    codebase: codebaseGit,
     async reviewSnapshot(worktree, base, signal, captured) {
       const read = async (env: Record<string, string>) => {
         const tree = captured ?? (await runGit(["write-tree"], worktree, { env, signal })).trim();
@@ -381,6 +387,19 @@ export function createGit(): Git {
         }
         await runGit(["branch", "-D", branch], repoDir);
       });
+    },
+
+    async pruneWorktrees(repoDir, expire, signal) {
+      if (!/^\d+\.(?:seconds?|minutes?|hours?|days?)\.ago$/.test(expire)) {
+        throw new Error(`invalid worktree prune expiry '${expire}'`);
+      }
+      await coordinateMetadata(
+        repoDir,
+        async () => {
+          await runGit(["worktree", "prune", `--expire=${expire}`], repoDir, { signal });
+        },
+        signal,
+      );
     },
 
     async diff(worktree, base, signal) {

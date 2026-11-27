@@ -63,3 +63,12 @@ Code60 neither triggers nor blocks an Agent Provider's internal context compacti
 - **Live context gauge:** The composer footer shows the token count and capacity that the provider reports over ACP and never guesses from transcript length. When a provider compacts context, the gauge can drop to match the new report.
 - **Interaction with Code60 context handoff:** Between turns, Code60 starts automatic context handoff at 70% of context capacity. That check uses the higher of the provider's report and Code60's own session estimate. Code60's 70% rollover often occurs before late-window provider compaction, while early provider compaction still runs inside the harness.
 - **Safety and continuity:** Neither provider compaction nor Code60's context handoff deletes local transcripts, restores old permissions, or replays past tool calls. Code60 also carries explicit in-session **Model** choices into the fresh handoff session.
+
+### How does Vector Codebase Search work?
+
+Vector Codebase Search indexes each repository's latest `main` branch locally using Code60's ONNX embedding engine (`jina-embeddings-v2-base-code`) and SQLite `FTS5` search.
+
+- **Non-mutating Git sync:** Code60 Gateway fetches `origin/main` when a remote exists and reads commit blobs without altering local files, branches, or the Git index. When `origin` is offline or absent, Code60 indexes the local `main` branch or `HEAD`.
+- **Available surfaces:** **Relay**, **Custom Assistants**, project orchestrators, workers, **Workflows**, and **Scheduled Jobs** receive `code60_search_codebase` and `code60_codebase_index_status`. **Relay** and **Custom Assistants** pass an explicit repository path, while other surfaces search their active repository automatically.
+- **Local privacy and sharing:** Code60 runs CPU embeddings offline in a separate Node.js worker process and saves vectors in `$XDG_STATE_HOME/code60/codebase-index/index.sqlite`. Worktrees of the same repository share one index.
+- **Inspection and management:** Open **Context → Vector Search** to view every repository index, file and chunk counts, storage size, and last run time. That page also supports re-indexing, removal after confirmation, and live query tests.

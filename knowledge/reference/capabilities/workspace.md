@@ -31,7 +31,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: No confirmation; navigation only.
-- Limits: Chat is a top-level navigation button opening Relay and Carbon's Chat History panel. Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments are expandable navigation groups. Opening a destination reveals its group. Skip to main content moves keyboard focus past the navigation to the current page. Conversations keep their own actions in Chat History. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.
+- Limits: Chat is a top-level navigation button opening Relay and Carbon's Chat History panel. Automate, Connect, Context, Customize, Personalize, Manage, Contributor Tools and Experiments are expandable navigation groups. Opening a destination reveals its group. Skip to main content moves keyboard focus past the navigation to the current page. Conversations keep their own actions in Chat History. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.
 - Pages: none
 - Settings sections: none
 - Tools: none

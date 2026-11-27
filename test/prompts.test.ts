@@ -80,6 +80,8 @@ describe("prompt templates", () => {
     expect(contract).toContain("Delegate project changes to workers");
     expect(contract).toContain("This does not authorize project edits, shell commands");
     expect(contract).toContain("code60_setup_git");
+    expect(contract).toContain("code60_get_heartbeat_status");
+    expect(contract).toContain("Proactively finish idle workers");
     expect(contract).toContain(".env");
     expect(contract).toContain("multiple-choice options with a clear recommended default");
     expect(contract).not.toContain("Use only the supplied Code60 MCP tools");

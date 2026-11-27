@@ -405,6 +405,17 @@ workflow writer without reclaiming stale evidence; refuse active/uncertain histo
 A fresh missing workflow root needs no creation. Release the writer afterward,
 preserving every registry and database.
 
+## Vector codebase search
+
+CodebaseIndexService owns private repository indexing (`$XDG_STATE_HOME/code60/codebase-index/index.sqlite`)
+and the lazy ONNX sidecar (`codebase-worker.ts`), separate from manual RAG and `memory.sqlite`.
+Sync `origin/main` (falling back to local `main`/`HEAD`) via `core`'s injected Git port without mutating
+working trees, indexes or local branches. Key indexes by canonical `git-common-dir` so worktrees share
+one index. Expose read-only `code60_search_codebase` and `code60_codebase_index_status` on Relay/Custom
+Assistants (explicit `cwd`), Project Orchestrators (bound project) and via gateway `McpRuntimePorts.expose`
+(`code60-code`) to SubAgents, Workflows and Scheduled Agents. Keep inline search wait budgets under the
+MCP broker request timeout and stop the sidecar on shutdown.
+
 ## Initial database preparation
 
 Gateway startup and explicit private management setup may prepare the default

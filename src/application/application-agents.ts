@@ -8,6 +8,7 @@ import {
 } from "../bridge/index.js";
 import type { SessionResourceFactory } from "../core/index.js";
 import { stateHome } from "../core/index.js";
+import type { CodebaseIndexService } from "./codebase-service.js";
 import { CustomAgentStore } from "./custom-agent-store.js";
 import type { McpConnectorRole } from "./mcp-configuration.js";
 import type { ModelDefaults } from "./model-defaults.js";
@@ -49,6 +50,8 @@ export class ApplicationAgents {
       root: string | undefined,
       warning: (message: string) => void,
     ) => SessionResourceFactory,
+    private readonly codebase?: CodebaseIndexService,
+    private readonly codebaseSessionResources?: (cwd: string) => SessionResourceFactory | undefined,
   ) {
     this.relay = new RelayService(
       deps,
@@ -61,6 +64,8 @@ export class ApplicationAgents {
       orchestrationAutoApproval,
       onPlanTimingError,
       connectorResources,
+      codebase,
+      codebaseSessionResources,
     );
     this.selected = this.relay;
   }
@@ -217,6 +222,8 @@ export class ApplicationAgents {
             this.orchestrationAutoApproval,
             this.onPlanTimingError,
             this.connectorResources,
+            this.codebase,
+            this.codebaseSessionResources,
           );
           if (this.knowledge) runtime.attachKnowledge(this.knowledge);
           this.agents.set(request.id, runtime);

@@ -28,7 +28,7 @@ tags:
 
 ## 2. Read-only diagnosis
 
-1. Open **Manage → System Manager** (Services tab). Health checks poll every two seconds while visible and back off to sixty seconds when unavailable. Global **Pause polling** (under **Workspace** or **Manage → Polling**) pauses these checks; use **Refresh Backend Service** for an explicit check.
+1. Open **Manage → System Manager** (Services tab) or **Manage → Heartbeat** (or run `code60 heartbeat status --json`) to inspect the latest maintenance sweep, drift warnings, and any autonomous reconciliation actions. Health checks poll every two seconds while visible and back off to sixty seconds when unavailable. Global **Pause polling** (under **Workspace** or **Manage → Polling**) pauses these checks; use **Refresh Backend Service** for an explicit check.
 2. Inspect installation, connectivity, pause state, active runs, and blocks independently. Open **Automate → Scheduled Jobs** to review saved schedules and execution history. An unreachable service does not prove execution stopped; preserve that failure.
 3. Run read-only terminal checks under the affected user account and normal `HOME`/`XDG` environment:
    - `code60 status` and `code60 service status`

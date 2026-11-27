@@ -13,7 +13,9 @@ const tasks: Record<string, string> = {
   appearance: "Choose a color theme and focus settings",
   "system-manager": "Check service health and recover jobs",
   "health-check": "Inspect backend, providers, services and disk health",
+  heartbeat: "Monitor autonomous health sweeps, stuck recovery and clean worktree hygiene",
   usage: "Monitor provider token burn rates and inspect heavy chats and workflows",
+  "vector-search": "Inspect indexed repositories, storage size, and test hybrid code queries",
   "polling-settings": "Configure background polling",
   updates: "Check the installed version and update instructions",
 };

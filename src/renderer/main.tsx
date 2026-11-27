@@ -12,7 +12,9 @@ import "./style.css";
 import "./carbon/application.scss";
 import "./carbon/scheduled-jobs.scss";
 import "./carbon/health-check.scss";
+import "./carbon/heartbeat.scss";
 import "./carbon/usage.scss";
+import "./carbon/vector-search.scss";
 
 document.documentElement.classList.add("carbon-app");
 const root = document.getElementById("root");

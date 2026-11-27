@@ -27,4 +27,7 @@
 
 - Pass optional diff cancellation through every temporary-index Git command. Wait for subprocess completion before removing its temporary index, and never alter the real index. Preserve default command timeouts for callers without cancellation.
 
+- Codebase indexing reads (`codebase.ts`) use non-mutating `git fetch --no-tags --quiet origin main`
+  with `GIT_TERMINAL_PROMPT=0` and stream blobs via `git ls-tree` and `git cat-file --batch` without
+  modifying working files, staging indexes or local branches.
 - Setup mutations use owned process trees so cancelling a commit stops its hooks/signers too. Never remove repository locks or roll back partial initialization/staging automatically. The default subprocess behavior is unchanged.

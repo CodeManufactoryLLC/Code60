@@ -144,6 +144,15 @@ export const pages = [
     icon: "app-health-check",
   },
   {
+    id: "heartbeat",
+    initialOrder: 31,
+    label: "Heartbeat",
+    group: "apps",
+    order: 2,
+    database: false,
+    icon: "app-heartbeat",
+  },
+  {
     id: "usage",
     initialOrder: 30,
     label: "Usage",
@@ -151,6 +160,15 @@ export const pages = [
     order: 4,
     database: false,
     icon: "app-usage",
+  },
+  {
+    id: "vector-search",
+    initialOrder: 32,
+    label: "Vector Search",
+    group: "apps",
+    order: 5,
+    database: false,
+    icon: "app-vector-search",
   },
   {
     id: "apps",

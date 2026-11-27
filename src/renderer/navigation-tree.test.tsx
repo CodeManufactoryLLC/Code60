@@ -56,6 +56,7 @@ describe("navigation tree", () => {
       "commands",
       "tables",
       "health-check",
+      "heartbeat",
       "prompts",
       "mcp-servers",
       "memory",
@@ -64,6 +65,7 @@ describe("navigation tree", () => {
       "system-manager",
       "updates",
       "usage",
+      "vector-search",
       "workflows",
     ]);
     expect(staticChildren("tables", null).map(({ id }) => id)).toEqual([

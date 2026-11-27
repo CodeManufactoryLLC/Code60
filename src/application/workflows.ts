@@ -23,6 +23,7 @@ import {
 } from "../bridge/index.js";
 import {
   type CoreDeps,
+  type SessionResourceFactory,
   stateHome,
   WorkflowEngine,
   WorkflowProviderError,
@@ -251,8 +252,17 @@ export class DesktopWorkflows {
     private readonly pick: () => Promise<string | null>,
     private readonly generate: (input: string, signal: AbortSignal) => Promise<WorkflowDraftReply>,
     private readonly providers: WorkflowProviderPorts,
+    private readonly codebaseTools?: {
+      sessionResources(repository: string): SessionResourceFactory | undefined;
+      trackRepository?(repository: string): void;
+    },
   ) {
     this.root = join(stateHome(env), "code60", "workflows");
+  }
+
+  /** Worktrees currently owned by workflow records so maintenance never prunes them. */
+  pinnedWorktrees(): string[] {
+    return this.entries.map((entry) => entry.worktree).filter((p) => p.length > 0);
   }
 
   private ensureEngine(): WorkflowEngine {
@@ -261,6 +271,7 @@ export class DesktopWorkflows {
         join(this.root, "engine"),
         this.deps.agents,
         (providerId, cwd) => this.providers.resolve(providerId, cwd),
+        (repository) => this.codebaseTools?.sessionResources(repository),
       );
       this.unwatchEngine = this.engine.onRunChange((snapshot) => {
         this.handleEngineSnapshot(snapshot);
@@ -678,6 +689,7 @@ export class DesktopWorkflows {
 
   private async submit(record: WorkflowRecord) {
     await this.target(record);
+    this.codebaseTools?.trackRepository?.(record.repository);
     const providerId = record.definition.provider ?? this.providers.list().defaultProvider;
     if (!providerId) {
       throw new WorkflowProviderError("Connect a verified provider first.");

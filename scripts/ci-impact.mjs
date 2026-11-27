@@ -56,7 +56,7 @@ function forPath(path) {
     return ["instructions"];
 
   if (
-    /^(?:src\/(?:application|core)\/(?:rag[.-]|memory-worker\.)|scripts\/(?:prepare-models|test-rag-model|distribution\/probe-native)|models\/)/.test(
+    /^(?:src\/(?:application|core)\/(?:rag[.-]|memory-worker\.|codebase-worker\.)|scripts\/(?:prepare-models|test-rag-model|distribution\/probe-native)|models\/)/.test(
       path,
     )
   )

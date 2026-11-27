@@ -105,6 +105,7 @@ export const knowledgeSchemas = {
     contentRevision: z.string().length(64).optional(),
     offset: sequence.default(0),
   }),
+  code60_get_heartbeat_status: z.strictObject({}),
 };
 export type KnowledgeTool = keyof typeof knowledgeSchemas;
 export const isKnowledgeTool = (name: string): name is KnowledgeTool =>
@@ -181,6 +182,12 @@ export const MCP_KNOWLEDGE_TOOL_DEFINITIONS = [
     },
     required: ["panelId", "tabId", "revision"],
   },
+  {
+    name: "code60_get_heartbeat_status",
+    description:
+      "Read redacted, host-identifier-free Core Heartbeat status: schedule enablement, last sweep initiation/termination/duration, aggregate counts, and fixed finding codes. Exposes no file paths, hostnames, IPs, raw logs, or destructive controls.",
+    properties: {},
+  },
 ].map((tool) => ({
   kind: "knowledge" as const,
   name: tool.name as KnowledgeTool,
@@ -246,7 +253,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Left navigation sidebar or Home / Apps / Settings lists; workspace header → Back / Forward",
     "none",
     "human-only",
-    "Chat is a top-level navigation button opening Relay and Carbon's Chat History panel. Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments are expandable navigation groups. Opening a destination reveals its group. Skip to main content moves keyboard focus past the navigation to the current page. Conversations keep their own actions in Chat History. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.",
+    "Chat is a top-level navigation button opening Relay and Carbon's Chat History panel. Automate, Connect, Context, Customize, Personalize, Manage, Contributor Tools and Experiments are expandable navigation groups. Opening a destination reveals its group. Skip to main content moves keyboard focus past the navigation to the current page. Conversations keep their own actions in Chat History. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.",
     "No confirmation; navigation only.",
   ),
   feature(
@@ -378,7 +385,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "commands",
     "Commands",
     `Use bundled or saved reusable prompts with a leading $name. Bundled commands: ${BUILTIN_COMMANDS.map((command) => `$${command.name}: ${command.description}`).join(" ")}`,
-    "Customize → Commands (also Apps → Commands); project composer / or $ command picker",
+    "Context → Commands (also Apps → Commands); project composer / or $ command picker",
     "database",
     "existing-tools",
     "Choose a slash suggestion to insert its $name token, then add arguments. An unselected /name is plain text. Saved names override bundled names. Commands expand only in project orchestrator chats, not Relay or worker chats. Conversation commands do not grant new execution authority. Relay has no command creation tool; reading never executes.",
@@ -396,7 +403,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "prompts",
     "Internal Prompts",
     "Inspect all 44 internal prompts by canonical dotted ID and customize the 10 editable project, handoff, and utility templates.",
-    "Customize → Internal Prompts (also Apps → Internal Prompts) → filter by ID/name and Save, Discard changes, or Reset to default",
+    "Context → Internal Prompts (also Apps → Internal Prompts) → filter by ID/name and Save, Discard changes, or Reset to default",
     "database",
     "read",
     "Database overrides precede config and built-ins for the 10 editable templates. Safety wrappers, strict JSON schemas, bundled tactics, built-in commands, and Relay/Custom Assistant prompts are read-only; Relay stays independent of project databases.",
@@ -454,7 +461,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "memory",
     "Memory",
     "Learn and recall scoped evidence when enabled.",
-    "Apps → Memory; Apps → Data Viewer → Memories",
+    "Context → Memory (also Apps → Memory); Apps → Data Viewer → Memories",
     "none",
     "human-only",
     "Memory Off disables learning/recall, not session-local continuity. No memory records exposed through awareness.",
@@ -506,6 +513,16 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "human-only",
     "No database is required. Passive local checks run on page open; active provider authentication probes, embedding checksum verification and optional registry release checks run only on explicit human request with per-check cancellation and never repair services or mutate state. Copy health report omits hostname, IP addresses, proxy hosts and filesystem paths by default unless explicitly opted in. Relay and awareness cannot run health probes or read host-identifying details.",
     "Read-only diagnostics; active probes run only when explicitly requested by the user.",
+  ),
+  feature(
+    "heartbeat",
+    "Heartbeat",
+    "Inspect recurring and manual Core Heartbeat sweeps, view all eight maintenance actions with initiation, termination and duration timestamps, initiate manual or dry-run sweeps, browse recent sweep history, and configure autonomous hygiene policies.",
+    "Manage → Heartbeat (also Apps → Heartbeat) and local terminal → code60 heartbeat",
+    "none",
+    "read",
+    "No database is required. Stores bounded policy and the last 50 sweeps in $XDG_STATE_HOME/code60/heartbeat/state.json (up to 512 KiB) without consuming the 5,000-entry Scheduled Jobs execution budget. Autonomously runs passive health sweeps, reconciles dead-owner runs, stops verified orphan processes, clears verified leftover-agent blocks, restarts capped stateless sidecars, applies 2 GiB/4 GiB low-disk pause/resume hysteresis, prunes stale temp/Git metadata, and removes terminal zero-diff or already-discarded code60/* worktrees past the configured age limit while preserving worktrees with edits, locks, and history. Never replays uncertain work, commits, merges, or pushes. Agents can read redacted aggregate status via code60_get_heartbeat_status without paths, hostnames, IPs, raw logs, or policy/trigger authority.",
+    "Manual Run heartbeat, Dry run, Cancel, and Policy changes are human-only in Manage → Heartbeat or local code60 heartbeat CLI.",
   ),
   feature(
     "usage",
@@ -628,6 +645,16 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Presentation only; reports never change work or permissions. Sidebar names follow live connection, work and worker-monitoring states; approval, stopping, idle and saved entries stay static. Hidden views, reduced motion and forced colors disable the spotlight.",
   ),
   feature(
+    "codebase-search",
+    "Vector Search",
+    "Automatically index the latest main branch of Git repositories with Code60's bundled offline ONNX embedding engine, inspect indexed repositories and storage sizes under Context → Vector Search, and run hybrid semantic and lexical code search.",
+    "Context → Vector Search (also Apps → Vector Search); Relay, Custom Assistants, project chats, subagents, Workflow Engine, and Scheduled Agents → code60_search_codebase and code60_codebase_index_status",
+    "git",
+    "read",
+    "No database is required for the Vector Search page. Indexes tracked text files on main (non-mutating origin fetch when configured, falling back to local main or default branch) without modifying the working tree or branches. Shared across linked worktrees via git-common-dir. Private SQLite + FTS5 index under application state; runs ONNX inference in a dedicated lazy Node sidecar. Relay and Custom Assistants require an explicit cwd; project chats, subagents, Workflow Engine, and Scheduled Agents are strictly bound to their target repository. Retrieved code is untrusted data.",
+    "Read-only for agents; removing a repository index from Context → Vector Search requires browser confirmation and deletes only derived index rows while preserving source files and Git history.",
+  ),
+  feature(
     "knowledge",
     "Self-knowledge",
     "Discover capabilities, open-state metadata and effective customizations.",
@@ -652,7 +679,9 @@ export const PAGE_CAPABILITIES = {
   workflows: "workflows",
   "system-manager": "system-manager",
   "health-check": "health-check",
+  heartbeat: "heartbeat",
   usage: "usage",
+  "vector-search": "codebase-search",
   automations: "automations",
   "episodic-memory": "episodic-memory",
   rag: "rag",
@@ -685,11 +714,14 @@ export const SETTINGS_CAPABILITIES = {
 /** Every agent-visible tool belongs to exactly one capability. */
 export const TOOL_CAPABILITIES: Record<string, string> = {
   code60_browser: "browser",
+  code60_search_codebase: "codebase-search",
+  code60_codebase_index_status: "codebase-search",
   code60_get_capabilities: "knowledge",
   code60_get_app_state: "knowledge",
   code60_list_customizations: "knowledge",
   code60_read_customization: "knowledge",
   code60_read_view: "knowledge",
+  code60_get_heartbeat_status: "heartbeat",
   code60_get_activity_context: "activity",
   code60_report_activity: "activity",
   code60_create_command: "commands",
@@ -799,11 +831,11 @@ export const CAPABILITY_CATEGORIES: readonly CapabilityCategory[] = [
   {
     id: "automation",
     kbId: "KB-REF-004",
-    title: "Capabilities: Scheduled Jobs and Workflows",
+    title: "Capabilities: Scheduled Jobs, Workflows, and Heartbeat",
     summary:
-      "Generated capability specs for recurring Scheduled Jobs and native multi-step Workflows inside Code60 Gateway.",
-    tags: ["capabilities", "automation", "workflows", "reference"],
-    capabilities: ["automations", "workflows"],
+      "Generated capability specs for recurring Scheduled Jobs, native multi-step Workflows, and Core Heartbeat maintenance inside Code60 Gateway.",
+    tags: ["capabilities", "automation", "workflows", "heartbeat", "reference"],
+    capabilities: ["automations", "workflows", "heartbeat"],
   },
   {
     id: "connectors",
@@ -844,11 +876,12 @@ export const CAPABILITY_CATEGORIES: readonly CapabilityCategory[] = [
     kbId: "KB-REF-008",
     title: "Capabilities: Data, Search, Self-Knowledge, and Experiments",
     summary:
-      "Generated capability specs for Data Viewer, Search, Diagnostic Logs, Self-Knowledge, Retrieval Tests, and Memory Tester.",
+      "Generated capability specs for Data Viewer, Search, Vector Codebase Search, Diagnostic Logs, Self-Knowledge, Retrieval Tests, and Memory Tester.",
     tags: ["capabilities", "inspection", "experiments", "reference"],
     capabilities: [
       "data",
       "search",
+      "codebase-search",
       "logs",
       "knowledge",
       "rag",

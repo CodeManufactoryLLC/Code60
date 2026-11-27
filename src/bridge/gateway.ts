@@ -46,6 +46,11 @@ export const confirmationPresentation = {
   "stop-backend": { title: "Stop Code60 Backend?", action: "Stop backend", danger: true },
   "stop-runs": { title: "Stop all runs?", action: "Stop all runs", danger: true },
   "clear-index": { title: "Clear RAG index?", action: "Clear index", danger: true },
+  "remove-codebase-index": {
+    title: "Remove repository index?",
+    action: "Remove index",
+    danger: true,
+  },
   "undo-request": { title: "Undo this request?", action: "Undo request", danger: true },
   "replace-database": { title: "Replace database?", action: "Replace database", danger: true },
   "clear-history": { title: "Clear project history?", action: "Clear history", danger: true },

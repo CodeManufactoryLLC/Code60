@@ -4093,7 +4093,10 @@ describe("app-wide orchestration chat", {
       expect.objectContaining({ name: "code60" }),
       ...first,
     ]);
-    expect(agents.specs[1]?.mcpServers).toEqual(first);
+    expect(agents.specs[1]?.mcpServers).toEqual([
+      ...first,
+      expect.objectContaining({ name: "code60-code" }),
+    ]);
     const original = structuredClone(agents.specs);
     const next = await configureMcp("next");
     expect(controller.snapshot().chat.run?.id).toBe(id);
@@ -4109,7 +4112,10 @@ describe("app-wide orchestration chat", {
     expect(agents.specs).toHaveLength(2);
     await controller.start({ ...request, prompt: "new manual" });
     await vi.waitFor(() => expect(agents.specs).toHaveLength(3));
-    expect(agents.specs[2]?.mcpServers).toEqual(next);
+    expect(agents.specs[2]?.mcpServers).toEqual([
+      ...next,
+      expect.objectContaining({ name: "code60-code" }),
+    ]);
     await controller.orchestrationChatAction({ type: "new" });
     await vi.waitFor(() => expect(controller.snapshot().chat.run?.status).toBe("idle"));
     expect(agents.specs[3]?.mcpServers).toEqual([
@@ -4383,7 +4389,7 @@ describe("app-wide orchestration chat", {
     await controller.poll(["worktrees"]);
     const [runId] = await controller.start({ ...request, prompt: "Project hello" });
     await vi.waitFor(() => expect(controller.snapshot().runs[0]?.view?.status).toBe("idle"));
-    expect(agents.specs[1]?.mcpServers).toBeUndefined();
+    expect(agents.specs[1]?.mcpServers).toEqual([expect.objectContaining({ name: "code60-code" })]);
     agents.sessions[1]?.update({ type: "message", text: "Streamed " });
     agents.sessions[1]?.update({ type: "message", text: "reply" });
     const sessions = await call("code60_search_sessions", { query: runId });
@@ -5564,6 +5570,12 @@ describe("orchestrated workers over ACP", {
     await fs.writeFile(join(projectDir, ".env"), "SECRET=123\n");
     await fs.writeFile(join(projectDir, "README.md"), "# Demo\n");
 
+    const beforeGit = await call("code60_codebase_index_status", {});
+    expect(beforeGit.status).toBeGreaterThanOrEqual(400);
+    expect(beforeGit.body.error).toContain("code60_setup_git");
+    expect(beforeGit.body.error).toContain("inspect");
+    const trackSpy = vi.spyOn(controller.codebase, "trackRepository");
+
     const inspected = await call("code60_setup_git", { scope, action: "inspect" });
     expect(inspected.status, inspected.body.error).toBe(200);
     expect(inspected.body.result).toMatchObject({
@@ -5610,6 +5622,7 @@ describe("orchestrated workers over ACP", {
     expect(committed).toContain("README.md");
     expect(committed).not.toContain(".env");
     expect(controller.snapshot().gitReadiness?.status).toBe("ready");
+    expect(trackSpy).toHaveBeenCalledWith(projectDir);
 
     // Calling setup again on a ready repository is an idempotent no-op.
     const repeat = await call("code60_setup_git", { scope, action: "setup" });
@@ -6121,7 +6134,10 @@ describe("orchestrated workers over ACP", {
     const { call, scope } = await setup();
     const runId = await dispatch(call, scope, "first worker");
     await vi.waitFor(() => expect(session(runId)?.prompts).toEqual(["first worker"]));
-    expect(agents.specs.find((spec) => spec.cwd.endsWith(runId))?.mcpServers).toEqual(first);
+    expect(agents.specs.find((spec) => spec.cwd.endsWith(runId))?.mcpServers).toEqual([
+      ...first,
+      expect.objectContaining({ name: "code60-code" }),
+    ]);
     const next = await configureMcp("next");
     expect(agents.specs[0]?.mcpServers).toEqual([
       expect.objectContaining({ name: "code60" }),
@@ -6136,7 +6152,10 @@ describe("orchestrated workers over ACP", {
     expect((await call("code60_resume_agent", { scope, runId, prompt: "continue" })).status).toBe(
       200,
     );
-    expect(agents.restores.at(-1)?.spec.mcpServers).toEqual(next);
+    expect(agents.restores.at(-1)?.spec.mcpServers).toEqual([
+      ...next,
+      expect.objectContaining({ name: "code60-code" }),
+    ]);
     await vi.waitFor(() =>
       expect(controller.snapshot().runs.find((run) => run.record.id === runId)?.view?.status).toBe(
         "idle",
@@ -6152,7 +6171,10 @@ describe("orchestrated workers over ACP", {
     expect((await call("code60_resume_agent", { scope, runId, prompt: "handoff" })).status).toBe(
       200,
     );
-    expect(agents.specs.at(-1)?.mcpServers).toEqual(next);
+    expect(agents.specs.at(-1)?.mcpServers).toEqual([
+      ...next,
+      expect.objectContaining({ name: "code60-code" }),
+    ]);
     expect(JSON.stringify(controller.snapshot())).not.toContain("private-next");
   });
 
@@ -6358,7 +6380,7 @@ describe("orchestrated workers over ACP", {
     const runId = await dispatch(call, scope, "Fix the bug");
     await vi.waitFor(() => expect(session(runId)?.prompts).toEqual(["Fix the bug"]));
     const spec = agents.specs.find((entry) => entry.cwd.endsWith(runId));
-    expect(spec?.mcpServers).toBeUndefined();
+    expect(spec?.mcpServers).toEqual([expect.objectContaining({ name: "code60-code" })]);
     expect(controller.snapshot().workers).toEqual([runId]);
 
     await vi.waitFor(() => expect(chatPrompts()).toHaveLength(1));
@@ -7410,5 +7432,85 @@ describe("controller terminals", () => {
       await fresh.shutdown();
       await fs.rm(emptyState, { recursive: true, force: true });
     }
+  });
+
+  it("exposes Heartbeat runtime helpers for repos, pinned runs, wedged recovery, and sidecar healing", async () => {
+    await controller.open(directory);
+    expect(controller.heartbeatRepoPaths()).toContain(controller.snapshot().directory);
+
+    const emptyPins = controller.heartbeatPinnedWorktreesAndRuns();
+    expect(emptyPins.worktrees.size).toBe(0);
+    expect(emptyPins.runIds.size).toBe(0);
+    expect(controller.heartbeatInspectWedgedRuns()).toEqual([]);
+
+    // Exercise pinned active runs and wedged-run detection via snapshot state.
+    const realSnap = controller.snapshot(false, true);
+    const snapSpy = vi.spyOn(controller, "snapshot").mockReturnValue({
+      ...realSnap,
+      liveIds: ["live-1"],
+      runs: [
+        {
+          record: {
+            id: "wedged-1",
+            agent: "claude",
+            worktree: "/tmp/wt-wedged",
+          } as never,
+          view: { status: "running", stopping: true } as never,
+          agentAlive: true,
+        } as never,
+      ],
+      chat: { ...realSnap.chat, kind: "relay", error: "Relay disconnected" } as never,
+    });
+
+    const pins = controller.heartbeatPinnedWorktreesAndRuns();
+    expect(pins.runIds.has("live-1")).toBe(true);
+    expect(pins.runIds.has("wedged-1")).toBe(true);
+    expect(pins.worktrees.has("/tmp/wt-wedged")).toBe(true);
+    expect(controller.heartbeatInspectWedgedRuns()).toEqual([
+      {
+        runId: "wedged-1",
+        label: "claude",
+        reason: "Run remained in stopping state with a live agent process.",
+      },
+    ]);
+
+    const actionSpy = vi.spyOn(controller, "action").mockResolvedValueOnce(undefined as never);
+    expect(await controller.heartbeatRecoverWedgedRun("wedged-1")).toBe(true);
+    actionSpy.mockRejectedValueOnce(new Error("stop failed"));
+    expect(await controller.heartbeatRecoverWedgedRun("wedged-1")).toBe(false);
+    actionSpy.mockRestore();
+
+    // Healthy sidecar + Relay error reporting.
+    const healthy = await controller.heartbeatHealRuntime({
+      canRestartSidecar: true,
+      mode: "inspect",
+    });
+    expect(healthy.restartedSidecars).toBe(0);
+    expect(healthy.relayError).toBe("Relay disconnected");
+
+    // Unhealthy sidecar restarted when maintain + canRestartSidecar.
+    const memSnapSpy = vi
+      .spyOn(controller.memory, "snapshot")
+      .mockResolvedValueOnce({ warning: "Sidecar stalled" } as never);
+    const memCloseSpy = vi.spyOn(controller.memory, "close").mockResolvedValueOnce();
+    const healed = await controller.heartbeatHealRuntime({
+      canRestartSidecar: true,
+      mode: "maintain",
+    });
+    expect(healed.restartedSidecars).toBe(1);
+    expect(healed.sidecarIssues).toContain("Sidecar stalled");
+    expect(memCloseSpy).toHaveBeenCalledTimes(1);
+
+    // Unresponsive sidecar rejection handled safely.
+    memSnapSpy.mockRejectedValueOnce(new Error("IPC timeout"));
+    const failed = await controller.heartbeatHealRuntime({
+      canRestartSidecar: true,
+      mode: "maintain",
+    });
+    expect(failed.sidecarIssues).toContain("Memory sidecar did not respond to health check.");
+
+    memSnapSpy.mockRestore();
+    memCloseSpy.mockRestore();
+    snapSpy.mockRestore();
   });
 });

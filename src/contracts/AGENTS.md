@@ -33,6 +33,10 @@
   mode; project dispatch still rejects directories and requires Git isolation.
   Shared identities and history-window policies remain browser-safe, strict and
   free of I/O. No executable/environment fields are permitted.
+- Vector codebase search contracts (`codebase-search.ts`) are browser-safe Zod schemas
+  defining `code60_search_codebase` and `code60_codebase_index_status` for role-scoped
+  `"bound"` (no `cwd`) and `"relay"` (explicit `cwd`) callers, rejecting path traversal
+  and unbounded query limits.
 - The self-knowledge catalog in `knowledge.ts` must classify every page, settings
   section and MCP tool. Update descriptors with any capability-affecting change,
   then run `npm run generate:capabilities`; never hand-edit files under `knowledge/reference/capabilities/`.

@@ -19,6 +19,23 @@ export function chatDraftKey(chat: OrchestrationChat | undefined): string {
 export function attachToChat(key: string, attachment: ChatAttachment): boolean {
   return drafts.get(key)?.attach(attachment) ?? false;
 }
+export function prefillChatDraft(key: string, text: string): boolean {
+  if (!key) return false;
+  const existing = drafts.get(key);
+  if (existing) {
+    existing.edit(text);
+    return true;
+  }
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem(key, text);
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
 type DraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 interface DraftSnapshot {
   text: string;

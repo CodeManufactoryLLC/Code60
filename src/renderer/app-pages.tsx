@@ -7,6 +7,7 @@ import { AppsPage } from "./apps-page.js";
 import { AutomationsPage } from "./automations.js";
 import { Button as AppButton } from "./carbon/button.js";
 import { Surface as Card } from "./carbon/surfaces.js";
+import { chatDraftKey, prefillChatDraft } from "./chat-draft.js";
 import { ChatWorkspace } from "./chat-workspace.js";
 import { builtinRelayId, conversationId } from "./chats.js";
 import { CommandsPage } from "./commands-page.js";
@@ -16,6 +17,7 @@ import { CustomAgentsPage } from "./custom-agents.js";
 import { EpisodicMemoryPage } from "./episodic-memory.js";
 import { EventsPage } from "./events.js";
 import { HealthCheckPage } from "./health-check.js";
+import { HeartbeatPage } from "./heartbeat.js";
 import { HomePage } from "./home-page.js";
 import { LogsPage } from "./logs.js";
 import { McpWorkspace } from "./mcp-workspace.js";
@@ -46,6 +48,7 @@ import { SystemManagerPage } from "./system-manager.js";
 import { updateTabs } from "./tabs.js";
 import { UpdatesSection } from "./updates.js";
 import { UsagePage } from "./usage-page.js";
+import { VectorSearchPage } from "./vector-search-page.js";
 import { WebServerPage } from "./web-server.js";
 import { WorkflowsPage } from "./workflows.js";
 import { WorktreesPage } from "./worktrees.js";
@@ -264,18 +267,59 @@ export function AppPages(props: AppPagesProps) {
         active={!splash && tabs.active === "health-check"}
         {...(snapshot?.versions?.code60 ? { clientVersion: snapshot.versions.code60 } : {})}
         onNotify={notify}
-        onNavigate={(link) => {
+        onAskChat={(prompt) => {
+          prefillChatDraft("code60.orchestrationDraft:relay", prompt);
+          void props.openRelay().catch(() => void navigation.open({ kind: "page", id: "chat" }));
+        }}
+        onNavigate={(link, prompt) => {
           if (link.kind === "relay") {
-            props.openRelay();
+            if (prompt) prefillChatDraft("code60.orchestrationDraft:relay", prompt);
+            void props.openRelay().catch(() => void navigation.open({ kind: "page", id: "chat" }));
           } else if (link.kind === "settings" && isSettingsSection(link.id)) {
             void navigation.open({ kind: "settings", id: link.id });
           } else if (link.kind === "page") {
+            if (link.id === "chat" && prompt) {
+              const key = chatDraftKey(snapshot?.chat) || "code60.orchestrationDraft:relay";
+              prefillChatDraft(key, prompt);
+            }
+            void navigation.open({ kind: "page", id: link.id as RenderedPageId });
+          }
+        }}
+      />
+    ),
+    heartbeat: (
+      <HeartbeatPage
+        api={api}
+        active={!splash && tabs.active === "heartbeat"}
+        onNotify={notify}
+        onAskChat={(prompt) => {
+          prefillChatDraft("code60.orchestrationDraft:relay", prompt);
+          void props.openRelay().catch(() => void navigation.open({ kind: "page", id: "chat" }));
+        }}
+        onNavigate={(link, prompt) => {
+          if (link.kind === "relay") {
+            if (prompt) prefillChatDraft("code60.orchestrationDraft:relay", prompt);
+            void props.openRelay().catch(() => void navigation.open({ kind: "page", id: "chat" }));
+          } else if (link.kind === "settings" && isSettingsSection(link.id)) {
+            void navigation.open({ kind: "settings", id: link.id });
+          } else if (link.kind === "page") {
+            if (link.id === "chat" && prompt) {
+              const key = chatDraftKey(snapshot?.chat) || "code60.orchestrationDraft:relay";
+              prefillChatDraft(key, prompt);
+            }
             void navigation.open({ kind: "page", id: link.id as RenderedPageId });
           }
         }}
       />
     ),
     usage: <UsagePage api={api} active={!splash && tabs.active === "usage"} onNotify={notify} />,
+    "vector-search": (
+      <VectorSearchPage
+        api={api}
+        active={!splash && tabs.active === "vector-search"}
+        onNotify={notify}
+      />
+    ),
     automations: (
       <AutomationsPage
         api={api}

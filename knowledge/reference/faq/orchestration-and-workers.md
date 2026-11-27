@@ -60,6 +60,7 @@ No. Code60 has no native desktop Computer Use control.
 Yes. Code60 supports MCP for both its own orchestration tools and external tool servers. See [MCP Configuration](../../../MCP.md) for full details.
 
 - **Orchestration tools:** In Code60's Two-Layer Architecture, orchestrators receive Code60's MCP tools for worker control, planning, reviews, and browser automation. Workers never receive those tools.
+- **Codebase search tools:** Orchestrators, workers, **Workflows**, and **Scheduled Jobs** receive Code60's read-only Vector Codebase Search tools (`code60_search_codebase` and `code60_codebase_index_status`).
 - **External MCP servers:** Under **Connect → MCP Servers**, a user can manage User and open-project servers with visual forms or strict JSON. Project server IDs override User IDs, new servers start off, and project servers require human approval for their exact revision.
 - **Transports and scope:** Code60 supports `stdio` and Streamable HTTP transports for tools only. It omits legacy Server-Sent Events (SSE), resources, prompts, sampling, and elicitation.
 - **Secrets and limits:** MCP secrets stay in macOS Keychain, Linux Secret Service, or explicit temporary memory, with S256 PKCE OAuth support. **Scheduled Jobs**, setup probes, and internal helpers receive no external MCP servers.

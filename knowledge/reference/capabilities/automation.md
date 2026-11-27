@@ -1,10 +1,10 @@
 ---
 id: KB-REF-004
-title: "Capabilities: Scheduled Jobs and Workflows"
+title: "Capabilities: Scheduled Jobs, Workflows, and Heartbeat"
 domain: reference
 kind: reference
 status: active
-summary: Generated capability specs for recurring Scheduled Jobs and native multi-step Workflows inside Code60 Gateway.
+summary: Generated capability specs for recurring Scheduled Jobs, native multi-step Workflows, and Core Heartbeat maintenance inside Code60 Gateway.
 updated: 2026-11-27
 code_refs:
   - src/contracts/knowledge.ts
@@ -13,10 +13,11 @@ tags:
   - capabilities
   - automation
   - workflows
+  - heartbeat
   - reference
 ---
 
-# Capabilities: Scheduled Jobs and Workflows
+# Capabilities: Scheduled Jobs, Workflows, and Heartbeat
 
 Generated from `src/contracts/knowledge.ts`. Do not edit by hand; run `npm run generate:capabilities`.
 
@@ -49,3 +50,17 @@ Schema version: 1
 - Pages: `workflows`
 - Settings sections: none
 - Tools: none
+
+## Heartbeat
+
+- ID: `heartbeat`
+- Status: shipped
+- Purpose: Inspect recurring and manual Core Heartbeat sweeps, view all eight maintenance actions with initiation, termination and duration timestamps, initiate manual or dry-run sweeps, browse recent sweep history, and configure autonomous hygiene policies.
+- Access: Manage → Heartbeat (also Apps → Heartbeat) and local terminal → code60 heartbeat
+- Prerequisite: none
+- Agent access: read
+- Confirmation: Manual Run heartbeat, Dry run, Cancel, and Policy changes are human-only in Manage → Heartbeat or local code60 heartbeat CLI.
+- Limits: No database is required. Stores bounded policy and the last 50 sweeps in $XDG_STATE_HOME/code60/heartbeat/state.json (up to 512 KiB) without consuming the 5,000-entry Scheduled Jobs execution budget. Autonomously runs passive health sweeps, reconciles dead-owner runs, stops verified orphan processes, clears verified leftover-agent blocks, restarts capped stateless sidecars, applies 2 GiB/4 GiB low-disk pause/resume hysteresis, prunes stale temp/Git metadata, and removes terminal zero-diff or already-discarded code60/* worktrees past the configured age limit while preserving worktrees with edits, locks, and history. Never replays uncertain work, commits, merges, or pushes. Agents can read redacted aggregate status via code60_get_heartbeat_status without paths, hostnames, IPs, raw logs, or policy/trigger authority.
+- Pages: `heartbeat`
+- Settings sections: none
+- Tools: `code60_get_heartbeat_status`
