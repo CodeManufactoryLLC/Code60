@@ -504,4 +504,10 @@ describe("vector codebase search tool exposure across all six surfaces", () => {
       await broker.close();
     }
   });
+
+  it("allows closing the MCP broker more than once during quiesce and shutdown", async () => {
+    const broker = await createMcpBroker();
+    await broker.close();
+    await expect(broker.close()).resolves.toBeUndefined();
+  });
 });

@@ -96,13 +96,15 @@ function createSidecarClient(
       const current = child;
       if (!current) return;
       child = undefined;
+      if (current.exitCode !== null || current.signalCode !== null) return;
       retiring = new Promise<void>((resolve) => {
         const kill = setTimeout(() => current.kill("SIGKILL"), 1_000);
         current.once("exit", () => {
           clearTimeout(kill);
           resolve();
         });
-        current.disconnect();
+        if (current.connected) current.disconnect();
+        else current.kill();
       }).finally(() => {
         retiring = undefined;
       });
@@ -217,7 +219,7 @@ function createSidecarClient(
         pending.reject(new Error("Codebase search service closed"));
       }
       requests.clear();
-      if (current) {
+      if (current && current.exitCode === null && current.signalCode === null) {
         await new Promise<void>((resolve) => {
           const kill = setTimeout(() => current.kill("SIGKILL"), 1_000);
           current.once("exit", () => {
