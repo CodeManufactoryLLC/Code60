@@ -34,7 +34,6 @@ import { staticChildren } from "./navigation-tree.js";
 import { PageTitle, PageTitleNavigationContext } from "./page-title.js";
 import { usePageTransition } from "./page-transition.js";
 import { PollingControls, PollingPage } from "./polling.js";
-import { ProjectHomePages, ProjectsHomePage } from "./project-home-pages.js";
 import { PromptEditorPage } from "./prompt-editor.js";
 import { ProvidersPage } from "./providers-page.js";
 import { RagPage } from "./rag.js";
@@ -78,6 +77,7 @@ export function AppPages(props: AppPagesProps) {
     act,
     fileAction,
     accept,
+    onChatHistoryOpenChange,
   } = props;
   const snapshot = state?.snapshot;
   const [requestedWorkflow, setRequestedWorkflow] = useState<{ id: string; nonce: number } | null>(
@@ -87,11 +87,9 @@ export function AppPages(props: AppPagesProps) {
     tabs.active,
     tabs.active === "settings"
       ? settingsSection
-      : tabs.active === "project"
-        ? tabs.projectId
-        : tabs.active === "chat"
-          ? (props.workerId ?? (snapshot && conversationId(snapshot.chat)))
-          : undefined,
+      : tabs.active === "chat"
+        ? (props.workerId ?? (snapshot && conversationId(snapshot.chat)))
+        : undefined,
     !splash,
   );
   const titleNavigation = useMemo(
@@ -171,9 +169,15 @@ export function AppPages(props: AppPagesProps) {
       fileBrowser.selectFile(source.path);
       setExplorerOpen(true);
       setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
-    } else if (source.kind === "project")
-      void navigation.open({ kind: "project", id: searchTarget.projectId });
-    else if (source.runId) {
+    } else if (source.kind === "project") {
+      const projectChat = snapshot.chats.find(
+        (chat) => chat.projectId === searchTarget.projectId && !chat.archived,
+      );
+      const id = projectChat && conversationId(projectChat);
+      onChatHistoryOpenChange(true);
+      if (id) void navigation.open({ kind: "conversation", id });
+      else setTabs((current) => updateTabs(current, { type: "select", id: "chat" }));
+    } else if (source.runId) {
       setSelected(source.runId);
       openChat(source.runId, false, source.eventIndex);
     }
@@ -182,6 +186,7 @@ export function AppPages(props: AppPagesProps) {
     snapshot?.databaseEpoch,
     snapshot?.projectInstanceId,
     snapshot?.revision,
+    snapshot?.chats,
     directory,
     fileAction,
     fileBrowser,
@@ -190,6 +195,7 @@ export function AppPages(props: AppPagesProps) {
     navigation,
     setSelected,
     openChat,
+    onChatHistoryOpenChange,
   ]);
   const views = {
     "mcp-servers": (
@@ -230,24 +236,6 @@ export function AppPages(props: AppPagesProps) {
         snapshot={snapshot}
         management={props.providerManagement}
         active={!splash && tabs.active === "providers"}
-      />
-    ),
-    projects: (
-      <ProjectsHomePage
-        projects={snapshot?.openProjects ?? []}
-        navigation={navigation}
-        database={database}
-        onOpenProject={() => showPicker(database ? "project" : "database")}
-      />
-    ),
-    project: (
-      <ProjectHomePages
-        projects={snapshot?.openProjects ?? []}
-        chats={snapshot?.chats ?? []}
-        runs={navigationRuns}
-        selectedId={props.workerId ?? (snapshot && conversationId(snapshot.chat))}
-        activeId={tabs.projectId}
-        navigation={navigation}
       />
     ),
     tables: parentHome("tables"),
@@ -617,7 +605,7 @@ export function AppPages(props: AppPagesProps) {
           database={database}
           databaseEpoch={snapshot?.databaseEpoch ?? 0}
           hasProjects={Boolean(snapshot?.projects.length)}
-          onProjects={() => void navigation.open({ kind: "page", id: "projects" })}
+          onProjects={() => showPicker(database ? "project" : "database")}
           onOpen={setSearchTarget}
         />
       </>

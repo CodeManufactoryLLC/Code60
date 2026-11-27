@@ -31,7 +31,6 @@ interface Context {
   selectedId: string | undefined;
   onPage(id: PageId): void;
   onSection(id: SettingsSectionId | null): void;
-  onProject(id: string): void;
   selectWorker(
     id: string | undefined,
     projectId?: string | null,
@@ -100,36 +99,18 @@ export function createNavigationActions(
       return Promise.resolve(false);
     const archiveCurrent =
       request.type === "archive" && id === before.selectedId && before.tabs.active === "chat";
-    const archivedProjectId = archiveCurrent
-      ? before.chats.find((chat) => conversationId(chat) === id)?.projectId
-      : undefined;
-    const archiveToProject =
-      archivedProjectId &&
-      !before.chats.some(
-        (chat) =>
-          chat.projectId === archivedProjectId && !chat.archived && conversationId(chat) !== id,
-      )
-        ? archivedProjectId
-        : undefined;
     return run(
       async (current) => {
         await before.api.orchestrationChatAction(request);
-        if (archiveToProject && current())
-          await before.api.projectAction({ type: "select", projectId: archiveToProject });
-        else if (archiveCurrent && relayId && current())
+        if (archiveCurrent && relayId && current())
           await before.api.orchestrationChatAction({ type: "select", id: relayId });
       },
       () => {
         if (archiveCurrent) {
           read().onArchived();
-          read().selectWorker(undefined, archiveToProject ?? null);
-          if (archiveToProject) {
-            reveal({ kind: "project", id: archiveToProject });
-            read().onProject(archiveToProject);
-          } else {
-            if (relayId) reveal({ kind: "conversation", id: relayId });
-            read().onPage("chat");
-          }
+          read().selectWorker(undefined, null);
+          if (relayId) reveal({ kind: "conversation", id: relayId });
+          read().onPage("chat");
         } else if (request.type === "select" || request.type === "new") {
           const projectId =
             request.type === "new"
@@ -137,14 +118,11 @@ export function createNavigationActions(
               : before.chats.find((chat) => conversationId(chat) === request.id)?.projectId;
           read().selectWorker(undefined, projectId ?? null);
           if (request.type === "select") reveal({ kind: "conversation", id: request.id });
-          else if (projectId) reveal({ kind: "project", id: projectId });
           read().onPage("chat");
         }
       },
-      !!archiveToProject,
+      false,
       () => {
-        if (archiveToProject)
-          return read().projects.some((project) => project.id === archiveToProject);
         if (request.type === "select")
           return read().chats.some((chat) => canOpenChat(chat, request.id));
         if (request.type === "new" && request.projectId)
@@ -188,21 +166,6 @@ export function createNavigationActions(
         context.onSection(target.id);
         context.onPage("settings");
         return true;
-      case "project":
-        if (!context.projects.some((project) => project.id === target.id)) return false;
-        return run(
-          async () => context.api.projectAction({ type: "select", projectId: target.id }),
-          () => {
-            if (read().projects.some((project) => project.id === target.id)) {
-              reveal(target);
-              read().onProject(target.id);
-            }
-          },
-          true,
-          () => read().projects.some((project) => project.id === target.id),
-          false,
-          target,
-        );
       case "conversation":
         if (context.chats.some((chat) => canOpenChat(chat, target.id)))
           return chatAction({ type: "select", id: target.id });

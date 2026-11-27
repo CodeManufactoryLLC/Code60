@@ -110,7 +110,7 @@ export function installPressFeedback(document: Document): () => void {
     // Raised controls use hard-shadow displacement in CSS, never a second scale effect.
     if (
       control.matches(
-        ".cds--btn, .cds--accordion__heading, .home-card, .primary, .destructive, .splash-enter, .sidebar-card-toggle, .project-sidebar-open, .project-folder-stop, .project-session-add, .project-chat-toggle, .chat-sidebar-action",
+        ".cds--btn, .cds--accordion__heading, .home-card, .primary, .destructive, .splash-enter, .sidebar-card-toggle, .chat-sidebar-action",
       )
     )
       return;

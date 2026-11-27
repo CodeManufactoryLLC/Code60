@@ -329,7 +329,7 @@ export function SearchPage({
         {database && !hasProjects && (
           <section>
             <h2>No projects in this database</h2>
-            <AppButton onClick={onProjects}>Open projects</AppButton>
+            <AppButton onClick={onProjects}>Open project</AppButton>
           </section>
         )}
         {submitted?.error && (

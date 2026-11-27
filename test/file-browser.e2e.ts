@@ -2,8 +2,14 @@ import { execFileSync } from "node:child_process";
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { expandNavigation } from "./fixtures/browser-actions.js";
-import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
+import { openNewChatModal } from "./fixtures/browser-actions.js";
+import {
+  browserApp,
+  createDatabase,
+  newProjectSession,
+  onboard,
+  openProject,
+} from "./fixtures/browser-app.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
 test("browser: host chooser navigates, recovers, and creates and reopens the chosen database", async ({
@@ -141,9 +147,8 @@ test("browser: folder chooser keeps its actions visible while browsing and selec
     const { page } = await fixture.open();
     await onboard(page);
     await createDatabase(page, fixture.directory);
-    await expandNavigation(page, "Develop");
-    await page.getByRole("tab", { name: "Projects", exact: true }).click();
-    await page.locator("#panel-projects").getByRole("button", { name: "New Project" }).click();
+    const newChat = await openNewChatModal(page);
+    await newChat.getByRole("button", { name: "Open Project Folder", exact: true }).click();
     const launch = page
       .getByRole("dialog", { name: "Open Project", exact: true })
       .getByRole("button", { name: "Open Folder", exact: true });
@@ -230,15 +235,14 @@ test("browser: project Explorer selects, expands and reuses an owned preview", a
     const entry = tree.getByRole("treeitem", { name: file, exact: true });
     for (const name of ["alpha", "beta"]) {
       await openProject(page, fixture.directory, name);
-      await page
-        .getByRole("button", { name: `New Session in ${name}`, exact: true })
-        .first()
-        .click();
+      await newProjectSession(page, name);
       const chat = page
-        .getByRole("region", { name: `Project ${join(fixture.directory, name)}`, exact: true })
-        .getByRole("button", { name: "Chat 1", exact: true });
+        .locator(
+          `cds-aichat-history-panel-menu[data-history-group="${name}"] cds-aichat-history-panel-item`,
+        )
+        .first();
       await chat.click();
-      await expect(chat).toHaveAttribute("aria-current", "true");
+      await expect(chat).toHaveAttribute("selected", "");
       const toggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
       if (!(await selector.isVisible()))
         await toggle.and(page.locator('[aria-expanded="false"]')).click();

@@ -87,7 +87,6 @@ function fixture() {
     selectedId: "relay",
     onPage: vi.fn(),
     onSection: vi.fn(),
-    onProject: vi.fn(),
     selectWorker: vi.fn(),
     onArchived: vi.fn(),
   };

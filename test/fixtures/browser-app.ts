@@ -137,4 +137,4 @@ export async function browserApp(
   };
 }
 
-export { createDatabase, onboard, openProject } from "./browser-actions.js";
+export { createDatabase, newProjectSession, onboard, openProject } from "./browser-actions.js";

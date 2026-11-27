@@ -155,7 +155,7 @@
     --control-hover: var(--card-header-hover);
   }
 
-  .sidebar-navigation-card :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-action) {
+  .sidebar-navigation-card :is(.sidebar-card-chevron, .sidebar-card-action) {
     color: var(--primary);
     background: var(--primary-text);
   }
@@ -177,8 +177,7 @@
   padding-right: 12px;
 }
 
-.sidebar .sidebar-card-toggle,
-.sidebar .project-sidebar-open {
+.sidebar .sidebar-card-toggle {
   position: absolute;
   z-index: 1;
   top: calc((var(--nav-row-height) - var(--nav-action-height)) / 2);
@@ -191,39 +190,24 @@
   transition: color var(--motion) var(--ease);
 }
 
-.sidebar .project-sidebar-open {
-  right: 4px;
-}
-
-.sidebar .sidebar-card-header #tab-chat {
-  padding-right: 44px;
-}
-
 /* Reserve action space, revealing only the row under the pointer or keyboard focus. */
-.sidebar :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop, .sidebar-card-action) {
+.sidebar :is(.sidebar-card-chevron, .sidebar-card-stop, .sidebar-card-action) {
   opacity: 0;
 }
 
 .sidebar-section:has(
     > .sidebar-card-header:hover,
     > .sidebar-card-toggle:hover,
-    > .project-sidebar-open:hover,
     > .sidebar-card-header :focus-visible,
-    > .sidebar-card-toggle:focus-visible,
-    > .project-sidebar-open:focus-visible
+    > .sidebar-card-toggle:focus-visible
   )
-  > :is(.sidebar-card-toggle, .project-sidebar-open)
-  > :is(.sidebar-card-chevron, .sidebar-card-add),
-.project-chat-heading:is(:hover, :has(:focus-visible))
-  > .icon-button
-  > :is(.sidebar-card-chevron, .sidebar-card-add, .sidebar-card-stop),
+  > .sidebar-card-toggle
+  > .sidebar-card-chevron,
 .chat-sidebar-row:is(:hover, :has(:focus-visible)) > .chat-sidebar-action > .sidebar-card-action {
   opacity: 1;
 }
 
 .sidebar-card-chevron,
-.sidebar-card-add,
-.sidebar-card-stop,
 .sidebar-card-action {
   display: flex;
   align-items: center;
@@ -239,40 +223,22 @@
     color var(--motion) var(--ease);
 }
 
-.sidebar-card-stop {
-  color: var(--project-stop-color);
-  --icon-size: 16px;
-}
-
-.project-folder-stop:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-stop {
-  background: var(--project-stop-color);
-  color: var(--on-destructive);
-}
-
 .sidebar-card-chevron > .carbon-icon {
   rotate: -90deg;
   transition: rotate var(--motion) var(--ease);
 }
 
 .sidebar-card-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron,
-.project-sidebar-open:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
-.project-session-add:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-add,
-.project-chat-toggle:is(:hover, :focus-visible, :active) .sidebar-card-chevron,
 .chat-sidebar-action:is(:hover, :focus-visible, :active):not(:disabled) .sidebar-card-action {
   background: var(--primary);
   color: var(--primary-text);
 }
 
-.sidebar-card-toggle[aria-expanded="true"] .sidebar-card-chevron > .carbon-icon,
-.project-chat-toggle[aria-expanded="true"] .sidebar-card-chevron > .carbon-icon {
+.sidebar-card-toggle[aria-expanded="true"] .sidebar-card-chevron > .carbon-icon {
   rotate: 0deg;
 }
 
 .sidebar-card-toggle:active .sidebar-card-chevron,
-.project-sidebar-open:active:not(:disabled) .sidebar-card-add,
-.project-folder-stop:active:not(:disabled) .sidebar-card-stop,
-.project-session-add:active:not(:disabled) .sidebar-card-add,
-.project-chat-toggle:active .sidebar-card-chevron,
 .chat-sidebar-action:active:not(:disabled) .sidebar-card-action {
   translate: 1px 1px;
   box-shadow: 1px 1px 0 #000000;
@@ -812,7 +778,6 @@
   justify-content: center;
 }
 
-.sidebar-card-add > .carbon-icon,
 .sidebar-card-action > .carbon-icon {
   --icon-size: 16px;
 }

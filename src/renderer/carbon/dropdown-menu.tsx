@@ -36,6 +36,7 @@ export function DropdownMenu({
     <>
       <Button
         ref={trigger}
+        {...(iconOnly ? {} : { variant: "quiet" as const })}
         className={iconOnly ? "icon-button" : undefined}
         aria-label={iconOnly ? label : undefined}
         title={iconOnly ? label : undefined}
@@ -58,7 +59,6 @@ export function DropdownMenu({
           id={id}
           x={position.x}
           y={position.y}
-          align="end"
           anchor={trigger.current}
           initialFocus={position.last ? "last" : "first"}
           label={label}

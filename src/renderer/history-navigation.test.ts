@@ -47,10 +47,6 @@ describe("history restoration through shared navigation", () => {
       { kind: "settings", id: "text" },
     ],
     [{ page: "settings" }, { kind: "page", id: "settings" }],
-    [
-      { page: "project", project: "b" },
-      { kind: "project", id: "b" },
-    ],
     [{ page: "providers" }, { kind: "page", id: "providers" }],
     [
       { page: "chat", chat: "worker" },
@@ -95,8 +91,6 @@ describe("history restoration through shared navigation", () => {
   });
 
   it.each([
-    { page: "project", project: "closed" },
-    { page: "project" },
     { page: "chat", chat: "archived" },
     { page: "chat", chat: "gone" },
   ] satisfies Destination[])("skips unavailable %j", (entry) => {
@@ -129,10 +123,6 @@ describe("asynchronous navigation observation", () => {
     [
       { kind: "custom-agent", id: "assistant" },
       { page: "chat", chat: "custom" },
-    ],
-    [
-      { kind: "project", id: "b" },
-      { page: "project", project: "b" },
     ],
     [{ kind: "page", id: "providers" }, { page: "providers" }],
     [

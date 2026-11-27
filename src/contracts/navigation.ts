@@ -22,7 +22,6 @@ export interface PageDefinition {
 }
 export const parentPageIds = [
   "assistants",
-  "projects",
   "apps",
   "tables",
   "settings",
@@ -61,15 +60,6 @@ export const pages = [
     icon: "app-custom-agents",
   },
   {
-    id: "projects",
-    label: "Projects",
-    group: "chat",
-    order: 0,
-    initialOrder: 18,
-    database: false,
-    icon: "app-backlog",
-  },
-  {
     id: "providers",
     label: "Providers",
     group: "primary",
@@ -77,16 +67,6 @@ export const pages = [
     initialOrder: 25,
     database: false,
     icon: "app-helmet",
-  },
-  {
-    id: "project",
-    label: "Project",
-    group: "legacy",
-    order: 0,
-    initialOrder: 19,
-    database: true,
-    icon: "app-folder",
-    internal: true,
   },
   {
     id: "tables",

@@ -108,9 +108,12 @@ it("keeps unrelated controls square while Card primitives own migrated surfaces"
 });
 
 it("lets the Bubble primitive own human chrome without rounding automatic prompts or code", () => {
-  const bubble = rule("chat", ".event.prompt:where(:not(.automatic)) pre, .agent-message-bubble");
-  expect(bubble).toContain("padding: 12px 18px");
-  expect(bubble).not.toMatch(/background:|border-radius:|color:/);
+  const humanBubble = rule("chat", ".event.prompt:where(:not(.automatic)) pre");
+  expect(humanBubble).toContain("padding: 12px 18px");
+  expect(humanBubble).not.toMatch(/background:|border-radius:|color:/);
+  const agentBubble = rule("chat", ".agent-message-bubble");
+  expect(agentBubble).toContain("padding: 12px 18px 12px 0");
+  expect(agentBubble).not.toMatch(/background:|border-radius:|color:/);
   expect(rule("chat", ".event.prompt pre")).not.toContain("color:");
   expect(rule("accessibility", ".event.prompt:not(.automatic) pre")).toContain(
     "background: Canvas",

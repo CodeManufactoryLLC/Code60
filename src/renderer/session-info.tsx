@@ -1,10 +1,9 @@
 import { Menu, MenuItem, MenuItemRadioGroup } from "@carbon/react";
-import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { defaultableSelections } from "../bridge/index.js";
 import type { ModeChange, SessionState } from "../core/index.js";
 import { AgentLogo } from "./agent-logo.js";
 import { Button as AppButton } from "./carbon/button.js";
-import { Toggle } from "./carbon/toggle-button.js";
 import { Icon } from "./icons.js";
 import { menuAnchorMoved } from "./menu-anchor.js";
 
@@ -201,81 +200,9 @@ export function SessionOptionPicker({
   );
 }
 
-function AutoApprovalToggle({
-  enabled,
-  active,
-  save,
-}: {
-  enabled: boolean;
-  active: boolean;
-  save(value: boolean): Promise<void>;
-}) {
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(false);
-  return (
-    <>
-      <Toggle
-        aria-label="Code60 auto-approval"
-        aria-pressed={enabled}
-        disabled={!active || saving}
-        data-tooltip="Auto-approve permission requests across all orchestration chats and their workers"
-        onClick={async () => {
-          setSaving(true);
-          setError(false);
-          try {
-            await save(!enabled);
-          } catch {
-            setError(true);
-          } finally {
-            setSaving(false);
-          }
-        }}
-      >
-        Code60 auto-approval <span aria-hidden="true">{enabled ? "On" : "Off"}</span>
-      </Toggle>
-      {error && <span role="alert">Could not save Code60 auto-approval. Try again.</span>}
-    </>
-  );
-}
-
-export function SessionExtras({
-  harness,
-  ended,
-  active,
-  autoApproval,
-  onAutoApprovalChange,
-  children,
-}: {
-  harness: string;
-  ended: boolean;
-  active: boolean;
-  autoApproval: boolean;
-  onAutoApprovalChange?: ((value: boolean) => Promise<void>) | undefined;
-  children?: ReactNode;
-}) {
-  const name = harnessNames[harness.toLowerCase()] ?? harness;
-  return (
-    <div className="composer-footer session-extras">
-      {children}
-      {onAutoApprovalChange && (
-        <AutoApprovalToggle enabled={autoApproval} active={active} save={onAutoApprovalChange} />
-      )}
-      <span
-        className="composer-harness"
-        role="img"
-        // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard access exposes the identifying tooltip.
-        tabIndex={0}
-        aria-label={`Current provider: ${name}`}
-        data-tooltip={`${ended ? "Last reported · " : ""}${name}`}
-      >
-        <AgentLogo id={harness} size={20} />
-      </span>
-    </div>
-  );
-}
-
 /** Shared between all orchestrator and worker composers. Choices are connector-owned. */
 export function SessionInfo({
+  harness,
   state,
   ended,
   editable,
@@ -286,6 +213,7 @@ export function SessionInfo({
   onSaveDefault,
   sessionRole = "worker",
 }: {
+  harness?: string | undefined;
   state: SessionState | undefined;
   ended: boolean;
   editable: boolean;
@@ -296,6 +224,7 @@ export function SessionInfo({
   onSaveDefault?: (() => void) | undefined;
   sessionRole?: "orchestrator" | "worker";
 }) {
+  const harnessName = harness ? (harnessNames[harness.toLowerCase()] ?? harness) : undefined;
   const modes = state?.modes;
   const settings = state?.settings;
   const selected = modes?.controls.length
@@ -316,6 +245,18 @@ export function SessionInfo({
     !!onSaveDefault && defaultableSelections(state).some((c) => c.category === "model");
   return (
     <section className="chat-prompt-controls" aria-label="Session information">
+      {harness && harnessName && (
+        <span
+          className="composer-harness"
+          role="img"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard access exposes the identifying tooltip.
+          tabIndex={0}
+          aria-label={`Current provider: ${harnessName}`}
+          data-tooltip={`${ended ? "Last reported · " : ""}${harnessName}`}
+        >
+          <AgentLogo id={harness} size={20} />
+        </span>
+      )}
       <SessionOptionPicker
         controls={settings?.controls ?? []}
         source="config"

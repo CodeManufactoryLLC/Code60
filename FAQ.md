@@ -149,7 +149,7 @@ Size figures reflect macOS Apple Silicon measurements for Code60 `v0.4.1` on `20
 
 ### How does Code60 Auto-Approval work?
 
-**Code60 auto-approval** sets one application-wide permission policy across both layers of Code60's [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture). It covers orchestrators (**Relay**, **Custom Assistants**, and project chats) and their workers. The toggle sits beside **Harness mode** in the composer, starts on, and persists across restarts.
+**Code60 auto-approval** sets one application-wide permission policy across both layers of Code60's [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture). It covers orchestrators (**Relay**, **Custom Assistants**, and project chats) and their workers. The **auto-approve** checkbox sits in the top header, starts on, and persists across restarts.
 
 - **When on:** Code60 answers each new ACP permission request with a once-only allow option and never grants an always-allow rule. If the agent offers no matching once-only option, Code60 cancels the request.
 - **When off:** Each new ACP request waits in the requesting conversation for a human to choose **Allow once** or **Deny**. The **Workspace** approval count opens a waiting conversation, including a project chat in the archive.
@@ -171,7 +171,7 @@ Apply sandboxing outside Code60 or through each [Agent Provider](TERMINOLOGY.md#
 
 - **Provider sandbox:** Enable the sandbox settings and **Harness mode** options that each **Agent Provider** supports in its own CLI or configuration.
 - **Container or virtual machine:** Run Code60 inside a container (such as the optional [Linux development container](.devcontainer/README.md)) or a virtual machine. A separate operating-system user account with narrow filesystem and network access also limits what agents can touch.
-- **Manual approval review:** Turn off **Code60 auto-approval** in the composer to review each ACP permission request. Manual review helps inspect prompts, while operating-system boundaries still come from the provider sandbox, container, virtual machine, or user account.
+- **Manual approval review:** Turn off **auto-approve** in the top header to review each ACP permission request. Manual review helps inspect prompts, while operating-system boundaries still come from the provider sandbox, container, virtual machine, or user account.
 
 ### How does Code60 interact with my Agent Provider's sandbox?
 
@@ -355,7 +355,7 @@ Code60 neither triggers nor blocks an [Agent Provider's](TERMINOLOGY.md#agent-pr
 
 **Plans** guide interactive chat orchestration in [Code60 Gateway](TERMINOLOGY.md#gateway), while [Workflows](TERMINOLOGY.md#workflow) run standalone multi-task coding runs inside **Code60 Gateway**.
 
-- **Execution and providers:** Both **Plans** and **Workflows** run on any active **Agent Provider** through ACP. **Plans** run inside chat (**Relay**, **Custom Assistants**, or project chats), while **Workflows** start manually under **Develop → Workflows** or on a cadence under **Automate → Scheduled Jobs**.
+- **Execution and providers:** Both **Plans** and **Workflows** run on any active **Agent Provider** through ACP. **Plans** run inside chat (**Relay**, **Custom Assistants**, or project chats), while **Workflows** start manually under **Automate → Workflows** or on a cadence under **Automate → Scheduled Jobs**.
 - **Structure and verification:** A **Plan** is an optional task list that an orchestrator revises in chat and executes by dispatching interactive Code60 workers. A **Workflow** defines up to 100 sequential tasks with independent verification criteria, optional check commands, and automatic repair and retry limits.
 - **Changes and lifecycle:** **Plans** integrate worker edits with message-level **Undo**, while **Workflows** keep all edits inside a separate Git worktree without automatic apply or **Undo**. Both continue running after closing the browser and pause or stop when **Code60 Gateway** stops.
 
@@ -390,14 +390,14 @@ Code60 **Plans** are application-level plans with human approval gates and worke
 
 - **Single prompt jobs:** A single-prompt job runs one headless turn inside a separate Git worktree from the local base branch. It uses an explicit deny-by-default tool allowlist and records a transcript and diff in **Execution history**.
 - **Workflow jobs:** A workflow job launches a multi-task **Workflow** from the local base branch with repairs, retries, and an `autoApprove` toggle. When `autoApprove` stays off, permission requests pause the run for human review.
-- **Live workflow interaction:** Every workflow run from **Scheduled Jobs** appears inside **Develop → Workflows** with a **Scheduled** tag. A user can inspect activity, pause, resume, steer, answer questions, or stop the run there.
+- **Live workflow interaction:** Every workflow run from **Scheduled Jobs** appears inside **Automate → Workflows** with a **Scheduled** tag. A user can inspect activity, pause, resume, steer, answer questions, or stop the run there.
 
 ### Do Scheduled Jobs automatically resume when I restart my computer?
 
 Future occurrences resume automatically when the per-user Code60 Gateway service is active, while incomplete prompt runs and occurrences during downtime never replay.
 
 - **Automatic service startup:** After `code60 service install`, `launchd` (macOS) or user `systemd` without linger (Linux) starts Code60 Gateway again when the user logs in. Future occurrences from **Scheduled Jobs** continue on their normal cadence.
-- **No catch-up or prompt replay:** Code60 never catches up on downtime occurrences and never replays a single-prompt run that stops during a reboot. Active **Workflow** runs still use **Workflows** restart reconciliation under **Develop → Workflows** and re-attach their status in **Scheduled Jobs**.
+- **No catch-up or prompt replay:** Code60 never catches up on downtime occurrences and never replays a single-prompt run that stops during a reboot. Active **Workflow** runs still use **Workflows** restart reconciliation under **Automate → Workflows** and re-attach their status in **Scheduled Jobs**.
 - **Uncertain leftover processes:** If a reboot leaves uncertain process ownership behind, Code60 pauses new launches. A user must confirm the old process no longer runs and clear the block in **Apps → System Manager**.
 
 ### Do Scheduled Jobs re-try automatically?

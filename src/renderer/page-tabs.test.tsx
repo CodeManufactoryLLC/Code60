@@ -31,37 +31,26 @@ function navigation(
       settingsSection={settingsSection}
       database={database}
       onSelect={() => {}}
+      onOpenChat={() => {}}
       onSettingsSectionSelect={() => {}}
-      onOpenProject={() => {}}
-      onConnectDatabase={() => {}}
-      projectDisabled={false}
-      navigation={{
-        open: async () => true,
-        chatAction: async () => true,
-        projectAction: async () => true,
-        invalidate: () => {},
-        pending: false,
-        busy,
-        projectPending: false,
-        conversationPending: false,
-        error: "",
-      }}
+      navigation={{ busy }}
       chats={[]}
-      runs={[]}
-      selectedId={undefined}
-      navigationSerial={undefined}
-      eventsByRun={{}}
     />,
   );
 }
 
 describe("database connection navigation", () => {
-  it("shows the nine navigation groups and their destinations in order", () => {
+  it("shows the top-level Chat button followed by the seven navigation groups in order", () => {
     const html = navigation(null);
+    expect(html).toContain('data-sidebar-item="chat"');
+    expect(html).toContain('id="tab-chat"');
+    expect(html).toContain(">Chat</span>");
+    expect(html).not.toContain('id="nav-group-Chat"');
+    expect(html).not.toContain('id="nav-group-Develop"');
+    expect(html).not.toContain('data-sidebar-item="projects"');
+
     const groups = html.split('id="nav-group-').slice(1);
     expect(groups.map((group) => group.split('"')[0])).toEqual([
-      "Chat",
-      "Develop",
       "Automate",
       "Connect",
       "Customize",
@@ -75,18 +64,18 @@ describe("database connection navigation", () => {
         [...group.matchAll(/data-sidebar-item="([^"]+)"/g)].map((match) => match[1]),
       ),
     ).toEqual([
-      ["relay", "custom-agents"],
-      ["projects", "workflows"],
-      ["automations"],
+      ["automations", "workflows"],
       ["mcp-servers", "providers"],
-      ["prompts", "commands", "customize-mcp-servers"],
+      ["custom-agents", "prompts", "commands", "customize-mcp-servers"],
       ["appearance", "table-defaults", "text"],
       ["about", "health-check", "polling-settings", "system-manager", "updates", "usage"],
       ["episodic-memory", "rag"],
       ["web-server"],
     ]);
     for (const label of [
-      "Relay",
+      "Chat",
+      "Workflows",
+      "Custom Assistants",
       "Internal Prompts",
       "Table Defaults",
       "Updates",
@@ -107,10 +96,12 @@ describe("database connection navigation", () => {
       expect(sidebar?.includes('aria-busy="true"')).toBe(busy);
     },
   );
-  it("keeps responsive navigation, Commands and Workspace in the header", () => {
+  it("keeps responsive navigation, centered auto-approve checkbox, Commands and Workspace in the header", () => {
     const html = navigation(null);
     expect(html).toContain('aria-label="Open product navigation"');
     expect(html).toContain('aria-controls="navigation-sidebar"');
+    expect(html).toContain('class="product-header-center"');
+    expect(html).toContain(">auto-approve<");
     expect(html).toContain('aria-label="Commands"');
     expect(html).toContain(">Workspace</button>");
   });
@@ -122,35 +113,32 @@ describe("database connection navigation", () => {
     }
   });
 
-  it("replaces project identity with database connection and disables workspace destinations", () => {
+  it("keeps Chat enabled and disables database-dependent destinations without a database", () => {
     const html = navigation(null, "/old-project");
-    const card = html.match(
-      /<button[^>]*class="icon-button project-sidebar-open[^"]*"[\s\S]*?<\/button>/,
-    )?.[0];
-    expect(card).toContain("Connect to database to add a project");
-    expect(card).toContain("Add Project");
-    expect(card).not.toContain("old-project");
-    expect(card).not.toContain("disabled");
+    expect(html).not.toContain("project-sidebar-open");
+    expect(html).not.toContain('aria-label="Add Project"');
+    expect(html).not.toContain("old-project");
     for (const id of ["prompts", "commands", "episodic-memory", "rag"]) {
       expect(html.match(new RegExp(`<button[^>]*id="tab-${id}"[^>]*>`))?.[0]).toContain("disabled");
     }
-    for (const id of ["chat", "mcp-servers", "settings-polling-settings", "settings-updates"]) {
+    for (const id of [
+      "chat",
+      "workflows",
+      "custom-agents",
+      "mcp-servers",
+      "settings-polling-settings",
+      "settings-updates",
+    ]) {
       const tab = html.match(new RegExp(`<button[^>]*id="tab-${id}"[^>]*>`))?.[0];
       expect(tab).toBeDefined();
       expect(tab).not.toContain("disabled");
     }
   });
-  it("keeps the Add Project action and workspace controls independent of the selected folder", () => {
+  it("enables database-dependent workspace controls once connected", () => {
     for (const directory of [undefined, "/project"]) {
       const html = navigation("/database.sqlite", directory);
-      expect(html).toContain('aria-label="Add Project"');
+      expect(html).not.toContain("project-sidebar-open");
       expect(html).not.toContain("sidebar-header");
-      expect(html).toContain('title="Add Project"');
-      const action = html.indexOf('class="icon-button project-sidebar-open[^"]*"');
-      expect(html).not.toContain('id="projects-card-toggle"');
-      expect(action).toBeLessThan(html.indexOf('id="chat-pages"'));
-      expect(html).not.toContain('class="page-tab-label">Add Project</span>');
-      expect(html).not.toContain(">project</span>");
       expect(html).not.toContain("Connect to database");
       expect(html.match(/<button[^>]*id="tab-prompts"[^>]*>/)?.[0]).not.toContain("disabled");
     }

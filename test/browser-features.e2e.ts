@@ -3,8 +3,14 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { expect, type Page, test } from "@playwright/test";
-import { expandNavigation } from "./fixtures/browser-actions.js";
-import { browserApp, createDatabase, onboard, openProject } from "./fixtures/browser-app.js";
+import { expandNavigation, openChat, openNewChatModal } from "./fixtures/browser-actions.js";
+import {
+  browserApp,
+  createDatabase,
+  newProjectSession,
+  onboard,
+  openProject,
+} from "./fixtures/browser-app.js";
 import { commitFixture } from "./fixtures/git-repository.js";
 
 test("browser: skips pairing by default and can require or skip it again without restarting work", async ({
@@ -136,7 +142,7 @@ test("browser: approved conversation continues with no browser and reattaches wi
       const layout = await header.evaluate((content) => {
         const top = content.getBoundingClientRect();
         const dot = content.querySelector(".relay-pulse")?.getBoundingClientRect();
-        const chat = content.querySelector("#nav-group-Chat")?.getBoundingClientRect();
+        const chat = content.querySelector(".product-nav-chat")?.getBoundingClientRect();
         if (!dot || !chat) throw new Error("Relay and Chat must be present");
         return [
           chat.top - top.top,
@@ -281,6 +287,7 @@ test("browser: custom assistant, memory settings and manual update information s
   try {
     const { page } = await fixture.open();
     await start(page, fixture.directory);
+    await expandNavigation(page, "Customize");
     await page.getByRole("tab", { name: "Custom Assistants", exact: true }).click();
     await page.getByRole("button", { name: "New Assistant", exact: true }).click();
     const editor = page.getByRole("dialog", { name: "New Assistant", exact: true });
@@ -437,6 +444,7 @@ test("browser: Carbon application navigation, appearance controls and retained d
     await expectPageAlignment("#jobs-page-heading", "#panel-automations .cds--tabs");
     const customize = nav.getByRole("tablist", { name: "Customize", exact: true });
     await expect(customize.getByRole("tab")).toHaveText([
+      "Custom Assistants",
       "Internal Prompts",
       "Commands",
       "MCP Servers",
@@ -529,7 +537,7 @@ test("browser: Carbon application navigation, appearance controls and retained d
     await appearance.getByRole("combobox", { name: "Theme", exact: true }).selectOption("dark");
     await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
     await expect(reset).toHaveCSS("color", "rgb(194, 174, 180)");
-    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await openChat(page);
     const prompt = page.getByRole("textbox", { name: "Message to orchestrator", exact: true });
     await expect(prompt).toHaveCSS("--cds-link-primary", "#c2aeb4");
     await app(page, "Appearance");
@@ -552,7 +560,7 @@ test("browser: Carbon application navigation, appearance controls and retained d
     await size.selectOption("18");
     await size.press("Tab");
     await expect(size).toHaveValue("18");
-    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await openChat(page);
     const composer = page
       .locator(".orchestration-chat-page:visible")
       .getByRole("textbox", { name: "Message to orchestrator", exact: true });
@@ -596,12 +604,12 @@ test("browser: Carbon application navigation, appearance controls and retained d
         await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible();
       }
     }
-    for (const groupName of ["Develop", "Automate"] as const)
+    for (const groupName of ["Automate", "Customize"] as const)
       await expandNavigation(page, groupName);
     await page.setViewportSize({ width: 1600, height: 1280 });
     await page.screenshot({ path: test.info().outputPath("sidebar-groups.png") });
     await app(page, "Memory");
-    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await openChat(page);
     await expect(composer).toHaveValue("Unsent Carbon migration draft");
     expect(fixture.gateway.application.snapshot().runs).toHaveLength(0);
   } finally {
@@ -988,9 +996,10 @@ test("browser: pending agent permission survives refresh and cancellation preven
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const chat = page.locator(".orchestration-chat-page:visible");
     const composer = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
-    const approval = chat.getByRole("button", { name: "Code60 auto-approval", exact: true });
+    const approval = page.getByRole("checkbox", { name: "auto-approve", exact: true });
     await expect(approval).toBeEnabled();
-    if ((await approval.getAttribute("aria-pressed")) === "true") await approval.click();
+    if (await approval.isChecked()) await page.locator(".auto-approve-toggle label").click();
+    await expect(approval).not.toBeChecked();
     await composer.fill(
       JSON.stringify([
         { permission: { id: "browser-deny", title: "Run fixture command", kind: "execute" } },
@@ -1005,7 +1014,7 @@ test("browser: pending agent permission survives refresh and cancellation preven
     await app(page, "Appearance");
     await expect(pulse).toHaveAccessibleName("Relay: Attention");
     await page.reload();
-    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await openChat(page);
     await expect(
       chat.getByRole("region", { name: "Pending approvals", exact: true }),
     ).toContainText("Run fixture command");
@@ -1139,7 +1148,9 @@ test("browser: inspects a search result alongside the query and recovers from no
     await start(page, fixture.directory);
     await openFromHome(page, "Search");
     await expect(page.getByRole("heading", { name: "No projects in this database" })).toBeVisible();
-    await page.getByRole("button", { name: "Open projects", exact: true }).click();
+    await page.getByRole("button", { name: "Open project", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Open Project", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
     await openProject(page, fixture.directory, project);
     await openFromHome(page, "Search");
     const panel = page.locator("#panel-search");
@@ -1193,11 +1204,12 @@ test("browser: concurrent project conversations retain their own streaming respo
     const composer = chat.getByRole("textbox", { name: "Message to orchestrator" });
     const select = async (name: string) => {
       const entry = page
-        .getByRole("region", { name: `Project ${join(fixture.directory, name)}`, exact: true })
-        .locator(".chat-sidebar-entry")
+        .locator(
+          `cds-aichat-history-panel-menu[data-history-group="${name}"] cds-aichat-history-panel-item`,
+        )
         .first();
       await entry.click();
-      await expect(entry).toHaveAttribute("aria-current", "true");
+      await expect(entry).toHaveAttribute("selected", "");
       const id = await entry.getAttribute("id");
       if (!id) throw new Error("Selected conversation is missing its navigation identity.");
       await expect(page.locator("#panel-chat")).toHaveAttribute("aria-labelledby", id);
@@ -1214,10 +1226,7 @@ test("browser: concurrent project conversations retain their own streaming respo
       execFileSync("git", ["add", "README.md"], { cwd: repo });
       commitFixture(repo);
       await openProject(page, fixture.directory, name);
-      await page
-        .getByRole("button", { name: `New Session in ${name}`, exact: true })
-        .first()
-        .click();
+      await newProjectSession(page, name);
     }
     for (const name of names) {
       await select(name);
@@ -1247,22 +1256,6 @@ test("browser: concurrent project conversations retain their own streaming respo
     );
     await select("release-server");
     await expect(composer).toHaveText("Server follow-up draft");
-    const rename = page
-      .getByRole("region", {
-        name: `Project ${join(fixture.directory, "release-server")}`,
-        exact: true,
-      })
-      .getByRole("button", { name: /^Rename chat:/ })
-      .first();
-    await rename.click();
-    const dialog = page.getByRole("dialog", { name: "Rename chat" });
-    await dialog.getByLabel("Chat name").press("Escape");
-    await expect(dialog).toBeHidden();
-    await expect(page.getByRole("button", { name: "Develop", exact: true })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
-    await expect(rename).toBeFocused();
     for (const name of names)
       expect(
         execFileSync("git", ["status", "--porcelain"], {
@@ -1365,10 +1358,8 @@ test("browser: Open Project modal fits its content and keeps actions in view", a
     commitFixture(repo);
     const { page } = await fixture.open();
     await start(page, fixture.directory);
-    await expandNavigation(page, "Develop");
-    await page.getByRole("tab", { name: "Projects", exact: true }).click();
-    const launch = page.locator("#panel-projects").getByRole("button", { name: "New Project" });
-    await launch.click();
+    const newChat = await openNewChatModal(page);
+    await newChat.getByRole("button", { name: "Open Project Folder", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Open Project", exact: true });
     await expect(dialog.getByText("No recent projects.")).toBeVisible();
     for (const [width, height] of [
@@ -1397,11 +1388,11 @@ test("browser: Open Project modal fits its content and keeps actions in view", a
       expect(Math.abs(open.y + open.height - bounds.y - bounds.height)).toBeLessThanOrEqual(2);
     }
     await page.keyboard.press("Escape");
-    await expect(launch).toBeFocused();
+    await expect(dialog).toHaveCount(0);
     await page.setViewportSize({ width: 1440, height: 900 });
     await openProject(page, fixture.directory, name);
-    await page.getByRole("tab", { name: "Projects", exact: true }).click();
-    await launch.click();
+    const reopenModal = await openNewChatModal(page);
+    await reopenModal.getByRole("button", { name: "Open Project Folder", exact: true }).click();
     const row = dialog.getByRole("listitem").filter({ hasText: repo });
     await page.setViewportSize({ width: 375, height: 667 });
     await expect(row).toBeVisible();
@@ -1471,12 +1462,9 @@ test("browser: Carbon project commands retain arguments after a rejected send an
     execFileSync("git", ["add", "README.md"], { cwd: repo });
     commitFixture(repo);
     await openProject(page, fixture.directory, "command-project");
-    await page
-      .getByRole("button", { name: "New Session in command-project", exact: true })
-      .first()
-      .click();
+    await newProjectSession(page, "command-project");
     const chat = page.locator(".orchestration-chat-page:visible");
-    await expect(page.getByRole("tabpanel", { name: "Chat 1", exact: true })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Chat 1", exact: true })).toBeVisible();
     await expect(chat.getByRole("button", { name: "Tactics", exact: true })).toBeEnabled();
     const input = chat.getByRole("textbox", { name: "Message to orchestrator" });
     await expect(input).toBeEditable();
@@ -1576,13 +1564,24 @@ test("browser: Carbon project commands retain arguments after a rejected send an
               const box = element.getBoundingClientRect();
               const column = document.querySelector(".app-workspace")!.getBoundingClientRect();
               const header = document.querySelector(".product-header")!.getBoundingClientRect();
+              const historyRail = document
+                .querySelector(".chat-history-rail")
+                ?.getBoundingClientRect();
               const inspector = document.querySelector(
                 '.file-panel[data-minimized="false"]:not([inert])',
               );
+              const left =
+                historyRail && historyRail.width > 0 && historyRail.width < column.width - 2
+                  ? historyRail.right
+                  : column.left;
+              const top =
+                historyRail && historyRail.width >= column.width - 2
+                  ? historyRail.bottom
+                  : header.bottom;
               const right = inspector?.getBoundingClientRect().left ?? window.innerWidth;
               return [
-                box.left - column.left,
-                box.top - header.bottom,
+                box.left - left,
+                box.top - top,
                 box.right - right,
                 box.bottom - window.innerHeight,
               ].map((difference) => Math.round(difference) || 0);
@@ -1627,8 +1626,10 @@ test("browser: the worker prompt line owns its permission decision and follow-up
     await start(page, fixture.directory);
     await page.getByRole("button", { name: "Relay", exact: true }).click();
     const relay = page.locator(".orchestration-chat-page:visible");
-    const approval = relay.getByRole("button", { name: "Code60 auto-approval", exact: true });
-    if ((await approval.getAttribute("aria-pressed")) === "true") await approval.click();
+    const approval = page.getByRole("checkbox", { name: "auto-approve", exact: true });
+    await expect(approval).toBeEnabled();
+    if (await approval.isChecked()) await page.locator(".auto-approve-toggle label").click();
+    await expect(approval).not.toBeChecked();
     const target = join(fixture.directory, "worker-target");
     await mkdir(target);
     const request =
@@ -1645,7 +1646,7 @@ test("browser: the worker prompt line owns its permission decision and follow-up
     const parentInput = relay.getByRole("textbox", { name: "Message to orchestrator" });
     await parentInput.fill(request);
     await parentInput.press("Enter");
-    await page.getByRole("button", { name: /^Permission worker \[/ }).click();
+    await page.locator('cds-aichat-history-panel-item[name*="Permission worker"]').click();
     const worker = page.locator(".worker-chat-page:visible");
     const allow = worker.getByRole("button", { name: "Allow once", exact: true });
     await expect(allow).toBeVisible();
@@ -1813,7 +1814,7 @@ test("browser: removes focus highlight borders across Carbon controls, shadow ch
       await page.keyboard.press("Escape");
       await expect(workspaceDialog).toBeHidden();
 
-      await page.getByRole("button", { name: "Relay", exact: true }).click();
+      await openChat(page);
       const chat = page.locator(".orchestration-chat-page:visible");
       const input = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
       await input.click();
@@ -1825,12 +1826,12 @@ test("browser: removes focus highlight borders across Carbon controls, shadow ch
       const modelButton = chat.getByRole("button", { name: "Model", exact: true });
       await modelButton.focus();
       await expectNoFocusBorder(`${scheme} chat Model button`);
-      const approvalButton = chat.getByRole("button", {
-        name: "Code60 auto-approval",
+      const approvalCheckbox = page.getByRole("checkbox", {
+        name: "auto-approve",
         exact: true,
       });
-      await approvalButton.focus();
-      await expectNoFocusBorder(`${scheme} chat auto-approval button`);
+      await approvalCheckbox.focus();
+      await expectNoFocusBorder(`${scheme} header auto-approve checkbox`);
       const filesToggle = page.getByRole("button", { name: "Toggle files panel", exact: true });
       await filesToggle.focus();
       await expectNoFocusBorder(`${scheme} Toggle files panel button`);
@@ -1930,6 +1931,345 @@ test("browser: scheduled workflow branches from baseBranch, runs with autoApprov
       .map((line) => line.slice(9));
     expect(worktrees.length).toBe(2);
     await expect(readFile(join(worktrees[1] ?? "", "UNCOMMITTED.txt"), "utf8")).rejects.toThrow();
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("browser: redesigned Carbon Commands menu supports search, recovery, keyboard navigation, and Carbon layout", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const fixture = await browserApp(browser);
+  try {
+    const view = await fixture.open();
+    const { page } = view;
+    page.setDefaultTimeout(15_000);
+    await start(page, fixture.directory);
+
+    const commandsButton = page.getByRole("button", { name: "Commands", exact: true });
+    await expect(commandsButton).toHaveAttribute("aria-haspopup", "dialog");
+    await commandsButton.click();
+
+    const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
+    await expect(palette).toBeVisible();
+
+    const search = palette.getByRole("combobox", { name: "Search commands", exact: true });
+    await expect(search).toBeFocused();
+
+    // Verify Carbon layout: pinned body (no double scroll), full-width borderless options, no solid-red danger button.
+    const layout = await palette.evaluate((el) => {
+      const content = el.querySelector<HTMLElement>(".cds--modal-content");
+      const list = el.querySelector<HTMLElement>(".command-palette-list");
+      const firstOption = el.querySelector<HTMLElement>(".command-palette-option");
+      const dangerOption = el.querySelector<HTMLElement>(
+        '.command-palette-option[data-danger="true"]',
+      );
+      return {
+        contentOverflow: content ? getComputedStyle(content).overflowY : null,
+        listOverflow: list ? getComputedStyle(list).overflowY : null,
+        listWidth: list?.clientWidth ?? 0,
+        optionWidth: firstOption?.getBoundingClientRect().width ?? 0,
+        optionBorderTop: firstOption ? getComputedStyle(firstOption).borderTopWidth : null,
+        optionRadius: firstOption ? getComputedStyle(firstOption).borderRadius : null,
+        dangerBg: dangerOption ? getComputedStyle(dangerOption).backgroundColor : null,
+      };
+    });
+    expect(layout.contentOverflow).toBe("hidden");
+    expect(layout.listOverflow).toBe("auto");
+    expect(layout.optionWidth).toBeGreaterThanOrEqual(layout.listWidth - 2);
+    expect(layout.optionBorderTop).toBe("0px");
+    expect(layout.optionRadius).toBe("0px");
+    expect(layout.dangerBg).toBe("rgba(0, 0, 0, 0)");
+
+    // Disabled commands explain why they are unavailable.
+    const stopAll = palette.getByRole("option", { name: /Stop all runs/ });
+    await expect(stopAll).toBeDisabled();
+    await expect(stopAll).toContainText("No active runs");
+
+    // Resting state keeps the result count visually quiet; filtering shows match highlight and count.
+    const count = palette.locator(".command-palette-count");
+    await expect(count).toHaveText("");
+    await search.fill("Dark");
+    await expect(count).toHaveText("1 result");
+    const darkOption = palette.getByRole("option", { name: /Theme: Dark/ });
+    await expect(darkOption).toHaveAttribute("aria-selected", "true");
+    await expect(darkOption.locator("mark")).toHaveText("Dark");
+
+    // Pressing Enter runs the active command and closes the palette.
+    await page.keyboard.press("Enter");
+    await expect(palette).toBeHidden();
+    await expect(page.locator(":root")).toHaveAttribute("data-color-scheme", "dark");
+
+    // Reopen via keyboard shortcut (Meta+K / Control+K).
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+k" : "Control+k");
+    await expect(palette).toBeVisible();
+    await expect(search).toBeFocused();
+
+    // Empty state offers Clear search recovery returning focus to the combobox.
+    await search.fill("zzznomatch");
+    await expect(count).toHaveText("0 results");
+    await expect(palette.getByText("No matching commands.")).toBeVisible();
+    await palette
+      .locator(".command-palette-empty")
+      .getByRole("button", { name: "Clear search" })
+      .click();
+    await expect(search).toHaveValue("");
+    await expect(search).toBeFocused();
+    await expect(count).toHaveText("");
+
+    // Escape closes immediately even when search text is present.
+    await search.fill("Light");
+    await expect(palette.getByRole("option", { name: /Theme: Light/ })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
+
+    // Restore Light theme via arrow navigation + Enter.
+    await commandsButton.click();
+    await expect(palette).toBeVisible();
+    await search.fill("Theme:");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowUp");
+    await expect(palette.getByRole("option", { name: /Theme: Light/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await page.keyboard.press("Enter");
+    await expect(palette).toBeHidden();
+    await expect(page.locator(":root")).toHaveAttribute("data-color-scheme", "light");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("browser: top-level Chat button opens Relay with Carbon Chat History beside left nav, Workflows in Automate, and Custom Assistants in Customize", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const fixture = await browserApp(browser);
+  const projectName = "demo";
+  const projectDir = join(fixture.directory, projectName);
+  try {
+    await mkdir(projectDir);
+    const { page } = await fixture.open();
+    page.setDefaultTimeout(15_000);
+    await start(page, fixture.directory);
+
+    const sidebar = page.locator("#navigation-sidebar");
+    // Left nav has top-level Chat button, no Develop or Chat sections, no Projects node.
+    await expect(sidebar.locator("#tab-chat")).toBeVisible();
+    await expect(sidebar.locator("#tab-chat")).toHaveText("Chat");
+    await expect(sidebar.locator("#nav-group-Develop")).toHaveCount(0);
+    await expect(sidebar.locator("#nav-group-Chat")).toHaveCount(0);
+    await expect(sidebar.locator('[data-sidebar-item="projects"]')).toHaveCount(0);
+
+    // Workflows lives under Automate.
+    await expandNavigation(page, "Automate");
+    await expect(sidebar.locator("#nav-group-Automate #tab-workflows")).toBeVisible();
+
+    // Custom Assistants lives under Customize without nested conversation children.
+    await expandNavigation(page, "Customize");
+    await expect(sidebar.locator("#nav-group-Customize #tab-custom-agents")).toBeVisible();
+    await expect(sidebar.locator("#custom-agent-pages")).toHaveCount(0);
+
+    // Create two Custom Assistants out of alphabetical order to verify flat alpha-sorted listing.
+    await sidebar.locator("#nav-group-Customize #tab-custom-agents").click();
+    for (const assistantName of ["Zebra Helper", "Alpha Helper"]) {
+      await page.getByRole("button", { name: "New Assistant", exact: true }).click();
+      const editor = page.getByRole("dialog", { name: "New Assistant", exact: true });
+      await editor.getByLabel("Name", { exact: true }).fill(assistantName);
+      await editor
+        .getByLabel("Special instructions", { exact: true })
+        .fill(`Help with ${assistantName}.`);
+      await editor.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(
+        page.getByRole("button", { name: `Open ${assistantName}`, exact: true }),
+      ).toBeVisible();
+    }
+
+    // Navigate away to Workflows, then click Chat button to open Relay + Carbon Chat History.
+    await sidebar.locator("#tab-workflows").click();
+    await expect(page.locator("#panel-workflows")).toBeVisible();
+
+    await openChat(page);
+    await expect(page.locator("#panel-chat")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Relay", exact: true })).toBeVisible();
+
+    // Header has centered auto-approve checkbox, no "Code60 auto-approval" footer toggle,
+    // and the provider logo sits to the left of Model inside the chat box.
+    const autoApprove = page.getByRole("checkbox", { name: "auto-approve", exact: true });
+    await expect(autoApprove).toBeVisible();
+    await expect(autoApprove).toBeChecked();
+    await expect(page.getByRole("button", { name: "Code60 auto-approval" })).toHaveCount(0);
+    const composerLayout = await page.evaluate(() => {
+      const header = document.querySelector(".product-header")?.getBoundingClientRect();
+      const center = document.querySelector(".product-header-center")?.getBoundingClientRect();
+      const controls = document.querySelector(
+        ".orchestration-chat-page:not([hidden]) .chat-prompt-controls",
+      );
+      const logo = controls?.querySelector(".composer-harness")?.getBoundingClientRect();
+      const model = controls?.querySelector(".composer-model")?.getBoundingClientRect();
+      return header && center && logo && model
+        ? {
+            centerBalanced:
+              Math.abs(center.left + center.width / 2 - (header.left + header.width / 2)) < 40,
+            logoLeftOfModel: logo.right <= model.left + 2,
+          }
+        : null;
+    });
+    expect(composerLayout?.centerBalanced).toBe(true);
+    expect(composerLayout?.logoLeftOfModel).toBe(true);
+
+    // Verify Carbon's out-of-the-box chat history shell sits directly to the right of the left nav.
+    const layout = await page.evaluate(() => {
+      const nav = document.getElementById("navigation-sidebar")?.getBoundingClientRect();
+      const history = document.querySelector("cds-aichat-history-shell")?.getBoundingClientRect();
+      const conv = document.querySelector(".chat-conversations")?.getBoundingClientRect();
+      return nav && history && conv
+        ? {
+            historyRightOfNav: history.left >= nav.right - 2,
+            convRightOfHistory: conv.left >= history.right - 2,
+            historyWidth: history.width,
+          }
+        : null;
+    });
+    expect(layout?.historyRightOfNav).toBe(true);
+    expect(layout?.convRightOfHistory).toBe(true);
+    expect(layout?.historyWidth).toBeGreaterThan(200);
+
+    // Open a project and create a new session via Chat History New chat modal.
+    await openProject(page, fixture.directory, projectName);
+    await newProjectSession(page, projectName);
+
+    // Project group and its Chat 1 appear inside Carbon's Chat History panel.
+    // Custom Assistants are flat and alphabetically sorted below Relay and above project folders.
+    await expect(
+      page.locator('cds-aichat-history-panel-menu[data-history-group="Custom Assistants"]'),
+    ).toHaveCount(0);
+    const projectMenu = page.locator(
+      `cds-aichat-history-panel-menu[data-history-group="${projectName}"]`,
+    );
+    await expect(projectMenu).toBeVisible();
+    await expect(projectMenu.locator('svg[slot="title-icon"]')).toBeVisible();
+    const topLevelOrder = await page.evaluate(() => {
+      const container = document.querySelector("cds-aichat-history-panel-items");
+      if (!container) return [];
+      return Array.from(container.children).map((el) => ({
+        tag: el.tagName.toLowerCase(),
+        label: el.getAttribute("name") ?? el.getAttribute("data-history-group") ?? "",
+      }));
+    });
+    expect(topLevelOrder).toEqual([
+      { tag: "cds-aichat-history-panel-item", label: "Relay" },
+      { tag: "cds-aichat-history-panel-item", label: "Alpha Helper" },
+      { tag: "cds-aichat-history-panel-item", label: "Zebra Helper" },
+      { tag: "cds-aichat-history-panel-menu", label: projectName },
+    ]);
+    const projectChatItem = projectMenu.locator("cds-aichat-history-panel-item").first();
+    await expect(projectChatItem).toHaveAttribute("name", /Chat 1/);
+    await expect(projectChatItem).toHaveAttribute("selected", "");
+
+    // Collapse the project folder, then click Relay and Chat; the folder must stay collapsed.
+    await projectMenu.locator('button[part="expando"]').click();
+    await expect(projectMenu).not.toHaveAttribute("expanded", "");
+    await page.locator('cds-aichat-history-panel-item[name="Relay"]').click();
+    await expect(page.getByRole("heading", { level: 1, name: "Relay", exact: true })).toBeVisible();
+    await expect(projectMenu).not.toHaveAttribute("expanded", "");
+
+    // Switch back to Relay from the left nav Chat button; the collapsed folder stays collapsed.
+    await openChat(page);
+    await expect(page.getByRole("heading", { level: 1, name: "Relay", exact: true })).toBeVisible();
+    await expect(projectMenu).not.toHaveAttribute("expanded", "");
+
+    // Re-expand the project folder and verify search filters history items.
+    await projectMenu.locator('button[part="expando"]').click();
+    await expect(projectMenu).toHaveAttribute("expanded", "");
+
+    // Search inside Carbon's HistoryToolbar filters history items.
+    const searchInput = page.locator("cds-aichat-history-toolbar cds-search input");
+    await searchInput.fill("Chat 1");
+    const searchResult = page.locator("cds-aichat-history-search-item").first();
+    await expect(searchResult).toBeVisible();
+    await searchResult.click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Chat 1", exact: true }),
+    ).toBeVisible();
+
+    // Send a prompt in Chat 1 and confirm user messages omit Carbon's "You <time>" header line.
+    const chatMain = page.locator(".orchestration-chat-page:visible");
+    const promptInput = chatMain.getByRole("textbox", {
+      name: "Message to orchestrator",
+      exact: true,
+    });
+    await expect(promptInput).toHaveAttribute("contenteditable", "true");
+    await promptInput.fill(JSON.stringify([{ message: "Hello from assistant" }]));
+    await promptInput.press("Enter");
+    await expect(chatMain.getByRole("article", { name: "Assistant" })).toHaveText(
+      /Hello from assistant/,
+    );
+    const visibleAvatarLabels = await chatMain.evaluate((rootEl) => {
+      const labels: string[] = [];
+      const visit = (node: ParentNode) => {
+        for (const el of node.querySelectorAll(".cds-aichat--message__avatar-line")) {
+          if (getComputedStyle(el).display !== "none") {
+            labels.push((el.textContent ?? "").trim());
+          }
+        }
+        for (const el of node.querySelectorAll("*")) {
+          if (el.shadowRoot) visit(el.shadowRoot);
+        }
+      };
+      visit(rootEl);
+      return labels;
+    });
+    expect(visibleAvatarLabels.some((label) => label.startsWith("You "))).toBe(false);
+    expect(visibleAvatarLabels.some((label) => label.startsWith("Code60 "))).toBe(true);
+    const messageAlignment = await chatMain.evaluate((rootEl) => {
+      let labelLeft: number | null = null;
+      const visit = (node: ParentNode) => {
+        for (const el of node.querySelectorAll(".cds-aichat--message__label span")) {
+          if (getComputedStyle(el).display !== "none" && el.textContent?.includes("Code60 ")) {
+            labelLeft = el.getBoundingClientRect().left;
+          }
+        }
+        for (const el of node.querySelectorAll("*")) {
+          if (el.shadowRoot) visit(el.shadowRoot);
+        }
+      };
+      visit(rootEl);
+      const agentText = rootEl.querySelector(".agent-message-bubble .chat-markdown");
+      const userBubble = rootEl.querySelector('.transcript-content[data-variant="human"]');
+      const userStyle = userBubble ? getComputedStyle(userBubble) : null;
+      return {
+        labelLeft,
+        agentLeft: agentText ? agentText.getBoundingClientRect().left : null,
+        userRadius: userStyle?.borderTopLeftRadius ?? "",
+        userBg: userStyle?.backgroundColor ?? "",
+      };
+    });
+    expect(messageAlignment.labelLeft).not.toBeNull();
+    expect(messageAlignment.agentLeft).not.toBeNull();
+    expect(
+      Math.abs((messageAlignment.labelLeft ?? 0) - (messageAlignment.agentLeft ?? 0)),
+    ).toBeLessThanOrEqual(2);
+    expect(Number.parseFloat(messageAlignment.userRadius)).toBeGreaterThan(0);
+    expect(messageAlignment.userBg).not.toBe("rgba(0, 0, 0, 0)");
+
+    // Collapse and reopen Chat History rail.
+    await page.locator("cds-aichat-history-header cds-icon-button").click();
+    await expect(page.locator("cds-aichat-history-shell")).toHaveCount(0);
+    await page.getByRole("button", { name: "Open chat history", exact: true }).click();
+    await expect(page.locator("cds-aichat-history-shell")).toBeVisible();
+
+    // Close Project triggers the Stop folder confirmation dialog from New chat modal.
+    const newChat = await openNewChatModal(page);
+    await newChat
+      .getByRole("button", { name: `Close Project ${projectName}`, exact: true })
+      .click();
+    const confirmDialog = page.getByRole("dialog", { name: /Stop/ });
+    await expect(confirmDialog).toBeVisible();
+    await confirmDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(confirmDialog).toBeHidden();
   } finally {
     await fixture.close();
   }

@@ -41,3 +41,16 @@ it("keeps event IDs across backfill and streaming, retaining original authors an
   });
   expect(expanded.get(response)).toEqual({ from: "assistant", children: "Part two" });
 });
+
+function ProxiedTurn({ children }: { children: string; from: "user" | "assistant" }) {
+  return children;
+}
+
+it("preserves ChatTurn author metadata even when ChatTurn is proxied by Fast Refresh", () => {
+  const entries = chatEntries([
+    <ProxiedTurn key="u1" from="user">
+      Hello
+    </ProxiedTurn>,
+  ]);
+  expect(entries.get(".$u1")).toEqual({ from: "user", children: "Hello" });
+});

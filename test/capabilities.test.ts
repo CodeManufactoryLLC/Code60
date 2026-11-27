@@ -100,7 +100,7 @@ describe("browser capability catalog", () => {
       agentAccess: "human-only",
       access: expect.stringContaining("Left navigation sidebar"),
       limitations: expect.stringMatching(
-        /Chat, Develop, Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments.*Skip to main content/,
+        /Chat is a top-level navigation button.*Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments.*Skip to main content/,
       ),
     });
     expect(
@@ -109,7 +109,9 @@ describe("browser capability catalog", () => {
   });
   it("describes content-title commands while keeping navigation and availability human-only", () => {
     const navigation = APPLICATION_CAPABILITIES.find((cap) => cap.id === "page-navigation");
-    expect(navigation?.limitations).toContain("Projects and conversations keep their own actions");
+    expect(navigation?.limitations).toContain(
+      "Conversations keep their own actions in Chat History",
+    );
     expect(navigation?.limitations).toContain(
       "Restoring a view never sends a request or grants approval",
     );
@@ -208,11 +210,11 @@ describe("browser capability catalog", () => {
       "relay animation checkbox beside Forward",
     );
     expect(APPLICATION_CAPABILITIES.find((c) => c.id === "relay")?.access).toContain(
-      "Sidebar → Chat → Relay",
+      "Sidebar → Chat",
     );
     expect(APPLICATION_CAPABILITIES.find((c) => c.id === "custom-agents")).toMatchObject({
       label: "Custom Assistants",
-      access: expect.stringContaining("Sidebar → Chat → Custom Assistants → New Assistant"),
+      access: expect.stringContaining("Sidebar → Customize → Custom Assistants → New Assistant"),
       prerequisite: "none",
       agentAccess: "human-only",
     });
@@ -411,18 +413,20 @@ describe("browser capability catalog", () => {
     const projects = APPLICATION_CAPABILITIES.find((capability) => capability.id === "projects");
     expect(projects).toMatchObject({
       prerequisite: "database",
-      access: expect.stringContaining("project row → + (New Session)"),
+      access: expect.stringContaining(
+        "Chat History → New chat (Open Project Folder, New Session, Close Project)",
+      ),
       confirmation: expect.stringContaining("Confirm the full selected path with Open project"),
       limitations: expect.stringContaining(
-        "Archiving the last displayed project chat returns to its home without a replacement",
+        "Archiving the last displayed project chat returns to Relay without creating a replacement",
       ),
     });
-    expect(projects?.access).toContain("project home → New Session");
-    expect(projects?.access).toContain("red × (Close Project)");
     expect(projects?.limitations).toContain("invokes Stop Folder");
     expect(projects?.limitations).toContain("keeps the project open");
     expect(projects?.confirmation).toContain("Stop folder confirmation");
-    expect(projects?.limitations).toContain("only the project chevron");
+    expect(projects?.limitations).toContain(
+      "listed in Carbon's Chat History panel beside the navigation sidebar",
+    );
     expect(projects?.limitations).toContain("Project chat auto-names are limited to 19 characters");
     const commands = APPLICATION_CAPABILITIES.find((capability) => capability.id === "commands");
     expect(commands).toMatchObject({

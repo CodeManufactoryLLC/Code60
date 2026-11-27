@@ -1,13 +1,22 @@
 import { useEffect, useState } from "react";
 import type { AppPagesProps } from "./app-page-props.js";
+import { Button as AppButton } from "./carbon/button.js";
 import { Surface as Card } from "./carbon/surfaces.js";
 import { chatDraftKey } from "./chat-draft.js";
+import { ChatHistoryPanel } from "./chat-history-panel.js";
 import { ChatPage } from "./chat-page.js";
-import { chatEventKey, conversationTitle, isSelectedConversation, workerLabel } from "./chats.js";
+import {
+  chatEventKey,
+  conversationId,
+  conversationTitle,
+  isSelectedConversation,
+  workerLabel,
+} from "./chats.js";
 import { ContentHeaderSlot } from "./content-page-header.js";
 import { showsProjectFiles } from "./file-navigation.js";
 import { FilePanel } from "./file-panel.js";
 import { GitReadinessNotice, GitSetupDialog } from "./git-setup.js";
+import { Icon } from "./icons.js";
 import { selectedRecallSource } from "./memory-recall-source.js";
 import { RelayPlansPanel } from "./relay-plans-panel.js";
 import { RetainedProjectPanels } from "./retained-project-panels.js";
@@ -33,6 +42,9 @@ type ChatWorkspaceProps = Pick<
   | "fileAction"
   | "setError"
   | "navigation"
+  | "navigationRuns"
+  | "chatHistoryOpen"
+  | "onChatHistoryOpenChange"
 >;
 export function ChatWorkspace({
   api,
@@ -49,6 +61,9 @@ export function ChatWorkspace({
   fileAction,
   setError,
   navigation,
+  navigationRuns,
+  chatHistoryOpen,
+  onChatHistoryOpenChange,
 }: ChatWorkspaceProps) {
   const snapshot = state?.snapshot;
   const selectionPending = navigation.projectPending || navigation.conversationPending;
@@ -164,14 +179,42 @@ export function ChatWorkspace({
         }}
       />
     ) : null;
+  const selectedHistoryId = workerId ?? (snapshot && conversationId(snapshot.chat));
   return (
     <div
       className="chat-workspace-body"
+      data-history-open={chatHistoryOpen || undefined}
       data-file-panel-open={
         projectFiles ? explorerOpen : relayActive || relayWorkerActive ? relayPanelOpen : undefined
       }
     >
+      <ChatHistoryPanel
+        open={chatHistoryOpen}
+        onOpenChange={onChatHistoryOpenChange}
+        chatOpen={tabs.active === "chat"}
+        conversationVisible={tabs.active === "chat" && !navigation.projectPending}
+        chats={snapshot?.chats ?? []}
+        runs={navigationRuns}
+        openProjects={snapshot?.openProjects}
+        customAgents={snapshot?.customAgents ?? []}
+        selectedId={selectedHistoryId}
+        database={database}
+        eventsByRun={{ ...transcripts.events, ...state?.chatEventsByRun }}
+        navigation={navigation}
+        onOpenProject={() => showPicker(database ? "project" : "database")}
+      />
       <Card className="chat-conversations">
+        {!chatHistoryOpen && (
+          <AppButton
+            type="button"
+            className="icon-button chat-history-reopen"
+            aria-label="Open chat history"
+            title="Open chat history"
+            onClick={() => onChatHistoryOpenChange(true)}
+          >
+            <Icon name="side-panel--open" />
+          </AppButton>
+        )}
         <div id="workspace-panel-actions" />
         <ContentHeaderSlot />
         {gitSetupProject === directory && gitSetupProject && (
@@ -194,7 +237,6 @@ export function ChatWorkspace({
             }
             api={api}
             notice={chat?.kind === "relay" ? null : projectNotice}
-            autoApproval={snapshot?.orchestration.allowAll ?? true}
             chat={
               chat ? { ...chat, title: conversationTitle(snapshot?.chats ?? [], chat) } : undefined
             }
@@ -257,7 +299,6 @@ export function ChatWorkspace({
               api={api}
               run={run}
               label={workerLabel(snapshot?.chats ?? [], run)}
-              autoApproval={snapshot?.orchestration.allowAll ?? true}
               orchestrated={snapshot?.workers.includes(id) ?? false}
               events={
                 current && (snapshot?.liveIds.includes(id) || workerId === id)

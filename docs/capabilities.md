@@ -27,7 +27,7 @@ Schema version: 1
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: No confirmation; navigation only.
-- Limits: Chat, Develop, Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments are expandable navigation groups. Opening a destination reveals its group. Skip to main content moves keyboard focus past the navigation to the current page. Projects and conversations keep their own actions. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.
+- Limits: Chat is a top-level navigation button opening Relay and Carbon's Chat History panel. Automate, Connect, Customize, Personalize, Manage, Contributor Tools and Experiments are expandable navigation groups. Opening a destination reveals its group. Skip to main content moves keyboard focus past the navigation to the current page. Conversations keep their own actions in Chat History. Commands and Workspace are in the header. Returning browsers restore a validated view scoped to the active database, with Relay as the fallback. Restoring a view never sends a request or grants approval.
 - Pages: none
 - Settings sections: none
 - Tools: none
@@ -36,7 +36,7 @@ Schema version: 1
 
 - ID: `navigation-history`
 - Status: shipped
-- Purpose: Return to visited pages, Settings sections, project and provider homes, and specific chats.
+- Purpose: Return to visited pages, Settings sections, provider home, and specific chats.
 - Access: Workspace header → Back / Forward
 - Prerequisite: none
 - Agent access: human-only
@@ -79,7 +79,7 @@ Schema version: 1
 - ID: `relay`
 - Status: shipped
 - Purpose: Application-wide orchestration across explicit targets. Select the relay animation checkbox beside Forward to show the dot above Chat. It defaults to off and remembers your choice in this browser. The dot shows Relay activity across pages: Idle, Listening, Thinking, Speaking, Complete or Attention. The embedded Carbon prompt line opens the selected Code60 thread. Enter sends and Shift+Enter adds a line. Stop targets the current turn.
-- Access: Sidebar → Chat → Relay (also available from Home)
+- Access: Sidebar → Chat (also available from Home and Chat History)
 - Prerequisite: provider
 - Agent access: existing-tools
 - Confirmation: Existing permissions apply.
@@ -107,7 +107,7 @@ Schema version: 1
 - ID: `custom-agents`
 - Status: shipped
 - Purpose: Create application-wide assistants with special instructions and one persistent Relay-style conversation each.
-- Access: Home → Custom Assistants or Sidebar → Chat → Custom Assistants → New Assistant; assistant row → More actions → Edit or Archive; title actions → Archived → row → More actions → Restore
+- Access: Home → Custom Assistants or Sidebar → Customize → Custom Assistants → New Assistant; assistant row → More actions → Edit or Archive; title actions → Archived → row → More actions → Restore; Chat History
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: Archiving requires browser confirmation, stops only the assistant and preserves history.
@@ -121,12 +121,12 @@ Schema version: 1
 - ID: `projects`
 - Status: shipped
 - Purpose: Retain independent project workspaces and conversations. New Session starts a project-bound chat.
-- Access: Projects heading → circular Add Project; project row → + (New Session); Projects page → New Project; project home → New Session; project row → red × (Close Project); project row → chevron (expand/collapse)
+- Access: Chat History → New chat (Open Project Folder, New Session, Close Project) or Commands → Open project
 - Prerequisite: database
 - Agent access: read
-- Confirmation: Select database offers Open existing database and Create database. Each opens its host picker immediately. The authenticated host folder chooser allows directory creation within locally configured roots. Click to select a folder, double-click or press Enter to browse, then choose the folder. Confirm the full selected path with Open project. Back, Forward and Up navigate the chooser. Cancel has initial focus on confirmation and leaves the current project and history unchanged. The red × requires the existing Stop folder confirmation; cancelling leaves work running.
-- Limits: Opening or selecting a project is a human action; opening never initializes Git. Archiving the last displayed project chat returns to its home without a replacement. New Session explicitly creates a chat. Project chat auto-names are limited to 19 characters. Manual names and existing titles are unchanged. The red × labelled Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Project name selection and new sessions preserve disclosure state; only the project chevron expands or collapses its list.
-- Pages: `projects`, `project`, `chat`
+- Confirmation: Select database offers Open existing database and Create database. Each opens its host picker immediately. The authenticated host folder chooser allows directory creation within locally configured roots. Click to select a folder, double-click or press Enter to browse, then choose the folder. Confirm the full selected path with Open project. Back, Forward and Up navigate the chooser. Cancel has initial focus on confirmation and leaves the current project and history unchanged. Close Project requires the existing Stop folder confirmation; cancelling leaves work running.
+- Limits: Opening or selecting a project is a human action; opening never initializes Git. Archiving the last displayed project chat returns to Relay without creating a replacement. New Session explicitly creates a chat. Project chat auto-names are limited to 19 characters. Manual names and existing titles are unchanged. Close Project invokes Stop Folder: it stops project work and Relay workers in that folder, pauses replacement for that task/target and keeps the project open. Other folders continue. Relay, Custom Assistant chats, project chats, and workers are listed in Carbon's Chat History panel beside the navigation sidebar.
+- Pages: `chat`
 - Settings sections: none
 - Tools: none
 
@@ -275,7 +275,7 @@ Schema version: 1
 - ID: `orchestration-permissions`
 - Status: shipped
 - Purpose: Choose whether to review each permission request from Relay, Custom Assistants, project chats and their workers.
-- Access: Orchestration chat or worker composer → Code60 auto-approval (beside Harness mode)
+- Access: Workspace header → auto-approve
 - Prerequisite: none
 - Agent access: human-only
 - Confirmation: When off, choose Allow once or Deny in the requesting conversation. The Workspace approval count opens a waiting conversation, including archived project chats with a pending request.
@@ -373,7 +373,7 @@ Schema version: 1
 - ID: `workflows`
 - Status: shipped
 - Purpose: Inspect saved definitions or edit a copy for fresh review. Use Execution history to open the player for one run, including runs started from Scheduled Jobs (marked with a Scheduled badge). Create ordered coding workflows manually or through Create with prompt, choose any verified Code60 provider, review and explicitly start them in dedicated saved-file worktrees, or schedule recurring workflows from Scheduled Jobs off a local base branch. Track independent verification, repairs, decisions and accepted diffs.
-- Access: Develop → Workflows (also Apps → Workflows)
+- Access: Automate → Workflows (also Apps → Workflows)
 - Prerequisite: runtime
 - Agent access: human-only
 - Confirmation: Existing permissions apply.

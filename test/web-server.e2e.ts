@@ -1,7 +1,7 @@
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { expandNavigation, openMcpServers } from "./fixtures/browser-actions.js";
+import { expandNavigation, openChat, openMcpServers } from "./fixtures/browser-actions.js";
 import { browserApp, createDatabase, onboard } from "./fixtures/browser-app.js";
 
 async function serverPage(page: Page) {
@@ -145,7 +145,7 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
     await expect(
       remoteSettings.getByText("Manage access from the controlling localhost browser."),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Relay", exact: true }).click();
+    await openChat(page);
     const chat = page.locator(".orchestration-chat-page:visible");
     const composer = chat.getByRole("textbox", { name: "Message to orchestrator", exact: true });
     await composer.fill(
@@ -182,7 +182,7 @@ test("browser: LAN beta pairs an HTTP browser, preserves approved work on disabl
         ),
       )
       .toBe("completed after LAN disable\n");
-    await local.page.getByRole("button", { name: "Relay", exact: true }).click();
+    await openChat(local.page);
     await expect(local.page.locator(".orchestration-chat-page:visible")).toContainText(
       "LAN work completed",
     );

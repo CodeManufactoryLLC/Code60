@@ -14,13 +14,11 @@ import {
   settingsSectionIds,
 } from "./navigation.js";
 import type { NavigationIconName } from "./navigation-icons.js";
-import { pathLabel } from "./path-label.js";
 
 export type NavigationTarget =
   | { kind: "custom-agent"; id: string }
   | { kind: "page"; id: PageId }
   | { kind: "settings"; id: SettingsSectionId }
-  | { kind: "project"; id: string }
   | { kind: "conversation"; id: string };
 
 export interface NavigationNode {
@@ -70,17 +68,6 @@ export function staticChildren(parent: ParentPageId, database: string | null): N
   return nodes.sort((a, b) => a.label.localeCompare(b.label));
 }
 
-export function projectNodes(projects: readonly OpenProject[]): NavigationNode[] {
-  return projects.map((project) => ({
-    id: project.id,
-    label: pathLabel(project.path),
-    title: project.path,
-    icon: "app-folder",
-    available: true,
-    target: { kind: "project", id: project.id },
-  }));
-}
-
 export function projectConversations(
   project: OpenProject,
   chats: readonly OrchestrationChat[],
@@ -107,30 +94,11 @@ export function conversationProject(
   return chat?.projectId ?? projects.find((project) => project.workerIds.includes(id))?.id;
 }
 
-export function conversationNodes(entries: ReturnType<typeof conversations>): NavigationNode[] {
-  return entries
-    .filter((entry) => !entry.parentId)
-    .map((entry) => ({
-      id: entry.id,
-      label: entry.label,
-      icon: entry.role === "orchestrator" ? "app-communication" : "app-down-right",
-      available: true,
-      target: { kind: "conversation", id: entry.id },
-    }));
-}
-
 export function isNavigationHome(id: PageId) {
-  return (
-    id === "home" ||
-    id === "project" ||
-    id === "providers" ||
-    parentPageIds.some((parent) => parent === id)
-  );
+  return id === "home" || id === "providers" || parentPageIds.some((parent) => parent === id);
 }
 
-export function sidebarPageElementId(id: PageId, projectId?: string) {
-  if (id === "project") return projectId ? `project-${projectId}` : "tab-chat";
-  if (id === "projects") return "tab-chat";
+export function sidebarPageElementId(id: PageId) {
   if (id === "tables" || id === "advanced" || id === "experiments") return `${id}-toggle`;
   return `tab-${id}`;
 }
