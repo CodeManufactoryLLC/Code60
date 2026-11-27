@@ -50,6 +50,7 @@
   "indexes": [
     "knowledge/INDEX.md",
     "knowledge/architecture/INDEX.md",
+    "knowledge/architecture/c4/INDEX.md",
     "knowledge/governance/INDEX.md",
     "knowledge/operations/INDEX.md",
     "knowledge/reference/INDEX.md",
@@ -57,6 +58,193 @@
     "knowledge/subsystems/INDEX.md"
   ],
   "documents": [
+    {
+      "id": "KB-ARCH-001",
+      "title": "C4 Level 1: System Context",
+      "domain": "architecture",
+      "kind": "subsystem",
+      "status": "active",
+      "summary": "Actors, external systems, and trust boundaries surrounding Code60 in Structurizr view code60-context.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/c4/context.md",
+      "lines": 48,
+      "bytes": 2861,
+      "code_refs": [
+        "architecture/structurizr/model/people-and-external.dsl",
+        "architecture/structurizr/views/context-and-containers.dsl",
+        "SECURITY.md"
+      ],
+      "related": [
+        "KB-ARCH-002",
+        "KB-ARCH-006"
+      ],
+      "tags": [
+        "c4",
+        "architecture",
+        "context"
+      ]
+    },
+    {
+      "id": "KB-ARCH-002",
+      "title": "C4 Level 2: Containers and Data Stores",
+      "domain": "architecture",
+      "kind": "subsystem",
+      "status": "active",
+      "summary": "Executable runtime processes, sidecars, helpers, and persistent data stores in Structurizr view code60-containers.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/c4/containers.md",
+      "lines": 51,
+      "bytes": 3846,
+      "code_refs": [
+        "architecture/structurizr/model/containers.dsl",
+        "src/gateway/main.ts",
+        "src/management/cli.ts"
+      ],
+      "related": [
+        "KB-ARCH-001",
+        "KB-ARCH-003",
+        "KB-ARCH-004"
+      ],
+      "tags": [
+        "c4",
+        "architecture",
+        "containers"
+      ]
+    },
+    {
+      "id": "KB-ARCH-003",
+      "title": "C4 Level 3: Backend Components and Module Boundaries",
+      "domain": "architecture",
+      "kind": "subsystem",
+      "status": "active",
+      "summary": "Gateway internal components and the 11-module import dependency rules enforced by test/boundaries.test.ts.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/c4/components-backend.md",
+      "lines": 50,
+      "bytes": 2597,
+      "code_refs": [
+        "architecture/structurizr/model/components-gateway.dsl",
+        "test/boundaries.test.ts"
+      ],
+      "related": [
+        "KB-ARCH-002",
+        "KB-ARCH-004"
+      ],
+      "tags": [
+        "c4",
+        "architecture",
+        "components",
+        "boundaries"
+      ]
+    },
+    {
+      "id": "KB-ARCH-004",
+      "title": "C4 Level 3: Browser SPA Components",
+      "domain": "architecture",
+      "kind": "subsystem",
+      "status": "active",
+      "summary": "Internal React 19 and IBM Carbon UI components and typed HTTP/SSE client inside src/renderer/.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/c4/components-renderer.md",
+      "lines": 42,
+      "bytes": 2881,
+      "code_refs": [
+        "architecture/structurizr/model/components-renderer.dsl",
+        "src/renderer/browser-client.ts",
+        "src/renderer/page-tabs.tsx"
+      ],
+      "related": [
+        "KB-ARCH-002",
+        "KB-ARCH-003"
+      ],
+      "tags": [
+        "c4",
+        "architecture",
+        "renderer",
+        "carbon"
+      ]
+    },
+    {
+      "id": "KB-ARCH-005",
+      "title": "C4 Dynamic Views: Core Runtime Flows",
+      "domain": "architecture",
+      "kind": "subsystem",
+      "status": "active",
+      "summary": "End-to-end runtime interaction sequences modeled in Structurizr views/dynamic.dsl.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/c4/runtime-flows.md",
+      "lines": 46,
+      "bytes": 2962,
+      "code_refs": [
+        "architecture/structurizr/views/dynamic.dsl",
+        "src/gateway/server.ts",
+        "src/application/controller.ts"
+      ],
+      "related": [
+        "KB-ARCH-002",
+        "KB-ARCH-003"
+      ],
+      "tags": [
+        "c4",
+        "architecture",
+        "dynamic",
+        "flows"
+      ]
+    },
+    {
+      "id": "KB-ARCH-006",
+      "title": "C4 Deployment Views: Native Host and Docker",
+      "domain": "architecture",
+      "kind": "subsystem",
+      "status": "active",
+      "summary": "Production deployment topologies for native macOS/Linux login services and the mjholliday/code60 Docker image.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/c4/deployment.md",
+      "lines": 42,
+      "bytes": 2481,
+      "code_refs": [
+        "architecture/structurizr/model/deployment.dsl",
+        "docker/Dockerfile",
+        "docker/compose.yaml",
+        "src/platform/user-service.ts"
+      ],
+      "related": [
+        "KB-ARCH-001",
+        "KB-ARCH-002"
+      ],
+      "tags": [
+        "c4",
+        "architecture",
+        "deployment",
+        "docker"
+      ]
+    },
+    {
+      "id": "KB-ARCH-007",
+      "title": "Structurizr C4 Workflow and Viewer Guide",
+      "domain": "architecture",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Commands and conventions for validating, viewing locally, and exporting Code60's modular Structurizr C4 workspace.",
+      "updated": "2026-11-27",
+      "path": "knowledge/architecture/structurizr-guide.md",
+      "lines": 40,
+      "bytes": 2143,
+      "code_refs": [
+        "architecture/structurizr/workspace.dsl",
+        "scripts/c4.mjs",
+        "test/c4.test.mjs"
+      ],
+      "related": [
+        "KB-ARCH-001",
+        "KB-ARCH-003"
+      ],
+      "tags": [
+        "c4",
+        "structurizr",
+        "tooling"
+      ]
+    },
     {
       "id": "KB-REF-001",
       "title": "Capabilities: Orchestration and Chat",

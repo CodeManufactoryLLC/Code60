@@ -178,6 +178,10 @@ handoff tests; actual login-service lifecycle validation remains a native releas
 
 Canonical knowledge lives under `knowledge/` in small, size-bounded semantic files navigated by nested `INDEX.md` files and [knowledge/index.json](knowledge/index.json). Follow the [knowledge-base skill](.factory/skills/knowledge-base/SKILL.md) when adding or updating documents, then run `npm run kb:index` and `npm run kb:check`. For capability-affecting changes, update `src/contracts/knowledge.ts` and run `npm run generate:capabilities && npm run kb:check` rather than editing files under `knowledge/reference/capabilities/` by hand.
 
+### C4 architecture and Structurizr
+
+Code60's C4 architecture lives as modular Structurizr DSL in [architecture/structurizr/workspace.dsl](architecture/structurizr/workspace.dsl) with bounded progressive-disclosure docs under [knowledge/architecture/c4/INDEX.md](knowledge/architecture/c4/INDEX.md). Follow the [c4-architecture skill](.factory/skills/c4-architecture/SKILL.md) when changing module boundaries, processes, stores, or deployment topologies. Run `npm run c4:check` (zero-Docker static check), `npm run c4:validate` (full Structurizr DSL check via Docker), and `npm run c4:view` (loopback-only local viewer on `http://127.0.0.1:8080`).
+
 ### Optional Git hooks
 
 Nothing installs hooks during `npm ci`. Opt in explicitly:

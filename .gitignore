@@ -26,6 +26,7 @@ playwright-report/
 .vscode/
 .devcontainer/local/
 .devcontainer/devcontainer.json
+architecture/structurizr/.structurizr/
 
 # Operating system metadata
 .DS_Store

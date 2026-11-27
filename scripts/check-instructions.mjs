@@ -3,6 +3,7 @@ import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import Markdown from "react-markdown";
 import { parse } from "yaml";
+import { checkC4Architecture } from "./c4.mjs";
 import { checkKnowledgeBase } from "./kb.mjs";
 
 const repository = fileURLToPath(new URL("..", import.meta.url));
@@ -265,6 +266,7 @@ export async function checkInstructions(directory = repository) {
     }
   }
   failures.push(...(await checkKnowledgeBase(root)));
+  failures.push(...(await checkC4Architecture(root)));
   return failures;
 }
 

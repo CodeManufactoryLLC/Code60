@@ -10,6 +10,7 @@ it.each([
   ["docs/runbooks/setup.md", ["instructions"]],
   ["knowledge/reference/capabilities/runtime.md", ["instructions"]],
   ["knowledge/index.json", ["instructions"]],
+  ["architecture/structurizr/workspace.dsl", ["instructions"]],
   ["docs/review/after.png", ["instructions"]],
   ["src/renderer/Page.tsx", ["check", "browser"]],
   ["test/core-reconnect.test.ts", ["check"]],
