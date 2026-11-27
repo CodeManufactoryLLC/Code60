@@ -7,7 +7,7 @@ Neobrutalism colors, artwork sizing, shadows, rounded cards, custom control
 presentation and role-typography requirements below. Preserve stored appearance
 records, domain workflows, captured owners, native confirmation authority, refs,
 visibility cleanup, keyboard access and retained drafts. Prefer plain sections,
-rows and tables. See [migration ledger](../../docs/carbon-migration.md).
+rows and tables.
 Specialist code/diff/tree widgets may retain their functional implementation;
 standard actions, forms, navigation, menus, tables and modals should use Carbon.
 No comparison destination, preference or feature flag is introduced.

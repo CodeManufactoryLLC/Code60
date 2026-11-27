@@ -149,7 +149,7 @@ Apps → Workflows creates ordered coding workflows manually or with **Create wi
 prompt**, runs them natively inside Code60 Gateway with any verified ACP provider
 in dedicated saved-file worktrees, and shows implementation, verification, repair
 and decision status. Work continues after closing the browser while the backend
-stays running. See the [workflow guide](docs/transmission-workflows.md) for
+stays running. See [Scheduled Jobs and Workflows](knowledge/reference/capabilities/automation.md) for
 prerequisites, approval defaults, pause/resume behavior and recovery details.
 
 
@@ -176,5 +176,4 @@ Execution history shows all schedules by default. View history on a job applies 
 
 Code60 uses upstream Carbon controls and White/G100 themes across its browser UI. Under **Personalize → Appearance**, use **Accent color** to change the default verdigris. The browser remembers your choice across themes. Home, Apps, Settings and project/provider homes
 use destination rows with direct creation buttons. Backend operations, retained
-conversations and saved appearance records are preserved. See the
-[migration ledger](docs/carbon-migration.md) for implementation, validation and explicit QA limits.
+conversations and saved appearance records are preserved.

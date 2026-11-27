@@ -5,8 +5,7 @@ feature branch and merged only after its dependencies and required checks pass.
 This document authorizes no implementation, service installation, release,
 registry publication or website deployment.
 
-The short intent remains in the [architectural view](docs/architectural-views/one-command-distribution.md).
-[ARCHITECTURE.md](ARCHITECTURE.md) and [RELEASING.md](RELEASING.md) remain authoritative
+[ARCHITECTURE.md](ARCHITECTURE.md), [knowledge/operations/distribution/INDEX.md](knowledge/operations/distribution/INDEX.md), and [RELEASING.md](RELEASING.md) remain authoritative
 until the corresponding implementation PR updates them.
 
 ## Goal and completed user journey

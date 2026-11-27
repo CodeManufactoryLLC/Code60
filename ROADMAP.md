@@ -16,8 +16,8 @@ service. Browser closure preserves approved work; confirmed Stop Backend stops
 both components. Backend restart restores evidence, never uncertain work authority.
 
 Supported targets are macOS Apple Silicon and Linux x64. Distribution is an npm
-tarball with manual updates. See [the migration record](docs/gateway-daemon-migration-plan.md)
-and [architecture](ARCHITECTURE.md) for current behavior and validation limits.
+tarball with manual updates. See [architecture](ARCHITECTURE.md) for current
+behavior and validation limits.
 The linked GitHub milestones predate this direction and require separate tracker
 reconciliation before they can be treated as a current delivery sequence.
 

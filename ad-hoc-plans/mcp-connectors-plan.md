@@ -115,8 +115,8 @@ Status: complete. Implementation, required checks and owned-resource cleanup ver
   discovery, allow/deny, inactive/revoked/cross-session rejection, cancellation and
   backend-only upstream credentials. These are supporting integration tests, not
   a production connector adapter or certification of real provider support.
-- Added the [ownership architectural view](../docs/architectural-views/mcp-connector-ownership.md)
-  and the [target runtime contract](../ARCHITECTURE.md#mcp-connector-foundation-and-target-runtime).
+- Documented connector ownership and runtime boundaries (now tracked in [ARCHITECTURE.md](../ARCHITECTURE.md)
+  and [knowledge/architecture/c4/INDEX.md](../knowledge/architecture/c4/INDEX.md)).
   Updated module instructions and distinguished active MCP behavior from the
   staged target design in `MCP.md`.
 - No new page, management request, snapshot, tool or availability was introduced.
