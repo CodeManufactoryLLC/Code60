@@ -158,6 +158,13 @@
   .actions-menu {
     border-color: ButtonText;
   }
+  .command-palette-option[aria-selected="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .command-palette-kbd {
+    border-color: CanvasText;
+  }
 }
 
 @media (forced-colors: active) {

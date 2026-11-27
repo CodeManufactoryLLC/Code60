@@ -1934,3 +1934,109 @@ test("browser: scheduled workflow branches from baseBranch, runs with autoApprov
     await fixture.close();
   }
 });
+
+test("browser: redesigned Carbon Commands menu supports search, recovery, keyboard navigation, and Carbon layout", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const fixture = await browserApp(browser);
+  try {
+    const view = await fixture.open();
+    const { page } = view;
+    page.setDefaultTimeout(15_000);
+    await start(page, fixture.directory);
+
+    const commandsButton = page.getByRole("button", { name: "Commands", exact: true });
+    await expect(commandsButton).toHaveAttribute("aria-haspopup", "dialog");
+    await commandsButton.click();
+
+    const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
+    await expect(palette).toBeVisible();
+
+    const search = palette.getByRole("combobox", { name: "Search commands", exact: true });
+    await expect(search).toBeFocused();
+
+    // Verify Carbon layout: pinned body (no double scroll), full-width borderless options, no solid-red danger button.
+    const layout = await palette.evaluate((el) => {
+      const content = el.querySelector<HTMLElement>(".cds--modal-content");
+      const list = el.querySelector<HTMLElement>(".command-palette-list");
+      const firstOption = el.querySelector<HTMLElement>(".command-palette-option");
+      const dangerOption = el.querySelector<HTMLElement>(
+        '.command-palette-option[data-danger="true"]',
+      );
+      return {
+        contentOverflow: content ? getComputedStyle(content).overflowY : null,
+        listOverflow: list ? getComputedStyle(list).overflowY : null,
+        listWidth: list?.clientWidth ?? 0,
+        optionWidth: firstOption?.getBoundingClientRect().width ?? 0,
+        optionBorderTop: firstOption ? getComputedStyle(firstOption).borderTopWidth : null,
+        optionRadius: firstOption ? getComputedStyle(firstOption).borderRadius : null,
+        dangerBg: dangerOption ? getComputedStyle(dangerOption).backgroundColor : null,
+      };
+    });
+    expect(layout.contentOverflow).toBe("hidden");
+    expect(layout.listOverflow).toBe("auto");
+    expect(layout.optionWidth).toBeGreaterThanOrEqual(layout.listWidth - 2);
+    expect(layout.optionBorderTop).toBe("0px");
+    expect(layout.optionRadius).toBe("0px");
+    expect(layout.dangerBg).toBe("rgba(0, 0, 0, 0)");
+
+    // Disabled commands explain why they are unavailable.
+    const stopAll = palette.getByRole("option", { name: /Stop all runs/ });
+    await expect(stopAll).toBeDisabled();
+    await expect(stopAll).toContainText("No active runs");
+
+    // Resting state keeps the result count visually quiet; filtering shows match highlight and count.
+    const count = palette.locator(".command-palette-count");
+    await expect(count).toHaveText("");
+    await search.fill("Dark");
+    await expect(count).toHaveText("1 result");
+    const darkOption = palette.getByRole("option", { name: /Theme: Dark/ });
+    await expect(darkOption).toHaveAttribute("aria-selected", "true");
+    await expect(darkOption.locator("mark")).toHaveText("Dark");
+
+    // Pressing Enter runs the active command and closes the palette.
+    await page.keyboard.press("Enter");
+    await expect(palette).toBeHidden();
+    await expect(page.locator(":root")).toHaveAttribute("data-color-scheme", "dark");
+
+    // Reopen via keyboard shortcut (Meta+K / Control+K).
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+k" : "Control+k");
+    await expect(palette).toBeVisible();
+    await expect(search).toBeFocused();
+
+    // Empty state offers Clear search recovery returning focus to the combobox.
+    await search.fill("zzznomatch");
+    await expect(count).toHaveText("0 results");
+    await expect(palette.getByText("No matching commands.")).toBeVisible();
+    await palette
+      .locator(".command-palette-empty")
+      .getByRole("button", { name: "Clear search" })
+      .click();
+    await expect(search).toHaveValue("");
+    await expect(search).toBeFocused();
+    await expect(count).toHaveText("");
+
+    // Escape closes immediately even when search text is present.
+    await search.fill("Light");
+    await expect(palette.getByRole("option", { name: /Theme: Light/ })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
+
+    // Restore Light theme via arrow navigation + Enter.
+    await commandsButton.click();
+    await expect(palette).toBeVisible();
+    await search.fill("Theme:");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowUp");
+    await expect(palette.getByRole("option", { name: /Theme: Light/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await page.keyboard.press("Enter");
+    await expect(palette).toBeHidden();
+    await expect(page.locator(":root")).toHaveAttribute("data-color-scheme", "light");
+  } finally {
+    await fixture.close();
+  }
+});

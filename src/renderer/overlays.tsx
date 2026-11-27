@@ -1,7 +1,11 @@
-import { ActionableNotification, ToastNotification } from "@carbon/react";
+import {
+  ActionableNotification,
+  Button as CarbonButton,
+  Layer,
+  Search,
+  ToastNotification,
+} from "@carbon/react";
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { Button as AppButton } from "./carbon/button.js";
-import { TextInput as CarbonTextInput } from "./carbon/fields.js";
 import { Icon, type IconName } from "./icons.js";
 import { Modal } from "./modal.js";
 import { markParts, rankCommands } from "./palette.js";
@@ -25,6 +29,8 @@ export interface Command {
   run(): void;
 }
 
+const PAGE_STEP = 6;
+
 export function CommandPalette({ commands, onClose }: { commands: Command[]; onClose(): void }) {
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -34,7 +40,10 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
   const searching = query.trim() !== "";
   const matches = rankCommands(commands, query);
   const enabled = matches.filter((entry) => !entry.command.disabled);
-  const active = enabled[index % Math.max(1, enabled.length)]?.command;
+  const activeIndex = enabled.length
+    ? ((index % enabled.length) + enabled.length) % enabled.length
+    : -1;
+  const active = activeIndex >= 0 ? enabled[activeIndex]?.command : undefined;
   useEffect(() => {
     if (active)
       list.current
@@ -45,6 +54,11 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
     if (command.disabled) return;
     onClose();
     command.run();
+  };
+  const clearQuery = () => {
+    setQuery("");
+    setIndex(0);
+    input.current?.focus();
   };
   const groups = searching
     ? [{ name: "", entries: matches }]
@@ -60,77 +74,134 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
       initialFocus="input"
       passive
       className="command-palette"
+      onKeyDownCapture={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }
+      }}
       onKeyDown={(event) => {
+        if (!enabled.length) return;
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
           setIndex(
             (value) =>
-              (value + (event.key === "ArrowDown" ? 1 : -1) + enabled.length) %
-              Math.max(1, enabled.length),
+              (value + (event.key === "ArrowDown" ? 1 : -1) + enabled.length) % enabled.length,
           );
+        } else if (event.key === "PageDown" || event.key === "PageUp") {
+          event.preventDefault();
+          setIndex((value) => {
+            const current = ((value % enabled.length) + enabled.length) % enabled.length;
+            return event.key === "PageDown"
+              ? Math.min(enabled.length - 1, current + PAGE_STEP)
+              : Math.max(0, current - PAGE_STEP);
+          });
         } else if (event.key === "Enter" && active) {
           event.preventDefault();
           choose(active);
         }
       }}
     >
-      <div className="palette-input">
-        <Icon name="chevron--right" />
-        <CarbonTextInput
-          ref={input}
-          role="combobox"
-          aria-label="Search commands"
-          aria-expanded="true"
-          aria-controls={`${id}-list`}
-          aria-autocomplete="list"
-          aria-activedescendant={active ? `${id}-${active.id}` : undefined}
-          placeholder="Type a command, page, or run…"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setIndex(0);
-          }}
-        />
+      <div className="command-palette-search">
+        <Layer>
+          <Search
+            ref={input}
+            id={`${id}-search`}
+            size="lg"
+            labelText="Search commands"
+            placeholder="Search commands, pages, or actions…"
+            closeButtonLabelText="Clear search"
+            role="combobox"
+            aria-label="Search commands"
+            aria-expanded="true"
+            aria-controls={`${id}-list`}
+            aria-autocomplete="list"
+            aria-activedescendant={active ? `${id}-${active.id}` : undefined}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setIndex(0);
+            }}
+            onClear={() => {
+              setQuery("");
+              setIndex(0);
+            }}
+          />
+        </Layer>
       </div>
-      <div role="listbox" aria-label="Commands" id={`${id}-list`} ref={list}>
+      <div
+        className="command-palette-list"
+        role="listbox"
+        aria-label="Commands"
+        id={`${id}-list`}
+        ref={list}
+      >
         {groups.map((group) => {
-          const options = group.entries.map(({ command, marks }) => (
-            <AppButton
-              key={command.id}
-              id={`${id}-${command.id}`}
-              type="button"
-              role="option"
-              className={command.danger ? "danger-text" : undefined}
-              aria-selected={command === active}
-              aria-disabled={command.disabled || undefined}
-              disabled={command.disabled}
-              tabIndex={-1}
-              onClick={() => choose(command)}
-            >
-              {command.icon ? <Icon name={command.icon} /> : <span />}
-              <span className="option-label">
-                {markParts(command.label, marks).map((part) =>
-                  part.marked ? (
-                    <mark key={part.start}>{part.text}</mark>
-                  ) : (
-                    <Fragment key={part.start}>{part.text}</Fragment>
-                  ),
+          const options = group.entries.map(({ command, marks }) => {
+            const context = [searching ? command.group : "", command.hint]
+              .filter(Boolean)
+              .join(" · ");
+            const unavailableReason = command.disabled ? command.reason : undefined;
+            return (
+              <button
+                key={command.id}
+                id={`${id}-${command.id}`}
+                type="button"
+                role="option"
+                className="command-palette-option"
+                data-danger={command.danger || undefined}
+                aria-selected={command === active}
+                aria-disabled={command.disabled || undefined}
+                aria-description={unavailableReason}
+                title={unavailableReason}
+                disabled={command.disabled}
+                tabIndex={-1}
+                onClick={() => choose(command)}
+              >
+                {command.icon ? (
+                  <Icon name={command.icon} />
+                ) : (
+                  <span className="command-palette-icon-spacer" aria-hidden="true" />
                 )}
-              </span>
-              <span className="command-hint">
-                {[searching ? command.group : "", command.hint].filter(Boolean).join(" / ")}
-              </span>
-              {command.checked ? (
-                <Icon name="checkmark" aria-label="Current" role="img" aria-hidden={undefined} />
-              ) : (
-                <span className="command-hint">{command.keys}</span>
-              )}
-            </AppButton>
-          ));
+                <span className="command-palette-label">
+                  {markParts(command.label, marks).map((part) =>
+                    part.marked ? (
+                      <mark key={part.start}>{part.text}</mark>
+                    ) : (
+                      <Fragment key={part.start}>{part.text}</Fragment>
+                    ),
+                  )}
+                </span>
+                <span className="command-palette-meta">
+                  {unavailableReason ? (
+                    <span className="command-palette-reason">{unavailableReason}</span>
+                  ) : (
+                    context && <span className="command-palette-context">{context}</span>
+                  )}
+                  {command.checked && (
+                    <Icon
+                      name="checkmark"
+                      className="command-palette-check"
+                      aria-label="Current"
+                      role="img"
+                      aria-hidden={undefined}
+                    />
+                  )}
+                  {command.keys && <kbd className="command-palette-kbd">{command.keys}</kbd>}
+                </span>
+              </button>
+            );
+          });
           return group.name ? (
             // biome-ignore lint/a11y/useSemanticElements: a fieldset would add form semantics and its own frame to a row of buttons.
-            <div role="group" aria-labelledby={`${id}-group-${group.name}`} key={group.name}>
-              <div className="palette-group" id={`${id}-group-${group.name}`}>
+            <div
+              className="command-palette-group"
+              role="group"
+              aria-labelledby={`${id}-group-${group.name}`}
+              key={group.name}
+            >
+              <div className="command-palette-group-label" id={`${id}-group-${group.name}`}>
                 {group.name}
               </div>
               {options}
@@ -139,20 +210,32 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
             <Fragment key="results">{options}</Fragment>
           );
         })}
-        {!matches.length && <p className="palette-empty">No matching commands.</p>}
+        {!matches.length && (
+          <div className="command-palette-empty">
+            <p>No matching commands.</p>
+            {searching && (
+              <CarbonButton type="button" kind="tertiary" size="sm" onClick={clearQuery}>
+                Clear search
+              </CarbonButton>
+            )}
+          </div>
+        )}
       </div>
-      <footer>
-        <span>
-          <kbd>↑</kbd> <kbd>↓</kbd> Move
-        </span>
-        <span>
-          <kbd>Enter</kbd> Run
-        </span>
-        <span>
-          <kbd>Esc</kbd> Close
-        </span>
-        <span className="palette-count" aria-live="polite">
-          {matches.length} {matches.length === 1 ? "result" : "results"}
+      <footer className="command-palette-footer" data-searching={searching || undefined}>
+        <div className="command-palette-hints" aria-hidden="true">
+          <span>
+            <kbd className="command-palette-kbd">↑</kbd>
+            <kbd className="command-palette-kbd">↓</kbd> Move
+          </span>
+          <span>
+            <kbd className="command-palette-kbd">Enter</kbd> Run
+          </span>
+          <span>
+            <kbd className="command-palette-kbd">Esc</kbd> Close
+          </span>
+        </div>
+        <span className="command-palette-count" aria-live="polite">
+          {searching ? `${matches.length} ${matches.length === 1 ? "result" : "results"}` : ""}
         </span>
       </footer>
     </Modal>

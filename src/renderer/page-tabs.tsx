@@ -162,7 +162,19 @@ export function PageTabBar({
               {connected ? "Backend connected" : "Reconnecting to backend…"}
             </span>
           )}
-          <Button size="md" kind="ghost" onClick={commands} title="Commands" aria-label="Commands">
+          <Button
+            size="md"
+            kind="ghost"
+            onClick={commands}
+            aria-haspopup="dialog"
+            aria-keyshortcuts="Control+K Meta+K"
+            title={
+              typeof navigator !== "undefined" && navigator.platform.startsWith("Mac")
+                ? "Commands (⌘K)"
+                : "Commands (Ctrl+K)"
+            }
+            aria-label="Commands"
+          >
             <Icon name="terminal" className="commands-icon" />
             <span className="commands-label">Commands</span>
           </Button>

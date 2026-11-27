@@ -49,6 +49,37 @@ export function appCommands({
 }: CommandContext): Command[] {
   const { theme, setTheme, signals, setSignals, charts, setCharts } = preferences;
   const settingsShortcut = navigator.platform.startsWith("Mac") ? "⌘," : "Ctrl+,";
+  const waitBusy = "Wait for the current action to finish";
+  const newReason = busy
+    ? waitBusy
+    : !database
+      ? "Connect to a database first"
+      : !directory
+        ? "Open a project first"
+        : undefined;
+  const terminalReason = busy
+    ? waitBusy
+    : !terminalSource?.target ||
+        (terminalSource.target.kind !== "project" &&
+          terminalSource.target.kind !== "project-worker")
+      ? "Select a project or worker first"
+      : undefined;
+  const projectReason = busy
+    ? waitBusy
+    : !database
+      ? "Connect to a database first"
+      : snapshot?.active
+        ? "Stop active runs first"
+        : undefined;
+  const databaseReason = busy ? waitBusy : snapshot?.active ? "Stop active runs first" : undefined;
+  const refreshReason = busy
+    ? waitBusy
+    : !database
+      ? "Connect to a database first"
+      : !directory
+        ? "Open a project first"
+        : undefined;
+  const stopAllReason = busy ? waitBusy : !snapshot?.active ? "No active runs" : undefined;
   return [
     ...pageCommands(
       tabs.active,
@@ -68,7 +99,8 @@ export function appCommands({
       label: "New agent session",
       group: "Project",
       icon: "add",
-      disabled: busy || !database || !directory,
+      disabled: newReason !== undefined,
+      ...(newReason ? { reason: newReason } : {}),
       run: () => setSetup(true),
     },
     {
@@ -76,11 +108,8 @@ export function appCommands({
       label: "Open terminal",
       group: "Project",
       icon: "terminal",
-      disabled:
-        busy ||
-        !terminalSource?.target ||
-        (terminalSource.target.kind !== "project" &&
-          terminalSource.target.kind !== "project-worker"),
+      disabled: terminalReason !== undefined,
+      ...(terminalReason ? { reason: terminalReason } : {}),
       run: () => {
         if (!terminalSource?.target) return;
         fileAction({
@@ -97,7 +126,8 @@ export function appCommands({
       label: "Open project",
       group: "Project",
       icon: "document",
-      disabled: busy || !database || Boolean(snapshot?.active),
+      disabled: projectReason !== undefined,
+      ...(projectReason ? { reason: projectReason } : {}),
       run: () => showPicker("project"),
     },
     {
@@ -105,7 +135,8 @@ export function appCommands({
       label: "Connect to database",
       group: "Project",
       icon: "document",
-      disabled: busy || Boolean(snapshot?.active),
+      disabled: databaseReason !== undefined,
+      ...(databaseReason ? { reason: databaseReason } : {}),
       run: () => showPicker("database"),
     },
     {
@@ -113,7 +144,8 @@ export function appCommands({
       label: "Poll project data",
       group: "Project",
       icon: "renew",
-      disabled: busy || !database || !directory,
+      disabled: refreshReason !== undefined,
+      ...(refreshReason ? { reason: refreshReason } : {}),
       run: () =>
         void attempt(() =>
           api.poll(["history", "config", "configurations"], {
@@ -130,7 +162,8 @@ export function appCommands({
       group: "Project",
       icon: "stop",
       danger: true,
-      disabled: busy || !snapshot?.active,
+      disabled: stopAllReason !== undefined,
+      ...(stopAllReason ? { reason: stopAllReason } : {}),
       run: () => void attempt(() => api.stopAll()),
     },
     ...(
