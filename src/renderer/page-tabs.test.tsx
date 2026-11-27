@@ -68,7 +68,7 @@ describe("database connection navigation", () => {
       ["mcp-servers", "providers"],
       ["custom-agents", "prompts", "commands", "customize-mcp-servers"],
       ["appearance", "table-defaults", "text"],
-      ["about", "health-check", "polling-settings", "system-manager", "updates"],
+      ["about", "health-check", "polling-settings", "system-manager", "updates", "usage"],
       ["episodic-memory", "rag"],
       ["web-server"],
     ]);

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export * from "./logs.js";
 export * from "./memory.js";
+export * from "./usage.js";
 
 import { type OperatingContractClauses, type PromptId, validatePromptTemplate } from "./prompts.js";
 

@@ -42,6 +42,7 @@ export const confirmationPresentation = {
   },
   "start-scheduler": { title: "Start Scheduling Service?", action: "Start service", danger: false },
   "clear-logs": { title: "Clear logs?", action: "Clear logs", danger: true },
+  "clear-usage": { title: "Clear usage history?", action: "Clear usage history", danger: true },
   "stop-backend": { title: "Stop Code60 Backend?", action: "Stop backend", danger: true },
   "stop-runs": { title: "Stop all runs?", action: "Stop all runs", danger: true },
   "clear-index": { title: "Clear RAG index?", action: "Clear index", danger: true },

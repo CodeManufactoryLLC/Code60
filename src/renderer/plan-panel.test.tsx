@@ -122,3 +122,52 @@ it("clamps a future running timestamp to the saved total", () => {
     render(["pending"], "running", undefined, { elapsedMs: 5_000, runningSince: 2_000 }),
   ).toContain("Execution time: 5s");
 });
+it("renders structured plan sections and task metadata safely and omits empty sections", () => {
+  const minimal = render(["pending"], "draft");
+  expect(minimal).not.toContain("Out of scope");
+  expect(minimal).not.toContain("Assumptions &amp; open questions");
+  expect(minimal).not.toContain("Verification &amp; completion criteria");
+  expect(minimal).not.toContain("plan-task-detail");
+  expect(minimal).not.toContain("plan-task-meta");
+
+  const plan: Plan = {
+    format: 1,
+    id: "plan-structured",
+    chatId: "chat",
+    project: null,
+    revision: 1,
+    proposalRevision: 1,
+    creationOrder: 1,
+    requestId: "structured",
+    creationKey: "",
+    title: "Structured plan",
+    description: "Goal summary",
+    outOfScope: ["<b>Not this</b>"],
+    assumptions: ["API token is configured"],
+    verification: ["Run npm run check"],
+    state: "draft",
+    tasks: [
+      {
+        id: "task-1",
+        text: "Build structured schema",
+        details: "Edit bridge and application <plan> files",
+        verify: "Unit tests pass",
+        state: "pending",
+        note: "",
+        workerIds: [],
+      },
+    ],
+  };
+  const html = renderToStaticMarkup(
+    <PlanPanel plan={plan} api={{} as ApplicationClient} currentChat="chat" project={null} />,
+  );
+  expect(html).toContain("Out of scope");
+  expect(html).toContain("&lt;b&gt;Not this&lt;/b&gt;");
+  expect(html).not.toContain("<b>Not this</b>");
+  expect(html).toContain("Assumptions &amp; open questions");
+  expect(html).toContain("API token is configured");
+  expect(html).toContain("Edit bridge and application &lt;plan&gt; files");
+  expect(html).toContain('<span class="plan-task-meta-label">Verify:</span> Unit tests pass');
+  expect(html).toContain("Verification &amp; completion criteria");
+  expect(html).toContain("Run npm run check");
+});

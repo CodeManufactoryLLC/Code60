@@ -53,6 +53,7 @@ export * from "./relay-files.js";
 export * from "./relay-reviews.js";
 export * from "./tactics.js";
 export * from "./terminal.js";
+export * from "./usage.js";
 export * from "./web-links.js";
 
 import { modeChangeSchema } from "../contracts/index.js";
@@ -166,6 +167,7 @@ export {
   type ReadOnlyPromptCatalogEntry,
   renderEpisodicMemoryPrompt,
   renderPrompt,
+  renderRelayAcceptedPlanPrompt,
   type SaveCommand,
   SEARCH_OVERVIEW_GUARDRAIL,
   SEARCH_QUERY_LIMIT,
@@ -473,6 +475,17 @@ export interface ApplicationClient {
   onHealthChanged?(
     listener: (snapshot: import("./health-check.js").HealthSnapshot) => void,
   ): () => void;
+  usageReport?(
+    query?: import("./usage.js").UsageReportQuery,
+  ): Promise<import("./usage.js").UsageReport>;
+  usageTurns?(
+    query?: import("./usage.js").UsageTurnsQuery,
+  ): Promise<import("./usage.js").UsageTurnPage>;
+  usageExport?(
+    request: import("./usage.js").UsageExportRequest,
+  ): Promise<import("./usage.js").UsageExportResult>;
+  usageClear?(): Promise<{ cleared: boolean; deleted: number }>;
+  onUsageChanged?(listener: () => void): () => void;
   memorySnapshot(): Promise<import("../contracts/index.js").MemorySnapshot>;
   browseMemories(
     request: import("../contracts/index.js").MemoryBrowse,

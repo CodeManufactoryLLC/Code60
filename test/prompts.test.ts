@@ -16,7 +16,9 @@ import {
   parseValue,
   promptTemplatesSchema,
   READONLY_PROMPT_IDS,
+  RELAY_PLAN_ACCEPTED_TEMPLATE,
   renderPrompt,
+  renderRelayAcceptedPlanPrompt,
   validatePromptTemplate,
 } from "../src/contracts/index.js";
 
@@ -115,6 +117,18 @@ describe("prompt templates", () => {
         message: "{{summary}}",
       }),
     ).toBe("{{message}} $& $1|{{summary}}");
+    expect(findPromptCatalogEntry("plan.accepted.relay")).toMatchObject({
+      editable: false,
+      builtInText: RELAY_PLAN_ACCEPTED_TEMPLATE,
+    });
+    const renderedRelay = renderRelayAcceptedPlanPrompt(
+      "plan-1",
+      2,
+      "# Plan\n{{planId}} $& {{proposalRevision}}",
+    );
+    expect(renderedRelay).toContain("Human accepted plan plan-1, proposal revision 2.");
+    expect(renderedRelay).toContain("code60_read_plan");
+    expect(renderedRelay).toContain("# Plan\n{{planId}} $& {{proposalRevision}}");
   });
 
   it("refuses to render a field the template does not allow", () => {

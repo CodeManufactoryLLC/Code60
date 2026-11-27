@@ -29,6 +29,7 @@ import {
   parseActivityContextArgs,
   planMarkdown,
   RELAY_OPERATING_ADDENDUM,
+  renderRelayAcceptedPlanPrompt,
 } from "../bridge/index.js";
 import type { SessionResourceFactory } from "../core/index.js";
 import {
@@ -788,6 +789,10 @@ export class RelayService {
             },
           ],
           promptContext: () => this.knowledgeContext(),
+          usageAttribution: {
+            surface: this.identity ? "custom-assistant" : "relay",
+            conversationId: store.id,
+          },
         },
       );
       if (!current()) return await retire();
@@ -1559,7 +1564,7 @@ export class RelayService {
             this.scope = randomUUID();
             const sent = await chat.reply(
               run.id,
-              `Human accepted plan ${plan.id}, proposal revision ${plan.proposalRevision}. Execute only these target/mode assignments with their planTaskId values. Read the plan tool for row IDs.\n\n${planMarkdown(plan)}`,
+              renderRelayAcceptedPlanPrompt(plan.id, plan.proposalRevision, planMarkdown(plan)),
               "automatic",
             );
             if (!sent) throw new Error("Relay did not send the accepted plan");

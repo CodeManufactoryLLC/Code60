@@ -9,7 +9,14 @@ import {
   type SessionUpdate,
   type Stream,
 } from "@agentclientprotocol/sdk";
-import { type ModeChange, type SessionState, supportsModeChange } from "../contracts/index.js";
+import {
+  emitUsage,
+  type ModeChange,
+  type SessionState,
+  supportsModeChange,
+  type UsageAttribution,
+  type UsageSink,
+} from "../contracts/index.js";
 import { SessionStateTracker } from "./session-state.js";
 import type { AgentMcpServer } from "./types.js";
 import {
@@ -21,6 +28,7 @@ import {
   TOOL_KINDS,
   type ToolKind,
 } from "./types.js";
+import { SessionUsageCollector } from "./usage-collector.js";
 
 const AUTH_REQUIRED = -32000;
 
@@ -45,6 +53,10 @@ export interface OpenSessionOptions {
   mcpServers?: readonly AgentMcpServer[];
   /** Sent as ACP `clientInfo` when given. */
   clientVersion?: string;
+  /** Optional best-effort sink for quantitative per-turn usage telemetry. */
+  usage?: UsageSink;
+  /** Internal attribution metadata attached to usage observations. */
+  usageAttribution?: UsageAttribution;
 }
 
 export interface RestoreSessionOptions extends OpenSessionOptions {
@@ -254,8 +266,12 @@ async function connectSession(
   });
   startupAuth.catch(() => {});
   let busy = false;
+  let turnCancelled = false;
   let suppressUpdates = false;
   const state = new SessionStateTracker();
+  const usageCollector = options.usage
+    ? new SessionUsageCollector(options.agentName, options.usageAttribution)
+    : undefined;
   let modeRequest: AbortController | undefined;
   let modeRevision = 0;
   const early: { sessionId: string; update: SessionUpdate }[] = [];
@@ -306,8 +322,14 @@ async function connectSession(
       trackState(params.update);
       // Tool-call state must track replayed history even when the replay itself is suppressed.
       const update = mapUpdate(params.update, toolCalls);
-      if (suppressUpdates) return;
+      if (suppressUpdates) {
+        if (params.update.sessionUpdate === "usage_update") {
+          usageCollector?.observeUpdate(params.update, 0);
+        }
+        return;
+      }
       const raw = rawUpdate(params.update);
+      usageCollector?.observeUpdate(params.update, raw.size);
       if (listeners.size === 0) retainRaw(raw);
       for (const listener of listeners) {
         listener(raw);
@@ -428,7 +450,9 @@ async function connectSession(
       for (const entry of early)
         if (entry.sessionId === sessionId) {
           trackState(entry.update);
-          retainRaw(rawUpdate(entry.update));
+          const raw = rawUpdate(entry.update);
+          usageCollector?.observeUpdate(entry.update, raw.size);
+          retainRaw(raw);
         }
       early.length = 0;
       state.setup(session);
@@ -543,6 +567,10 @@ async function connectSession(
       if (busy) throw new Error("a turn is already in progress");
       if (modeRequest) throw new Error("the session is busy");
       busy = true;
+      turnCancelled = false;
+      usageCollector?.startTurn(text);
+      let stopReason = "error";
+      let rawResponse: unknown;
       try {
         const response = await call(
           ctx.request(methods.agent.session.prompt, {
@@ -550,12 +578,25 @@ async function connectSession(
             prompt: [{ type: "text", text }],
           }),
         );
+        rawResponse = response;
+        stopReason = response.stopReason;
         return response.stopReason;
+      } catch (error) {
+        if (turnCancelled) stopReason = "cancelled";
+        throw error;
       } finally {
         busy = false;
+        const observation = usageCollector?.finishTurn({
+          sessionId: id,
+          model: state.state.model?.id ?? null,
+          stopReason,
+          rawResponse,
+        });
+        if (observation) emitUsage(options.usage, observation);
       }
     },
     async cancel() {
+      if (busy) turnCancelled = true;
       for (const controller of pendingPermissions) controller.abort();
       await Promise.race([ctx.notify(methods.agent.session.cancel, { sessionId: id }), terminated]);
     },

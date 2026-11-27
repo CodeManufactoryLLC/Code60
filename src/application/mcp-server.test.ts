@@ -22,10 +22,19 @@ describe("MCP initialization", () => {
     for (const name of ["code60_get_capabilities", "code60_get_app_state", "code60_read_view"])
       expect(relay.some((tool) => tool.name === name)).toBe(true);
     const plan = relay.find((tool) => tool.name === "code60_create_plan");
+    expect(plan?.inputSchema.properties).toMatchObject({
+      outOfScope: { type: "array" },
+      assumptions: { type: "array" },
+      verification: { type: "array" },
+    });
     expect(plan?.inputSchema.properties.tasks).toMatchObject({
       items: {
         required: ["text", "target"],
-        properties: { target: { required: ["cwd", "workspaceMode"] } },
+        properties: {
+          details: { type: "string" },
+          verify: { type: "string" },
+          target: { required: ["cwd", "workspaceMode"] },
+        },
       },
     });
     expect(

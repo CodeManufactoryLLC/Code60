@@ -17,6 +17,18 @@ import {
 const ids = new Set(APPLICATION_CAPABILITIES.map((capability) => capability.id));
 
 describe("browser capability catalog", () => {
+  it("classifies Usage Monitoring as database-independent and human-only with local privacy boundaries", () => {
+    const usage = APPLICATION_CAPABILITIES.find((cap) => cap.id === "usage");
+    expect(usage).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      access: expect.stringContaining("Apps → Usage"),
+    });
+    expect(PAGE_CAPABILITIES.usage).toBe("usage");
+    expect(pages.find((page) => page.id === "usage")?.database).toBe(false);
+    expect(usage?.limitations).toContain("never prompts, replies, file paths or credentials");
+    expect(usage?.limitations).toContain("never exposed to agents, MCP or awareness");
+  });
   it("classifies Health Check as database-independent and human-only with redacted exports", () => {
     const health = APPLICATION_CAPABILITIES.find((cap) => cap.id === "health-check");
     expect(health).toMatchObject({

@@ -371,6 +371,15 @@ export function createPromptActionHandler(
             base,
             workspaceMode: "worktree",
             requireIsolation: true,
+            usageAttribution: {
+              surface: "scheduled-job",
+              scheduleId: automation.id,
+              executionId: execution.id,
+              projectId: createHash("sha256")
+                .update(action.repository.path)
+                .digest("hex")
+                .slice(0, 16),
+            },
           },
           config,
         );

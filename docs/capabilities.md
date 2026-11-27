@@ -162,7 +162,7 @@ Schema version: 1
 
 - ID: `plans`
 - Status: shipped
-- Purpose: Propose and track revisioned tasks with rounded completion percentages and cumulative running time; use View Plan in a blank Files tab to reopen the current conversation’s latest saved plan.
+- Purpose: Propose and track structured, revisioned plans (goal/scope, exclusions, assumptions, ordered tasks with details and verification criteria, rounded completion percentages, and cumulative running time); use View Plan in a blank Files tab to reopen the current conversation’s latest saved plan.
 - Access: Chat → right sidebar → + New Tab → View Plan → existing plan tab
 - Prerequisite: runtime
 - Agent access: existing-tools
@@ -407,6 +407,20 @@ Schema version: 1
 - Confirmation: Read-only diagnostics; active probes run only when explicitly requested by the user.
 - Limits: No database is required. Passive local checks run on page open; active provider authentication probes, embedding checksum verification and optional registry release checks run only on explicit human request with per-check cancellation and never repair services or mutate state. Copy health report omits hostname, IP addresses, proxy hosts and filesystem paths by default unless explicitly opted in. Relay and awareness cannot run health probes or read host-identifying details.
 - Pages: `health-check`
+- Settings sections: none
+- Tools: none
+
+## Usage
+
+- ID: `usage`
+- Status: shipped
+- Purpose: Monitor estimated token burn rates by provider, model and surface, inspect heavy chats and workflows, audit individual turns, and export JSON, CSV or Markdown reports.
+- Access: Manage → Usage (also Apps → Usage) and local terminal → code60 usage
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: Choose Clear usage history to remove retained usage rows while keeping transcripts, databases and worktrees. Cancel keeps history.
+- Limits: No database is required. Captures quantitative per-turn telemetry across Relay, Custom Assistants, project chats, workers, Scheduled Jobs, Workflows and background helpers using a three-tier ladder (exact ACP PromptResponse.usage, derived usage_update/tool-wave estimates, and wire-text lower bounds). Local storage under $XDG_STATE_HOME/code60/usage/usage.sqlite retains up to 90 days or 500,000 turns of counts and opaque IDs only, never prompts, replies, file paths or credentials. Read-only monitoring without spend limits or guessed dollar rate tables; never exposed to agents, MCP or awareness.
+- Pages: `usage`
 - Settings sections: none
 - Tools: none
 

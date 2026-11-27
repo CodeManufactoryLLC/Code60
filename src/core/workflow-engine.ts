@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   closeSync,
   fstatSync,
@@ -697,7 +697,16 @@ export class WorkflowEngine {
 
     const spec = this.resolveProvider(r.plan.provider, r.plan.repository);
     const session = await this.agents.start(
-      { ...spec, cwd: r.plan.repository, mcpServers: [] },
+      {
+        ...spec,
+        cwd: r.plan.repository,
+        mcpServers: [],
+        usage: {
+          surface: "workflow",
+          workflowId: r.id,
+          projectId: createHash("sha256").update(r.plan.repository).digest("hex").slice(0, 16),
+        },
+      },
       this.shutdown.signal,
     );
     const managed: ManagedSession = {

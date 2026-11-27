@@ -35,6 +35,7 @@ describe("page tabs", () => {
         "workflows",
         "web-server",
         "health-check",
+        "usage",
       ],
       active: "chat",
     });

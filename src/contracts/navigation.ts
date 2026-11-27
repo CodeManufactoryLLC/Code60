@@ -144,6 +144,15 @@ export const pages = [
     icon: "app-health-check",
   },
   {
+    id: "usage",
+    initialOrder: 30,
+    label: "Usage",
+    group: "apps",
+    order: 4,
+    database: false,
+    icon: "app-usage",
+  },
+  {
     id: "apps",
     initialOrder: 14,
     label: "Apps",

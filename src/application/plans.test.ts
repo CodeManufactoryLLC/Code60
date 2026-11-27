@@ -282,3 +282,80 @@ it("rejects altered or duplicate creation order", async () => {
   await writeFile(path, JSON.stringify({ ...second, creationOrder: first.creationOrder }));
   await expect(PlanStore.open(root, "chat")).rejects.toThrow("Duplicate plan creation order");
 });
+
+it("persists, revises, clears, and renders structured plan sections and task metadata", async () => {
+  const { root, store } = await setup();
+  const structured = {
+    requestId: "structured-1",
+    title: "Improve plans",
+    description: "Unify planning prompts and render structured sections.",
+    outOfScope: ["Changing worker scheduling"],
+    assumptions: ["Existing format 1 records stay valid"],
+    verification: ["npm run check passes"],
+    tasks: [
+      {
+        text: "Extend plan schema",
+        details: "Update src/bridge/plans.ts and src/application/plans.ts",
+        verify: "PlanStore unit tests pass",
+      },
+      { text: "Update PlanPanel" },
+    ],
+  };
+  const created = await store.create(structured, "/project");
+  expect(created.outOfScope).toEqual(["Changing worker scheduling"]);
+  expect(created.assumptions).toEqual(["Existing format 1 records stay valid"]);
+  expect(created.verification).toEqual(["npm run check passes"]);
+  expect(created.tasks[0]).toMatchObject({
+    text: "Extend plan schema",
+    details: "Update src/bridge/plans.ts and src/application/plans.ts",
+    verify: "PlanStore unit tests pass",
+  });
+  expect(created.tasks[1]).not.toHaveProperty("details");
+  expect(created.tasks[1]).not.toHaveProperty("verify");
+
+  const markdown = await readFile(join(root, "plans", `${created.id}.md`), "utf8");
+  expect(markdown).toContain("## Out of scope\n\n- Changing worker scheduling");
+  expect(markdown).toContain(
+    "## Assumptions & open questions\n\n- Existing format 1 records stay valid",
+  );
+  expect(markdown).toContain("## Tasks\n\n- [ ] Extend plan schema");
+  expect(markdown).toContain("  Details: Update src/bridge/plans.ts and src/application/plans.ts");
+  expect(markdown).toContain("  Verify: PlanStore unit tests pass");
+  expect(markdown).toContain("## Verification & completion criteria\n\n- npm run check passes");
+
+  const revised = await store.update({
+    operation: "revise",
+    planId: created.id,
+    revision: created.revision,
+    draft: {
+      title: "Improve plans v2",
+      description: "Revised scope.",
+      assumptions: ["Updated assumption"],
+      tasks: [{ id: created.tasks[0]?.id, text: "Extend plan schema" }],
+    },
+  });
+  expect(revised.outOfScope).toBeUndefined();
+  expect(revised.assumptions).toEqual(["Updated assumption"]);
+  expect(revised.verification).toBeUndefined();
+  expect(revised.tasks[0]?.details).toBeUndefined();
+  expect(revised.tasks[0]?.verify).toBeUndefined();
+
+  const revisedMarkdown = await readFile(join(root, "plans", `${created.id}.md`), "utf8");
+  expect(revisedMarkdown).not.toContain("## Out of scope");
+  expect(revisedMarkdown).toContain("## Assumptions & open questions\n\n- Updated assumption");
+  expect(revisedMarkdown).not.toContain("## Verification & completion criteria");
+
+  expect(planCreateSchema.safeParse({ ...structured, outOfScope: ["  "] }).success).toBe(false);
+  expect(
+    planCreateSchema.safeParse({
+      ...structured,
+      tasks: [{ text: "Step", details: "  " }],
+    }).success,
+  ).toBe(false);
+  expect(
+    planCreateSchema.safeParse({
+      ...structured,
+      tasks: [{ text: "Step", verify: "  " }],
+    }).success,
+  ).toBe(false);
+});

@@ -27,9 +27,17 @@ import {
   operationRequestSchema,
   pairingPolicySchema,
   pairingRequestSchema,
+  parseUsageReportQuery,
+  parseUsageTurnsQuery,
   webServerEnabledSchema,
 } from "../bridge/index.js";
-import { CODE60_VERSION, type CoreDeps, defaultDeps, stateHome } from "../core/index.js";
+import {
+  CODE60_VERSION,
+  type CoreDeps,
+  defaultDeps,
+  stateHome,
+  UsageStore,
+} from "../core/index.js";
 import {
   diagnosticMessage,
   fileCode,
@@ -242,6 +250,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     if (controlling) send(controlling, event, value);
   };
   const logs = new DesktopLogStore(join(stateHome(env), "code60", "logs"));
+  const usage = new UsageStore(join(stateHome(env), "code60", "usage"));
   let settings = await readGatewaySettings(root);
   let requirePairing = containerRequiresPairing || (settings?.requirePairing ?? false);
   const roots = options.roots ?? settings?.roots ?? [userHome(env)];
@@ -267,7 +276,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     );
   };
   const application = new ApplicationHost(
-    options.deps ?? defaultDeps(logs.sink),
+    options.deps ?? defaultDeps(logs.sink, usage.sink),
     env,
     interactions,
     {
@@ -291,7 +300,7 @@ export async function startGateway(options: GatewayOptions = {}) {
       ragModelRoot: options.modelRoot ?? fileURLToPath(new URL("../../models/", import.meta.url)),
     },
   );
-  const workflowBaseDeps = options.deps ?? defaultDeps();
+  const workflowBaseDeps = options.deps ?? defaultDeps(undefined, usage.sink);
   const workflows = new DesktopWorkflows(
     env,
     { ...workflowBaseDeps, agents: providerAgents(workflowBaseDeps.agents, env) },
@@ -310,7 +319,7 @@ export async function startGateway(options: GatewayOptions = {}) {
   let scheduler: Awaited<ReturnType<typeof startSchedulerRuntime>> | undefined;
   let schedulerError: string | null = null;
   try {
-    const schedulerDeps = options.deps ?? defaultDeps();
+    const schedulerDeps = options.deps ?? defaultDeps(undefined, usage.sink);
     scheduler = await startSchedulerRuntime(
       env,
       {
@@ -434,6 +443,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     emit,
     workflows,
     healthCheck,
+    usage,
   );
   operations.set("backend-stop", async () => {
     if (
@@ -462,6 +472,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     application.terminals.subscribe((event) => emit("terminal-event", event)),
     application.terminals.subscribeChanges(() => emit("terminals-changed")),
     logs.subscribe(() => emit("logs-changed")),
+    usage.subscribe(() => emit("usage-changed")),
     healthCheck.subscribe((snapshot) => emit("health-changed", snapshot)),
   ];
   const detach = async (session: string) => {
@@ -669,6 +680,24 @@ export async function startGateway(options: GatewayOptions = {}) {
             for await (const chunk of request)
               if (chunk.length) throw new Error("Uninstall preparation accepts no payload");
             respond(response, await prepareUninstall());
+          } else if (path === "/management/usage") {
+            const payload = (await body(request)) as {
+              query?: unknown;
+              includeTurns?: unknown;
+              turnLimit?: unknown;
+            } | null;
+            const query = parseUsageReportQuery(payload?.query ?? {});
+            const includeTurns = payload?.includeTurns === true;
+            const report = usage.report(query);
+            const turns = includeTurns
+              ? usage.turns(
+                  parseUsageTurnsQuery({
+                    ...query,
+                    ...(typeof payload?.turnLimit === "number" ? { limit: payload.turnLimit } : {}),
+                  }),
+                ).turns
+              : undefined;
+            respond(response, { report, ...(turns ? { turns } : {}) });
           } else if (path === "/management/prepare-database") {
             for await (const chunk of request)
               if (chunk.length) throw new Error("Database preparation accepts no payload");
@@ -1042,6 +1071,7 @@ export async function startGateway(options: GatewayOptions = {}) {
         server.closeAllConnections();
       });
       await logs.close();
+      usage.close();
       await rm(join(root, "connection.json"), { force: true });
       await release();
     })().catch((error) => {
@@ -1122,6 +1152,7 @@ export async function startGateway(options: GatewayOptions = {}) {
       workflows.close(),
       logs.close(),
     ]);
+    usage.close();
     server.close();
     await release();
     throw error;
@@ -1158,19 +1189,23 @@ export async function managementRequest(
     | "pairing"
     | "prepare-database"
     | "update-summary"
+    | "usage"
     | "uninstall-summary"
     | "prepare-uninstall",
-  value?: { requirePairing: boolean },
+  value?:
+    | { requirePairing: boolean }
+    | { query?: unknown; includeTurns?: boolean; turnLimit?: number },
 ) {
   const connection = await readGatewayConnection(env);
+  const sendsBody = action === "pairing" || action === "usage";
   const response = await fetch(`${connection.origin}/management/${action}`, {
     method: "POST",
     redirect: "error",
     headers: {
       "X-Code60-Management": connection.token,
-      ...(action === "pairing" ? { "Content-Type": "application/json" } : {}),
+      ...(sendsBody ? { "Content-Type": "application/json" } : {}),
     },
-    ...(action === "pairing" ? { body: JSON.stringify(value ?? null) } : {}),
+    ...(sendsBody ? { body: JSON.stringify(value ?? null) } : {}),
     signal: AbortSignal.timeout(["shutdown", "prepare-uninstall"].includes(action) ? 90_000 : 5000),
   });
   const result = (await response.json()) as Record<string, unknown>;

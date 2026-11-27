@@ -78,8 +78,13 @@ import {
   parseTerminalOpen,
   parseTerminalResize,
   parseTerminalWrite,
+  parseUsageClearRequest,
+  parseUsageExportRequest,
+  parseUsageReportQuery,
+  parseUsageTurnsQuery,
   parseWebLink,
 } from "../bridge/index.js";
+import type { UsageStore } from "../core/index.js";
 import type { Interactions } from "./interactions.js";
 
 /** Fixed human application operations; agent MCP gateways never receive this surface. */
@@ -91,11 +96,38 @@ export function applicationOperations(
   emit: (event: string, value?: unknown) => void,
   workflows: DesktopWorkflows,
   healthCheck?: HealthCheckService,
+  usage?: UsageStore,
 ) {
   const operations = new Map<string, (value: unknown) => unknown>();
   const handle = (name: string, action: (value: unknown) => unknown) => {
     operations.set(name, action);
   };
+  handle("usage-report", (value) => {
+    const query = parseUsageReportQuery(value);
+    if (!usage) throw new Error("Usage monitoring store is unavailable.");
+    return usage.report(query);
+  });
+  handle("usage-turns", (value) => {
+    const query = parseUsageTurnsQuery(value);
+    if (!usage) throw new Error("Usage monitoring store is unavailable.");
+    return usage.turns(query);
+  });
+  handle("usage-export", (value) => {
+    const request = parseUsageExportRequest(value);
+    if (!usage) throw new Error("Usage monitoring store is unavailable.");
+    return usage.exportReport(request);
+  });
+  handle("usage-clear", async (value) => {
+    parseUsageClearRequest(value);
+    if (!usage) throw new Error("Usage monitoring store is unavailable.");
+    const confirmed = await interactions.confirm(
+      "clear-usage",
+      "Delete all recorded token-usage history? Conversation transcripts, databases, and Git worktrees are kept.",
+    );
+    if (!confirmed) return { cleared: false, deleted: 0 };
+    const result = usage.clear();
+    return { cleared: true, deleted: result.deleted };
+  });
   handle("health-check", (value) => {
     const request = parseHealthCheckRequest(value);
     if (!healthCheck) throw new Error("Health Check service is unavailable.");

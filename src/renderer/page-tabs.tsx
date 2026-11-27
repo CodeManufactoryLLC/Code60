@@ -316,7 +316,7 @@ const sidebarGroups = {
   Connect: ["mcp-servers", "providers"],
   Customize: ["custom-agents", "prompts", "commands", "customize-mcp-servers"],
   Personalize: ["appearance", "table-defaults", "text"],
-  Manage: ["about", "health-check", "polling-settings", "system-manager", "updates"],
+  Manage: ["about", "health-check", "polling-settings", "system-manager", "updates", "usage"],
   "Contributor Tools": ["episodic-memory", "rag"],
   Experiments: ["web-server"],
 } as const satisfies Record<
