@@ -1,12 +1,16 @@
 styles {
     element "Element" {
         color "#ffffff"
-        fontSize 22
+        fontSize 28
+        width 420
+        height 240
     }
     element "Person" {
         shape Person
         background "#161616"
         color "#ffffff"
+        width 360
+        height 340
     }
     element "LAN" {
         background "#393939"
@@ -60,6 +64,7 @@ styles {
     relationship "Relationship" {
         thickness 2
         color "#525252"
-        fontSize 18
+        fontSize 22
+        width 220
     }
 }
