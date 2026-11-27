@@ -18,7 +18,14 @@ export async function draftWorkflow(
   const combined = AbortSignal.any([signal, abort.signal]);
   let rejectAbort: () => void = () => {};
   try {
-    const session = await agents.start({ ...spec, mcpServers: [] }, combined);
+    const session = await agents.start(
+      {
+        ...spec,
+        mcpServers: [],
+        usage: { ...spec.usage, surface: "helper", helperKind: "workflow-draft" },
+      },
+      combined,
+    );
     let off = () => {};
     try {
       session.onPermission(async () => "deny");

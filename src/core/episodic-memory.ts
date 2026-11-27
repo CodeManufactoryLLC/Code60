@@ -72,7 +72,10 @@ export async function extractEpisodicMemory(
   try {
     for (const [index, data] of chunks.entries()) {
       combined.throwIfAborted();
-      const session = await agents.start(spec, combined);
+      const session = await agents.start(
+        { ...spec, usage: { ...spec.usage, surface: "helper", helperKind: "episodic-memory" } },
+        combined,
+      );
       let dispose = () => {};
       let onAbort = () => {};
       try {

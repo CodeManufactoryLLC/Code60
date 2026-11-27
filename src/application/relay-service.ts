@@ -788,6 +788,10 @@ export class RelayService {
             },
           ],
           promptContext: () => this.knowledgeContext(),
+          usageAttribution: {
+            surface: this.identity ? "custom-assistant" : "relay",
+            conversationId: store.id,
+          },
         },
       );
       if (!current()) return await retire();

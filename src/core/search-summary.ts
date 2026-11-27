@@ -33,7 +33,10 @@ export async function summarizeSearch(
   let onAbort = () => {};
   try {
     combined.throwIfAborted();
-    const session = await agents.start(spec, combined);
+    const session = await agents.start(
+      { ...spec, usage: { ...spec.usage, surface: "helper", helperKind: "search-summary" } },
+      combined,
+    );
     let dispose = () => {};
     try {
       combined.throwIfAborted();
