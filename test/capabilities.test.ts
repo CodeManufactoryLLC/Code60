@@ -32,6 +32,16 @@ describe("browser capability catalog", () => {
     expect(usage?.limitations).toContain("never prompts, replies, file paths or credentials");
     expect(usage?.limitations).toContain("never exposed to agents, MCP or awareness");
   });
+  it("classifies Alerts as database-independent and human-only with strict internal links", () => {
+    const alerts = APPLICATION_CAPABILITIES.find((cap) => cap.id === "alerts");
+    expect(alerts).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "human-only",
+      access: expect.stringContaining("Header → Alerts bell"),
+    });
+    expect(alerts?.limitations).toContain("Database-independent");
+    expect(alerts?.limitations).toContain("never exposed to agents, MCP or awareness");
+  });
   it("classifies Health Check as database-independent and human-only with redacted exports", () => {
     const health = APPLICATION_CAPABILITIES.find((cap) => cap.id === "health-check");
     expect(health).toMatchObject({

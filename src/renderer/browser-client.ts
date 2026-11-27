@@ -129,6 +129,8 @@ export function createBrowserClient(
     onTerminalsChanged: (listener) => events.on("terminals-changed", listener),
     healthCheck: (request) => rpc("health-check", request),
     onHealthChanged: (listener) => events.on("health-changed", listener),
+    alerts: (request) => rpc("alerts", request),
+    onAlertsChanged: (listener) => events.on("alerts-changed", listener),
     heartbeat: (request) => rpc("heartbeat", request),
     onHeartbeatChanged: (listener) => events.on("heartbeat-changed", listener),
     usageReport: (query) => rpc("usage-report", query ?? {}),
@@ -297,6 +299,10 @@ export function createBrowserClient(
             void api
               .appSummary?.()
               .then((snapshot) => events.emit("update", snapshot))
+              .catch(() => {});
+            void api
+              .alerts?.({ action: "list" })
+              .then((snapshot) => events.emit("alerts-changed", snapshot))
               .catch(() => {});
           }
           if (frame.event === "resync") ready();

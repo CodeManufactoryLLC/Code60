@@ -4,7 +4,7 @@ title: "Capabilities: Runtime Lifecycle and Monitoring"
 domain: reference
 kind: reference
 status: active
-summary: Generated capability specs for browser/backend lifecycle, Updates, Uninstall, System Manager, Health Check, and Usage.
+summary: Generated capability specs for browser/backend lifecycle, Updates, Uninstall, System Manager, Health Check, Usage, and Alerts.
 updated: 2026-11-27
 code_refs:
   - src/contracts/knowledge.ts
@@ -13,6 +13,7 @@ tags:
   - capabilities
   - runtime
   - operations
+  - alerts
   - reference
 ---
 
@@ -103,5 +104,19 @@ Schema version: 1
 - Confirmation: Choose Clear usage history to remove retained usage rows while keeping transcripts, databases and worktrees. Cancel keeps history.
 - Limits: No database is required. Captures quantitative per-turn telemetry across Relay, Custom Assistants, project chats, workers, Scheduled Jobs, Workflows and background helpers using a three-tier ladder (exact ACP PromptResponse.usage, derived usage_update/tool-wave estimates, and wire-text lower bounds). Local storage under $XDG_STATE_HOME/code60/usage/usage.sqlite retains up to 90 days or 500,000 turns of counts and opaque IDs only, never prompts, replies, file paths or credentials. Read-only monitoring without spend limits or guessed dollar rate tables; never exposed to agents, MCP or awareness.
 - Pages: `usage`
+- Settings sections: none
+- Tools: none
+
+## Alerts
+
+- ID: `alerts`
+- Status: shipped
+- Purpose: Surface app-wide items needing human attention in the upper-right header bell, with an unread count badge, clickable internal navigation links, and read/unread management.
+- Access: Header → Alerts bell
+- Prerequisite: none
+- Agent access: human-only
+- Confirmation: None.
+- Limits: Database-independent and persisted privately in local backend state. Links target only validated internal Code60 destinations; never stores prompts, transcripts, credentials or arbitrary paths, and never exposed to agents, MCP or awareness.
+- Pages: none
 - Settings sections: none
 - Tools: none

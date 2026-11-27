@@ -5,7 +5,18 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connectMcpUpstream } from "../agents/index.js";
 import {
+  ALERT_PREFIXES,
+  AlertService,
   ApplicationHost,
+  collectApprovalAlerts,
+  collectDraftPlanAlerts,
+  collectFailedPlanAlerts,
+  collectHealthAlerts,
+  collectSchedulerExecutionAlerts,
+  collectSchedulerLiveAlerts,
+  collectWorkflowFailureAlert,
+  collectWorkflowLiveAlerts,
+  collectWorkspaceAlerts,
   DesktopAutomations,
   DesktopLogStore,
   DesktopWorkflows,
@@ -16,6 +27,8 @@ import {
   openProjectDatabase,
   prepareCodexEnvironment,
   providerAgents,
+  type SchedulerExecutionNotice,
+  schedulerExecutionAlertKey,
 } from "../application/index.js";
 import { startSchedulerRuntime } from "../automation/index.js";
 import {
@@ -252,6 +265,8 @@ export async function startGateway(options: GatewayOptions = {}) {
     if (controlling) send(controlling, event, value);
   };
   const logs = new DesktopLogStore(join(stateHome(env), "code60", "logs"));
+  const alerts = new AlertService(join(stateHome(env), "code60", "alerts"));
+  await alerts.load();
   const usage = new UsageStore(join(stateHome(env), "code60", "usage"));
   let settings = await readGatewaySettings(root);
   let requirePairing = containerRequiresPairing || (settings?.requirePairing ?? false);
@@ -512,6 +527,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     workflows,
     healthCheck,
     usage,
+    alerts,
     heartbeat,
   );
   operations.set("backend-stop", async () => {
@@ -524,6 +540,56 @@ export async function startGateway(options: GatewayOptions = {}) {
       shutdownRequested = true;
     return shutdownRequested;
   });
+  const syncApplicationAlerts = (snapshot: ReturnType<ApplicationHost["snapshot"]>) => {
+    if (closing || quiescing || preparingUninstall) return;
+    void (async () => {
+      await alerts.syncSource(ALERT_PREFIXES.approval, collectApprovalAlerts(snapshot));
+      await alerts.syncSource(ALERT_PREFIXES.planDraft, collectDraftPlanAlerts(snapshot));
+      await alerts.syncSource(ALERT_PREFIXES.workspace, collectWorkspaceAlerts(snapshot));
+      for (const failed of collectFailedPlanAlerts(snapshot)) {
+        await alerts.publish(failed);
+      }
+    })().catch(() => {});
+  };
+  let schedulerAlertSyncInFlight = false;
+  let schedulerAlertSyncPending = false;
+  const syncSchedulerAlerts = (): Promise<void> => {
+    if (closing || quiescing || preparingUninstall) return Promise.resolve();
+    if (schedulerAlertSyncInFlight) {
+      schedulerAlertSyncPending = true;
+      return Promise.resolve();
+    }
+    schedulerAlertSyncInFlight = true;
+    return (async () => {
+      try {
+        do {
+          schedulerAlertSyncPending = false;
+          await alerts.syncSource(
+            ALERT_PREFIXES.automation,
+            collectSchedulerLiveAlerts(schedulerError),
+          );
+          if (!scheduler || closing || quiescing || preparingUninstall) continue;
+          const history = (await scheduler.request({ action: "history", limit: 20 })) as {
+            executions?: SchedulerExecutionNotice[];
+          };
+          const executions = history?.executions ?? [];
+          if (!alerts.schedulerHistorySeeded) {
+            await alerts.markSchedulerHistorySeeded(
+              executions.map((item) => schedulerExecutionAlertKey(item.id)),
+            );
+            continue;
+          }
+          for (const item of collectSchedulerExecutionAlerts(executions)) {
+            await alerts.publish(item);
+          }
+        } while (schedulerAlertSyncPending && !closing && !quiescing && !preparingUninstall);
+      } finally {
+        schedulerAlertSyncInFlight = false;
+      }
+    })().catch(() => {});
+  };
+  syncApplicationAlerts(application.snapshot(false, true));
+  await syncSchedulerAlerts();
   const disposers = [
     application.subscribe((snapshot) => {
       workflows.observeProvider(
@@ -533,6 +599,7 @@ export async function startGateway(options: GatewayOptions = {}) {
           snapshot.agentSetup?.enabled.includes(snapshot.agentSetup.primary ?? ""),
         ]),
       );
+      syncApplicationAlerts(snapshot);
       emit("update", snapshot);
     }, true),
     application.mcp.subscribe(() => emit("mcp-changed")),
@@ -543,7 +610,23 @@ export async function startGateway(options: GatewayOptions = {}) {
     application.terminals.subscribeChanges(() => emit("terminals-changed")),
     logs.subscribe(() => emit("logs-changed")),
     usage.subscribe(() => emit("usage-changed")),
-    healthCheck.subscribe((snapshot) => emit("health-changed", snapshot)),
+    alerts.subscribe((snapshot) => emit("alerts-changed", snapshot)),
+    workflows.subscribeChanges((recordId, workflowSnapshot) => {
+      const name = workflows.workflowName(recordId) ?? "Workflow";
+      void (async () => {
+        await alerts.syncSource(
+          ALERT_PREFIXES.workflowPrefix(recordId),
+          collectWorkflowLiveAlerts(recordId, name, workflowSnapshot),
+        );
+        const failure = collectWorkflowFailureAlert(recordId, name, workflowSnapshot);
+        if (failure) await alerts.publish(failure);
+      })().catch(() => {});
+    }),
+    scheduler?.subscribe(() => syncSchedulerAlerts()) ?? (() => {}),
+    healthCheck.subscribe((snapshot) => {
+      void alerts.syncSource(ALERT_PREFIXES.health, collectHealthAlerts(snapshot)).catch(() => {});
+      emit("health-changed", snapshot);
+    }),
     heartbeat.subscribe((snapshot) => emit("heartbeat-changed", snapshot)),
   ];
   const detach = async (session: string) => {
@@ -1148,6 +1231,7 @@ export async function startGateway(options: GatewayOptions = {}) {
         server.closeAllConnections();
       });
       await logs.close();
+      await alerts.close();
       usage.close();
       await rm(join(root, "connection.json"), { force: true });
       await release();

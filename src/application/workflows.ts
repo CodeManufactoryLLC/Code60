@@ -326,6 +326,10 @@ export class DesktopWorkflows {
     };
   }
 
+  workflowName(recordId: string): string | undefined {
+    return this.entries.find((entry) => entry.id === recordId)?.name;
+  }
+
   async hasActiveWorkflowForRepository(repositoryPath: string): Promise<boolean> {
     if (this.closed) return false;
     await this.load();

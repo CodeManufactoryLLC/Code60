@@ -772,11 +772,11 @@
       "domain": "reference",
       "kind": "reference",
       "status": "active",
-      "summary": "Generated capability specs for browser/backend lifecycle, Updates, Uninstall, System Manager, Health Check, and Usage.",
+      "summary": "Generated capability specs for browser/backend lifecycle, Updates, Uninstall, System Manager, Health Check, Usage, and Alerts.",
       "updated": "2026-11-27",
       "path": "knowledge/reference/capabilities/runtime.md",
-      "lines": 108,
-      "bytes": 8848,
+      "lines": 123,
+      "bytes": 9503,
       "code_refs": [
         "src/contracts/knowledge.ts",
         "src/contracts/navigation.ts"
@@ -785,6 +785,7 @@
         "capabilities",
         "runtime",
         "operations",
+        "alerts",
         "reference"
       ]
     },
