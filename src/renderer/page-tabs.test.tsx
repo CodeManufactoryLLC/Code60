@@ -222,7 +222,7 @@ describe("database connection navigation", () => {
       "1.0.0-alpha.1",
     );
     expect(withVersion).toContain(
-      '<div class="product-navigation-version" role="note" aria-label="Running Code60 version">v1.0.0-alpha.1</div></nav>',
+      '<div class="product-navigation-version" role="note" aria-label="Code60 version">v1.0.0-alpha.1</div></nav>',
     );
 
     const prefixed = navigation(

@@ -246,11 +246,7 @@ export function PageTabBar({
           />
         </div>
         {appVersion && (
-          <div
-            className="product-navigation-version"
-            role="note"
-            aria-label="Running Code60 version"
-          >
+          <div className="product-navigation-version" role="note" aria-label="Code60 version">
             {appVersion.startsWith("v") ? appVersion : `v${appVersion}`}
           </div>
         )}
