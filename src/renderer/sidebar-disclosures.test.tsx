@@ -169,6 +169,10 @@ it("places Workflows in Automate and Custom Assistants in Customize", () => {
   const customTab = byId(view.tree(), "tab-custom-agents");
   expect(customTab.props["aria-controls"]).toBe("panel-custom-agents");
   expect(customTab.props["aria-expanded"]).toBeUndefined();
+
+  view.render({ tabs: { ...initialTabs, active: "vector-search" } });
+  expect(group("Context").props.destination).toBeDefined();
+  expect(group("Customize").props.destination).toBeUndefined();
 });
 
 it("shows Providers as a single tab in Connect", () => {

@@ -312,6 +312,10 @@ export async function startGateway(options: GatewayOptions = {}) {
       list: () => application.workflowProviders(),
       resolve: (providerId, cwd) => application.resolveWorkflowProvider(providerId, cwd),
     },
+    {
+      sessionResources: (repository) => application.codebaseSessionResources(repository),
+      trackRepository: (repository) => application.codebase.trackRepository(repository),
+    },
   );
   let resolveAppReady!: () => void;
   const appReady = new Promise<void>((resolve) => {
@@ -329,6 +333,8 @@ export async function startGateway(options: GatewayOptions = {}) {
         agents: providerAgents(schedulerDeps.agents, env),
       },
       {
+        codeTools: (repository) => application.codebaseSessionResources(repository),
+        onRepositoryActive: (repository) => application.codebase.trackRepository(repository),
         handlers: [
           createWorkflowActionHandler({
             deps: schedulerDeps,
@@ -532,6 +538,7 @@ export async function startGateway(options: GatewayOptions = {}) {
     application.mcp.subscribe(() => emit("mcp-changed")),
     application.memory.subscribe(() => emit("memory-changed")),
     application.rag.subscribe((status) => emit("rag-status", status)),
+    application.codebase.subscribe(() => emit("codebase-index-changed")),
     application.terminals.subscribe((event) => emit("terminal-event", event)),
     application.terminals.subscribeChanges(() => emit("terminals-changed")),
     logs.subscribe(() => emit("logs-changed")),

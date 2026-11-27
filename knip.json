@@ -22,6 +22,7 @@
     "src/application/mcp-server.ts",
     "src/application/rag-worker.ts",
     "src/application/memory-worker.ts",
+    "src/application/codebase-worker.ts",
     "scripts/dev-backend.mjs",
     "scripts/devcontainer-tunnel.mjs",
     "scripts/devcontainer-session.mjs",

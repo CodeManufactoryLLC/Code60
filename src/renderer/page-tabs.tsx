@@ -314,7 +314,8 @@ function HistoryControls({
 const sidebarGroups = {
   Automate: ["automations", "workflows"],
   Connect: ["mcp-servers", "providers"],
-  Customize: ["custom-agents", "prompts", "commands", "customize-mcp-servers"],
+  Context: ["vector-search", "memory", "commands", "prompts"],
+  Customize: ["custom-agents", "customize-mcp-servers"],
   Personalize: ["appearance", "table-defaults", "text"],
   Manage: [
     "about",

@@ -24,6 +24,7 @@ import {
   assembleOperatingContract,
   DEFAULT_PROMPT_TEMPLATES,
   isActivityTool,
+  isCodebaseSearchTool,
   isKnowledgeTool,
   isMcpControlTool,
   parseActivityContextArgs,
@@ -45,6 +46,7 @@ import { ActivityDisplay } from "./activity-display.js";
 import { BrowserAutomation } from "./browser-automation.js";
 import { ChatCheckpoints } from "./chat-checkpoints.js";
 import { savedChatReferences } from "./chat-reference.js";
+import { type CodebaseIndexService, composeSessionResources } from "./codebase-service.js";
 import { ConversationReplies } from "./conversation-replies.js";
 import { EventWindow } from "./event-window.js";
 import { ExecutionHost, type ExecutionOwner, type ExecutionWorker } from "./execution-host.js";
@@ -169,6 +171,8 @@ export class RelayService {
       root: string | undefined,
       warning: (message: string) => void,
     ) => SessionResourceFactory,
+    private readonly codebase?: CodebaseIndexService,
+    private readonly codebaseSessionResources?: (cwd: string) => SessionResourceFactory | undefined,
   ) {
     const changed = () => this.changed();
     this.activity = new ActivityDisplay({ changed });
@@ -190,10 +194,13 @@ export class RelayService {
       changed: (targetId) => this.changed(targetId),
       initialSettings: (provider) => this.modelDefaults?.selections(provider, "worker") ?? [],
       sessionResources: (_owner, target) =>
-        this.connectorResources?.("worker", target.cwd, (warning) => {
-          this.error = warning;
-          changed();
-        }),
+        composeSessionResources(
+          this.connectorResources?.("worker", target.cwd, (warning) => {
+            this.error = warning;
+            changed();
+          }),
+          this.codebaseSessionResources?.(target.cwd),
+        ),
       warning: () => {
         this.error = "A worker record could not be saved. Inspect the worker before retrying work.";
         changed();
@@ -1274,6 +1281,10 @@ export class RelayService {
       )
         throw new Error("Browser actions require an active chat request.");
       return this.browser.call(args, signal);
+    }
+    if (isCodebaseSearchTool(name)) {
+      if (!this.codebase) throw new Error("Vector codebase search is unavailable");
+      return this.codebase.callTool("relay", name, args, undefined, signal);
     }
     if (isKnowledgeTool(name)) {
       if (!this.knowledge) throw new Error("Code60 awareness is unavailable");

@@ -78,6 +78,8 @@ export interface RunSettings {
   /** Time between SIGTERM and SIGKILL when stopping the agent. */
   killGraceMs: number;
   decide(kind: ToolKind): PermissionRule;
+  /** Optional narrowly scoped structured override (e.g. built-in read-only search tools). */
+  allowPermission?: (request: PermissionRequest) => boolean;
   prompts: Readonly<PromptTemplates>;
   /**
    * Interactive only: saved session-option defaults applied to each newly created ACP session
@@ -1127,7 +1129,9 @@ export class Run {
   }
 
   private onPermission(request: PermissionRequest, signal: AbortSignal): Promise<PermissionAnswer> {
-    const rule = this.settings.decide(request.kind);
+    const rule = this.settings.allowPermission?.(request)
+      ? "allow"
+      : this.settings.decide(request.kind);
     if (rule !== "ask" || this.settings.mode === "headless") {
       const answer: PermissionAnswer = rule === "allow" ? "allow" : "deny";
       this.emitPermission(request, answer, "policy");

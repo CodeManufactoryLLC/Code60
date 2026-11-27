@@ -37,6 +37,7 @@ describe("page tabs", () => {
         "health-check",
         "usage",
         "heartbeat",
+        "vector-search",
       ],
       active: "chat",
     });

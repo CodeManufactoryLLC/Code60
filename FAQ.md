@@ -124,6 +124,7 @@ Code60 keeps all application data locally on the host machine. New run directori
 - **Run records and transcripts:** Runs write `run.json` and `events.jsonl` under `<git-common-dir>/code60/runs/`, `$XDG_STATE_HOME/code60/dirs/<key>/runs/`, or `.code60_workspace/` beside the database. Code60 does not automatically scrub or expire transcripts.
 - **Configuration, workflows, and logs:** MCP files live at `$XDG_CONFIG_HOME/code60/mcp.json` and `<project>/.code60/mcp.json`, and **Workflows** state lives under `$XDG_STATE_HOME/code60/workflows`. Diagnostic logs under `$XDG_STATE_HOME/code60/logs` carry a 7-day, 20 MiB cap.
 - **Usage ledger:** Token metrics live in `$XDG_STATE_HOME/code60/usage/usage.sqlite` with a 90-day, 500,000-turn cap. That file holds numeric counts, provider IDs, model IDs, and opaque IDs without prompts, replies, file paths, or secrets.
+- **Codebase search index:** [Vector Codebase Search](TERMINOLOGY.md#vector-codebase-search) saves repository embeddings and full-text chunks in `$XDG_STATE_HOME/code60/codebase-index/index.sqlite` with private permissions (`0600`).
 - **Credentials:** Provider logins stay in each provider's own backend-user storage. MCP secrets stay in macOS Keychain, Linux Secret Service, or explicit temporary backend memory.
 
 ### How much disk space does a Code60 installation use?
@@ -297,6 +298,7 @@ No. Code60 has no native desktop [Computer Use](TERMINOLOGY.md#computer-use) con
 Yes. Code60 supports [MCP](TERMINOLOGY.md#mcp) for both its own orchestration tools and external tool servers. See [MCP Configuration](MCP.md) for full details.
 
 - **Orchestration tools:** In Code60's [Two-Layer Architecture](TERMINOLOGY.md#two-layer-architecture), orchestrators receive Code60's MCP tools for worker control, planning, reviews, and browser automation. Workers never receive those tools.
+- **Codebase search tools:** Orchestrators, workers, **Workflows**, and **Scheduled Jobs** receive Code60's read-only [Vector Codebase Search](TERMINOLOGY.md#vector-codebase-search) tools (`code60_search_codebase` and `code60_codebase_index_status`).
 - **External MCP servers:** Under **Connect → MCP Servers**, a user can manage User and open-project servers with visual forms or strict JSON. Project server IDs override User IDs, new servers start off, and project servers require human approval for their exact revision.
 - **Transports and scope:** Code60 supports `stdio` and Streamable HTTP transports for tools only. It omits legacy Server-Sent Events (SSE), resources, prompts, sampling, and elicitation.
 - **Secrets and limits:** MCP secrets stay in macOS Keychain, Linux Secret Service, or explicit temporary memory, with S256 PKCE OAuth support. **Scheduled Jobs**, setup probes, and internal helpers receive no external MCP servers.
@@ -351,6 +353,15 @@ Code60 neither triggers nor blocks an [Agent Provider's](TERMINOLOGY.md#agent-pr
 - **Interaction with Code60 context handoff:** Between turns, Code60 starts automatic context handoff at 70% of context capacity. That check uses the higher of the provider's report and Code60's own session estimate. Code60's 70% rollover often occurs before late-window provider compaction, while early provider compaction still runs inside the harness.
 - **Safety and continuity:** Neither provider compaction nor Code60's context handoff deletes local transcripts, restores old permissions, or replays past tool calls. Code60 also carries explicit in-session **Model** choices into the fresh handoff session.
 
+### How does Vector Codebase Search work?
+
+[Vector Codebase Search](TERMINOLOGY.md#vector-codebase-search) indexes each repository's latest `main` branch locally using Code60's ONNX embedding engine (`jina-embeddings-v2-base-code`) and SQLite `FTS5` search.
+
+- **Non-mutating Git sync:** [Code60 Gateway](TERMINOLOGY.md#gateway) fetches `origin/main` when a remote exists and reads commit blobs without altering local files, branches, or the Git index. When `origin` is offline or absent, Code60 indexes the local `main` branch or `HEAD`.
+- **Available surfaces:** **Relay**, **Custom Assistants**, project orchestrators, workers, **Workflows**, and **Scheduled Jobs** receive `code60_search_codebase` and `code60_codebase_index_status`. **Relay** and **Custom Assistants** pass an explicit repository path, while other surfaces search their active repository automatically.
+- **Local privacy and sharing:** Code60 runs CPU embeddings offline in a separate Node.js worker process and saves vectors in `$XDG_STATE_HOME/code60/codebase-index/index.sqlite`. Worktrees of the same repository share one index.
+- **Inspection and management:** Open **Context → Vector Search** to view every repository index, file and chunk counts, storage size, and last run time. That page also supports re-indexing, removal after confirmation, and live query tests.
+
 ## Plans and Workflows
 
 ### What is the difference between Plans and Workflows?
@@ -383,7 +394,7 @@ Code60 **Plans** are application-level plans with human approval gates and worke
 **Scheduled Jobs** run locally on the host computer inside a mandatory separate Git worktree. There is no cloud runner or remote service.
 
 - **Local backend service:** The per-user [Code60 Gateway](TERMINOLOGY.md#gateway) service (`launchd` on macOS or user `systemd` without linger on Linux) runs each job directly on the host machine. The machine must stay awake with an active user login session.
-- **Separate Git worktree:** Each run creates a separate Git worktree from the job's local repository and base branch. Single-prompt jobs run one headless turn under an explicit deny-by-default allowlist, while workflow jobs run multi-task **Workflows** with an `autoApprove` option. Both run without external MCP servers or implicit memory.
+- **Separate Git worktree:** Each run creates a separate Git worktree from the job's local repository and base branch. Single-prompt jobs run one headless turn under an explicit deny-by-default allowlist, while workflow jobs run multi-task **Workflows** with an `autoApprove` option. Both receive Code60's read-only [Vector Codebase Search](TERMINOLOGY.md#vector-codebase-search) tools without external MCP servers or implicit memory.
 - **Manual review:** Code60 keeps the worktree, transcript, and diff on disk and never automatically applies, merges, commits, or pushes changes.
 
 ### What kinds of jobs can Scheduled Jobs run?

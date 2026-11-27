@@ -27,6 +27,7 @@ describe("Apps home", () => {
       "System Manager",
       "Updates",
       "Usage",
+      "Vector Search",
       "Workflows",
     ]);
     for (const card of home.props.cards.filter((card: { id: string }) =>

@@ -41,6 +41,9 @@ export type { AgentMcpServer, AgentSpec } from "../agents/index.js";
 export { ACP_PROTOCOL_VERSION } from "../agents/index.js";
 export { defaultableSelections } from "../contracts/index.js";
 export type {
+  CodebaseGitOps,
+  CodebaseMainSnapshot,
+  Git,
   GitReadiness,
   GitSetupFile,
   GitSetupOps,
@@ -257,6 +260,8 @@ export function commandDeps(deps: CoreDeps, workspace: Workspace): CommandDeps {
 
 export interface RunRequest {
   sessionResources?: SessionResourceFactory;
+  /** Narrow structured permission allowlist for built-in read-only tools. */
+  allowPermission?: (request: import("../agents/index.js").PermissionRequest) => boolean;
   /** Explicit desktop execution policy. Omitted preserves internal workspace detection. */
   workspaceMode?: "direct" | "worktree";
   /** Desktop workers must never fall back to editing the shared directory. */
@@ -412,6 +417,7 @@ export async function prepareRuns(
         ? {}
         : { initialSettings: request.initialSettings }),
       ...(request.sessionResources ? { sessionResources: request.sessionResources } : {}),
+      ...(request.allowPermission ? { allowPermission: request.allowPermission } : {}),
       ...(request.usageAttribution ? { usageAttribution: request.usageAttribution } : {}),
     },
   );
@@ -479,6 +485,18 @@ export async function prepareRecovery(
 }
 
 export { generateChatTitle } from "./chat-title.js";
+export {
+  buildFtsQuery,
+  CODEBASE_CHUNKER,
+  CODEBASE_LIMITS,
+  chunkCodeFile,
+  detectCodeLanguage,
+  isBuiltinCodebaseSearchPermission,
+  isIndexableCodeFile,
+  type LexicalCandidate,
+  rankCodebaseHits,
+  type VectorCandidate,
+} from "./codebase-chunker.js";
 export { extractEpisodicMemory } from "./episodic-memory.js";
 export {
   checkedVector,

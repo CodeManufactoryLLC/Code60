@@ -152,6 +152,14 @@ function fakeAgent(
         params: { sessionId: "new-session", update },
       });
     },
+    async requestPermission(id: number, params: Record<string, unknown>) {
+      await writer.write({
+        jsonrpc: "2.0",
+        id,
+        method: "session/request_permission",
+        params: { sessionId: "new-session", ...params },
+      });
+    },
     async update(text: string) {
       await writer.write({
         jsonrpc: "2.0",
@@ -252,6 +260,55 @@ describe("MCP tool attribution", () => {
         { server: "context7" },
       ]);
       expect(JSON.stringify(tools)).not.toContain("not-for-normalized-events");
+    } finally {
+      session.close();
+      agent.close();
+    }
+  });
+
+  it("extracts structured MCP server and tool names onto permission requests without trusting titles", async () => {
+    const agent = fakeAgent({});
+    const session = await openSession(agent.stream, { cwd: "/work", agentName: "fake" });
+    const requests: Array<{
+      toolCallId: string;
+      mcp: { server?: string; tool?: string } | undefined;
+    }> = [];
+    const updates: AgentUpdate[] = [];
+    session.onUpdate((update) => updates.push(update));
+    session.onPermission(async (request) => {
+      requests.push({ toolCallId: request.toolCallId, mcp: request.mcp });
+      return "deny";
+    });
+    try {
+      await agent.toolUpdate(
+        call({
+          toolCallId: "cb-1",
+          name: "mcp__code60-code__code60_search_codebase",
+        }),
+      );
+      await agent.requestPermission(101, {
+        toolCall: { toolCallId: "cb-1", title: "Search codebase", kind: "search" },
+        options: [{ optionId: "allow", name: "Allow", kind: "allow_once" }],
+      });
+      await agent.requestPermission(102, {
+        toolCall: {
+          toolCallId: "spoof-1",
+          title: "mcp__code60-code__code60_search_codebase",
+          kind: "execute",
+        },
+        options: [{ optionId: "allow", name: "Allow", kind: "allow_once" }],
+      });
+      await expect.poll(() => requests.length).toBe(2);
+      expect(requests[0]).toEqual({
+        toolCallId: "cb-1",
+        mcp: { server: "code60-code", tool: "code60_search_codebase" },
+      });
+      expect(requests[1]).toEqual({
+        toolCallId: "spoof-1",
+        mcp: undefined,
+      });
+      const toolEvent = updates.find((u) => u.type === "toolCall");
+      expect(toolEvent?.type === "toolCall" && toolEvent.mcp).toEqual({ server: "code60-code" });
     } finally {
       session.close();
       agent.close();
