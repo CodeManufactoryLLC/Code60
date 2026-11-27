@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { access, lstat, mkdir, readdir, readFile, realpath } from "node:fs/promises";
+import { access, constants, mkdir, open, readdir, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -103,25 +103,38 @@ export async function checkC4Architecture(directory = repository) {
       failures.push(`${fromRel}:1: Include "${rel}" escapes architecture/structurizr/`);
       return;
     }
-    if (!(await exists(filePath))) {
-      failures.push(`${fromRel}:1: Missing !include target "${rel}"`);
+    let handle;
+    try {
+      handle = await open(
+        filePath,
+        constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0),
+      );
+    } catch (error) {
+      if (error?.code === "ENOENT") {
+        failures.push(`${fromRel}:1: Missing !include target "${rel}"`);
+      } else {
+        failures.push(`${rel}:1: Structurizr DSL file must be a regular file, not a symlink`);
+      }
       return;
     }
-    const stat = await lstat(filePath);
-    if (stat.isSymbolicLink() || !stat.isFile()) {
-      failures.push(`${rel}:1: Structurizr DSL file must be a regular file, not a symlink`);
-      return;
+    let text;
+    try {
+      if (!(await handle.stat()).isFile()) {
+        failures.push(`${rel}:1: Structurizr DSL file must be a regular file, not a symlink`);
+        return;
+      }
+      const canonical = await realpath(filePath);
+      if (!inside(dslRoot, canonical)) {
+        failures.push(`${rel}:1: Structurizr DSL file resolves outside architecture/structurizr/`);
+        return;
+      }
+      if (visited.has(canonical)) return;
+      visited.add(canonical);
+      includedFiles.push(rel);
+      text = await handle.readFile("utf8");
+    } finally {
+      await handle.close();
     }
-    const canonical = await realpath(filePath);
-    if (!inside(dslRoot, canonical)) {
-      failures.push(`${rel}:1: Structurizr DSL file resolves outside architecture/structurizr/`);
-      return;
-    }
-    if (visited.has(canonical)) return;
-    visited.add(canonical);
-    includedFiles.push(rel);
-
-    const text = await readFile(filePath, "utf8");
     const { depth, minDepth } = countBraceDelta(text);
     if (depth !== 0 || minDepth < 0) {
       failures.push(`${rel}:1: Unbalanced braces in Structurizr DSL file`);

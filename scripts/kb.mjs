@@ -1,4 +1,13 @@
-import { access, lstat, mkdir, readdir, readFile, realpath, writeFile } from "node:fs/promises";
+import {
+  access,
+  constants,
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  realpath,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
@@ -220,10 +229,25 @@ async function scanKnowledgeBase(directory = repository) {
         failures.push(`${relPath}:1: Path leaves repository`);
         continue;
       }
-      const stat = await lstat(fullPath);
-      if (!stat.isFile()) {
+      let raw;
+      let handle;
+      try {
+        handle = await open(
+          fullPath,
+          constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0),
+        );
+      } catch {
         failures.push(`${relPath}:1: Expected a regular file`);
         continue;
+      }
+      try {
+        if (!(await handle.stat()).isFile()) {
+          failures.push(`${relPath}:1: Expected a regular file`);
+          continue;
+        }
+        raw = await handle.readFile("utf8");
+      } finally {
+        await handle.close();
       }
 
       const depth = nestingDepth(relPath);
@@ -232,8 +256,6 @@ async function scanKnowledgeBase(directory = repository) {
           `${relPath}:1: Nesting depth ${depth} exceeds maxDepth ${KB_LIMITS.maxDepth}`,
         );
       }
-
-      const raw = await readFile(fullPath, "utf8");
       const lines = raw.split(/\r?\n/).length;
       const bytes = Buffer.byteLength(raw, "utf8");
       if (lines > KB_LIMITS.maxLines) {
