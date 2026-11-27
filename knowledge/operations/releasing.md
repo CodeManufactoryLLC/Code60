@@ -67,4 +67,4 @@ Workflows run natively inside Code60 Gateway using verified ACP providers and lo
 
 ## Docker Hub publishing
 
-Publishing the `linux/amd64` image to Docker Hub (`mjholliday/code60`) is a separate manual dispatch of `.github/workflows/publish-docker.yml` from `main`, gated by the `dockerhub_release` environment (`push=false` for dry run, `push=true` to push with SBOM and provenance attestations). See [Docker Hub distribution](distribution/docker.md).
+Pushing a `v*` release tag merged into `main` automatically triggers `.github/workflows/publish-docker.yml` to build, test, and publish the verified `linux/amd64` image to Docker Hub (`mjholliday/code60`) with SBOM and provenance attestations, gated by the `dockerhub_release` environment (which allows both `main` and `v*` tags). Manual dispatch from `main` (`push=false` for dry run, `push=true` to push) remains available as a fallback. See [Docker Hub distribution](distribution/docker.md).

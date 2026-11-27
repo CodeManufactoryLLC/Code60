@@ -29,23 +29,23 @@ describe("Docker Hub tag and repository validation", () => {
       expect(() => normalizeDockerRepository(bad)).toThrow("Invalid Docker Hub repository");
   });
 
-  it("publishes rolling semver and latest tags only for stable releases", () => {
-    expect(dockerTagsForRelease("v0.4.1")).toEqual({
+  it("publishes rolling semver tags for stable releases and exact plus latest for prereleases", () => {
+    expect(dockerTagsForRelease("v1.0.0")).toEqual({
       repository: "mjholliday/code60",
-      version: "0.4.1",
+      version: "1.0.0",
       prerelease: false,
       tags: [
-        "mjholliday/code60:0.4.1",
-        "mjholliday/code60:0.4",
-        "mjholliday/code60:0",
+        "mjholliday/code60:1.0.0",
+        "mjholliday/code60:1.0",
+        "mjholliday/code60:1",
         "mjholliday/code60:latest",
       ],
     });
-    expect(dockerTagsForRelease("v0.5.0-beta.1", "mjholliday/code60")).toEqual({
+    expect(dockerTagsForRelease("v1.0.0-alpha.1", "mjholliday/code60")).toEqual({
       repository: "mjholliday/code60",
-      version: "0.5.0-beta.1",
+      version: "1.0.0-alpha.1",
       prerelease: true,
-      tags: ["mjholliday/code60:0.5.0-beta.1"],
+      tags: ["mjholliday/code60:1.0.0-alpha.1", "mjholliday/code60:latest"],
     });
   });
 });
@@ -125,9 +125,16 @@ describe("Docker image and workflow definitions", () => {
       ),
     ).toBe(true);
 
-    expect(Object.keys(publishDockerWorkflow.on)).toEqual(["workflow_dispatch"]);
+    expect(Object.keys(publishDockerWorkflow.on).sort()).toEqual(["push", "workflow_dispatch"]);
+    expect(publishDockerWorkflow.on.push).toEqual({ tags: ["v*"] });
     expect(publishDockerWorkflow.on.workflow_dispatch.inputs.push.default).toBe(false);
-    expect(publishDockerWorkflow.jobs.preflight.if).toBe("github.ref == 'refs/heads/main'");
+    expect(publishDockerWorkflow.jobs.preflight.if).toBe(
+      "(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')",
+    );
+    expect(publishDockerWorkflow.jobs.publish.if).toBe(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression
+      "${{ github.event_name == 'push' || inputs.push == true }}",
+    );
     expect(publishDockerWorkflow.jobs.publish.environment).toBe("dockerhub_release");
     expect(publishDockerWorkflow.jobs.publish.needs).toEqual(["preflight", "build-and-test"]);
     const pushStep = publishDockerWorkflow.jobs.publish.steps.find((step) =>

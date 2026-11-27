@@ -38,6 +38,7 @@ import { RelayPulse } from "./relay-pulse.js";
 import type { PageId, PageTabs, SettingsSectionId } from "./tabs.js";
 
 export function PageTabBar({
+  appVersion,
   relayListening = false,
   showRelayDot,
   onShowRelayDotChange,
@@ -62,6 +63,7 @@ export function PageTabBar({
   onBack = () => {},
   onForward = () => {},
 }: {
+  appVersion?: string | undefined;
   relayListening?: boolean;
   showRelayDot: boolean;
   onShowRelayDotChange(show: boolean): void;
@@ -243,6 +245,15 @@ export function PageTabBar({
             database={database}
           />
         </div>
+        {appVersion && (
+          <div
+            className="product-navigation-version"
+            role="note"
+            aria-label="Running Code60 version"
+          >
+            {appVersion.startsWith("v") ? appVersion : `v${appVersion}`}
+          </div>
+        )}
       </SideNav>
       {utilities && (
         <Modal
