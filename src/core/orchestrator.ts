@@ -6,6 +6,8 @@ import {
   type LogSink,
   type ModeChange,
   type PromptTemplates,
+  type UsageAttribution,
+  type UsageSink,
 } from "../contracts/index.js";
 import type { Git } from "../git/index.js";
 import { diagnosticText } from "../platform/index.js";
@@ -33,6 +35,7 @@ const KILL_GRACE_MS = 5_000;
 export interface OrchestratorDeps {
   memory?: import("./agent-memory.js").MemoryFactory;
   log?: LogSink;
+  usage?: UsageSink;
   agents: Agents;
   git: Git;
   store: RecordStore;
@@ -76,6 +79,8 @@ export interface OrchestratorOptions {
   owner?: "relay";
   /** Interactive only: saved session-option defaults for each provider's new sessions. */
   initialSettings?: (agent: string) => readonly SessionSelection[] | undefined;
+  /** Internal usage attribution for runs started by this orchestrator. */
+  usageAttribution?: UsageAttribution;
 }
 
 /** Drives a set of runs. The CLI renders it; nothing here needs a terminal. */
@@ -145,6 +150,7 @@ export async function createOrchestrator(
   const runDeps = {
     ...(options.mode === "interactive" && deps.memory ? { memory: deps.memory } : {}),
     ...(deps.log ? { log: deps.log } : {}),
+    ...(deps.usage ? { usage: deps.usage } : {}),
     agents: deps.agents,
     git: deps.git,
     store: deps.store,
@@ -197,6 +203,9 @@ export async function createOrchestrator(
     decide: (kind: Parameters<typeof decide>[0]) =>
       decide(kind, options.policy, options.mode, options.overrides),
     prompts: options.prompts ?? DEFAULT_PROMPT_TEMPLATES,
+    ...(options.usageAttribution === undefined
+      ? {}
+      : { usageAttribution: options.usageAttribution }),
   });
   const startedAt = deps.clock.now().toISOString();
   const runs = options.recovery

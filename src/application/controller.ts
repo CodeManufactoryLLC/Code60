@@ -3923,6 +3923,11 @@ export class ApplicationHost {
           initialSettings: this.modelDefaults.selections(provider, "orchestrator"),
           promptContext: () =>
             `${assembleOperatingContract(this.activePrompts()["contract.operating"])}\n\n${this.knowledgeContext(session)}`,
+          usageAttribution: {
+            surface: "project-chat",
+            conversationId: basename(directory),
+            ...(this.workspace?.dir ? { projectId: logProjectId(this.workspace.dir) } : {}),
+          },
         },
       );
       this.attachChat(session, chat);
@@ -4090,6 +4095,11 @@ export class ApplicationHost {
           sessionResources: this.connectorResources("project-chat", this.workspace?.dir),
           promptContext: () =>
             `${assembleOperatingContract(this.activePrompts()["contract.operating"])}\n\n${this.knowledgeContext(session)}`,
+          usageAttribution: {
+            surface: "project-chat",
+            conversationId: basename(directory),
+            ...(this.workspace?.dir ? { projectId: logProjectId(this.workspace.dir) } : {}),
+          },
         },
       );
       this.attachChat(session, chat);

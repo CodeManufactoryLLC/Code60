@@ -1,0 +1,193 @@
+@use '@carbon/react/scss/type';
+@use '@carbon/react/scss/spacing' as space;
+
+@layer carbon-app {
+  .usage-page {
+    @include type.type-style('body-01');
+    box-sizing: border-box;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    color: var(--cds-text-primary);
+    background: var(--cds-background);
+    overflow: auto;
+    scrollbar-gutter: stable;
+    padding-block-end: space.$spacing-09;
+
+    > .table-controls {
+      padding: 0;
+      margin: 0 0 space.$spacing-05;
+    }
+
+    .usage-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: space.$spacing-04;
+      margin-block-end: space.$spacing-05;
+    }
+
+    .usage-filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: space.$spacing-04;
+    }
+
+    .usage-filter-select {
+      min-inline-size: 10rem;
+    }
+
+    .usage-export-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: space.$spacing-05;
+    }
+
+    .usage-export-button {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: space.$spacing-03;
+      inline-size: 7.5rem;
+      block-size: 7.5rem;
+      min-inline-size: 7.5rem;
+      min-block-size: 7.5rem;
+      padding: space.$spacing-04;
+      text-align: center;
+    }
+
+    .usage-section {
+      margin-block-start: space.$spacing-05;
+    }
+
+    .usage-table-wrap {
+      overflow-x: auto;
+      margin-block-end: space.$spacing-06;
+    }
+
+    .usage-total-row td {
+      font-weight: 600;
+      background: var(--cds-layer-accent-01, var(--cds-layer-02));
+      border-block-end: 2px solid var(--cds-border-strong-01);
+      color: var(--cds-text-primary);
+    }
+
+    .usage-num {
+      text-align: end;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .usage-mono {
+      font-family: var(--cds-code-01-font-family, monospace);
+      font-size: 0.8125rem;
+    }
+
+    .usage-turn-detail {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+      gap: space.$spacing-05;
+      padding: space.$spacing-04 space.$spacing-05;
+      background: var(--cds-layer-02);
+    }
+
+    .usage-detail-group {
+      display: flex;
+      flex-direction: column;
+      gap: space.$spacing-02;
+    }
+
+    .usage-detail-title {
+      @include type.type-style('heading-compact-01');
+      color: var(--cds-text-primary);
+      margin: 0;
+    }
+
+    .usage-detail-list {
+      margin: 0;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: space.$spacing-01 space.$spacing-04;
+      @include type.type-style('helper-text-01');
+      font-variant-numeric: tabular-nums;
+
+      dt {
+        color: var(--cds-text-secondary);
+      }
+
+      dd {
+        margin: 0;
+        color: var(--cds-text-primary);
+      }
+    }
+
+    .usage-pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: space.$spacing-04;
+      margin-block-start: space.$spacing-04;
+      @include type.type-style('label-01');
+      color: var(--cds-text-secondary);
+    }
+
+    .usage-pagination-buttons {
+      display: flex;
+      gap: space.$spacing-03;
+    }
+
+    .usage-scope-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: space.$spacing-04;
+      padding: space.$spacing-03 space.$spacing-04;
+      margin-block-end: space.$spacing-04;
+      background: var(--cds-layer-01);
+      border: 1px solid var(--cds-border-subtle-01);
+    }
+
+    .usage-timeline-bars {
+      display: flex;
+      flex-direction: column;
+      gap: space.$spacing-02;
+      margin-block-end: space.$spacing-06;
+    }
+
+    .usage-timeline-row {
+      display: grid;
+      grid-template-columns: 9rem 1fr 8rem 5rem;
+      align-items: center;
+      gap: space.$spacing-04;
+      @include type.type-style('label-01');
+      font-variant-numeric: tabular-nums;
+    }
+
+    .usage-timeline-track {
+      block-size: 0.625rem;
+      background: var(--cds-layer-02);
+      overflow: hidden;
+    }
+
+    .usage-timeline-fill {
+      block-size: 100%;
+      background: var(--cds-interactive);
+    }
+
+    .usage-methodology {
+      margin-block-start: space.$spacing-06;
+    }
+
+    .usage-empty {
+      padding: space.$spacing-06;
+      color: var(--cds-text-secondary);
+      background: var(--cds-layer-01);
+      border: 1px solid var(--cds-border-subtle-01);
+      margin-block-end: space.$spacing-05;
+    }
+  }
+}

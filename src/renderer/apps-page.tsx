@@ -13,6 +13,7 @@ const tasks: Record<string, string> = {
   appearance: "Choose a color theme and focus settings",
   "system-manager": "Check service health and recover jobs",
   "health-check": "Inspect backend, providers, services and disk health",
+  usage: "Monitor provider token burn rates and inspect heavy chats and workflows",
   "polling-settings": "Configure background polling",
   updates: "Check the installed version and update instructions",
 };

@@ -20,6 +20,8 @@ import {
   parseValue,
   renderPrompt,
   supportsModeChange,
+  type UsageAttribution,
+  type UsageSink,
 } from "../contracts/index.js";
 import type { Git } from "../git/index.js";
 import { diagnosticMessage, diagnosticText } from "../platform/index.js";
@@ -48,6 +50,7 @@ import { ACTIVE_STATUSES, RefusedError } from "./types.js";
 export interface RunDeps {
   memory?: MemoryFactory;
   log?: LogSink;
+  usage?: UsageSink;
   agents: Agents;
   git: Git;
   store: RecordStore;
@@ -81,6 +84,8 @@ export interface RunSettings {
    * before its first prompt, model first. Restored sessions keep their own reported options.
    */
   initialSettings?: readonly SessionSelection[];
+  /** Internal usage attribution for turns started by this run. */
+  usageAttribution?: UsageAttribution;
 }
 
 /** One advertised session option value, identified by the harness's own option ID. */
@@ -232,6 +237,23 @@ export class Run {
       : {};
   }
 
+  private usageSpec(): { usage?: UsageAttribution } {
+    if (!this.deps.usage && !this.settings.usageAttribution) return {};
+    const base = this.settings.usageAttribution ?? { surface: "worker" as const };
+    const projectId =
+      base.projectId ??
+      (this.record.branch
+        ? createHash("sha256").update(this.settings.repoDir).digest("hex").slice(0, 16)
+        : undefined);
+    return {
+      usage: {
+        ...base,
+        runId: this.id,
+        ...(projectId ? { projectId } : {}),
+      },
+    };
+  }
+
   get status(): RunStatus {
     return this.record.status;
   }
@@ -312,6 +334,7 @@ export class Run {
           {
             name: this.record.agent,
             ...this.diagnostic(),
+            ...this.usageSpec(),
             command: this.settings.command,
             cwd: this.record.worktree,
             ...(this.settings.env === undefined ? {} : { env: this.settings.env }),
@@ -381,6 +404,7 @@ export class Run {
           {
             name: this.record.agent,
             ...this.diagnostic(),
+            ...this.usageSpec(),
             command: this.settings.command,
             cwd: this.record.worktree,
             ...(this.settings.env === undefined ? {} : { env: this.settings.env }),
@@ -431,6 +455,7 @@ export class Run {
         (this.agents.restore as NonNullable<Agents["restore"]>)(
           {
             name: this.record.agent,
+            ...this.usageSpec(),
             command: this.settings.command,
             cwd: this.record.worktree,
             ...(this.settings.env === undefined ? {} : { env: this.settings.env }),
@@ -656,6 +681,7 @@ export class Run {
         {
           name: record.agent,
           ...this.diagnostic(),
+          ...this.usageSpec(),
           command: settings.command,
           cwd: record.worktree,
           ...(settings.env === undefined ? {} : { env: settings.env }),
@@ -981,6 +1007,7 @@ export class Run {
                   this.agents.start(
                     {
                       name: this.record.agent,
+                      ...this.usageSpec(),
                       command: settings.command,
                       cwd: this.record.worktree,
                       ...(settings.env === undefined ? {} : { env: settings.env }),
