@@ -163,7 +163,7 @@ No. Code60 does not provide an operating-system, filesystem, or network sandbox 
 
 - **Code60 safeguards:** Browser and gateway checks protect the web interface and local application programming interface (API). Git worktrees separate Git working files, and the [Operating Contract](TERMINOLOGY.md#operating-contract) and ACP permissions guide behavior and approval prompts.
 - **Security limits:** None of those controls creates an operating-system security boundary or blocks actions an agent takes without requesting ACP approval. See the [Security Policy](SECURITY.md) for full details.
-- **Roadmap:** Optional Docker workers with filesystem, network, and resource boundaries appear in the [Code60 roadmap](ROADMAP.md).
+- **Roadmap:** Optional Docker workers with filesystem, network, and resource boundaries appear in the [Code60 roadmap](https://github.com/CodeManufactoryLLC/code60/issues/79).
 
 ### How do I provide a sandbox for my agents with Code60?
 
@@ -410,12 +410,12 @@ Single-prompt jobs run one headless turn, while workflow jobs still apply their 
 
 ### Is Code60 accessible?
 
-Code60 includes broad keyboard, screen-reader, contrast, and motion accessibility support, though formal accessibility certification remains future work on the [Code60 roadmap](ROADMAP.md).
+Code60 includes broad keyboard, screen-reader, contrast, and motion accessibility support, though formal accessibility certification remains future work on the [Code60 roadmap](https://github.com/CodeManufactoryLLC/code60/issues/79).
 
 - **Keyboard and focus:** Code60 uses IBM Carbon Design System components and includes a **Skip to main content** link. Menus, tables, trees, dialogs, and the command palette (`Cmd+K` or `Ctrl+K`) support full keyboard navigation. Closing overlays restores focus to the trigger control.
 - **Screen readers and status cues:** Controls include accessible labels, Accessible Rich Internet Applications (ARIA) states, and polite or alert status announcements. Status indicators include text labels alongside color.
 - **Themes, text, and system preferences:** **Personalize** settings offer **Light**, **Dark**, and **System** themes, a customizable accent color, adjustable interface text size, and optional signal colors. The interface also respects operating-system `forced-colors` (high-contrast) and `prefers-reduced-motion` settings by switching to system colors and turning off animations.
-- **Current compliance status:** Code60 makes no formal Web Content Accessibility Guidelines (WCAG) compliance claim today. Full accessibility readiness sits under the `v0.12.0` milestone in the [Code60 roadmap](ROADMAP.md).
+- **Current compliance status:** Code60 makes no formal Web Content Accessibility Guidelines (WCAG) compliance claim today. Full accessibility readiness sits under the `v0.12.0` milestone in the [Code60 roadmap](https://github.com/CodeManufactoryLLC/code60/issues/79).
 
 ## Architecture and Development
 

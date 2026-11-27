@@ -141,7 +141,7 @@ npm run test:packaged
 
 Browser tests run headlessly with fake providers and isolated state. Package checks install the npm tarball into a temporary prefix. Native service tests need an isolated, explicitly authorized supervisor environment; ordinary checks never register a real service.
 
-See [FAQ](FAQ.md), [terminology](TERMINOLOGY.md), [architecture](ARCHITECTURE.md), [capabilities](knowledge/reference/capabilities/INDEX.md), [MCP integration](MCP.md), [security](SECURITY.md), [contributing](CONTRIBUTING.md), [releases](RELEASING.md), [roadmap](ROADMAP.md) and [recovery runbooks](knowledge/operations/runbooks/INDEX.md).
+See [FAQ](FAQ.md), [terminology](TERMINOLOGY.md), [architecture](ARCHITECTURE.md), [capabilities](knowledge/reference/capabilities/INDEX.md), [MCP integration](MCP.md), [security](SECURITY.md), [contributing](CONTRIBUTING.md), [releases](RELEASING.md) and [recovery runbooks](knowledge/operations/runbooks/INDEX.md).
 
 ### Workflows
 
