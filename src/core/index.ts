@@ -57,6 +57,19 @@ export {
   stopRun,
 } from "./commands.js";
 export { DEFAULT_CONFIG, loadConfig, parseConfig } from "./config.js";
+export {
+  auditAndPruneWorktrees,
+  checkAndCleanOrphans,
+  cleanStaleTempArtifacts,
+  findHeartbeatActionDef,
+  type HeartbeatActionOutcome,
+  type HeartbeatActionRunner,
+  type HeartbeatMode,
+  heartbeatTargetHash,
+  reconcileWorkspaceRuns,
+  runHeartbeatSweep,
+  type TempCleanupFs,
+} from "./heartbeat.js";
 export type { Orchestrator } from "./orchestrator.js";
 export { recordedAgentAlive } from "./processes.js";
 export { buildHandoffPrompt } from "./recovery.js";

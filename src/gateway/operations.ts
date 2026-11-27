@@ -4,6 +4,7 @@ import type {
   DesktopLogStore,
   DesktopWorkflows,
   HealthCheckService,
+  HeartbeatService,
 } from "../application/index.js";
 import { logProjectId } from "../application/index.js";
 import {
@@ -34,6 +35,7 @@ import {
   parseGitSetupFile,
   parseGitSetupIdentity,
   parseHealthCheckRequest,
+  parseHeartbeatRequest,
   parseLogClear,
   parseLogDetail,
   parseLogQuery,
@@ -97,6 +99,7 @@ export function applicationOperations(
   workflows: DesktopWorkflows,
   healthCheck?: HealthCheckService,
   usage?: UsageStore,
+  heartbeat?: HeartbeatService,
 ) {
   const operations = new Map<string, (value: unknown) => unknown>();
   const handle = (name: string, action: (value: unknown) => unknown) => {
@@ -132,6 +135,11 @@ export function applicationOperations(
     const request = parseHealthCheckRequest(value);
     if (!healthCheck) throw new Error("Health Check service is unavailable.");
     return healthCheck.handle(request);
+  });
+  handle("heartbeat", (value) => {
+    const request = parseHeartbeatRequest(value);
+    if (!heartbeat) throw new Error("Heartbeat service is unavailable.");
+    return heartbeat.handle(request);
   });
   handle("mcp-recovery", (value) =>
     controller.mcpRecovery(parseMcpManagement(mcpRecoveryRequestSchema, value)),

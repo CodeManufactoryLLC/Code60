@@ -105,6 +105,7 @@ export const knowledgeSchemas = {
     contentRevision: z.string().length(64).optional(),
     offset: sequence.default(0),
   }),
+  code60_get_heartbeat_status: z.strictObject({}),
 };
 export type KnowledgeTool = keyof typeof knowledgeSchemas;
 export const isKnowledgeTool = (name: string): name is KnowledgeTool =>
@@ -180,6 +181,12 @@ export const MCP_KNOWLEDGE_TOOL_DEFINITIONS = [
       offset: { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
     },
     required: ["panelId", "tabId", "revision"],
+  },
+  {
+    name: "code60_get_heartbeat_status",
+    description:
+      "Read redacted, host-identifier-free Core Heartbeat status: schedule enablement, last sweep initiation/termination/duration, aggregate counts, and fixed finding codes. Exposes no file paths, hostnames, IPs, raw logs, or destructive controls.",
+    properties: {},
   },
 ].map((tool) => ({
   kind: "knowledge" as const,
@@ -508,6 +515,16 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
     "Read-only diagnostics; active probes run only when explicitly requested by the user.",
   ),
   feature(
+    "heartbeat",
+    "Heartbeat",
+    "Inspect recurring and manual Core Heartbeat sweeps, view all eight maintenance actions with initiation, termination and duration timestamps, initiate manual or dry-run sweeps, browse recent sweep history, and configure autonomous hygiene policies.",
+    "Manage → Heartbeat (also Apps → Heartbeat) and local terminal → code60 heartbeat",
+    "none",
+    "read",
+    "No database is required. Stores bounded policy and the last 50 sweeps in $XDG_STATE_HOME/code60/heartbeat/state.json (up to 512 KiB) without consuming the 5,000-entry Scheduled Jobs execution budget. Autonomously runs passive health sweeps, reconciles dead-owner runs, stops verified orphan processes, clears verified leftover-agent blocks, restarts capped stateless sidecars, applies 2 GiB/4 GiB low-disk pause/resume hysteresis, prunes stale temp/Git metadata, and removes terminal zero-diff or already-discarded code60/* worktrees past the configured age limit while preserving worktrees with edits, locks, and history. Never replays uncertain work, commits, merges, or pushes. Agents can read redacted aggregate status via code60_get_heartbeat_status without paths, hostnames, IPs, raw logs, or policy/trigger authority.",
+    "Manual Run heartbeat, Dry run, Cancel, and Policy changes are human-only in Manage → Heartbeat or local code60 heartbeat CLI.",
+  ),
+  feature(
     "usage",
     "Usage",
     "Monitor estimated token burn rates by provider, model and surface, inspect heavy chats and workflows, audit individual turns, and export JSON, CSV or Markdown reports.",
@@ -652,6 +669,7 @@ export const PAGE_CAPABILITIES = {
   workflows: "workflows",
   "system-manager": "system-manager",
   "health-check": "health-check",
+  heartbeat: "heartbeat",
   usage: "usage",
   automations: "automations",
   "episodic-memory": "episodic-memory",
@@ -690,6 +708,7 @@ export const TOOL_CAPABILITIES: Record<string, string> = {
   code60_list_customizations: "knowledge",
   code60_read_customization: "knowledge",
   code60_read_view: "knowledge",
+  code60_get_heartbeat_status: "heartbeat",
   code60_get_activity_context: "activity",
   code60_report_activity: "activity",
   code60_create_command: "commands",

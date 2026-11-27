@@ -6,7 +6,7 @@ import {
   managementRequest,
   pairingControl,
 } from "../gateway/index.js";
-
+import { runHeartbeatCli } from "./heartbeat.js";
 import { combinedStatus, runSetup } from "./setup.js";
 import { runUninstall } from "./uninstall.js";
 import { runUpdate } from "./update.js";
@@ -43,6 +43,10 @@ export async function runManagement(args: readonly string[], env: NodeJS.Process
     await runUsageCli(args.slice(1), env);
     return;
   }
+  if (command === "heartbeat") {
+    await runHeartbeatCli(args.slice(1), env);
+    return;
+  }
   if (command === "update") {
     await runUpdate(args.slice(1), env);
     return;
@@ -53,7 +57,7 @@ export async function runManagement(args: readonly string[], env: NodeJS.Process
   }
   if (command === "--help" || command === "help") {
     process.stdout.write(
-      "code60 setup [--yes] [--no-open]\ncode60 status\ncode60 usage [--since 24h|7d|30d|all|ISO] [--until ISO] [--provider id] [--surface name] [--format table|json|markdown|csv] [--turns] [--limit N] [--out file [--force]]\ncode60 update [--yes]\ncode60 update status\ncode60 update recover [--yes]\ncode60 uninstall [--yes]\ncode60 open\ncode60 service install|status|start|stop|repair|uninstall [--yes]\ncode60 pairing on|off|status [--yes]\n",
+      "code60 setup [--yes] [--no-open]\ncode60 status\ncode60 usage [--since 24h|7d|30d|all|ISO] [--until ISO] [--provider id] [--surface name] [--format table|json|markdown|csv] [--turns] [--limit N] [--out file [--force]]\ncode60 heartbeat [status|run] [--inspect] [--json]\ncode60 update [--yes]\ncode60 update status\ncode60 update recover [--yes]\ncode60 uninstall [--yes]\ncode60 open\ncode60 service install|status|start|stop|repair|uninstall [--yes]\ncode60 pairing on|off|status [--yes]\n",
     );
     return;
   }

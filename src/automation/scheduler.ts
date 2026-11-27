@@ -743,6 +743,27 @@ export class Scheduler {
     return structuredClone(value);
   }
 
+  executionCount(): number {
+    return this.store.state.executions.length;
+  }
+
+  enabledAutomations(): Automation[] {
+    return structuredClone(this.store.state.automations.filter((entry) => entry.enabled));
+  }
+
+  pinnedWorktrees(): string[] {
+    const paths: string[] = [];
+    for (const execution of this.store.state.executions) {
+      if (
+        (execution.status === "claimed" || execution.status === "running") &&
+        execution.artifact.evidence?.worktree.path
+      ) {
+        paths.push(execution.artifact.evidence.worktree.path);
+      }
+    }
+    return paths;
+  }
+
   async stop(): Promise<void> {
     this.stopped = true;
     this.abortAll("shutdown");

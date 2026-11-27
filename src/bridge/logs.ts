@@ -5,6 +5,7 @@ export type {
   LogPage,
   LogQuery,
   LogRecord,
+  LogSink,
   LogStatus,
 } from "../contracts/index.js";
 export { emitLog, LOG_EVENTS, logInputSchema, logRecordSchema } from "../contracts/index.js";

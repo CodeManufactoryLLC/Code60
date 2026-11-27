@@ -666,12 +666,12 @@
     .content-page-title { @include type.type-style('heading-05'); justify-content:flex-start; text-align:start; font-family:inherit; text-transform:none; }
     .content-page-title .navigation-icon, .navigation-destination-icon:has(.navigation-icon) {display:none;}
     .home-content,.settings-section,.workflow-content {margin-inline:0; align-items:flex-start;}
-    .home-content, .system-manager-page, .health-check-page,
+    .home-content, .system-manager-page, .health-check-page, .heartbeat-page,
     .prompt-editor-body, .rag-page, .web-server-page, .contributor-tools {
       padding: 0 0 space.$spacing-07;
     }
     .home-content { scrollbar-gutter: stable; }
-    .system-manager-page, .health-check-page { margin-inline: 0; }
+    .system-manager-page, .health-check-page, .heartbeat-page { margin-inline: 0; }
     .table-controls:has(> .page-title-placeholder):not(:has(> :not(.page-title-placeholder, [hidden], .sr-only))) {
       display: contents;
     }

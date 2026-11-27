@@ -42,6 +42,19 @@ describe("browser capability catalog", () => {
     expect(health?.limitations).toContain("omits hostname, IP addresses");
     expect(health?.limitations).toContain("Relay and awareness cannot run health probes");
   });
+  it("classifies Heartbeat as database-independent with redacted read-only agent awareness", () => {
+    const hb = APPLICATION_CAPABILITIES.find((cap) => cap.id === "heartbeat");
+    expect(hb).toMatchObject({
+      prerequisite: "none",
+      agentAccess: "read",
+      access: expect.stringContaining("Manage → Heartbeat"),
+    });
+    expect(PAGE_CAPABILITIES.heartbeat).toBe("heartbeat");
+    expect(TOOL_CAPABILITIES.code60_get_heartbeat_status).toBe("heartbeat");
+    expect(pages.find((page) => page.id === "heartbeat")?.database).toBe(false);
+    expect(hb?.limitations).toContain("code60_get_heartbeat_status");
+    expect(hb?.limitations).toContain("Never replays uncertain work");
+  });
   it("describes consented state-preserving uninstall without granting agent or browser authority", () => {
     const capability = APPLICATION_CAPABILITIES.find((cap) => cap.id === "uninstall");
     expect(capability).toMatchObject({

@@ -9,6 +9,9 @@ Stop all do not stop service-owned automations.
 ## Read-only diagnosis
 
 Open Apps → System Manager; service status updates automatically while visible.
+You can also open Manage → Heartbeat or run `code60 heartbeat status --json` to
+inspect the latest scheduled maintenance sweep, drift warnings, and any
+autonomous reconciliation actions.
 Checks normally run two seconds after the preceding read and back off to at most
 sixty seconds when unavailable. The footer's Pause polling also pauses these checks;
 Resume polling or use the optional Refresh Scheduling Service icon to check again.

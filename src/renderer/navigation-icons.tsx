@@ -83,6 +83,7 @@ const glyphs = {
   "app-steering-wheel": ChatBot,
   "app-system-manager": Dashboard,
   "app-health-check": Stethoscope,
+  "app-heartbeat": Activity,
   "app-usage": Analytics,
   "app-table": Table,
   "grid-nine": Grid,

@@ -10,8 +10,11 @@ Ordinary desktop launches do not have that automatic free-space guard.
 ## Read-only diagnosis
 
 Check free space on the repository, HOME/XDG state and temporary/build volumes
-using the OS storage viewer (or `df -h` on macOS/Linux). These may be different
-volumes. Inspect scheduler status/history using the
+using the OS storage viewer (or `df -h` on macOS/Linux) and inspect
+`code60 heartbeat status --json` or Manage → Heartbeat. These may be different
+volumes. Core Heartbeat proactively pauses future scheduled dispatches below
+2 GiB and resumes them only when headroom recovers above 4 GiB (never overriding
+a manual pause or persistence-failure latch). Inspect scheduler status/history using the
 [scheduler runbook](scheduler.md). Note whether failure is disk, permissions,
 unsafe identity or process ownership; free space does not repair all four.
 
