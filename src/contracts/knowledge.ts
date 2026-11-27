@@ -339,7 +339,7 @@ export const APPLICATION_CAPABILITIES: readonly Capability[] = [
   feature(
     "plans",
     "Plans",
-    "Propose and track revisioned tasks with rounded completion percentages and cumulative running time; use View Plan in a blank Files tab to reopen the current conversation’s latest saved plan.",
+    "Propose and track structured, revisioned plans (goal/scope, exclusions, assumptions, ordered tasks with details and verification criteria, rounded completion percentages, and cumulative running time); use View Plan in a blank Files tab to reopen the current conversation’s latest saved plan.",
     "Chat → right sidebar → + New Tab → View Plan → existing plan tab",
     "runtime",
     "existing-tools",

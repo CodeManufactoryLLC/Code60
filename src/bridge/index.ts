@@ -167,6 +167,7 @@ export {
   type ReadOnlyPromptCatalogEntry,
   renderEpisodicMemoryPrompt,
   renderPrompt,
+  renderRelayAcceptedPlanPrompt,
   type SaveCommand,
   SEARCH_OVERVIEW_GUARDRAIL,
   SEARCH_QUERY_LIMIT,

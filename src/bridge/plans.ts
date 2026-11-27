@@ -4,7 +4,11 @@ import { parseValue, runIdSchema } from "../contracts/index.js";
 const uuid = z.string().uuid();
 const revision = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const title = z.string().trim().min(1).max(160);
+const planItem = z.string().trim().min(1).max(500);
+const planList = z.array(planItem).max(50);
 const taskText = z.string().trim().min(1).max(2_000);
+const taskDetails = z.string().trim().min(1).max(4_000);
+const taskVerify = z.string().trim().min(1).max(1_000);
 const targetDraft = z.strictObject({
   cwd: z.string().min(1).max(32_768),
   workspaceMode: z.enum(["direct", "worktree"]),
@@ -14,8 +18,19 @@ export type PlanTarget = z.infer<typeof planTargetSchema>;
 const planDraftSchema = z.strictObject({
   title,
   description: z.string().max(16_000),
+  outOfScope: planList.optional(),
+  assumptions: planList.optional(),
+  verification: planList.optional(),
   tasks: z
-    .array(z.strictObject({ id: uuid.optional(), text: taskText, target: targetDraft.optional() }))
+    .array(
+      z.strictObject({
+        id: uuid.optional(),
+        text: taskText,
+        details: taskDetails.optional(),
+        verify: taskVerify.optional(),
+        target: targetDraft.optional(),
+      }),
+    )
     .min(1)
     .max(100),
 });
@@ -51,6 +66,9 @@ export const planSchema = z.strictObject({
   creationKey: z.string().max(250_000),
   title,
   description: z.string().max(16_000),
+  outOfScope: planList.optional(),
+  assumptions: planList.optional(),
+  verification: planList.optional(),
   state: z.enum(["draft", "queued", "running", "paused", "failed", "completed", "dismissed"]),
   rewound: z.literal(true).optional(),
   acceptedRevision: revision.optional(),
@@ -68,6 +86,8 @@ export const planSchema = z.strictObject({
       z.strictObject({
         id: uuid,
         text: taskText,
+        details: taskDetails.optional(),
+        verify: taskVerify.optional(),
         state: z.enum(["pending", "in_progress", "completed", "blocked"]),
         note: z.string().max(2_000),
         workerIds: z.array(runIdSchema).max(100),
@@ -107,20 +127,30 @@ export function planSummary(plan: Plan): PlanSummary {
     total: plan.tasks.length,
   };
 }
+const indentBlock = (value: string) => value.replace(/\n/g, "\n  ");
+const markdownList = (heading: string, items?: readonly string[]) =>
+  items?.length ? [`## ${heading}`, "", ...items.map((item) => `- ${indentBlock(item)}`), ""] : [];
+
 /** The count and progress bar belong to the UI, never this document. */
 export function planMarkdown(plan: Plan): string {
   return [
     `# ${plan.title.replace(/\s+/g, " ")}`,
     "",
-    plan.description,
+    ...(plan.description ? [plan.description, ""] : []),
+    ...markdownList("Out of scope", plan.outOfScope),
+    ...markdownList("Assumptions & open questions", plan.assumptions),
+    "## Tasks",
     "",
     ...plan.tasks.flatMap((task) => [
-      `- [${task.state === "completed" ? "x" : " "}] ${task.text.replace(/\n/g, "\n  ")}`,
+      `- [${task.state === "completed" ? "x" : " "}] ${indentBlock(task.text)}`,
+      ...(task.details ? [`  Details: ${indentBlock(task.details)}`] : []),
+      ...(task.verify ? [`  Verify: ${indentBlock(task.verify)}`] : []),
       ...(task.target
         ? [`  Target: ${JSON.stringify(task.target.cwd)} (${task.target.workspaceMode})`]
         : []),
-      ...(task.note ? [`  ${task.state}: ${task.note.replace(/\n/g, "\n  ")}`] : []),
+      ...(task.note ? [`  ${task.state}: ${indentBlock(task.note)}`] : []),
     ]),
     "",
+    ...markdownList("Verification & completion criteria", plan.verification),
   ].join("\n");
 }

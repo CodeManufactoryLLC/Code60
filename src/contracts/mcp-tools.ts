@@ -246,13 +246,37 @@ const planIdInput = {
   format: "uuid",
   description: "Plan ID returned by create or context.",
 };
+const planListInput = (description: string) => ({
+  type: "array",
+  maxItems: 50,
+  description,
+  items: { type: "string", minLength: 1, maxLength: 500 },
+});
 const planDraftInput = {
-  title: { type: "string", minLength: 1, maxLength: 160 },
-  description: { type: "string", maxLength: 16_000 },
+  title: {
+    type: "string",
+    minLength: 1,
+    maxLength: 160,
+    description: "Short single-line plan title summarizing the goal.",
+  },
+  description: {
+    type: "string",
+    maxLength: 16_000,
+    description:
+      "Concise overview of the goal, scope, and approach. Put exclusions, assumptions, task specifics, and verification criteria in their dedicated fields.",
+  },
+  outOfScope: planListInput("Optional explicit exclusions, boundaries, or non-goals."),
+  assumptions: planListInput(
+    "Optional unresolved assumptions, open questions, or dependencies to keep visible.",
+  ),
+  verification: planListInput(
+    "Optional overall verification steps and completion criteria for the plan.",
+  ),
   tasks: {
     type: "array",
     minItems: 1,
     maxItems: 100,
+    description: "Ordered, concrete tasks required to complete the plan.",
     items: {
       type: "object",
       additionalProperties: false,
@@ -263,7 +287,25 @@ const planDraftInput = {
           format: "uuid",
           description: "On revision, retain an existing task ID. Omit for a new task.",
         },
-        text: { type: "string", minLength: 1, maxLength: 2_000 },
+        text: {
+          type: "string",
+          minLength: 1,
+          maxLength: 2_000,
+          description: "Concise, actionable summary of this task.",
+        },
+        details: {
+          type: "string",
+          minLength: 1,
+          maxLength: 4_000,
+          description:
+            "Optional implementation specifics, affected files/components, or task-level dependencies.",
+        },
+        verify: {
+          type: "string",
+          minLength: 1,
+          maxLength: 1_000,
+          description: "Optional verification check or completion criterion for this task.",
+        },
       },
     },
   },
@@ -294,7 +336,7 @@ export const MCP_CONTROL_TOOL_DEFINITIONS: readonly McpControlToolDefinition[] =
   control(
     "code60_create_plan",
     "Create a plan",
-    "Save a Markdown task list in this conversation's plans folder and open its review tab. Returns the draft with task IDs and revision. Wait for the human Accept action before executing. Reuse requestId only for an identical request; revise or dismiss an unfinished plan before creating another.",
+    "Save a structured plan (rendered to Markdown in this conversation's plans folder) and open its review tab. Populate title, a concise goal/scope description, ordered tasks (with optional details and verify criteria), and plan-level outOfScope, assumptions, and verification where applicable. Returns the draft with task IDs and revision. Wait for the human Accept action before executing. Reuse requestId only for an identical request; revise or dismiss an unfinished plan before creating another.",
     object({ ...planDraftInput, requestId: { type: "string", minLength: 1, maxLength: 128 } }, [
       "requestId",
       "title",
