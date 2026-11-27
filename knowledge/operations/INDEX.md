@@ -8,4 +8,5 @@ Operational runbooks, installation, distribution, updates, and recovery. Generat
 
 | Section | Docs |
 | --- | ---: |
+| [Distribution](distribution/INDEX.md) | 6 |
 | [Runbooks](runbooks/INDEX.md) | 6 |

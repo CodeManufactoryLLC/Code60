@@ -3,7 +3,7 @@
 Code60 retains its Node 24 npm tarball and builds private platform payloads plus
 a small bootstrap. Managed candidates support explicit terminal update/recovery;
 no native installer, bundled Node or background updater is shipped. Publishing
-remains an explicit release action. See [update behavior](docs/distribution/updates.md).
+remains an explicit release action. See [update behavior](knowledge/operations/distribution/updates.md).
 
 ## Prepare a release
 
@@ -22,7 +22,7 @@ Tag the merged release commit on main with its exact package version. Push the t
 
 Managed installations use `code60 update`, with `code60 update status` and
 `code60 update recover` for inspection and explicit recovery. Follow the
-[update behavior](docs/distribution/updates.md).
+[update behavior](knowledge/operations/distribution/updates.md).
 
 For a legacy npm tarball, stop the backend, install the replacement tarball,
 repair its service registration, start the backend and pair the browser again.
@@ -30,14 +30,14 @@ Preserve the old package for inspection. Never downgrade application data or
 erase locks/history to make an older package start.
 
 Managed `code60 uninstall` removes owned application resources while retaining
-data, configuration and engine evidence; see [uninstall recovery](docs/distribution/uninstall.md).
+data and configuration; see [uninstall recovery](knowledge/operations/distribution/uninstall.md).
 Release acceptance must cover the installed golden journey, actual guarded process
 exit, interrupted cleanup through the standalone launcher and retained-data
 reinstallation. Component/native-engine smoke results cannot satisfy those gates.
 
 ## Platform payload and bootstrap candidates
 
-The [artifact workflow](docs/distribution/artifacts.md) adds private platform
+The [artifact workflow](knowledge/operations/distribution/artifacts.md) adds private platform
 payloads and a builtins-only bootstrap alongside the legacy tarball. Build and
 validate both Linux x64 and native macOS arm64 outputs at the exact selected
 commit. The manual release workflow collects both targets, rejects dirty or
@@ -46,8 +46,8 @@ It retains workflow artifacts only; it does not publish npm packages or release
 assets. The private candidate supports persistent installation and setup as
 described below. Version bumps remain explicit release-preparation work.
 
-Phase 4 additionally requires the managed installed-package journey and real shell
-acceptance described in [installation internals](docs/distribution/installation.md).
+Managed installation additionally requires the managed installed-package journey and real shell
+acceptance described in [installation internals](knowledge/operations/distribution/installation.md).
 The bootstrap build now compiles a narrow Node-only installer/launcher closure;
 its build job installs development dependencies, while the artifact itself retains
 zero runtime dependencies. Installation library APIs remain internal; publication
@@ -56,7 +56,7 @@ stays an explicit later release action.
 ## Setup candidate acceptance
 
 The private bootstrap supports `setup [--yes] [--no-open]`; it remains unpublished.
-Follow [setup semantics](docs/distribution/setup.md). Test `npm run test:setup` on
+Follow [setup semantics](knowledge/operations/distribution/setup.md). Test `npm run test:setup` on
 both supported targets and the Linux clean-install `--setup` mode in addition to
 artifact-only, managed and legacy npm checks. Pair only real descriptors from the
 same commit and verify bootstrap size/integrity. Keep release visibility private;
@@ -98,4 +98,4 @@ The release workflow validates a `linux/amd64` Docker image built directly from 
 verified `linux-x64` payload using `npm run test:docker`, without requiring registry
 credentials. Publishing to Docker Hub (`mjholliday/code60`) is a separate manual
 dispatch of `.github/workflows/publish-docker.yml` from `main` gated by the
-`dockerhub_release` environment. See [Docker Hub distribution](docs/distribution/docker.md).
+`dockerhub_release` environment. See [Docker Hub distribution](knowledge/operations/distribution/docker.md).

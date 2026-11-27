@@ -435,7 +435,7 @@ and systemd login/update lifecycle checks are required before release claims.
 
 ## Platform distribution candidates
 
-See the [artifact workflow](docs/distribution/artifacts.md) for `npm run package:payload`,
+See the [artifact workflow](knowledge/operations/distribution/artifacts.md) for `npm run package:payload`,
 `npm run test:payload`, `npm run package:bootstrap` and clean installed-payload
 acceptance. Build Linux in the pinned amd64 container and macOS on Apple Silicon.
 Retain per-run evidence and remove owned test resources; do not publish artifacts,
@@ -443,7 +443,7 @@ install a login service or enable public setup during this contributor workflow.
 
 ## Managed installation acceptance
 
-See [installation internals](docs/distribution/installation.md). Standard tests build
+See [installation internals](knowledge/operations/distribution/installation.md). Standard tests build
 the narrow Node-only distribution closure for real launcher subprocesses.
 `npm run test:installation` exercises isolated shell fixtures; require fish in the
 Linux container and disposable native runner. The managed clean-install mode adds
@@ -452,7 +452,7 @@ No contributor check edits your profiles or installs your login service.
 
 ## Setup development
 
-See [candidate setup behavior](docs/distribution/setup.md) for consent, status,
+See [candidate setup behavior](knowledge/operations/distribution/setup.md) for consent, status,
 database defaults and failure recovery. After preparing a platform payload, run
 `npm run test:setup` for real CLI/backend integration through an isolated supervisor
 fixture. On the Docker host, also run
@@ -463,7 +463,7 @@ changed by acceptance; retain evidence and verify owned resource cleanup.
 
 ## Update development
 
-See [explicit updates and recovery](docs/distribution/updates.md). After packaging,
+See [explicit updates and recovery](knowledge/operations/distribution/updates.md). After packaging,
 run `npm run test:update` for installed runtime/browser acceptance with isolated
 state and the bounded supervisor. On the Docker host also run
 `npm run test:packaged:clean -- --update release/payloads/linux-x64.json` for the
@@ -474,7 +474,7 @@ share the Node-only platform verifier without importing development dist.
 
 ## Uninstall development
 
-Follow [uninstall and recovery](docs/distribution/uninstall.md) and the QA workflow's
+Follow [uninstall and recovery](knowledge/operations/distribution/uninstall.md) and the QA workflow's
 state-preserving uninstall journey. Component tests cover owned file inventories,
 profile consent, guarded shutdown and the standalone recovery launcher. Never point
 tests at a real user service or profiles. Full installed golden/reinstall and

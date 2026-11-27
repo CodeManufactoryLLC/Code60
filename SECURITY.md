@@ -189,7 +189,7 @@ Scope: MCP tools run with the local user's permissions and are not sandboxed. SH
 ### 4.4 Application updates
 
 - `SEC-4.4.1` The browser MUST NOT silently download or install application updates.
-- `SEC-4.4.2` Managed installations MUST update explicitly via `code60 update` using verified release metadata and checksums (see [updates](docs/distribution/updates.md)), while manual tarball installations stop work, install the reviewed package, repair local backend registration, and restart the service.
+- `SEC-4.4.2` Managed installations MUST update explicitly via `code60 update` using verified release metadata and checksums (see [updates](knowledge/operations/distribution/updates.md)), while manual tarball installations stop work, install the reviewed package, repair local backend registration, and restart the service.
 - `SEC-4.4.3` Provider network access MUST remain independent of the application update process.
 
 ## 5. Security governance and vulnerability reporting

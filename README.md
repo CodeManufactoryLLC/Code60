@@ -85,10 +85,10 @@ code60 service uninstall
 Status is read-only. Stop, repair and uninstall require consent and preserve histories, databases, worktrees and settings. Repair refreshes the registered Node/application paths after an update or runtime move. Only one backend can own application state. An existing scheduler service is transferred only with installation consent and verified shutdown; uncertain work is never replayed.
 
 For a managed installation, `code60 uninstall` also removes its owned application
-releases and launcher after verifying idle ownership. It preserves user data and
-engine evidence. Service/application consent and interactive profile approval are
+releases and launcher after verifying idle ownership. It preserves user data.
+Service/application consent and interactive profile approval are
 separate; non-TTY removal requires `--yes` and retains profiles. Keep the printed
-absolute recovery command if cleanup is interrupted. See [uninstall and recovery](docs/distribution/uninstall.md).
+absolute recovery command if cleanup is interrupted. See [uninstall and recovery](knowledge/operations/distribution/uninstall.md).
 
 Workspace chooser roots default to the user's home directory. To add another root, stop the backend and edit private `gateway/settings.json` under the Code60 state directory with `{"roots":["/absolute/workspace/root"]}`, then start it again. Use only directories you intend Code60 to access. The chooser lists the backend computer's files; it is not an upload dialog.
 

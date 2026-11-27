@@ -53,6 +53,7 @@
     "knowledge/architecture/c4/INDEX.md",
     "knowledge/governance/INDEX.md",
     "knowledge/operations/INDEX.md",
+    "knowledge/operations/distribution/INDEX.md",
     "knowledge/operations/runbooks/INDEX.md",
     "knowledge/reference/INDEX.md",
     "knowledge/reference/capabilities/INDEX.md",
@@ -404,6 +405,177 @@
         "mcp",
         "oauth",
         "credentials"
+      ]
+    },
+    {
+      "id": "KB-OPS-007",
+      "title": "Distribution Artifacts and Bootstrap Packaging",
+      "domain": "operations",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Build, verify, and accept unpublished platform payloads and the builtins-only npm bootstrap.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/distribution/artifacts.md",
+      "lines": 70,
+      "bytes": 5920,
+      "code_refs": [
+        "scripts/package-payload.mjs",
+        "scripts/package-bootstrap.mjs",
+        "src/platform/payload-acquire.mjs",
+        "src/platform/payload-archive.mjs"
+      ],
+      "related": [
+        "KB-OPS-008",
+        "KB-OPS-009"
+      ],
+      "tags": [
+        "distribution",
+        "packaging",
+        "bootstrap",
+        "artifacts"
+      ]
+    },
+    {
+      "id": "KB-OPS-008",
+      "title": "Managed Installation Internals",
+      "domain": "operations",
+      "kind": "reference",
+      "status": "active",
+      "summary": "Managed installation layout, atomic activation, shell profile consent, and failure or uninstall recovery internals.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/distribution/installation.md",
+      "lines": 73,
+      "bytes": 7497,
+      "code_refs": [
+        "src/management/installation.ts",
+        "src/management/install-state.ts",
+        "src/management/installed-launcher.ts",
+        "src/management/shell-integration.ts"
+      ],
+      "related": [
+        "KB-OPS-007",
+        "KB-OPS-009",
+        "KB-OPS-010",
+        "KB-OPS-011"
+      ],
+      "tags": [
+        "distribution",
+        "installation",
+        "launcher",
+        "shell"
+      ]
+    },
+    {
+      "id": "KB-OPS-009",
+      "title": "Setup and First Use",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Managed setup consent, default database initialization, read-only status checks, failure handling, and validation boundaries.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/distribution/setup.md",
+      "lines": 65,
+      "bytes": 5177,
+      "code_refs": [
+        "src/management/setup.ts",
+        "src/application/setup-database.ts",
+        "src/gateway/server.ts"
+      ],
+      "related": [
+        "KB-OPS-007",
+        "KB-OPS-008",
+        "KB-OPS-010"
+      ],
+      "tags": [
+        "distribution",
+        "setup",
+        "database",
+        "cli"
+      ]
+    },
+    {
+      "id": "KB-OPS-010",
+      "title": "Explicit Updates and Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Run guarded terminal updates, inspect update state, recover interrupted activations, and respect browser read-only authority.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/distribution/updates.md",
+      "lines": 71,
+      "bytes": 5351,
+      "code_refs": [
+        "src/management/update.ts",
+        "src/management/update-state.ts",
+        "src/platform/update-registry.ts",
+        "src/renderer/updates.tsx"
+      ],
+      "related": [
+        "KB-OPS-008",
+        "KB-OPS-009",
+        "KB-OPS-011"
+      ],
+      "tags": [
+        "distribution",
+        "updates",
+        "recovery",
+        "cli"
+      ]
+    },
+    {
+      "id": "KB-OPS-011",
+      "title": "Uninstall and Recovery",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Remove managed Code60 installations safely while preserving user data, recover interrupted removals, and reinstall cleanly.",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/distribution/uninstall.md",
+      "lines": 53,
+      "bytes": 4602,
+      "code_refs": [
+        "src/management/uninstall.ts",
+        "src/management/uninstall-plan.ts",
+        "src/management/removal-state.ts"
+      ],
+      "related": [
+        "KB-OPS-008",
+        "KB-OPS-009",
+        "KB-OPS-010"
+      ],
+      "tags": [
+        "distribution",
+        "uninstall",
+        "recovery",
+        "cli"
+      ]
+    },
+    {
+      "id": "KB-OPS-012",
+      "title": "Docker Hub Distribution",
+      "domain": "operations",
+      "kind": "runbook",
+      "status": "active",
+      "summary": "Run, configure, build, test, and publish the optional linux/amd64 Code60 Docker image (mjholliday/code60).",
+      "updated": "2026-11-27",
+      "path": "knowledge/operations/distribution/docker.md",
+      "lines": 90,
+      "bytes": 5211,
+      "code_refs": [
+        "docker/Dockerfile",
+        "docker/compose.yaml",
+        "src/gateway/container.ts",
+        "scripts/package-docker.mjs"
+      ],
+      "related": [
+        "KB-OPS-007",
+        "KB-OPS-009"
+      ],
+      "tags": [
+        "distribution",
+        "docker",
+        "container",
+        "release"
       ]
     },
     {

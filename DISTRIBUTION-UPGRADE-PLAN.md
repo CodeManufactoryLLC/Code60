@@ -210,7 +210,7 @@ two concurrent runs verify independent cleanup. A private bootstrap containing b
 real descriptors passes packed CLI and staging/model acceptance. Required PR CI
 and exact-commit native workflow validation must pass before delivery. No artifact
 publication, real login service or public setup is included. See the
-[artifact workflow](docs/distribution/artifacts.md).
+[artifact workflow](knowledge/operations/distribution/artifacts.md).
 
 **PR outcome:** release tooling produces verified, installable macOS arm64 and
 Linux x64 application payloads plus a small npm bootstrap.
@@ -250,7 +250,7 @@ Bash/zsh and packed-bootstrap managed smoke pass on this Mac. Fish is unavailabl
 on this host and is required on the disposable native CI runner. Required PR CI
 and exact-commit native validation must pass before delivery. This is the first
 supported layout, with no legacy recognition, migration or compatibility layer.
-Public setup remains Phase 5. See [installation internals](docs/distribution/installation.md).
+Public setup remains Phase 5. See [installation internals](knowledge/operations/distribution/installation.md).
 
 **PR outcome:** an installed release has a durable `code60` command independent
 of npm's cache.

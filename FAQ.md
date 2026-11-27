@@ -66,7 +66,7 @@ No. Code60 installs, runs, and supports local development without Docker.
 
 Code60 runs natively on macOS Apple Silicon and Linux x64. It uses [Code60 Gateway](TERMINOLOGY.md#gateway) (a local Node.js 24 backend), a browser interface, and separate Git worktrees for coding agents.
 
-Code60 also provides a Linux `x64` Docker image (`mjholliday/code60`) on port `6060` for container setups. See the [Docker distribution guide](docs/distribution/docker.md) for setup and security options.
+Code60 also provides a Linux `x64` Docker image (`mjholliday/code60`) on port `6060` for container setups. See the [Docker distribution guide](knowledge/operations/distribution/docker.md) for setup and security options.
 
 Only optional contributor workflows require a local Linux Docker engine with Compose v2. Docker Desktop remains optional.
 
