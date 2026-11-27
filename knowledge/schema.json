@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code60.dev/schemas/knowledge-index.schema.json",
+  "title": "Code60 Knowledge Base Index & Frontmatter Schema",
+  "type": "object",
+  "required": ["schemaVersion", "domains", "documents"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "generatedAt": {
+      "type": ["string", "null"],
+      "description": "ISO-8601 UTC timestamp of the last index build, or null before first generation."
+    },
+    "domains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "code", "path", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": ["governance", "architecture", "subsystems", "operations", "reference"]
+          },
+          "code": {
+            "type": "string",
+            "enum": ["GOV", "ARCH", "SUB", "OPS", "REF"]
+          },
+          "path": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/documentEntry"
+      }
+    }
+  },
+  "$defs": {
+    "frontmatter": {
+      "type": "object",
+      "required": ["id", "title", "domain", "kind", "status", "summary", "updated"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^KB-(GOV|ARCH|SUB|OPS|REF)-[0-9]{3}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain": {
+          "type": "string",
+          "enum": ["governance", "architecture", "subsystems", "operations", "reference"]
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["normative", "adr", "subsystem", "runbook", "reference"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "draft", "deprecated", "superseded"]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Single-sentence progressive-disclosure summary rendered in INDEX.md."
+        },
+        "updated": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "rule_prefix": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]{1,7}$",
+          "description": "Optional prefix for single-line RFC 2119 stipulations (e.g., SEC, GOV, GW)."
+        },
+        "code_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Repository-relative source paths this document governs or describes."
+        },
+        "related": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^KB-(GOV|ARCH|SUB|OPS|REF)-[0-9]{3}$"
+          },
+          "description": "Related KB document IDs."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          }
+        }
+      }
+    },
+    "documentEntry": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/frontmatter"
+        },
+        {
+          "type": "object",
+          "required": ["path"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^knowledge/(governance|architecture|subsystems|operations|reference)/.+\\.md$"
+            },
+            "ruleIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]+\\.[0-9]+\\.[0-9]+$"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

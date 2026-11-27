@@ -1,0 +1,38 @@
+{
+  "$schema": "./schema.json",
+  "schemaVersion": 1,
+  "generatedAt": null,
+  "domains": [
+    {
+      "id": "governance",
+      "code": "GOV",
+      "path": "knowledge/governance",
+      "description": "Normative policies, RFC 2119 standards, contributor/release/branch rules"
+    },
+    {
+      "id": "architecture",
+      "code": "ARCH",
+      "path": "knowledge/architecture",
+      "description": "System architecture, module boundaries, and architectural decision records"
+    },
+    {
+      "id": "subsystems",
+      "code": "SUB",
+      "path": "knowledge/subsystems",
+      "description": "Canonical specifications per runtime subsystem"
+    },
+    {
+      "id": "operations",
+      "code": "OPS",
+      "path": "knowledge/operations",
+      "description": "Operational runbooks, installation, distribution, updates, and recovery"
+    },
+    {
+      "id": "reference",
+      "code": "REF",
+      "path": "knowledge/reference",
+      "description": "Machine-synced or generated technical references"
+    }
+  ],
+  "documents": []
+}
