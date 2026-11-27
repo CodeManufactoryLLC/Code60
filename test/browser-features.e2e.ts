@@ -2196,7 +2196,7 @@ test("browser: top-level Chat button opens Relay with Carbon Chat History beside
     ).toBeVisible();
 
     // Send a prompt in Chat 1 and confirm user messages omit Carbon's "You <time>" header line.
-    const chatMain = page.getByRole("main", { name: "Chat 1", exact: true });
+    const chatMain = page.locator(".orchestration-chat-page:visible");
     const promptInput = chatMain.getByRole("textbox", {
       name: "Message to orchestrator",
       exact: true,
