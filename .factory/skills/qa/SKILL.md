@@ -47,7 +47,7 @@ Use the existing harness, not a new QA plugin or a live agent.
 
 ## Run safely
 
-- Follow the [shared-host rules](../../../AGENTS.md#concurrent-work-on-a-shared-host).
+- Follow shared-host isolation rules ([AGENTS.md](../../../AGENTS.md), [CONSTITUTION.md](../../../CONSTITUTION.md)).
   Record the assigned checkout/branch, selected host/container environment, owned
   process/container identities, ports and evidence paths before execution. Do not
   stop another task's listener or container, change shared Docker/Git settings,

@@ -42,7 +42,7 @@ Dedicated integrations, Code60-owned OAuth
 registrations/client IDs/secrets, hosted authentication and legacy SSE are excluded.
 See the [FAQ](knowledge/reference/faq/orchestration-and-workers.md#does-code60-support-mcp),
 [implementation plan](ad-hoc-plans/mcp-connectors-plan.md),
-[architecture](ARCHITECTURE.md#mcp-connector-foundation-and-target-runtime) and
+[architecture](ARCHITECTURE.md) and
 [MCP storage recovery](knowledge/operations/runbooks/mcp-storage.md) and [MCP runtime recovery](knowledge/operations/runbooks/mcp-runtime-auth.md).
 
 ## Browser modes in chat
