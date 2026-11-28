@@ -25,7 +25,21 @@ import {
 } from "../core/index.js";
 import { fileCode } from "../platform/index.js";
 import { AutomationError } from "./errors.js";
-import { type ActionExecutionOutcome, type ActionHandler, ExecutionRefused } from "./handlers.js";
+import {
+  type ActionExecutionOutcome,
+  type ActionHandler,
+  ExecutionRefused,
+  PrelaunchPreparationError,
+} from "./handlers.js";
+
+const PRELAUNCH_REFUSAL_REASONS = [
+  "low_disk",
+  "provider_missing",
+  "provider_changed",
+  "repository_missing",
+  "repository_replaced",
+  "base_missing",
+] as const;
 
 export { ExecutionRefused };
 
@@ -183,6 +197,16 @@ export function createPromptActionHandler(
 
   const inspect = async (execution: Execution): Promise<"gone" | "blocked"> => {
     if (execution.artifact.type !== "prompt") return "blocked";
+    // A durable prelaunch claim or known prelaunch refusal proves no agent process ever started,
+    // even if the repository itself is missing or replaced.
+    if (
+      execution.status === "claimed" ||
+      PRELAUNCH_REFUSAL_REASONS.includes(
+        (execution.reason ?? "") as (typeof PRELAUNCH_REFUSAL_REASONS)[number],
+      )
+    ) {
+      return "gone";
+    }
     const artifact = execution.artifact;
     try {
       await verifyRepository(artifact.repository);
@@ -193,20 +217,7 @@ export function createPromptActionHandler(
         if (!(error instanceof UsageError) && fileCode(error) !== "ENOENT") throw error;
         return null;
       });
-      if (!record) {
-        // Only a durable prelaunch claim (or a known prelaunch refusal) proves no process started.
-        return execution.status === "claimed" ||
-          [
-            "low_disk",
-            "provider_missing",
-            "provider_changed",
-            "repository_missing",
-            "repository_replaced",
-            "base_missing",
-          ].includes(execution.reason ?? "")
-          ? "gone"
-          : "blocked";
-      }
+      if (!record) return "blocked";
       if (
         record.agentPid === undefined &&
         ["running", "waiting", "idle", "interrupted"].includes(record.status)
@@ -293,6 +304,7 @@ export function createPromptActionHandler(
         return {
           status: "cancelled",
           reason: ctx.abortKind() === "shutdown" ? "service_stopped" : "cancelled_by_user",
+          neverStarted: true,
         };
       let orchestrator: Orchestrator | undefined;
       const cancel = () => {
@@ -314,6 +326,7 @@ export function createPromptActionHandler(
       };
       let denials = 0;
       let persistenceFailed = false;
+      let agentLaunchAttempted = false;
       let unsubscribe = () => {};
       let unwarn = () => {};
       try {
@@ -405,7 +418,10 @@ export function createPromptActionHandler(
         });
         await verifyRepository(action.repository);
         if (ctx.signal.aborted || persistenceFailed) await orchestrator.shutdown();
-        else orchestrator.start();
+        else {
+          agentLaunchAttempted = true;
+          orchestrator.start();
+        }
         await orchestrator.done;
         const [result] = await orchestrator.results();
         if (!result) throw new Error("Missing result");
@@ -430,11 +446,20 @@ export function createPromptActionHandler(
                 : status === "failed"
                   ? "agent_failed"
                   : null,
+          ...(!agentLaunchAttempted ? { neverStarted: true } : {}),
           artifact: (current) =>
             current.type === "prompt"
               ? { ...current, denials, changedFiles: result.changedFiles }
               : current,
         };
+      } catch (error) {
+        if (!agentLaunchAttempted && !(error instanceof ExecutionRefused)) {
+          throw new PrelaunchPreparationError(
+            error instanceof Error ? error.message : String(error),
+            { cause: error },
+          );
+        }
+        throw error;
       } finally {
         disposed = true;
         clearTimeout(notice);

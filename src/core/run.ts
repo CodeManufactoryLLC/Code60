@@ -147,6 +147,8 @@ export class Run {
   private session: AgentSession | undefined;
   private sessionExited = false;
   private modeChanging = false;
+  private reconnecting = false;
+  private recovering = false;
   /** Confirmed explicit session-option choices, reapplied to replacement sessions of this run. */
   private readonly chosen = new Map<string, SessionSelection>();
   private chosenModel = false;
@@ -302,74 +304,85 @@ export class Run {
   /** Restores a saved ACP session without replaying a previous prompt. */
   async restore(): Promise<RecoveryResult> {
     await this.assertRecoverableAndSafe();
-    this.turnOperation = randomUUID();
-    this.log("recovery.start", "started");
-    const previousStatus = this.status;
-    const previousReason = this.record.reason;
-    const sessionId = this.record.acpSessionId;
-    if (!sessionId) {
-      this.log("recovery.end", "failed");
-      return {
-        type: "handoff-required",
-        reason: "This run has no saved ACP session ID to restore.",
-      };
-    }
-    if (!this.agents.restore) {
-      this.log("recovery.end", "failed");
-      return {
-        type: "handoff-required",
-        reason: "The configured agent launcher does not support ACP session restore.",
-      };
-    }
-    let session: AgentSession;
+    this.recovering = true;
     try {
-      if (this.memory?.restore)
-        this.memory.restore(
-          buildHandoffPrompt(
-            this.record,
-            await this.deps.store.readEvents(this.id),
-            this.settings.prompts["handoff.summary"],
+      this.turnOperation = randomUUID();
+      this.log("recovery.start", "started");
+      const previousStatus = this.status;
+      const previousReason = this.record.reason;
+      const sessionId = this.record.acpSessionId;
+      if (!sessionId) {
+        this.log("recovery.end", "failed");
+        return {
+          type: "handoff-required",
+          reason: "This run has no saved ACP session ID to restore.",
+        };
+      }
+      if (!this.agents.restore) {
+        this.log("recovery.end", "failed");
+        return {
+          type: "handoff-required",
+          reason: "The configured agent launcher does not support ACP session restore.",
+        };
+      }
+      let session: AgentSession;
+      try {
+        if (this.memory?.restore)
+          this.memory.restore(
+            buildHandoffPrompt(
+              this.record,
+              await this.deps.store.readEvents(this.id),
+              this.settings.prompts["handoff.summary"],
+            ),
+          );
+        session = await this.startRecoveryAgent((signal) =>
+          (this.agents.restore as NonNullable<Agents["restore"]>)(
+            {
+              name: this.record.agent,
+              ...this.diagnostic(),
+              ...this.usageSpec(),
+              command: this.settings.command,
+              cwd: this.record.worktree,
+              ...(this.settings.env === undefined ? {} : { env: this.settings.env }),
+              ...(this.settings.mcpServers === undefined
+                ? {}
+                : { mcpServers: this.settings.mcpServers }),
+            },
+            sessionId,
+            signal,
           ),
         );
-      session = await this.startRecoveryAgent((signal) =>
-        (this.agents.restore as NonNullable<Agents["restore"]>)(
-          {
-            name: this.record.agent,
-            ...this.diagnostic(),
-            ...this.usageSpec(),
-            command: this.settings.command,
-            cwd: this.record.worktree,
-            ...(this.settings.env === undefined ? {} : { env: this.settings.env }),
-            ...(this.settings.mcpServers === undefined
-              ? {}
-              : { mcpServers: this.settings.mcpServers }),
-          },
-          sessionId,
-          signal,
-        ),
+      } catch (error) {
+        this.log("recovery.end", "failed");
+        return { type: "handoff-required", reason: message(error) };
+      }
+      await this.installSession(session);
+      this.record.ownerPid = this.deps.ownerPid ?? process.pid;
+      delete this.record.endedAt;
+      this.lastOutcome = { status: "finished" };
+      const previousOutcome =
+        previousStatus === "interrupted"
+          ? "The previous turn was interrupted."
+          : `This run previously ended with status ${previousStatus}.`;
+      this.emit({ type: "note", text: "Reconnected to the earlier agent session." });
+      await this.setStatus(
+        "idle",
+        `${previousOutcome}${previousReason ? ` Recorded reason: ${previousReason}.` : ""} The ACP session was restored; review the worktree before replying.`,
       );
-    } catch (error) {
-      this.log("recovery.end", "failed");
-      return { type: "handoff-required", reason: message(error) };
+      if (this.shutdownRequested && !this.ending) {
+        void this.end(this.lastOutcome ?? { status: "finished" });
+      } else if (this.sessionExited && !this.ending) {
+        void this.end({ status: "failed", reason: "the agent exited while idle" });
+      }
+      this.log("recovery.end", "succeeded");
+      return { type: "restored" };
+    } finally {
+      this.recovering = false;
+      if (this.shutdownRequested && !ACTIVE_STATUSES.has(this.status) && !this.ending) {
+        this.ending = true;
+        this.resolveFinished();
+      }
     }
-    await this.installSession(session);
-    this.record.ownerPid = this.deps.ownerPid ?? process.pid;
-    delete this.record.endedAt;
-    this.lastOutcome = { status: "finished" };
-    const previousOutcome =
-      previousStatus === "interrupted"
-        ? "The previous turn was interrupted."
-        : `This run previously ended with status ${previousStatus}.`;
-    this.emit({ type: "note", text: "Reconnected to the earlier agent session." });
-    await this.setStatus(
-      "idle",
-      `${previousOutcome}${previousReason ? ` Recorded reason: ${previousReason}.` : ""} The ACP session was restored; review the worktree before replying.`,
-    );
-    if (this.sessionExited && !this.ending) {
-      void this.end({ status: "failed", reason: "the agent exited while idle" });
-    }
-    this.log("recovery.end", "succeeded");
-    return { type: "restored" };
   }
 
   /**
@@ -388,51 +401,60 @@ export class Run {
     if (summary.length > HANDOFF_PROMPT_LIMIT)
       throw new Error("the recovery handoff exceeds its size limit");
     if (text.trim() === "") throw new Error("the message is empty");
-    this.memory?.restore?.(summary);
-    const context = this.settings.promptContext?.();
-    const heading =
-      origin === "automatic"
-        ? "--- Automatic Code60 update (not written by the user) ---"
-        : "--- User request ---";
-    const sent = renderPrompt("handoff.first-turn", this.settings.prompts["handoff.first-turn"], {
-      summary,
-      message: context ? `${context}\n\n${heading}\n${deliveredText}` : deliveredText,
-    });
-    this.log("recovery.start", "started");
-    let session: AgentSession;
+    this.recovering = true;
     try {
-      session = await this.startRecoveryAgent((signal) =>
-        this.agents.start(
-          {
-            name: this.record.agent,
-            ...this.diagnostic(),
-            ...this.usageSpec(),
-            command: this.settings.command,
-            cwd: this.record.worktree,
-            ...(this.settings.env === undefined ? {} : { env: this.settings.env }),
-            ...(this.settings.mcpServers === undefined
-              ? {}
-              : { mcpServers: this.settings.mcpServers }),
-          },
-          signal,
-        ),
-      );
-    } catch (error) {
-      this.log("recovery.end", "failed");
-      throw new Error(`could not start a fresh agent session: ${message(error)}`);
+      this.memory?.restore?.(summary);
+      const context = this.settings.promptContext?.();
+      const heading =
+        origin === "automatic"
+          ? "--- Automatic Code60 update (not written by the user) ---"
+          : "--- User request ---";
+      const sent = renderPrompt("handoff.first-turn", this.settings.prompts["handoff.first-turn"], {
+        summary,
+        message: context ? `${context}\n\n${heading}\n${deliveredText}` : deliveredText,
+      });
+      this.log("recovery.start", "started");
+      let session: AgentSession;
+      try {
+        session = await this.startRecoveryAgent((signal) =>
+          this.agents.start(
+            {
+              name: this.record.agent,
+              ...this.diagnostic(),
+              ...this.usageSpec(),
+              command: this.settings.command,
+              cwd: this.record.worktree,
+              ...(this.settings.env === undefined ? {} : { env: this.settings.env }),
+              ...(this.settings.mcpServers === undefined
+                ? {}
+                : { mcpServers: this.settings.mcpServers }),
+            },
+            signal,
+          ),
+        );
+      } catch (error) {
+        this.log("recovery.end", "failed");
+        throw new Error(`could not start a fresh agent session: ${message(error)}`);
+      }
+      await this.installSession(session);
+      this.log("recovery.end", "succeeded");
+      this.record.ownerPid = this.deps.ownerPid ?? process.pid;
+      delete this.record.endedAt;
+      this.lastOutcome = { status: "finished" };
+      this.emit({
+        type: "note",
+        text: `The earlier agent session could not be restored (${reason.replace(/\.$/, "")}). Started a fresh session in the same worktree with a summary of the earlier work.`,
+        detail: summary,
+      });
+      await this.setStatus("running", "Started a fresh session with a handoff summary.");
+      void this.runTurn(text, true, true, sent, origin);
+    } finally {
+      this.recovering = false;
+      if (this.shutdownRequested && !ACTIVE_STATUSES.has(this.status) && !this.ending) {
+        this.ending = true;
+        this.resolveFinished();
+      }
     }
-    await this.installSession(session);
-    this.log("recovery.end", "succeeded");
-    this.record.ownerPid = this.deps.ownerPid ?? process.pid;
-    delete this.record.endedAt;
-    this.lastOutcome = { status: "finished" };
-    this.emit({
-      type: "note",
-      text: `The earlier agent session could not be restored (${reason.replace(/\.$/, "")}). Started a fresh session in the same worktree with a summary of the earlier work.`,
-      detail: summary,
-    });
-    await this.setStatus("running", "Started a fresh session with a handoff summary.");
-    void this.runTurn(text, true, true, sent, origin);
   }
 
   /** Replace an idle physical session without manufacturing or replaying a prompt. */
@@ -449,10 +471,16 @@ export class Run {
     )
       throw new RefusedError("Reconnect requires an idle session with ACP restoration support");
     this.modeChanging = true;
+    this.reconnecting = true;
     this.deps.onChange();
     this.session = undefined;
+    let previousStopped = false;
     try {
       await previous.stop(this.settings.killGraceMs);
+      previousStopped = true;
+      if (this.shutdownRequested || this.ending) {
+        throw new Error("cancelled during shutdown");
+      }
       const session = await this.startRecoveryAgent((signal) =>
         (this.agents.restore as NonNullable<Agents["restore"]>)(
           {
@@ -475,6 +503,11 @@ export class Run {
         text: "Reconnected MCP resources in a fresh ACP session. No prompt was replayed.",
       });
     } catch {
+      if (!previousStopped) this.session ??= previous;
+      if (this.shutdownRequested || this.ending) {
+        await this.end(this.lastOutcome ?? { status: "finished" });
+        throw new RefusedError("Session reconnect cancelled during shutdown");
+      }
       this.session ??= previous;
       await this.end({
         status: "failed",
@@ -482,6 +515,7 @@ export class Run {
       });
       throw new RefusedError("Session reconnect failed; start a new session");
     } finally {
+      this.reconnecting = false;
       this.modeChanging = false;
       this.deps.onChange();
     }
@@ -563,7 +597,7 @@ export class Run {
 
   /** Ends an idle run. Its final status comes from the last turn. */
   finish(): void {
-    if (this.status !== "idle" || this.ending) {
+    if (this.status !== "idle" || this.ending || this.modeChanging) {
       throw new Error(`run ${this.id} is ${this.status}; you can finish only an idle run`);
     }
     void this.end(this.lastOutcome ?? { status: "finished" });
@@ -618,6 +652,10 @@ export class Run {
         this.deps.clock.clearTimeout(this.graceTimer);
       }
     }
+    if (this.reconnecting) {
+      this.startAbort.abort();
+      return this.finished;
+    }
     switch (this.status) {
       case "queued":
         void this.end({ status: "cancelled", reason: "cancelled before it started" });
@@ -632,6 +670,12 @@ export class Run {
         else if (!this.cancelTurn("shutdown")) this.startAbort.abort();
         break;
       default:
+        if (this.recovering) {
+          this.startAbort.abort();
+        } else if (!this.ending) {
+          this.ending = true;
+          this.resolveFinished();
+        }
         break;
     }
     return this.finished;
@@ -642,6 +686,9 @@ export class Run {
   }
 
   private async startAndRun(): Promise<void> {
+    if (this.ending || this.shutdownRequested) {
+      return this.end({ status: "cancelled", reason: "cancelled before it started" });
+    }
     const { git, clock } = this.deps;
     const agents = this.agents;
     const { record, settings } = this;
@@ -855,7 +902,12 @@ export class Run {
   }
 
   private async assertRecoverableAndSafe(): Promise<void> {
-    if (ACTIVE_STATUSES.has(this.status) || this.ending) {
+    if (
+      ACTIVE_STATUSES.has(this.status) ||
+      this.ending ||
+      this.recovering ||
+      this.shutdownRequested
+    ) {
       throw new RefusedError(`run ${this.id} is ${this.status}; only ended runs can be recovered`);
     }
     if (await recordedAgentAlive(this.deps.processes, this.record)) {
@@ -885,6 +937,10 @@ export class Run {
         throw new Error(
           `the agent did not start within ${formatDuration(this.settings.turnTimeoutMs)}`,
         );
+      }
+      if (cancel.aborted) {
+        await session.stop(0);
+        throw new Error("cancelled during shutdown");
       }
       return session;
     } catch (error) {
@@ -1126,6 +1182,13 @@ export class Run {
     this.lastOutcome = outcome;
     const note = cause === "timeout" ? " (turn timed out)" : "";
     await this.setStatus("idle", `turn ${turn} ended: ${stopReason}${note}`);
+    if (this.sessionExited && !this.ending) {
+      return this.end(
+        outcome.status === "finished"
+          ? { status: "failed", reason: "the agent exited while idle" }
+          : outcome,
+      );
+    }
   }
 
   private onPermission(request: PermissionRequest, signal: AbortSignal): Promise<PermissionAnswer> {

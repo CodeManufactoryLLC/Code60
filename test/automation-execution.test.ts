@@ -158,6 +158,25 @@ describe("isolated automation execution", () => {
         reason: "preparation_failed",
       }),
     ).toBe("blocked");
+    // Deleting or replacing the repository must still allow prelaunch refusals and claims to settle as gone.
+    await fs.rename(s.repository, `${s.repository}-moved`);
+    await fs.mkdir(s.repository);
+    expect(
+      await s.handler.inspect({
+        ...s.execution,
+        status: "failed",
+        reason: "repository_replaced",
+      }),
+    ).toBe("gone");
+    await fs.rm(s.repository, { recursive: true, force: true });
+    expect(
+      await s.handler.inspect({
+        ...s.execution,
+        status: "failed",
+        reason: "repository_missing",
+      }),
+    ).toBe("gone");
+    expect(await s.handler.inspect({ ...s.execution, status: "claimed" })).toBe("gone");
   });
 
   it("overrides permissive global policy, disables MCP, pins a worktree and runs exactly one turn", async () => {
@@ -370,9 +389,11 @@ describe("isolated automation execution", () => {
     expect(s.agents.sessions).toHaveLength(0);
     const abort = new AbortController();
     abort.abort();
-    expect(
-      (await s.handler.execute(s.automation, s.execution, s.makeCtx(abort.signal))).status,
-    ).toBe("cancelled");
+    expect(await s.handler.execute(s.automation, s.execution, s.makeCtx(abort.signal))).toEqual({
+      status: "cancelled",
+      reason: "cancelled_by_user",
+      neverStarted: true,
+    });
     expect(s.agents.sessions).toHaveLength(0);
     expect(await s.handler.inspect(s.execution)).toBe("blocked");
   });

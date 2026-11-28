@@ -118,6 +118,13 @@ export async function userServiceSnapshot(path: string) {
   });
   return entry ? installationSnapshot(path, 64 * 1024, true) : null;
 }
+const INSPECT_MAX_BUFFER = 4 * 1024 * 1024;
+
+function launchdServiceListed(services: string, label: string): boolean {
+  if (!label) return true;
+  return services.split("\n").some((line) => line.trim().split(/\s+/).at(-1) === label);
+}
+
 type ServiceInspectionCommand = (
   argv: readonly string[],
 ) => Promise<{ ok: boolean; stdout: string }>;
@@ -128,7 +135,7 @@ const inspectCommand: ServiceInspectionCommand = (argv) =>
     execFile(
       file,
       args,
-      { timeout: 5000, maxBuffer: 64 * 1024, windowsHide: true },
+      { timeout: 5000, maxBuffer: INSPECT_MAX_BUFFER, windowsHide: true },
       (error, stdout) => resolve({ ok: !error, stdout }),
     );
   });
@@ -209,10 +216,9 @@ export async function inspectUserService(
   // must positively show that this job is absent, even after a failed bootout.
   const supervisor = await command(["launchctl", "print", `gui/${process.getuid?.() ?? -1}`]);
   const services = /^\s*services = \{\n([\s\S]*?)^\s*\}/m.exec(supervisor.stdout)?.[1];
+  const label = (definition.status.at(-1) ?? "").split("/").at(-1) ?? "";
   const unloaded =
-    supervisor.ok &&
-    services !== undefined &&
-    !services.includes((definition.status.at(-1) ?? "").split("/").at(-1) ?? "");
+    supervisor.ok && services !== undefined && !launchdServiceListed(services, label);
   return {
     definitionPresent,
     ...(unloaded ? { loaded: false } : {}),

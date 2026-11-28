@@ -231,6 +231,42 @@ describe("per-user service supervisors", () => {
       });
     },
   );
+  it("handles >64 KiB launchctl domain output with the real default command and matches exact labels", async () => {
+    const definition = userServiceDefinition("darwin", "/no-such-code60-home", "/state", runtime);
+    const label = (definition.status.at(-1) ?? "").split("/").at(-1) ?? "";
+    const prefixCommand = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, stdout: "" })
+      .mockResolvedValueOnce({
+        ok: true,
+        stdout: `services = {\n  123 0 ${label}.helper\n}\n`,
+      });
+    expect(await inspectUserService(definition, prefixCommand)).toEqual({
+      definitionPresent: false,
+      loaded: false,
+      state: "stopped",
+    });
+
+    const bin = await mkdtemp(join(tmpdir(), "c60-launchctl-big-"));
+    const previousPath = process.env.PATH;
+    try {
+      const script = [
+        "#!/usr/bin/env node",
+        'if (process.argv[3] && process.argv[3].includes("/com.")) process.exit(1);',
+        'process.stdout.write("services = {\\n}\\nendpoints = {\\n" + "  0x1 M A com.apple.x\\n".repeat(8000) + "}\\n");',
+      ].join("\n");
+      await writeFile(join(bin, "launchctl"), script, { mode: 0o700 });
+      process.env.PATH = `${bin}:${previousPath ?? ""}`;
+      expect(await inspectUserService(definition)).toEqual({
+        definitionPresent: false,
+        loaded: false,
+        state: "stopped",
+      });
+    } finally {
+      process.env.PATH = previousPath;
+      await rm(bin, { recursive: true, force: true });
+    }
+  });
 });
 
 it.each(["absent", "loaded", "unavailable"])(

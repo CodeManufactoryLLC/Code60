@@ -11,6 +11,8 @@ import {
   type ActionExecutionOutcome,
   type ActionHandler,
   ActionRegistry,
+  ExecutionRefused,
+  PrelaunchPreparationError,
 } from "./handlers.js";
 import { Scheduler } from "./scheduler.js";
 import { emptyState, type StateWriter } from "./store.js";
@@ -731,5 +733,45 @@ describe("durable automation scheduler", () => {
     expect(skipped.status).toBe("skipped");
     expect(skipped.reason).toBe("handler_unavailable");
     await standalone.scheduler.stop();
+  });
+
+  it("does not brick state.block on prelaunch refusals, pre-spawn cancels, or pre-spawn preparation errors", async () => {
+    const s = setup();
+    const automation = (await s.scheduler.request({ action: "create", draft })) as Automation;
+    vi.mocked(s.executor.inspect).mockResolvedValue("blocked");
+
+    vi.mocked(s.executor.execute).mockRejectedValueOnce(new ExecutionRefused("repository_missing"));
+    await s.scheduler.request({ action: "runNow", id: automation.id });
+    await flush();
+    expect(s.store.state.executions.at(-1)).toMatchObject({
+      status: "failed",
+      reason: "repository_missing",
+    });
+    expect(s.scheduler.status().block).toBeNull();
+
+    vi.mocked(s.executor.execute).mockRejectedValueOnce(
+      new PrelaunchPreparationError("repoInfo failed before launch"),
+    );
+    await s.scheduler.request({ action: "runNow", id: automation.id });
+    await flush();
+    expect(s.store.state.executions.at(-1)).toMatchObject({
+      status: "failed",
+      reason: "preparation_failed",
+    });
+    expect(s.scheduler.status().block).toBeNull();
+
+    vi.mocked(s.executor.execute).mockResolvedValueOnce({
+      status: "cancelled",
+      reason: "cancelled_by_user",
+      neverStarted: true,
+    });
+    await s.scheduler.request({ action: "runNow", id: automation.id });
+    await flush();
+    expect(s.store.state.executions.at(-1)).toMatchObject({
+      status: "cancelled",
+      reason: "cancelled_by_user",
+    });
+    expect(s.scheduler.status().block).toBeNull();
+    await s.scheduler.stop();
   });
 });
