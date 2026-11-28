@@ -41,6 +41,25 @@ import { commandIdentity, PROVIDERS } from "./provider-catalog.js";
 
 const execFileAsync = promisify(execFile);
 
+async function raceWithSignal<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    void promise.catch(() => {});
+    throw signal.reason instanceof Error ? signal.reason : new Error("Health check timed out.");
+  }
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () =>
+      reject(signal.reason instanceof Error ? signal.reason : new Error("Health check timed out."));
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+    void promise.catch(() => {});
+  }
+}
+
 const LOW_DISK_ERROR_BYTES = 2 * 1024 ** 3; // 2 GiB scheduler dispatch guard (knowledge/operations/runbooks/low-disk.md)
 const LOW_DISK_WARNING_BYTES = 10 * 1024 ** 3; // 10 GiB headroom warning
 const LOW_DISK_WARNING_PERCENT = 10;
@@ -1259,7 +1278,7 @@ export class HealthCheckService {
       }
 
       case "memory-health": {
-        const memory = await this.ports.memorySnapshot();
+        const memory = await raceWithSignal(this.ports.memorySnapshot(), signal);
         if (memory.warning) {
           return {
             status: "warning",

@@ -104,6 +104,7 @@ function scheduleIndex() {
           if (store) more = await indexMemoryBatch(store, embedder);
           indexAttempts = 0;
         } catch {
+          model = undefined;
           const delay = INDEX_RETRY_DELAYS[indexAttempts++];
           if (delay !== undefined) {
             retry = setTimeout(() => {

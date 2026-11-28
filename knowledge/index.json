@@ -84,6 +84,48 @@
       ]
     },
     {
+      "id": "KB-GOV-002",
+      "title": "Testing and Verification Standards",
+      "domain": "governance",
+      "kind": "normative",
+      "status": "active",
+      "summary": "Normative rules for collaborator mock discipline, post-recovery liveness, multi-cycle maintenance tests, cross-subsystem seams, and fault-injected E2E journeys.",
+      "updated": "2026-11-27",
+      "path": "knowledge/governance/testing-standards.md",
+      "lines": 55,
+      "bytes": 3757,
+      "rule_prefix": "TEST",
+      "code_refs": [
+        "src/application/controller.ts",
+        "src/application/heartbeat.ts",
+        "src/application/memory-service.ts",
+        "src/application/health-check.ts",
+        "src/gateway/server.ts"
+      ],
+      "related": [
+        "KB-GOV-001"
+      ],
+      "tags": [
+        "testing",
+        "verification",
+        "governance",
+        "self-healing",
+        "qa"
+      ],
+      "ruleIds": [
+        "TEST-1.1.1",
+        "TEST-1.1.2",
+        "TEST-1.1.3",
+        "TEST-1.2.1",
+        "TEST-1.2.2",
+        "TEST-1.2.3",
+        "TEST-1.3.1",
+        "TEST-1.3.2",
+        "TEST-1.4.1",
+        "TEST-1.4.2"
+      ]
+    },
+    {
       "id": "KB-ARCH-001",
       "title": "C4 Level 1: System Context",
       "domain": "architecture",

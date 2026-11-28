@@ -191,3 +191,24 @@ and supported controls before extending tests. Retain evidence under ignored
   record scoped UI state and exact inclusion/exclusion evidence.
 - **Cleanup:** stop app/provider processes, remove only isolated synthetic state;
   do not export actual memory, prompts or transcripts.
+
+## Heartbeat self-healing and health verification
+
+- **Prerequisites/start:** isolated foreground gateway with real `MemoryService`,
+  `HeartbeatService`, and `HealthCheckService`; include both a healthy baseline
+  and a fault-injected unresponsive sidecar / operational warning case.
+- **Actions:** run a manual Heartbeat sweep, navigate to Health Check and run
+  **Memory service**, then run a second consecutive Heartbeat sweep. In seam
+  tests, fault-inject an unresponsive sidecar IPC failure before Sweep 1, verify
+  Health Check after Sweep 1, run Sweep 2, and separately inject a responsive
+  operational warning before Sweep 3.
+- **Invariants:** Heartbeat retires an unresponsive sidecar via `retireSidecar()`
+  without latching `MemoryService.closed` or `paused`; Health Check never reports
+  `Unavailable` / `"Memory service is stopping"` after self-healing; responsive
+  warnings are surfaced without tearing down a healthy sidecar; Sweep 2 stays
+  steady-state (`restartedSidecars: 0`) and persistent failures hit the restart
+  cap cleanly.
+- **Independent checks/evidence:** non-conditional Playwright assertions in
+  `test/heartbeat.e2e.ts` plus real-wiring seam verification in
+  `test/heartbeat-memory-seam.test.ts`; never stub `memory.close()`.
+- **Cleanup:** stop isolated gateway/sidecar processes and remove isolated temp state.

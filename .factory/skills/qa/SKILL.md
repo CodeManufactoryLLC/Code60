@@ -44,6 +44,12 @@ Use the existing harness, not a new QA plugin or a live agent.
   Read-only snapshots may supplement UI evidence but cannot replace user actions.
 - Use bounded condition-based assertions. Do not add arbitrary sleeps or retries
   that mask races. Do not require live providers, credentials or network access.
+- Follow [knowledge/governance/testing-standards.md](../../../knowledge/governance/testing-standards.md)
+  (`KB-GOV-002`, `TEST-*`). Never wrap expected outcome assertions in conditional
+  guards (`if (await element.isVisible())`) that allow regressions to pass
+  silently. For self-healing, recovery, or periodic maintenance features, verify
+  fault-injected recovery, post-heal liveness against real collaborators, and at
+  least two consecutive cycles rather than happy-path-only single sweeps.
 
 ## Run safely
 
