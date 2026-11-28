@@ -582,8 +582,8 @@
       "summary": "Run, configure, build, test, and publish the optional linux/amd64 Code60 Docker image (mjholliday/code60).",
       "updated": "2026-11-27",
       "path": "knowledge/operations/distribution/docker.md",
-      "lines": 90,
-      "bytes": 5174,
+      "lines": 86,
+      "bytes": 5508,
       "code_refs": [
         "docker/Dockerfile",
         "docker/compose.yaml",
@@ -611,7 +611,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/operations/releasing.md",
       "lines": 71,
-      "bytes": 6347,
+      "bytes": 6499,
       "code_refs": [
         ".github/workflows/release.yml",
         ".github/workflows/native-tests.yml",
@@ -821,7 +821,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/overview-and-setup.md",
       "lines": 103,
-      "bytes": 6332,
+      "bytes": 6335,
       "code_refs": [
         "src/management/cli.ts",
         "src/gateway/server.ts",
@@ -848,7 +848,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/workspaces-and-storage.md",
       "lines": 80,
-      "bytes": 6264,
+      "bytes": 6267,
       "code_refs": [
         "src/git/tasks.ts",
         "src/application/health-check.ts",
@@ -876,7 +876,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/permissions-and-sandboxing.md",
       "lines": 63,
-      "bytes": 4809,
+      "bytes": 4812,
       "code_refs": [
         "src/core/config.ts",
         "src/core/orchestrator.ts",
@@ -903,7 +903,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/security-and-secrets.md",
       "lines": 67,
-      "bytes": 5697,
+      "bytes": 5700,
       "code_refs": [
         "src/gateway/server.ts",
         "src/application/mcp-gateway.ts",
@@ -929,7 +929,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/licensing-and-usage.md",
       "lines": 72,
-      "bytes": 4915,
+      "bytes": 4918,
       "code_refs": [
         "src/contracts/usage.ts",
         "src/core/usage-store.ts",
@@ -955,7 +955,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/orchestration-and-workers.md",
       "lines": 78,
-      "bytes": 6195,
+      "bytes": 6198,
       "code_refs": [
         "src/core/orchestrator.ts",
         "src/core/config.ts",
@@ -984,7 +984,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/context-and-history.md",
       "lines": 75,
-      "bytes": 7227,
+      "bytes": 7230,
       "code_refs": [
         "src/application/memory-limits.ts",
         "src/application/relay-service.ts",
@@ -1011,7 +1011,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/plans-workflows-and-schedules.md",
       "lines": 84,
-      "bytes": 6781,
+      "bytes": 6784,
       "code_refs": [
         "src/core/workflow-engine.ts",
         "src/application/plans.ts",
@@ -1038,7 +1038,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/accessibility-and-support.md",
       "lines": 70,
-      "bytes": 4847,
+      "bytes": 4850,
       "code_refs": [
         "src/renderer/app.tsx",
         "package.json"
@@ -1063,7 +1063,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/provider-support.md",
       "lines": 58,
-      "bytes": 4073,
+      "bytes": 4076,
       "code_refs": [
         "src/application/provider-catalog.ts",
         "src/application/provider-setup-policy.ts"
@@ -1088,7 +1088,7 @@
       "updated": "2026-11-27",
       "path": "knowledge/reference/faq/provider-authentication.md",
       "lines": 107,
-      "bytes": 7067,
+      "bytes": 7070,
       "code_refs": [
         "src/application/provider-catalog.ts",
         "src/application/provider-setup-policy.ts",

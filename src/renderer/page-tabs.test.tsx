@@ -14,6 +14,7 @@ function navigation(
   sidebarOpen = true,
   busy = false,
   history = { canGoBack: false, canGoForward: false },
+  appVersion?: string,
 ) {
   vi.stubGlobal("localStorage", {
     getItem: (key: string) =>
@@ -22,6 +23,7 @@ function navigation(
   });
   return renderToStaticMarkup(
     <PageTabBar
+      appVersion={appVersion}
       showRelayDot={false}
       onShowRelayDotChange={() => {}}
       theme="system"
@@ -203,6 +205,38 @@ describe("database connection navigation", () => {
     expect(html.match(new RegExp(`<button[^>]*id="tab-settings-${section}"[^>]*>`))?.[0]).toContain(
       'aria-selected="true"',
     );
+  });
+  it("renders the app version at the bottom of the left navigation sidebar when provided", () => {
+    const withoutVersion = navigation(null);
+    expect(withoutVersion).not.toContain("product-navigation-version");
+
+    const withVersion = navigation(
+      null,
+      undefined,
+      "appearance",
+      initialTabs.active,
+      true,
+      true,
+      false,
+      { canGoBack: false, canGoForward: false },
+      "1.0.0-alpha.1",
+    );
+    expect(withVersion).toContain(
+      '<div class="product-navigation-version" role="note" aria-label="Code60 version">v1.0.0-alpha.1</div></nav>',
+    );
+
+    const prefixed = navigation(
+      null,
+      undefined,
+      "appearance",
+      initialTabs.active,
+      true,
+      true,
+      false,
+      { canGoBack: false, canGoForward: false },
+      "v1.0.0-alpha.1",
+    );
+    expect(prefixed).toContain(">v1.0.0-alpha.1</div></nav>");
   });
 });
 describe("header history", () => {

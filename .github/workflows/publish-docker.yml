@@ -1,10 +1,13 @@
 name: Publish Docker Hub image
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag merged into main (for example v0.4.1)
+        description: Existing version tag merged into main (for example v1.0.0-alpha.1)
         required: true
         type: string
       push:
@@ -17,16 +20,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: dockerhub-${{ inputs.tag }}
+  group: dockerhub-${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
   cancel-in-progress: false
 
 jobs:
   preflight:
-    if: github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       sha: ${{ steps.validate.outputs.sha }}
+      created: ${{ steps.validate.outputs.created }}
       version: ${{ steps.tags.outputs.version }}
       prerelease: ${{ steps.tags.outputs.prerelease }}
       repository: ${{ steps.tags.outputs.repository }}
@@ -42,11 +46,11 @@ jobs:
           package-manager-cache: false
       - id: validate
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
         run: node scripts/release/preflight.mjs
       - id: tags
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
           DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
         run: node scripts/release/docker-tags.mjs
 
@@ -98,10 +102,10 @@ jobs:
 
   publish:
     needs: [preflight, build-and-test]
-    if: ${{ inputs.push == true }}
+    if: ${{ github.event_name == 'push' || inputs.push == true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    # Configure this environment in GitHub Settings to allow deployments from main only.
+    # Configure this environment in GitHub Settings to allow deployments from main and v* tags.
     environment: dockerhub_release
     steps:
       - uses: actions/checkout@v7
@@ -144,7 +148,7 @@ jobs:
           build-args: |
             CODE60_VERSION=${{ needs.preflight.outputs.version }}
             CODE60_REVISION=${{ needs.preflight.outputs.sha }}
-            CODE60_CREATED=${{ github.event.head_commit.timestamp }}
+            CODE60_CREATED=${{ needs.preflight.outputs.created }}
       - name: Record published digest summary
         env:
           REPOSITORY: ${{ needs.preflight.outputs.repository }}

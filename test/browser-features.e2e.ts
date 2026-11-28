@@ -2062,6 +2062,23 @@ test("browser: top-level Chat button opens Relay with Carbon Chat History beside
     // Left nav has top-level Chat button, no Develop or Chat sections, no Projects node.
     await expect(sidebar.locator("#tab-chat")).toBeVisible();
     await expect(sidebar.locator("#tab-chat")).toHaveText("Chat");
+    const pkg = JSON.parse(await readFile(resolve("package.json"), "utf8")) as { version: string };
+    const navVersion = sidebar.locator(".product-navigation-version");
+    await expect(navVersion).toBeVisible();
+    await expect(navVersion).toHaveText(`v${pkg.version}`);
+    const versionPlacement = await page.evaluate(() => {
+      const nav = document.getElementById("navigation-sidebar")?.getBoundingClientRect();
+      const ver = document
+        .querySelector("#navigation-sidebar .product-navigation-version")
+        ?.getBoundingClientRect();
+      return nav && ver
+        ? {
+            centered: Math.abs(ver.left + ver.width / 2 - (nav.left + nav.width / 2)) <= 2,
+            atBottom: nav.bottom - ver.bottom <= 4,
+          }
+        : null;
+    });
+    expect(versionPlacement).toEqual({ centered: true, atBottom: true });
     await expect(sidebar.locator("#nav-group-Develop")).toHaveCount(0);
     await expect(sidebar.locator("#nav-group-Chat")).toHaveCount(0);
     await expect(sidebar.locator('[data-sidebar-item="projects"]')).toHaveCount(0);

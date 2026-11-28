@@ -439,6 +439,7 @@ export function App({
       >
         {!splash && (
           <PageTabBar
+            appVersion={snapshot?.versions.code60}
             relayListening={relayListening}
             showRelayDot={preferences.showRelayDot}
             onShowRelayDotChange={preferences.setShowRelayDot}

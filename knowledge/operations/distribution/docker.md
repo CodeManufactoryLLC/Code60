@@ -69,21 +69,17 @@ npm run test:docker -- release/payloads/linux-x64.json
 
 ## Docker Hub setup and publishing
 
-One-time setup: create `mjholliday/code60` on Docker Hub with a scoped Read & Write Access Token, then configure GitHub's `dockerhub_release` environment (restricted to `main`) with variable `DOCKERHUB_USERNAME`, secret `DOCKERHUB_TOKEN`, and optional variable `DOCKERHUB_REPOSITORY` (defaults to `mjholliday/code60`).
+One-time setup: create `mjholliday/code60` on Docker Hub with a scoped Read & Write Access Token, then configure GitHub's `dockerhub_release` environment with custom deployment policies allowing both the `main` branch and `v*` tags, with variable `DOCKERHUB_USERNAME`, secret `DOCKERHUB_TOKEN`, and optional variable `DOCKERHUB_REPOSITORY` (defaults to `mjholliday/code60`).
 
 To publish a release image:
 
-1. Tag the merged release commit on `main` (`vX.Y.Z` or `vX.Y.Z-beta.N`) per [Releasing Code60](../releasing.md).
-2. Run a dry run first (builds and tests without pushing):
+1. Tag the merged release commit on `main` (`vX.Y.Z` or `vX.Y.Z-alpha.N`) per [Releasing Code60](../releasing.md) and push the tag (`git push origin v1.0.0-alpha.1`).
+2. Pushing a `v*` tag automatically triggers `.github/workflows/publish-docker.yml`, which validates the tag on `main` against `package.json`/`package-lock.json`, runs `npm run test:docker`, and pushes the `linux/amd64` image with SBOM and provenance attestations under `dockerhub_release`.
+3. Manual dispatch from `main` remains available as a dry-run or re-publish fallback:
 
 ```sh
-gh workflow run publish-docker.yml --ref main -f tag=v0.5.0-beta -f push=false
+gh workflow run publish-docker.yml --ref main -f tag=v1.0.0-alpha.1 -f push=false
+gh workflow run publish-docker.yml --ref main -f tag=v1.0.0-alpha.1 -f push=true
 ```
 
-3. Push the verified `linux/amd64` image with SBOM and provenance attestations:
-
-```sh
-gh workflow run publish-docker.yml --ref main -f tag=v0.5.0-beta -f push=true
-```
-
-Stable tags publish `:X.Y.Z`, `:X.Y`, `:X`, and `:latest`. Prerelease tags publish only `:X.Y.Z-beta.N` (or `:X.Y.Z-beta`) and never move `:latest`.
+Stable tags publish `:X.Y.Z`, `:X.Y`, `:X`, and `:latest`. Prerelease tags (such as `v1.0.0-alpha.1`) publish `:X.Y.Z-alpha.1` and `:latest`.

@@ -1,6 +1,6 @@
 {
   "name": "code60",
-  "version": "0.5.0-beta",
+  "version": "1.0.0-alpha.1",
   "private": true,
   "description": "Local browser application for orchestrating coding agents on macOS and Linux",
   "license": "Apache-2.0",

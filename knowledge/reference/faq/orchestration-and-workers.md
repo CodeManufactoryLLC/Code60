@@ -24,7 +24,7 @@ tags:
 
 # FAQ: Orchestration, Workers, MCP, and Concurrency
 
-> **Applies to:** Code60 `v0.5.0-beta` · **Last update:** `2026-11-27`
+> **Applies to:** Code60 `v1.0.0-alpha.1` · **Last update:** `2026-11-27`
 > Open **Manage → About** or run `code60 status` to check the local Code60 version.
 
 ## Orchestration and Workers

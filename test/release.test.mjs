@@ -26,6 +26,10 @@ describe("release validation", () => {
   );
   it("accepts semantic release identities and compares stable versions", () => {
     expect(versionOf("v1.2.3")).toMatchObject({ version: "1.2.3", prerelease: false });
+    expect(versionOf("v1.0.0-alpha.1")).toMatchObject({
+      version: "1.0.0-alpha.1",
+      prerelease: true,
+    });
     expect(versionOf("v1.2.3-beta.1").prerelease).toBe(true);
     expect(newerStable("v1.10.0", ["v1.9.0", "v1.11.0-beta.1"])).toBe(true);
     expect(newerStable("v1.9.0", ["v1.10.0"])).toBe(false);

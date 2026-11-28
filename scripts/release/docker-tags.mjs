@@ -20,7 +20,7 @@ export function normalizeDockerRepository(value) {
 /**
  * Derive Docker image tags from a validated Code60 release tag.
  * Stable vX.Y.Z publishes exact, minor, major, and latest tags.
- * Prerelease vX.Y.Z-beta.N publishes only the exact prerelease tag and never moves latest.
+ * Prerelease vX.Y.Z-<prerelease> publishes both the exact prerelease tag and latest.
  */
 export function dockerTagsForRelease(releaseTag, repositoryInput) {
   const repository = normalizeDockerRepository(repositoryInput);
@@ -30,7 +30,7 @@ export function dockerTagsForRelease(releaseTag, repositoryInput) {
       repository,
       version,
       prerelease,
-      tags: [`${repository}:${version}`],
+      tags: [`${repository}:${version}`, `${repository}:latest`],
     };
   }
   const [major, minor] = version.split(".");
