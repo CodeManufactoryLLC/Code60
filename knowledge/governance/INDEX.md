@@ -9,3 +9,4 @@ Normative policies, RFC 2119 standards, contributor/release/branch rules. Genera
 | ID | Title | Kind | Status | Updated | Summary |
 | --- | --- | --- | --- | --- | --- |
 | `KB-GOV-001` | [Code60 Software Factory Definition V1.0](software-factory-definition.md) | `reference` | `active` | `2026-11-27` | Code60's V1.0 Software Factory definition, L0-L5 autonomy tracker, C/I/S/N capability gates, and anti-pattern guardrails. |
+| `KB-GOV-002` | [Testing and Verification Standards](testing-standards.md) | `normative` | `active` | `2026-11-27` | Normative rules for collaborator mock discipline, post-recovery liveness, multi-cycle maintenance tests, cross-subsystem seams, and fault-injected E2E journeys. |

@@ -68,6 +68,7 @@ export class MemoryService {
   }
   private closed = false;
   private warning: string | null = null;
+  private availabilityWarning: string | null = null;
   private providerKey = "";
   private mutating = 0;
   private toggling = false;
@@ -95,6 +96,12 @@ export class MemoryService {
     this.maintenance = setTimeout(() => {
       this.maintenance = undefined;
       void this.call("maintain")
+        .then(() => {
+          if (this.warning === "Memory retention could not finish. Check available storage.") {
+            this.warning = null;
+            this.changed();
+          }
+        })
         .catch(() => this.report("Memory retention could not finish. Check available storage."))
         .finally(() => this.scheduleMaintenance());
     }, 60000);
@@ -121,6 +128,10 @@ export class MemoryService {
   }
   report(message: string) {
     this.warning = message;
+    this.changed();
+  }
+  reportUnavailable(message: string) {
+    this.availabilityWarning = message;
     this.changed();
   }
   async syncProvider() {
@@ -175,7 +186,7 @@ export class MemoryService {
     this.runtimes.delete(runtime);
   }
   private async ready() {
-    await this.retiring;
+    while (this.retiring) await this.retiring;
     if (this.closed) throw new Error("Memory service is stopping");
     if (this.booting) return this.booting;
     if (this.child) return;
@@ -220,6 +231,7 @@ export class MemoryService {
       .then((snapshot) => {
         this.settings = snapshot.settings;
         this.loaded = true;
+        this.availabilityWarning = null;
         this.scheduleMaintenance();
       })
       .finally(() => {
@@ -227,23 +239,59 @@ export class MemoryService {
       });
     return this.booting;
   }
+  private async retireChild(graceful: boolean): Promise<void> {
+    clearTimeout(this.idle);
+    this.idle = undefined;
+    while (this.retiring) await this.retiring;
+    const child = this.child;
+    if (!child) return;
+    this.child = undefined;
+    this.booting = undefined;
+    for (const request of this.requests.values()) {
+      clearTimeout(request.timer);
+      request.reject(new Error("Memory sidecar stopped"));
+    }
+    this.requests.clear();
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    const retiring = new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        child.off("exit", done);
+        child.off("error", done);
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        try {
+          child.kill("SIGKILL");
+        } catch {}
+      }, 1000);
+      timer.unref?.();
+      child.once("exit", done);
+      child.once("error", done);
+      if (graceful && child.connected) {
+        try {
+          child.disconnect();
+        } catch {
+          try {
+            child.kill();
+          } catch {}
+        }
+      } else {
+        try {
+          child.kill();
+        } catch {}
+      }
+    }).finally(() => {
+      if (this.retiring === retiring) this.retiring = undefined;
+    });
+    this.retiring = retiring;
+    await retiring;
+  }
   private armIdle() {
     clearTimeout(this.idle);
     if (this.requests.size) return;
     this.idle = setTimeout(() => {
-      const child = this.child;
-      if (!child) return;
-      this.retiring = new Promise<void>((resolve) => {
-        const timer = setTimeout(() => child.kill("SIGKILL"), 1000);
-        child.once("exit", () => {
-          clearTimeout(timer);
-          resolve();
-        });
-        child.disconnect();
-      }).finally(() => {
-        this.retiring = undefined;
-      });
-      this.child = undefined;
+      void this.retireChild(true);
     }, 60000);
     this.idle.unref();
   }
@@ -281,6 +329,7 @@ export class MemoryService {
     if (revision === this.revision && !this.mutating) {
       this.settings = snapshot.settings;
       this.loaded = true;
+      this.availabilityWarning = null;
       this.scheduleMaintenance();
     }
     return {
@@ -288,6 +337,7 @@ export class MemoryService {
       provider: this.provider()?.name ?? null,
       warning:
         this.warning ??
+        this.availabilityWarning ??
         (snapshot.retentionFailed
           ? "Memory retention could not finish. Check available storage."
           : snapshot.indexFailed
@@ -357,6 +407,7 @@ export class MemoryService {
       if (action.type === "forget" || action.type === "forget-scope")
         for (const runtime of this.runtimes) runtime.invalidateContext();
       this.warning = null;
+      this.availabilityWarning = null;
       return true;
     } finally {
       this.revision++;
@@ -481,23 +532,25 @@ export class MemoryService {
     for (const job of jobs) job.abort.abort();
     await Promise.allSettled(jobs.map((job) => job.done));
   }
+  /**
+   * Gracefully retires the current stateless sidecar so the next request spawns a fresh
+   * worker process. Unlike `close()` or `stop()`, this preserves service availability
+   * (`closed`, `paused`, and retention maintenance remain unchanged).
+   */
+  async retireSidecar(): Promise<boolean> {
+    if (this.closed) return false;
+    clearTimeout(this.idle);
+    this.idle = undefined;
+    if (!this.child && !this.retiring) return false;
+    await this.retireChild(true);
+    this.changed();
+    return true;
+  }
   async stop() {
     this.paused = true;
     this.revision++;
     await this.stopJobs();
-    clearTimeout(this.idle);
-    await this.retiring;
-    const child = this.child;
-    if (child) {
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(() => child.kill("SIGKILL"), 1000);
-        child.once("exit", () => {
-          clearTimeout(timer);
-          resolve();
-        });
-        child.kill();
-      });
-    }
+    await this.retireChild(false);
   }
   async close() {
     this.closed = true;

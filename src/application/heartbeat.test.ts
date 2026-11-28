@@ -305,4 +305,55 @@ describe("HeartbeatService", () => {
     expect(updated.nextRunAt).toBeNull();
     await service.stop();
   });
+
+  it("records sidecar_restarted findings and enforces the 3-per-window restart cap", async () => {
+    const env = await makeStateEnv();
+    let tick = Date.parse("2026-11-27T12:00:00.000Z");
+    const service = new HeartbeatService(
+      makePorts(env, {
+        now: () => {
+          tick += 1000;
+          return new Date(tick);
+        },
+        runtime: {
+          repoPaths: () => [],
+          pinnedWorktreesAndRuns: () => ({ worktrees: new Set(), runIds: new Set() }),
+          inspectWedgedRuns: () => [],
+          recoverWedgedRun: async () => true,
+          healRuntime: async ({ canRestartSidecar }) =>
+            canRestartSidecar
+              ? {
+                  restartedSidecars: 1,
+                  sidecarIssues: ["Memory sidecar did not respond after restart."],
+                  relayReconnected: false,
+                  relayError: null,
+                }
+              : {
+                  restartedSidecars: 0,
+                  sidecarIssues: ["Memory sidecar did not respond to health check."],
+                  relayReconnected: false,
+                  relayError: null,
+                },
+        },
+      }),
+    );
+    await service.start();
+
+    for (let i = 0; i < 3; i++) {
+      const snap = await service.handle({ action: "run", mode: "maintain" });
+      const heal = snap.lastCompletedRun?.actions.find((a) => a.actionId === "runtime-self-heal");
+      expect(heal?.remediatedCount).toBe(1);
+      expect(heal?.findings.some((f) => f.code === "sidecar_restarted")).toBe(true);
+      expect(heal?.findings.some((f) => f.code === "health_warning")).toBe(true);
+    }
+
+    const capped = await service.handle({ action: "run", mode: "maintain" });
+    const healCapped = capped.lastCompletedRun?.actions.find(
+      (a) => a.actionId === "runtime-self-heal",
+    );
+    expect(healCapped?.status).toBe("escalated");
+    expect(healCapped?.remediatedCount).toBe(0);
+    expect(healCapped?.findings.some((f) => f.code === "sidecar_restart_capped")).toBe(true);
+    await service.stop();
+  });
 });

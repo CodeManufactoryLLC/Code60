@@ -446,4 +446,29 @@ describe("HealthCheckService", () => {
     });
     expect(descriptors.length).toBeGreaterThanOrEqual(7);
   });
+
+  it("aborts a hung memory-health check promptly when cancelled", async () => {
+    let startedResolve!: () => void;
+    const started = new Promise<void>((resolve) => {
+      startedResolve = resolve;
+    });
+    const service = new HealthCheckService(
+      makePorts({
+        memorySnapshot: () => {
+          startedResolve();
+          return new Promise(() => {});
+        },
+      }),
+    );
+
+    const running = service.handle({
+      action: "run",
+      scope: { kind: "check", checkId: "memory-health" },
+    });
+    await started;
+    const cancelled = service.cancel("memory-health");
+    expect(cancelled.checks.find((c) => c.id === "memory-health")?.running).toBe(false);
+    await running;
+    service.dispose();
+  });
 });

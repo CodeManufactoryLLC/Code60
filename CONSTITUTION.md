@@ -38,3 +38,11 @@ This document is the highest source of authority for agents working in this repo
 - `CON-4.1.2` Changes that affect runtime safeguards, authentication, pairing, permissions, process or filesystem boundaries, secrets, MCP connectors, provider setup, or application updates MUST preserve every applicable `SEC-*` stipulation in [SECURITY.md](SECURITY.md) and MUST include automated verification tests for any new or modified security boundary.
 - `CON-4.1.3` Agents and contributors MUST NOT weaken, bypass, or silently alter a `SEC-*` trust boundary; any intentional change to a security requirement MUST explicitly update [SECURITY.md](SECURITY.md) with rationale and corresponding test coverage in the same pull request.
 - `CON-4.1.4` [SECURITY.md](SECURITY.md) MUST maintain RFC 2119 single-line stipulations (`SEC-<section>.<subsection>.<number>`) in accordance with `CON-1.1.1` and `CON-1.1.2`.
+
+## 5. Testing and Verification Standards
+
+### 5.1 Binding verification stipulations
+
+- `CON-5.1.1` [knowledge/governance/testing-standards.md](knowledge/governance/testing-standards.md) (`KB-GOV-002`) is the canonical normative testing and verification policy for Code60; all `TEST-*` stipulations in that document MUST be enforced as binding constitutional requirements across unit, integration, seam, and end-to-end tests.
+- `CON-5.1.2` Automated tests for lifecycle, recovery, self-healing, or cross-subsystem seams MUST verify post-action liveness and state invariants against real collaborator state machines rather than asserting mock call counts alone.
+- `CON-5.1.3` Agents and contributors MUST NOT use mocks, conditional assertions, or happy-path-only coverage to satisfy test or coverage gates while bypassing failure, recovery, or multi-cycle invariants; any intentional exception MUST be documented in the test with explicit rationale.
