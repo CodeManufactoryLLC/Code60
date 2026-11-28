@@ -423,10 +423,11 @@ export async function startGateway(options: GatewayOptions = {}) {
       let recentFailedCount = 0;
       if (scheduler) {
         try {
-          const history = (await scheduler.request({ action: "history", limit: 20 })) as {
-            executions?: Array<{ status: string; reason: string | null }>;
-          };
-          for (const item of history?.executions ?? []) {
+          const history = await scheduler.request({ action: "history", limit: 20 });
+          const executions = Array.isArray(history)
+            ? (history as Array<{ status: string; reason: string | null }>)
+            : [];
+          for (const item of executions) {
             if (item.reason === "low_disk") recentLowDiskCount++;
             if (item.status === "failed" || item.status === "interrupted") recentFailedCount++;
           }
@@ -569,10 +570,8 @@ export async function startGateway(options: GatewayOptions = {}) {
             collectSchedulerLiveAlerts(schedulerError),
           );
           if (!scheduler || closing || quiescing || preparingUninstall) continue;
-          const history = (await scheduler.request({ action: "history", limit: 20 })) as {
-            executions?: SchedulerExecutionNotice[];
-          };
-          const executions = history?.executions ?? [];
+          const history = await scheduler.request({ action: "history", limit: 20 });
+          const executions = Array.isArray(history) ? (history as SchedulerExecutionNotice[]) : [];
           if (!alerts.schedulerHistorySeeded) {
             await alerts.markSchedulerHistorySeeded(
               executions.map((item) => schedulerExecutionAlertKey(item.id)),

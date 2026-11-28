@@ -21,6 +21,7 @@ import {
   type ActionRegistry,
   type ConcurrencySpec,
   ExecutionRefused,
+  PrelaunchPreparationError,
 } from "./handlers.js";
 import type { StateWriter } from "./store.js";
 
@@ -507,6 +508,9 @@ export class Scheduler {
           status: active.abort.signal.aborted ? ("cancelled" as const) : ("failed" as const),
           reason:
             error instanceof ExecutionRefused ? error.reason : ("preparation_failed" as const),
+          ...(error instanceof ExecutionRefused || error instanceof PrelaunchPreparationError
+            ? { neverStarted: true }
+            : {}),
         };
       }
       if (outcome.detachedOnShutdown && active.abortReason === "shutdown") {
@@ -539,7 +543,7 @@ export class Scheduler {
         if (outcome.reason === "low_disk" || outcome.reason === "persistence_failed")
           state.pausedAll = true;
         // Unknown leftover ownership blocks every later launch, regardless of outcome.
-        if ((await handler.inspect(entry)) !== "gone") {
+        if (!outcome.neverStarted && (await handler.inspect(entry)) !== "gone") {
           state.block = {
             reason: "leftover_agent",
             executionId: entry.id,

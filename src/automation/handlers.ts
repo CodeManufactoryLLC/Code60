@@ -16,6 +16,13 @@ export class ExecutionRefused extends Error {
   }
 }
 
+/** Preparation failed before any child agent process was launched. */
+export class PrelaunchPreparationError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+  }
+}
+
 interface LaneRequirement {
   name: string;
   limit: number;
@@ -41,6 +48,8 @@ export interface ActionExecutionOutcome {
   artifact?: (current: ExecutionArtifact) => ExecutionArtifact;
   /** True when backend shutdown detached a long-lived run whose own runtime reconciles restart. */
   detachedOnShutdown?: boolean;
+  /** True when execution settled before any agent launch was attempted (in-memory only). */
+  neverStarted?: boolean;
 }
 
 type RestartReconciliation =

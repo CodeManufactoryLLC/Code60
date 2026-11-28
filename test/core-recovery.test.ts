@@ -430,4 +430,48 @@ describe("session information on recovery", () => {
     });
     await orchestrator.shutdown();
   });
+
+  it.each([false, true] as const)(
+    "resolves shutdown(force=%s) during in-flight restore without leaking a late session",
+    async (force) => {
+      const agents = new FakeAgents();
+      let releaseRestore!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        releaseRestore = resolve;
+      });
+      let entered!: () => void;
+      const started = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const origRestore = agents.restore.bind(agents);
+      agents.restore = async (spec, id, _signal) => {
+        entered();
+        await gate;
+        return origRestore(spec, id, new AbortController().signal);
+      };
+      const { record, orchestrator } = await setup(makeRecord(), agents);
+
+      const restoring = orchestrator.restore(record.id);
+      await started;
+      await expect(orchestrator.restore(record.id)).rejects.toThrow(/only ended runs/);
+
+      const shuttingDown = orchestrator.shutdown(force);
+      releaseRestore();
+      expect((await restoring).type).toBe("handoff-required");
+      await shuttingDown;
+
+      expect(agents.sessions).toHaveLength(1);
+      expect(agents.sessions[0]?.stops).toContain(0);
+      expect(record.status).toBe("interrupted");
+    },
+  );
+
+  it("resolves shutdown immediately on an unstarted or failed recovery orchestrator", async () => {
+    const agents = new FakeAgents();
+    agents.restoreUnavailable = true;
+    const { record, orchestrator } = await setup(makeRecord(), agents);
+    expect((await orchestrator.restore(record.id)).type).toBe("handoff-required");
+    await orchestrator.shutdown(false);
+    expect(record.status).toBe("interrupted");
+  });
 });

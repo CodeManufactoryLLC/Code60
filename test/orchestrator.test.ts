@@ -1193,6 +1193,65 @@ describe("harness session controls", () => {
     expect(store.records.get("r1")?.sessionState?.usage?.used).toBe(10);
     await expect(orch.setMode("r1", change)).rejects.toThrow(/idle/);
   });
+
+  it("keeps a stopped queued run cancelled without creating a worktree when slots free up", async () => {
+    const { orch, agents, git, store, status } = await setup({
+      count: 3,
+      maxParallel: 1,
+      mode: "interactive",
+      prompt: "",
+    });
+    let releaseFirst!: () => void;
+    const firstTurn = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const origStart = agents.start.bind(agents);
+    let call = 0;
+    agents.start = async (spec, signal) => {
+      const idx = ++call;
+      const session = await origStart(spec, signal);
+      if (idx === 1) {
+        await firstTurn;
+      }
+      return session;
+    };
+    orch.start();
+    await vi.waitFor(() => expect(status("r1")).toBe("running"));
+    expect(status("r2")).toBe("queued");
+    expect(status("r3")).toBe("queued");
+
+    await orch.stop("r2");
+    expect(status("r2")).toBe("cancelled");
+
+    releaseFirst();
+    await vi.waitFor(() => expect(status("r1")).toBe("idle"));
+    await orch.stop("r1");
+    await vi.waitFor(() => expect(status("r3")).toBe("idle"));
+
+    expect(status("r2")).toBe("cancelled");
+    expect(store.records.get("r2")?.status).toBe("cancelled");
+    expect(git.worktrees.map((spec) => spec.branch)).not.toContain("code60/r2");
+    await orch.shutdown();
+  });
+
+  it("ends an interactive run when the agent exits right as its turn resolves", async () => {
+    const { orch, agents, status } = await setup({ mode: "interactive", prompt: "" });
+    orch.start();
+    await vi.waitFor(() => expect(status("r1")).toBe("idle"));
+    const session = agents.sessions[0];
+    if (!session) throw new Error("Missing session");
+    agents.script = () => "hang";
+    const originalPrompt = session.prompt.bind(session);
+    session.prompt = async (text) => {
+      const promise = originalPrompt(text);
+      session.crash();
+      session.endTurn("end_turn");
+      return promise;
+    };
+    await orch.reply("r1", "run and exit");
+    await orch.settled("r1");
+    expect(status("r1")).toBe("failed");
+  });
 });
 
 async function testDiffRun(deps: Parameters<typeof prepareDiff>[0], id: string) {

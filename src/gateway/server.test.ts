@@ -1054,3 +1054,161 @@ it("serves granular read-only health checks through the authenticated browser ga
     await draining;
   }
 });
+
+it("surfaces failed scheduled executions in health checks and alerts without bricking the scheduler", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { createHash } = await import("node:crypto");
+  const { stat } = await import("node:fs/promises");
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "code60-gateway-sched-")));
+  const assets = join(directory, "assets");
+  const repo = join(directory, "repo");
+  await mkdir(assets);
+  await mkdir(repo);
+  await writeFile(join(assets, "index.html"), "<!doctype html><title>Code60</title>");
+  await writeFile(
+    join(assets, "icon.gif"),
+    Buffer.from("R0lGODlhAQABAIABAP///wAAACwAAAAAAQABAAACAkQBADs=", "base64"),
+  );
+  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+  execFileSync("git", ["config", "user.email", "test@example.invalid"], { cwd: repo });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "--allow-empty", "-m", "init"], { cwd: repo });
+  const env = {
+    ...process.env,
+    HOME: directory,
+    SHELL: "/bin/sh",
+    XDG_DATA_HOME: join(directory, "data"),
+    XDG_STATE_HOME: join(directory, "state"),
+    XDG_CONFIG_HOME: join(directory, "config"),
+  };
+  await mkdir(join(env.XDG_CONFIG_HOME, "code60"), { recursive: true, mode: 0o700 });
+  await writeFile(
+    join(env.XDG_CONFIG_HOME, "code60", "config.json"),
+    JSON.stringify({ agents: { fixture: { command: ["fake-provider"] } } }),
+    { mode: 0o600 },
+  );
+  const repoStat = await stat(repo, { bigint: true });
+  const automationId = crypto.randomUUID();
+  const providerHash = createHash("sha256")
+    .update(JSON.stringify(["fake-provider"]))
+    .digest("hex");
+  const now = new Date().toISOString();
+  await mkdir(join(env.XDG_STATE_HOME, "code60", "automations"), { recursive: true, mode: 0o700 });
+  await writeFile(
+    join(env.XDG_STATE_HOME, "code60", "automations", "state.json"),
+    JSON.stringify({
+      format: 2,
+      revision: 1,
+      sequence: 0,
+      pausedAll: false,
+      block: null,
+      automations: [
+        {
+          id: automationId,
+          revision: 1,
+          createdAt: now,
+          updatedAt: now,
+          name: "Deleted Repo Check",
+          enabled: false,
+          nextRunAt: null,
+          trigger: {
+            type: "schedule",
+            schedule: { type: "interval", everyMinutes: 5, anchor: "2026-01-01T00:00:00.000Z" },
+          },
+          action: {
+            type: "prompt",
+            prompt: "Check repo",
+            agent: "fixture",
+            providerHash,
+            repository: { path: repo, dev: String(repoStat.dev), ino: String(repoStat.ino) },
+            baseBranch: "main",
+            allow: ["read"],
+            turnTimeout: "10s",
+          },
+        },
+      ],
+      executions: [],
+    }),
+    { mode: 0o600 },
+  );
+  const gateway = await startGateway({ env, assets, roots: [directory] });
+  owned.push({ directory, gateway });
+  const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
+    fetch(`${gateway.origin}${path}`, {
+      method: "POST",
+      headers: { Origin: gateway.origin, "Content-Type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    });
+  const session = await (await post("/api/connect", { version: 1 })).json();
+  const auth = {
+    "X-Code60-Session": session.token,
+    "X-Code60-Generation": String(session.generation),
+    "X-Code60-Client": crypto.randomUUID(),
+  };
+  const operation = (name: string, value?: unknown) =>
+    post(
+      "/api/operation",
+      { id: crypto.randomUUID(), operation: name, ...(value === undefined ? {} : { value }) },
+      auth,
+    );
+  const events = new AbortController();
+  let draining: Promise<void> | undefined;
+  try {
+    const stream = await fetch(`${gateway.origin}/api/events`, {
+      headers: auth,
+      signal: events.signal,
+    });
+    const reader = stream.body?.getReader();
+    if (!reader) throw new Error("Missing browser event stream");
+    draining = (async () => {
+      try {
+        while (!(await reader.read()).done) {
+          /* drain */
+        }
+      } catch {
+        /* expected on abort */
+      } finally {
+        reader.releaseLock();
+      }
+    })();
+
+    // Delete the repo so runNow fails with repository_missing (must NOT brick scheduler).
+    await rm(repo, { recursive: true, force: true });
+    const runResp = await operation("automation", { action: "runNow", id: automationId });
+    expect(runResp.status).toBe(200);
+
+    await vi.waitFor(async () => {
+      const historyResp = await operation("automation", { action: "history" });
+      expect(historyResp.status).toBe(200);
+      const history = await historyResp.json();
+      expect(history[0]).toMatchObject({ status: "failed", reason: "repository_missing" });
+    });
+
+    const schedStatus = await (await operation("automation", { action: "status" })).json();
+    expect(schedStatus.block).toBeNull();
+
+    const healthResp = await (
+      await operation("health-check", {
+        action: "run",
+        scope: { kind: "check", checkId: "scheduler-health" },
+      })
+    ).json();
+    const schedHealth = (
+      healthResp.checks as Array<{ id: string; status: string; summary: string }>
+    ).find((c) => c.id === "scheduler-health");
+    expect(schedHealth?.status).toBe("warning");
+    expect(schedHealth?.summary).toContain("1 recent failed/interrupted execution");
+
+    await vi.waitFor(async () => {
+      const alertsResp = await (await operation("alerts", { action: "list" })).json();
+      expect(
+        (alertsResp.alerts as Array<{ source: string; title: string }>).some(
+          (item) => item.source === "automation" && item.title.includes("Deleted Repo Check"),
+        ),
+      ).toBe(true);
+    });
+  } finally {
+    events.abort();
+    await draining;
+  }
+});

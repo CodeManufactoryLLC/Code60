@@ -247,6 +247,7 @@ export async function createOrchestrator(
   const pump = () => {
     while (!shuttingDown && active < options.maxParallel && queue.length > 0) {
       const run = queue.shift() as Run;
+      if (run.status !== "queued") continue;
       active += 1;
       void run.start();
       void run.finished.then(() => {
@@ -285,7 +286,12 @@ export async function createOrchestrator(
       find(runId).handoff(summary, text, reason, deliveredText, origin),
     setMode: (runId, change) => find(runId).setMode(change),
     finish: (runId) => find(runId).finish(),
-    stop: (runId) => find(runId).shutdown(false),
+    stop(runId) {
+      const run = find(runId);
+      const index = queue.indexOf(run);
+      if (index >= 0) queue.splice(index, 1);
+      return run.shutdown(false);
+    },
     cancelTurn: (runId) => find(runId).cancelTurn("user"),
     answerPermission(permissionId, answer) {
       return runs.some((run) => run.answerPermission(permissionId, answer));
