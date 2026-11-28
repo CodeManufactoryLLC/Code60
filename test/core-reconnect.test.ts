@@ -188,3 +188,33 @@ it("rejects finish() during reconnect and cleans up without orphaning on gracefu
   expect(f.agents.sessions[1]?.stops).toContain(0);
   expect(f.records.records.get("r1")?.agentPid).toBe(f.agents.sessions[0]?.pid);
 });
+
+it("cancels reconnect cleanly when shutdown(false) arrives while stopping the previous session", async () => {
+  const f = await fixture();
+  const raw = f.agents.sessions[0];
+  if (!raw) throw new Error("Missing session");
+  Object.assign(raw, { restoreSupported: true });
+  let releaseStop!: () => void;
+  const stopGate = new Promise<void>((resolve) => {
+    releaseStop = resolve;
+  });
+  let stopEntered!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    stopEntered = resolve;
+  });
+  const origStop = raw.stop.bind(raw);
+  raw.stop = async (graceMs) => {
+    stopEntered();
+    await stopGate;
+    return origStop(graceMs);
+  };
+
+  const reconnecting = f.controls.reconnect();
+  await entered;
+  const shuttingDown = f.orch.shutdown(false);
+  releaseStop();
+  await expect(reconnecting).rejects.toThrow(/cancelled during shutdown/);
+  await shuttingDown;
+  expect(f.orch.runs()[0]?.status).toBe("finished");
+  expect(f.agents.sessions).toHaveLength(1);
+});

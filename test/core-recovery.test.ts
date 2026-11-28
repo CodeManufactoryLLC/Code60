@@ -474,4 +474,33 @@ describe("session information on recovery", () => {
     await orchestrator.shutdown(false);
     expect(record.status).toBe("interrupted");
   });
+
+  it("resolves shutdown(false) during in-flight handoff without leaking a late session", async () => {
+    const agents = new FakeAgents();
+    let releaseStart!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseStart = resolve;
+    });
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const origStart = agents.start.bind(agents);
+    agents.start = async (spec, _signal) => {
+      entered();
+      await gate;
+      return origStart(spec, new AbortController().signal);
+    };
+    const { record, orchestrator } = await setup(makeRecord(), agents);
+
+    const handingOff = orchestrator.handoff(record.id, "Summary", "Continue", "Unavailable");
+    await started;
+    const shuttingDown = orchestrator.shutdown(false);
+    releaseStart();
+    await expect(handingOff).rejects.toThrow(/cancelled during shutdown/);
+    await shuttingDown;
+    expect(agents.sessions).toHaveLength(1);
+    expect(agents.sessions[0]?.stops).toContain(0);
+    expect(record.status).toBe("interrupted");
+  });
 });

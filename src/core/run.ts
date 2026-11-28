@@ -335,10 +335,6 @@ export class Run {
               this.settings.prompts["handoff.summary"],
             ),
           );
-        if (this.shutdownRequested || this.ending) {
-          this.log("recovery.end", "failed");
-          return { type: "handoff-required", reason: "Recovery was cancelled during shutdown." };
-        }
         session = await this.startRecoveryAgent((signal) =>
           (this.agents.restore as NonNullable<Agents["restore"]>)(
             {
@@ -359,11 +355,6 @@ export class Run {
       } catch (error) {
         this.log("recovery.end", "failed");
         return { type: "handoff-required", reason: message(error) };
-      }
-      if (this.shutdownRequested || this.ending) {
-        await session.stop(0).catch(() => {});
-        this.log("recovery.end", "failed");
-        return { type: "handoff-required", reason: "Recovery was cancelled during shutdown." };
       }
       await this.installSession(session);
       this.record.ownerPid = this.deps.ownerPid ?? process.pid;
@@ -425,9 +416,6 @@ export class Run {
       this.log("recovery.start", "started");
       let session: AgentSession;
       try {
-        if (this.shutdownRequested || this.ending) {
-          throw new Error("cancelled during shutdown");
-        }
         session = await this.startRecoveryAgent((signal) =>
           this.agents.start(
             {
@@ -448,11 +436,6 @@ export class Run {
         this.log("recovery.end", "failed");
         throw new Error(`could not start a fresh agent session: ${message(error)}`);
       }
-      if (this.shutdownRequested || this.ending) {
-        await session.stop(0).catch(() => {});
-        this.log("recovery.end", "failed");
-        throw new Error("could not start a fresh agent session: cancelled during shutdown");
-      }
       await this.installSession(session);
       this.log("recovery.end", "succeeded");
       this.record.ownerPid = this.deps.ownerPid ?? process.pid;
@@ -464,10 +447,6 @@ export class Run {
         detail: summary,
       });
       await this.setStatus("running", "Started a fresh session with a handoff summary.");
-      if (this.shutdownRequested && !this.ending) {
-        void this.end({ status: "cancelled", reason: "cancelled during shutdown" });
-        return;
-      }
       void this.runTurn(text, true, true, sent, origin);
     } finally {
       this.recovering = false;
@@ -500,8 +479,7 @@ export class Run {
       await previous.stop(this.settings.killGraceMs);
       previousStopped = true;
       if (this.shutdownRequested || this.ending) {
-        await this.end(this.lastOutcome ?? { status: "finished" });
-        throw new RefusedError("Session reconnect cancelled during shutdown");
+        throw new Error("cancelled during shutdown");
       }
       const session = await this.startRecoveryAgent((signal) =>
         (this.agents.restore as NonNullable<Agents["restore"]>)(
@@ -519,20 +497,12 @@ export class Run {
           signal,
         ),
       );
-      if (this.shutdownRequested || this.ending) {
-        await session.stop(0).catch(() => {});
-        await this.end(this.lastOutcome ?? { status: "finished" });
-        throw new RefusedError("Session reconnect cancelled during shutdown");
-      }
       await this.installSession(session);
       this.emit({
         type: "note",
         text: "Reconnected MCP resources in a fresh ACP session. No prompt was replayed.",
       });
-    } catch (error) {
-      if (error instanceof RefusedError && (this.shutdownRequested || this.ending)) {
-        throw error;
-      }
+    } catch {
       if (!previousStopped) this.session ??= previous;
       if (this.shutdownRequested || this.ending) {
         await this.end(this.lastOutcome ?? { status: "finished" });
@@ -716,8 +686,7 @@ export class Run {
   }
 
   private async startAndRun(): Promise<void> {
-    if (this.ending) return;
-    if (this.shutdownRequested) {
+    if (this.ending || this.shutdownRequested) {
       return this.end({ status: "cancelled", reason: "cancelled before it started" });
     }
     const { git, clock } = this.deps;
@@ -970,7 +939,7 @@ export class Run {
         );
       }
       if (cancel.aborted) {
-        await session.stop(0).catch(() => {});
+        await session.stop(0);
         throw new Error("cancelled during shutdown");
       }
       return session;
