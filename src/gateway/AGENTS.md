@@ -162,3 +162,8 @@ Animation replay URLs may carry one bounded `play` key on GET requests for an
 existing manifested GIF only. Reject other production queries, duplicate/extra
 keys, missing assets, non-GIF files, non-GET and all API/management queries.
 Replay keys change no authority, path selection or bytes; never put credentials in them.
+
+Cross-service gateway seams wired in `src/gateway/server.ts` (such as
+`HeartbeatService`, `ApplicationHost`, `MemoryService`, and `HealthCheckService`)
+MUST have real-wiring seam integration tests without mocking internal methods
+across the seam, in accordance with `KB-GOV-002` (`TEST-1.3.1`).

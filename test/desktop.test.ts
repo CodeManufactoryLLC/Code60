@@ -7480,37 +7480,82 @@ describe("controller terminals", () => {
     expect(await controller.heartbeatRecoverWedgedRun("wedged-1")).toBe(false);
     actionSpy.mockRestore();
 
-    // Healthy sidecar + Relay error reporting.
+    // Healthy sidecar baseline + Relay error reporting (assert empty sidecarIssues per KB-GOV-002 TEST-1.1.3).
+    // Note: DesktopController in this unit suite runs without a compiled memory-worker.js, so we stub
+    // only snapshot() for IPC responses and NEVER stub memory.close() or memory.retireSidecar().
+    // Full real-wiring MemoryService + HeartbeatService + HealthCheckService coverage lives in
+    // test/heartbeat-memory-seam.test.ts.
+    const healthyMemory = {
+      settings: { version: 2, enabled: true, retentionDays: 0 },
+      provider: "claude",
+      warning: null,
+      busy: false,
+      count: 0,
+      bytes: 0,
+      indexPending: 0,
+      indexFailed: false,
+      projects: [],
+      conversations: [],
+    };
+    const memSnapSpy = vi
+      .spyOn(controller.memory, "snapshot")
+      .mockResolvedValueOnce(healthyMemory as never);
     const healthy = await controller.heartbeatHealRuntime({
       canRestartSidecar: true,
       mode: "inspect",
     });
     expect(healthy.restartedSidecars).toBe(0);
+    expect(healthy.sidecarIssues).toEqual([]);
     expect(healthy.relayError).toBe("Relay disconnected");
 
-    // Unhealthy sidecar restarted when maintain + canRestartSidecar.
-    const memSnapSpy = vi
-      .spyOn(controller.memory, "snapshot")
-      .mockResolvedValueOnce({ warning: "Sidecar stalled" } as never);
-    const memCloseSpy = vi.spyOn(controller.memory, "close").mockResolvedValueOnce();
+    // Responsive operational warning is surfaced without closing/restarting the sidecar.
+    memSnapSpy.mockResolvedValueOnce({
+      ...healthyMemory,
+      warning: "Learning is unavailable. Check the verified provider and available storage.",
+    } as never);
+    const warned = await controller.heartbeatHealRuntime({
+      canRestartSidecar: true,
+      mode: "maintain",
+    });
+    expect(warned.restartedSidecars).toBe(0);
+    expect(warned.sidecarIssues).toEqual([
+      "Learning is unavailable. Check the verified provider and available storage.",
+    ]);
+    expect(controller.memory.paused).toBe(false);
+
+    // Unresponsive sidecar (rejected IPC) triggers real retireSidecar() (never close()) and verifies recovery.
+    memSnapSpy
+      .mockRejectedValueOnce(new Error("Memory operation timed out"))
+      .mockResolvedValueOnce(healthyMemory as never);
     const healed = await controller.heartbeatHealRuntime({
       canRestartSidecar: true,
       mode: "maintain",
     });
     expect(healed.restartedSidecars).toBe(1);
-    expect(healed.sidecarIssues).toContain("Sidecar stalled");
-    expect(memCloseSpy).toHaveBeenCalledTimes(1);
+    expect(healed.sidecarIssues).toEqual([]);
+    expect(controller.memory.paused).toBe(false);
 
-    // Unresponsive sidecar rejection handled safely.
-    memSnapSpy.mockRejectedValueOnce(new Error("IPC timeout"));
-    const failed = await controller.heartbeatHealRuntime({
+    // Unresponsive sidecar in inspect mode (or when restart-capped) reports the issue without restarting.
+    memSnapSpy.mockRejectedValueOnce(new Error("Memory operation timed out"));
+    const inspected = await controller.heartbeatHealRuntime({
+      canRestartSidecar: true,
+      mode: "inspect",
+    });
+    expect(inspected.restartedSidecars).toBe(0);
+    expect(inspected.sidecarIssues).toEqual(["Memory sidecar did not respond to health check."]);
+
+    // Persistent failure after restart reports post-restart failure while still counting the attempt.
+    memSnapSpy
+      .mockRejectedValueOnce(new Error("Memory operation timed out"))
+      .mockRejectedValueOnce(new Error("Memory sidecar stopped"));
+    const stillBroken = await controller.heartbeatHealRuntime({
       canRestartSidecar: true,
       mode: "maintain",
     });
-    expect(failed.sidecarIssues).toContain("Memory sidecar did not respond to health check.");
+    expect(stillBroken.restartedSidecars).toBe(1);
+    expect(stillBroken.sidecarIssues).toEqual(["Memory sidecar did not respond after restart."]);
 
     memSnapSpy.mockRestore();
-    memCloseSpy.mockRestore();
     snapSpy.mockRestore();
   });
 });

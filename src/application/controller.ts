@@ -2581,7 +2581,7 @@ export class ApplicationHost {
     );
     if (storage.memory === true)
       void this.memory.loadSettings().catch(() => {
-        this.memory.report("Saved memory is unavailable. Check private storage.");
+        this.memory.reportUnavailable("Saved memory is unavailable. Check private storage.");
       });
     this.relay = storage.relay
       ? new ApplicationAgents(
@@ -5659,17 +5659,28 @@ export class ApplicationHost {
     const relayReconnected = false;
     let relayError: string | null = null;
 
-    try {
-      const mem = await this.memory.snapshot();
-      if (mem.warning) {
-        sidecarIssues.push(mem.warning);
-        if (options.mode === "maintain" && options.canRestartSidecar) {
-          await this.memory.close();
+    if (!this.closing) {
+      try {
+        const mem = await this.memory.snapshot();
+        if (mem.warning) {
+          sidecarIssues.push(mem.warning);
+        }
+      } catch {
+        if (options.mode === "maintain" && options.canRestartSidecar && !this.closing) {
+          await this.memory.retireSidecar();
           restartedSidecars++;
+          try {
+            const recovered = await this.memory.snapshot();
+            if (recovered.warning) {
+              sidecarIssues.push(recovered.warning);
+            }
+          } catch {
+            sidecarIssues.push("Memory sidecar did not respond after restart.");
+          }
+        } else {
+          sidecarIssues.push("Memory sidecar did not respond to health check.");
         }
       }
-    } catch {
-      sidecarIssues.push("Memory sidecar did not respond to health check.");
     }
 
     const snap = this.snapshot(false, true);

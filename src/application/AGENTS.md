@@ -105,6 +105,13 @@ new loopback listeners.
   recall. Keep content out of diagnostics and memory capabilities out of MCP.
   Ordinary sends may continue without unavailable memory while context fits;
   a required but unavailable handoff must pause before dispatch.
+- `MemoryService.close()` is a permanent one-way shutdown latch reserved for
+  application shutdown (`controller.shutdown()`). Mid-session sidecar recovery
+  (such as Heartbeat `runtime-self-heal`) MUST call `retireSidecar()`, which
+  gracefully disconnects with a `SIGKILL` fallback without setting `closed` or
+  `paused`, and only restarts on unresponsive/failed IPC rather than responsive
+  operational warnings. Verify recovery with real post-heal `snapshot()` liveness
+  and multi-cycle tests per `KB-GOV-002` (`TEST-1.1.2`, `TEST-1.2.1`, `TEST-1.2.2`).
 
 ## Relay exceptions and ownership
 

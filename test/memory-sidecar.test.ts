@@ -12,6 +12,9 @@ vi.mock("node:child_process", async (original) => ({
 
 class Sidecar extends EventEmitter {
   connected = true;
+  exitCode: number | null = null;
+  signalCode: NodeJS.Signals | null = null;
+  autoExitOnDisconnect = false;
   send = vi.fn((message: { id: string; op: string }, callback: (error: null) => void) => {
     callback(null);
     queueMicrotask(() =>
@@ -23,9 +26,18 @@ class Sidecar extends EventEmitter {
   });
   disconnect = vi.fn(() => {
     this.connected = false;
+    if (this.autoExitOnDisconnect) {
+      queueMicrotask(() => {
+        this.exitCode = 0;
+        this.emit("exit", 0, null);
+      });
+    }
   });
-  kill = vi.fn(() => {
-    queueMicrotask(() => this.emit("exit", 0, null));
+  kill = vi.fn((signal?: NodeJS.Signals | number) => {
+    queueMicrotask(() => {
+      this.signalCode = typeof signal === "string" ? signal : "SIGTERM";
+      this.emit("exit", null, this.signalCode);
+    });
     return true;
   });
 }
@@ -79,5 +91,60 @@ describe("memory sidecar lifecycle", () => {
       "init",
       "snapshot",
     ]);
+  });
+  it("retireSidecar gracefully disconnects and allows a fresh sidecar to serve follow-up snapshots", async () => {
+    await service.loadSettings();
+    const first = children[0];
+    if (!first) throw new Error("Expected initial sidecar");
+    first.autoExitOnDisconnect = true;
+
+    expect(await service.retireSidecar()).toBe(true);
+    expect(first.disconnect).toHaveBeenCalledOnce();
+    expect(first.kill).not.toHaveBeenCalled();
+    expect(service.paused).toBe(false);
+
+    const next = await service.snapshot();
+    expect(next.count).toBe(0);
+    expect(next.warning).toBeNull();
+    expect(children).toHaveLength(2);
+    expect(children[1]?.send.mock.calls.map(([message]) => message.op)).toEqual([
+      "init",
+      "snapshot",
+    ]);
+  });
+  it("retireSidecar escalates to SIGKILL for a wedged worker and recovers on the next snapshot", async () => {
+    vi.useFakeTimers();
+    await service.loadSettings();
+    const first = children[0];
+    if (!first) throw new Error("Expected initial sidecar");
+    // Wedged worker ignores disconnect until killed.
+    first.autoExitOnDisconnect = false;
+
+    const retiring = service.retireSidecar();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await retiring).toBe(true);
+    expect(first.disconnect).toHaveBeenCalledOnce();
+    expect(first.kill).toHaveBeenCalledWith("SIGKILL");
+
+    const next = await service.snapshot();
+    expect(next.count).toBe(0);
+    expect(children).toHaveLength(2);
+  });
+  it("retireSidecar refuses to revive a permanently closed service", async () => {
+    await service.loadSettings();
+    await service.close();
+    expect(await service.retireSidecar()).toBe(false);
+    await expect(service.snapshot()).rejects.toThrow("Memory service is stopping");
+  });
+  it("clears transient availability warnings once snapshot succeeds while preserving operational warnings", async () => {
+    service.reportUnavailable("Saved memory is unavailable. Check private storage.");
+    const recovered = await service.snapshot();
+    expect(recovered.warning).toBeNull();
+
+    service.report("Learning is unavailable. Check the verified provider and available storage.");
+    const operational = await service.snapshot();
+    expect(operational.warning).toBe(
+      "Learning is unavailable. Check the verified provider and available storage.",
+    );
   });
 });

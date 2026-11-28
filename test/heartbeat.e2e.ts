@@ -49,30 +49,44 @@ test("browser: Heartbeat prioritizes actionable fixes, shows all actions, runs m
     await expect(initiated).not.toHaveText("—");
     await expect(duration).toHaveText(/\d+\s*(ms|s|m)/);
 
-    // If passive health warnings exist in the isolated environment, Needs attention lists them directly with Fix instructions and Ask Chat.
-    const attentionHeading = page.getByRole("heading", { name: "Needs attention", exact: true });
-    if (await attentionHeading.isVisible()) {
-      await expect(page.locator(".heartbeat-attention-fix").first()).toContainText("Fix:");
-      await expect(
-        page
-          .locator(".heartbeat-attention-action")
-          .first()
-          .getByRole("button", { name: "Ask Chat" }),
-      ).toBeVisible();
-    }
+    // Assert Sidecar and Relay recovery row completed cleanly without reporting "Memory service is stopping".
+    await expect(page).not.toContainText("Memory service is stopping");
 
     await local.page.screenshot({
       path: test.info().outputPath("heartbeat-actions.png"),
       fullPage: true,
     });
 
-    // Switch to History tab and verify the recorded sweep is listed with its Source.
+    // Navigate to Health Check after Sweep 1 and verify Memory service remains operational on granular recheck.
+    await local.page.locator("#tab-health-check").click();
+    const healthPage = local.page.locator("section.health-check-page");
+    await expect(healthPage).toBeVisible();
+    const memoryRow = healthPage.locator('[data-check-id="memory-health"]');
+    await expect(memoryRow).not.toHaveAttribute("data-status", "unavailable", { timeout: 15_000 });
+    await expect(memoryRow).not.toContainText("Memory service is stopping");
+    await healthPage.getByRole("button", { name: "Recheck Memory service", exact: true }).click();
+    await expect(memoryRow).not.toHaveAttribute("data-status", "running", { timeout: 15_000 });
+    await expect(memoryRow).not.toHaveAttribute("data-status", "unavailable");
+    await expect(memoryRow).not.toContainText("Memory service is stopping");
+
+    // Return to Heartbeat and execute a second consecutive sweep (KB-GOV-002 TEST-1.2.2).
+    await local.page.locator("#tab-heartbeat").click();
+    await expect(page).toBeVisible();
+    await page
+      .locator(".heartbeat-summary-controls")
+      .getByRole("button", { name: "Run heartbeat" })
+      .click();
+    await expect(terminated).not.toHaveText("In progress…", { timeout: 25_000 });
+    await expect(page).not.toContainText("Memory service is stopping");
+
+    // Switch to History tab and verify both recorded sweeps are listed with their Source.
     await page.getByRole("tab", { name: "History", exact: true }).click();
     const historyTable = page.getByRole("table", { name: "Heartbeat history" });
     await expect(historyTable).toBeVisible();
     await expect(
       historyTable.getByRole("columnheader", { name: "Source", exact: true }),
     ).toBeVisible();
+    await expect(historyTable.locator("tbody tr")).toHaveCount(2);
     await expect(historyTable).toContainText("Human-Triggered");
 
     // Switch to Policy tab and toggle scheduled heartbeat off, confirming persistence.
